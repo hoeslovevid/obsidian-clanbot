@@ -977,48 +977,68 @@ async def help_command(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
+# Track in-flight setup commands to prevent duplicates
+_setup_in_progress = set()
+
 @bot.tree.command(name="setup_obsidian", description="Create/ensure core channels and post Obsidian panels (mods only).")
 async def setup_obsidian(interaction: discord.Interaction):
     if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
         return await interaction.response.send_message("Obsidian Inheritors only.", ephemeral=True)
 
-    # Respond first, then do the work
-    await interaction.response.defer(ephemeral=True)
+    # Prevent duplicate execution (check if this interaction is already being processed)
+    interaction_key = f"{interaction.guild.id}:{interaction.channel.id}:{interaction.user.id}"
+    if interaction_key in _setup_in_progress:
+        # Already processing, just acknowledge
+        if not interaction.response.is_done():
+            await interaction.response.send_message("Setup already in progress...", ephemeral=True)
+        return
+    
+    try:
+        # Mark as in progress
+        _setup_in_progress.add(interaction_key)
+        
+        # Respond first, then do the work
+        await interaction.response.defer(ephemeral=True)
 
-    await ensure_core_channels(interaction.guild)
-    await ensure_join_to_create_channel(interaction.guild)
+        await ensure_core_channels(interaction.guild)
+        await ensure_join_to_create_channel(interaction.guild)
 
-    # Post panels where command is run (you control placement)
-    await interaction.channel.send(
-        embed=obsidian_embed(
-            "Obsidian Docket",
-            "Seal a docket entry for the Inheritors.\n\n"
-            "• Provide details & evidence links\n"
-            "• False reports may be actioned\n"
-            "• You will receive DM docket updates",
-            color=discord.Color.red(),
-        ),
-        view=ComplaintPanel(),
-    )
-
-    await interaction.channel.send(
-        embed=obsidian_embed(
-            "Dojo Comms",
-            f"Join **{CREATE_VC_NAME}** inside **{TEMP_VC_CATEGORY_NAME}** to forge a temporary cell channel.\n"
-            f"A control panel will appear in **#{VOICE_PANEL_CHANNEL_NAME}** for the squad owner.",
+        # Post panels where command is run (you control placement)
+        await interaction.channel.send(
+            embed=obsidian_embed(
+                "Obsidian Docket",
+                "Seal a docket entry for the Inheritors.\n\n"
+                "• Provide details & evidence links\n"
+                "• False reports may be actioned\n"
+                "• You will receive DM docket updates",
+                color=discord.Color.red(),
+            ),
+            view=ComplaintPanel(),
         )
-    )
 
-    await interaction.channel.send(
-        embed=obsidian_embed(
-            "Ops Board",
-            "Create events with **/event_create**.\n"
-            "Times support natural phrasing (e.g., `tomorrow 8pm`).\n"
-            "RSVP buttons + reminder included.",
+        await interaction.channel.send(
+            embed=obsidian_embed(
+                "Dojo Comms",
+                f"Join **{CREATE_VC_NAME}** inside **{TEMP_VC_CATEGORY_NAME}** to forge a temporary cell channel.\n"
+                f"A control panel will appear in **#{VOICE_PANEL_CHANNEL_NAME}** for the squad owner.",
+            )
         )
-    )
 
-    await interaction.followup.send("Obsidian systems deployed.", ephemeral=True)
+        await interaction.channel.send(
+            embed=obsidian_embed(
+                "Ops Board",
+                "Create events with **/event_create**.\n"
+                "Times support natural phrasing (e.g., `tomorrow 8pm`).\n"
+                "RSVP buttons + reminder included.",
+            )
+        )
+
+        await interaction.followup.send("Obsidian systems deployed.", ephemeral=True)
+    finally:
+        # Remove from in-progress set after a short delay to allow processing to complete
+        # But remove immediately in case of errors
+        await asyncio.sleep(1)
+        _setup_in_progress.discard(interaction_key)
 
 
 @bot.tree.command(name="event_create", description="Create an Obsidian Ops event with RSVP + reminder.")
