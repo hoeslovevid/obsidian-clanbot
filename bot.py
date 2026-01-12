@@ -1090,9 +1090,8 @@ class ComplaintPanel(discord.ui.View):
 
 class RequestInfoModal(discord.ui.Modal, title="Request Evidence"):
     def __init__(self, case_id: str):
-        super().__init__(timeout=300)
+        super().__init__(timeout=300, custom_id=f"request_info_{case_id}")
         self.case_id = case_id
-        self.custom_id = f"request_info_{case_id}"
         
         self.question = discord.ui.TextInput(
             label="Question to ask the user", 
