@@ -803,10 +803,10 @@ class VCPanelView(discord.ui.View):
         self.add_item(discord.ui.Button(label="Unseal", style=discord.ButtonStyle.success, emoji="🔓", custom_id=f"vc:{vc_id}:unlock"))
         self.add_item(discord.ui.Button(label="Cloak", style=discord.ButtonStyle.danger, emoji="🫥", custom_id=f"vc:{vc_id}:hide"))
         self.add_item(discord.ui.Button(label="Reveal", style=discord.ButtonStyle.success, emoji="👁️", custom_id=f"vc:{vc_id}:show"))
-        self.add_item(discord.ui.Button(label="Grant", style=discord.ButtonStyle.secondary, emoji="🜂", custom_id=f"vc:{vc_id}:invite"))
+        self.add_item(discord.ui.Button(label="Grant", style=discord.ButtonStyle.secondary, emoji="➕", custom_id=f"vc:{vc_id}:invite"))
         self.add_item(discord.ui.Button(label="Revoke", style=discord.ButtonStyle.secondary, emoji="⛓️", custom_id=f"vc:{vc_id}:remove"))
-        self.add_item(discord.ui.Button(label="Pass Command", style=discord.ButtonStyle.secondary, emoji="🜁", custom_id=f"vc:{vc_id}:transfer"))
-        self.add_item(discord.ui.Button(label="Dissolve", style=discord.ButtonStyle.danger, emoji="🜄", custom_id=f"vc:{vc_id}:disband"))
+        self.add_item(discord.ui.Button(label="Pass Command", style=discord.ButtonStyle.secondary, emoji="🔄", custom_id=f"vc:{vc_id}:transfer"))
+        self.add_item(discord.ui.Button(label="Dissolve", style=discord.ButtonStyle.danger, emoji="🗑️", custom_id=f"vc:{vc_id}:disband"))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         # Only owner or mods can use most controls
@@ -1114,9 +1114,9 @@ class ComplaintModView(discord.ui.View):
         super().__init__(timeout=None)
         self.case_id = case_id
 
-        self.add_item(discord.ui.Button(label="Mark Reviewed", style=discord.ButtonStyle.primary, emoji="🜁", custom_id=f"complaints:{case_id}:ack"))
-        self.add_item(discord.ui.Button(label="Close Docket", style=discord.ButtonStyle.success, emoji="🜄", custom_id=f"complaints:{case_id}:resolve"))
-        self.add_item(discord.ui.Button(label="Dismiss", style=discord.ButtonStyle.secondary, emoji="🜃", custom_id=f"complaints:{case_id}:reject"))
+        self.add_item(discord.ui.Button(label="Mark Reviewed", style=discord.ButtonStyle.primary, emoji="✅", custom_id=f"complaints:{case_id}:ack"))
+        self.add_item(discord.ui.Button(label="Close Docket", style=discord.ButtonStyle.success, emoji="🔒", custom_id=f"complaints:{case_id}:resolve"))
+        self.add_item(discord.ui.Button(label="Dismiss", style=discord.ButtonStyle.secondary, emoji="❌", custom_id=f"complaints:{case_id}:reject"))
         self.add_item(discord.ui.Button(label="Request Evidence", style=discord.ButtonStyle.danger, emoji="❗", custom_id=f"complaints:{case_id}:needinfo"))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
