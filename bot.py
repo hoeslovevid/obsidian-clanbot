@@ -146,12 +146,15 @@ class ClanBot(commands.Bot):
                 guild = discord.Object(id=GUILD_ID)
                 # Don't use copy_global_to to avoid duplicates - just sync guild commands directly
                 await self.tree.sync(guild=guild)
-                command_count = len([cmd for cmd in self.tree.get_commands(guild=guild)])
-                print(f"[sync] Synced {command_count} commands to guild {GUILD_ID}")
+                # List all registered commands for verification
+                commands_list = [cmd.name for cmd in self.tree.get_commands(guild=guild)]
+                print(f"[sync] Synced {len(commands_list)} commands to guild {GUILD_ID}")
+                print(f"[sync] Commands: {', '.join(commands_list)}")
             else:
                 await self.tree.sync()
-                command_count = len([cmd for cmd in self.tree.get_commands(guild=None)])
-                print(f"[sync] Synced {command_count} commands globally (may take a while to appear)")
+                commands_list = [cmd.name for cmd in self.tree.get_commands(guild=None)]
+                print(f"[sync] Synced {len(commands_list)} commands globally (may take a while to appear)")
+                print(f"[sync] Commands: {', '.join(commands_list)}")
         except Exception as e:
             print(f"[sync] Failed to sync commands: {e}")
             import traceback
