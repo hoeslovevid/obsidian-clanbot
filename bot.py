@@ -910,8 +910,7 @@ async def delete_temp_vc_and_panel(guild: discord.Guild, vc_id: int, *, reason: 
 # --------------------- Complaints ---------------------
 class ComplaintModal(discord.ui.Modal, title="Obsidian Docket Submission"):
     def __init__(self):
-        super().__init__(timeout=300)
-        self.custom_id = "complaint_modal"
+        super().__init__(timeout=300, custom_id="complaint_modal")
         
         self.category = discord.ui.TextInput(
             label="Category", 
