@@ -1451,13 +1451,16 @@ async def on_interaction(interaction: discord.Interaction):
             # Use interaction ID as unique identifier
             interaction_key = f"{interaction.id}:{interaction.user.id}"
             if interaction_key in _processed_modal_submissions:
+                print(f"[modal] Already processed: {interaction_key}")
                 return  # Already processed
             
             if interaction.response.is_done():
+                print(f"[modal] Interaction already done: {interaction_key}")
                 return  # Already handled
             
             # Mark as processing immediately
             _processed_modal_submissions.add(interaction_key)
+            print(f"[modal] Processing complaint submission: {interaction_key}")
             
             try:
                 # Acknowledge the interaction first to prevent duplicate processing
@@ -1621,12 +1624,15 @@ async def on_interaction(interaction: discord.Interaction):
                     ),
                     ephemeral=True,
                 )
+                print(f"[modal] Successfully created complaint: {case_id}")
             except Exception as e:
                 # Handle errors in modal submission
                 import traceback
+                import sys
                 error_traceback = traceback.format_exc()
-                print(f"[modal] Error in complaint modal submission: {e}")
-                print(error_traceback)
+                error_msg = f"[modal] Error in complaint modal submission: {e}\n{error_traceback}"
+                print(error_msg, file=sys.stderr, flush=True)
+                print(error_msg, flush=True)
                 try:
                     if interaction.response.is_done():
                         await interaction.followup.send(f"Error submitting docket: {str(e)}", ephemeral=True)
