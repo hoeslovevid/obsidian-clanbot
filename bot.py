@@ -1945,19 +1945,30 @@ async def on_interaction(interaction: discord.Interaction):
 
                 view = ComplaintModView(case_id)
 
+                # Check if interaction has already been responded to
+                if interaction.response.is_done():
+                    logger.warning(f"[button] complaints action already handled: {case_id}:{action}")
+                    return
+
                 if action == "ack":
+                    # Defer first to prevent timeout
+                    await interaction.response.defer(ephemeral=True)
                     await view.set_status(interaction, "ACKNOWLEDGED")
-                    await interaction.response.send_message(f"`{case_id}` marked reviewed.", ephemeral=True)
+                    await interaction.followup.send(f"`{case_id}` marked reviewed.", ephemeral=True)
                     return
 
                 if action == "resolve":
+                    # Defer first to prevent timeout
+                    await interaction.response.defer(ephemeral=True)
                     await view.set_status(interaction, "RESOLVED")
-                    await interaction.response.send_message(f"`{case_id}` closed.", ephemeral=True)
+                    await interaction.followup.send(f"`{case_id}` closed.", ephemeral=True)
                     return
 
                 if action == "reject":
+                    # Defer first to prevent timeout
+                    await interaction.response.defer(ephemeral=True)
                     await view.set_status(interaction, "REJECTED")
-                    await interaction.response.send_message(f"`{case_id}` dismissed.", ephemeral=True)
+                    await interaction.followup.send(f"`{case_id}` dismissed.", ephemeral=True)
                     return
 
                 if action == "needinfo":
