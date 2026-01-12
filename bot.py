@@ -168,6 +168,7 @@ def load_all_commands():
         # General commands
         "commands.general.help",
         "commands.general.setup_obsidian",
+        "commands.general.setup_docket",
         # Event commands
         "commands.events.event_create",
         # Complaint commands

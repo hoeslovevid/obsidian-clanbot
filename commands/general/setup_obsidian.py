@@ -32,22 +32,16 @@ def setup(bot):
             # Respond first, then do the work
             await interaction.response.defer(ephemeral=True)
 
-            await ensure_core_channels(interaction.guild)
+            # Only ensure channels needed for Dojo Comms and Ops Board
+            from bot import resolve_channel_id
+            from bot import VOICE_PANEL_CHANNEL_ID, VOICE_PANEL_CHANNEL_NAME
+            from bot import EVENTS_CHANNEL_ID, EVENTS_CHANNEL_NAME
+            
+            await resolve_channel_id(interaction.guild, "voice_panel_channel_id", VOICE_PANEL_CHANNEL_ID, VOICE_PANEL_CHANNEL_NAME)
+            await resolve_channel_id(interaction.guild, "events_channel_id", EVENTS_CHANNEL_ID, EVENTS_CHANNEL_NAME)
             await ensure_join_to_create_channel(interaction.guild)
 
-            # Post panels where command is run
-            await interaction.channel.send(
-                embed=obsidian_embed(
-                    "Obsidian Docket",
-                    "Seal a docket entry for the Inheritors.\n\n"
-                    "• Provide details & evidence links\n"
-                    "• False reports may be actioned\n"
-                    "• You will receive DM docket updates",
-                    color=discord.Color.red(),
-                ),
-                view=ComplaintPanel(),
-            )
-
+            # Post panels where command is run (Dojo Comms and Ops Board only)
             await interaction.channel.send(
                 embed=obsidian_embed(
                     "Dojo Comms",

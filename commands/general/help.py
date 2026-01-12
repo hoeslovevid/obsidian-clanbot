@@ -35,8 +35,11 @@ def setup(bot):
         # Mod-only commands
         if is_user_mod:
             desc += "**⚙️ Moderator Commands**\n"
-            desc += "• `/setup_obsidian` - Set up core channels and post Obsidian panels\n"
-            desc += "  └ Posts the Docket, Dojo Comms, and Ops Board panels in the current channel\n\n"
+            desc += "• `/setup_obsidian` - Set up channels and post Dojo Comms & Ops Board panels\n"
+            desc += "  └ Creates voice panel and events channels, posts Dojo Comms and Ops Board embeds\n\n"
+            
+            desc += "• `/setup_docket` - Post the Obsidian Docket (complaint/help request) panel\n"
+            desc += "  └ Creates complaints channel and posts the Docket embed with complaint button\n\n"
             
             desc += "• `/purge` - Clear messages from the current channel\n"
             desc += "  └ Usage: `/purge amount:<1-100> or 'all'`\n"
@@ -44,7 +47,8 @@ def setup(bot):
             desc += "  └ Note: Pinned messages are never deleted\n\n"
         else:
             desc += "**⚙️ Moderator Commands**\n"
-            desc += "• `/setup_obsidian` - (Mods only) Set up core channels and panels\n"
+            desc += "• `/setup_obsidian` - (Mods only) Set up channels and panels\n"
+            desc += "• `/setup_docket` - (Mods only) Post complaint/help request panel\n"
             desc += "• `/purge` - (Mods only) Clear messages from channels\n\n"
         
         desc += "**💰 Economy Commands**\n"
