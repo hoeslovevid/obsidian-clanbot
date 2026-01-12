@@ -1102,40 +1102,11 @@ class RequestInfoModal(discord.ui.Modal, title="Request Evidence"):
         self.add_item(self.question)
 
     async def on_submit(self, interaction: discord.Interaction):
-        if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
-            return await interaction.response.send_message("Obsidian Inheritors only.", ephemeral=True)
-
-        async with aiosqlite.connect(DB_PATH) as db:
-            cur = await db.execute(
-                "SELECT user_id FROM complaints WHERE guild_id=? AND case_id=?",
-                (interaction.guild.id, self.case_id),
-            )
-            row = await cur.fetchone()
-        if not row:
-            return await interaction.response.send_message("Case not found.", ephemeral=True)
-
-        user_id = int(row[0])
-
-        # Set status, DM user
-        await ComplaintModView(self.case_id).set_status(interaction, "NEEDS INFO", dm_override=False)
-
-        user = interaction.guild.get_member(user_id) or await bot.fetch_user(user_id)
-        if user:
-            try:
-                e = obsidian_embed(
-                    f"Evidence Requested • {self.case_id}",
-                    f"**Directive from Obsidian Inheritors:**\n{str(self.question)}\n\n"
-                    "Respond using:\n"
-                    f"**/submit_complaint** (case_id: `{self.case_id}`)\n\n"
-                    "_If your DMs are closed, you may not receive updates._",
-                    color=discord.Color.orange(),
-                )
-                await user.send(embed=e)
-            except discord.Forbidden:
-                pass
-
-        await log_complaint_action(interaction.guild, self.case_id, interaction.user.id, "REQUEST_INFO", str(self.question))
-        await interaction.response.send_message("Requested evidence (DM sent if possible).", ephemeral=True)
+        # This method is disabled - modal submissions are handled entirely by the on_interaction handler
+        # for persistence after bot restarts. We do NOTHING here - let on_interaction handle everything.
+        logger.info(f"[modal] RequestInfoModal.on_submit: Ignored - on_interaction will handle processing")
+        # Just return - do nothing. on_interaction handler will process the modal submission.
+        return
 
 
 class ComplaintModView(discord.ui.View):
