@@ -943,43 +943,30 @@ class ComplaintModal(discord.ui.Modal, title="Obsidian Docket Submission"):
         # are now primarily handled in the on_interaction handler for persistence after restarts.
         # Check if already processed to prevent duplicates
         interaction_key = f"{interaction.id}:{interaction.user.id}"
-        if interaction_key in _processed_modal_submissions:
-            logger.info(f"[modal] ComplaintModal.on_submit: Already processed by on_interaction handler: {interaction_key}")
-            # Don't process again - our handler already handled it
-            # Just ensure the interaction is responded to
-            if not interaction.response.is_done():
-                try:
-                    await interaction.response.defer(ephemeral=True)
-                except (discord.errors.NotFound, discord.errors.InteractionResponded, discord.errors.HTTPException):
-                    pass  # Already handled or expired
+        
+        # FIRST: Check if interaction has already been responded to (by on_interaction handler)
+        # This is the most reliable check - if the interaction is done, on_interaction already handled it
+        if interaction.response.is_done():
+            logger.info(f"[modal] ComplaintModal.on_submit: Interaction already responded to (handled by on_interaction), skipping")
             return  # Already processed by on_interaction handler
         
-        # Check if interaction has already been responded to (by on_interaction handler)
-        if interaction.response.is_done():
-            logger.info(f"[modal] ComplaintModal.on_submit: Interaction already responded to: {interaction_key}")
-            return  # Already handled
+        # SECOND: Check if already in tracking set (race condition check)
+        if interaction_key in _processed_modal_submissions:
+            logger.info(f"[modal] ComplaintModal.on_submit: Already in tracking set (handled by on_interaction), skipping")
+            return  # Already processed by on_interaction handler
         
-        logger.info(f"[modal] ComplaintModal.on_submit: Processing (not in tracking set): {interaction_key}")
-        # Mark as processing to prevent on_interaction handler from also processing it
+        # If we get here, on_interaction hasn't handled it yet
+        # Mark as processing immediately to prevent on_interaction from also processing it
         _processed_modal_submissions.add(interaction_key)
         
-        # Check if interaction has already been responded to (by on_interaction handler)
-        if interaction.response.is_done():
-            logger.info(f"[modal] ComplaintModal.on_submit: Interaction already responded to, skipping")
-            # Clean up and return - on_interaction handler is handling it
-            try:
-                await asyncio.sleep(0.1)  # Brief delay to let on_interaction finish
-                _processed_modal_submissions.discard(interaction_key)
-            except Exception:
-                pass
-            return
+        logger.info(f"[modal] ComplaintModal.on_submit: Processing (on_interaction didn't catch it): {interaction_key}")
         
         try:
             # Defer first to acknowledge the interaction
             await interaction.response.defer(ephemeral=True)
         except (discord.errors.NotFound, discord.errors.InteractionResponded, discord.errors.HTTPException) as e:
-            # Interaction was already handled or expired
-            logger.warning(f"[modal] ComplaintModal.on_submit: Could not defer (already handled): {e}")
+            # Interaction was already handled or expired (race condition - on_interaction got it first)
+            logger.warning(f"[modal] ComplaintModal.on_submit: Could not defer (already handled by on_interaction): {e}")
             _processed_modal_submissions.discard(interaction_key)
             return
         
