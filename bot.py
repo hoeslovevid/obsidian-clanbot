@@ -1482,33 +1482,44 @@ async def on_interaction(interaction: discord.Interaction):
             # Check if already processed (prevent duplicates)
             # Use interaction ID as unique identifier
             interaction_key = f"{interaction.id}:{interaction.user.id}"
+            deferred_key = f"{interaction_key}:deferred"
+            
+            # Check if already processed
             if interaction_key in _processed_modal_submissions:
                 logger.info(f"[modal] Already processed: {interaction_key}")
                 return  # Already processed
             
-            if interaction.response.is_done():
-                logger.info(f"[modal] Interaction already done: {interaction_key}")
-                return  # Already handled
+            # Check if on_submit already deferred it
+            already_deferred = deferred_key in _processed_modal_submissions
             
-            # Mark as processing immediately
+            if interaction.response.is_done() and not already_deferred:
+                logger.info(f"[modal] Interaction already done: {interaction_key}")
+                return  # Already handled (unless on_submit deferred it)
+            
+            # Mark as processing immediately (remove deferred marker if present)
+            if already_deferred:
+                _processed_modal_submissions.discard(deferred_key)
+                logger.info(f"[modal] Found deferred marker, on_submit already deferred")
             _processed_modal_submissions.add(interaction_key)
-            logger.info(f"[modal] Processing complaint submission: {interaction_key}")
+            logger.info(f"[modal] Processing complaint submission: {interaction_key} (already_deferred={already_deferred})")
             
             try:
-                # Acknowledge the interaction first to prevent duplicate processing
-                # But check if it's still valid first
-                try:
-                    await interaction.response.defer(ephemeral=True)
-                    logger.info(f"[modal] Deferred interaction successfully: {interaction_key}")
-                except (discord.errors.NotFound, discord.errors.InteractionResponded) as defer_err:
-                    # Interaction already expired or was handled - ignore
-                    logger.warning(f"[modal] Could not defer (already handled/expired): {defer_err}")
-                    _processed_modal_submissions.discard(interaction_key)
-                    return
-                except Exception as defer_err:
-                    logger.error(f"[modal] Unexpected error during defer: {defer_err}", exc_info=True)
-                    _processed_modal_submissions.discard(interaction_key)
-                    return
+                # Defer only if not already deferred by on_submit
+                if not already_deferred:
+                    try:
+                        await interaction.response.defer(ephemeral=True)
+                        logger.info(f"[modal] Deferred interaction successfully: {interaction_key}")
+                    except (discord.errors.NotFound, discord.errors.InteractionResponded) as defer_err:
+                        # Interaction already expired or was handled - ignore
+                        logger.warning(f"[modal] Could not defer (already handled/expired): {defer_err}")
+                        _processed_modal_submissions.discard(interaction_key)
+                        return
+                    except Exception as defer_err:
+                        logger.error(f"[modal] Unexpected error during defer: {defer_err}", exc_info=True)
+                        _processed_modal_submissions.discard(interaction_key)
+                        return
+                else:
+                    logger.info(f"[modal] Interaction already deferred by on_submit, proceeding with processing")
                 
                 # Extract values from interaction data
                 components = interaction.data.get("components", [])
