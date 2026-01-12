@@ -1097,9 +1097,9 @@ class RequestInfoModal(discord.ui.Modal, title="Request Evidence"):
             try:
                 e = obsidian_embed(
                     f"Evidence Requested • {self.case_id}",
-                    f"**Directive from Obsidian Inheritors:**\n{self.question}\n\n"
+                    f"**Directive from Obsidian Inheritors:**\n{str(self.question)}\n\n"
                     "Respond using:\n"
-                    f"**/complaint add** (case_id: `{self.case_id}`)\n\n"
+                    f"**/submit_complaint** (case_id: `{self.case_id}`)\n\n"
                     "_If your DMs are closed, you may not receive updates._",
                     color=discord.Color.orange(),
                 )
