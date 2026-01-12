@@ -143,6 +143,9 @@ def display_case_status(status: str) -> str:
     }.get(s, status.title() if status else "Unknown")
 
 
+# Global tracking set for modal submissions to prevent duplicates
+_processed_modal_submissions = set()
+
 # --------------------- Bot ---------------------
 class ClanBot(commands.Bot):
     def __init__(self):
