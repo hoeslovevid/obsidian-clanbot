@@ -2,6 +2,28 @@
 
 This guide will help you deploy the Obsidian Clan Bot to Railway.
 
+## Build Errors
+
+If you see errors like:
+```
+ERROR: failed to build: listing workers for Build: failed to list workers: Unavailable: connection error
+```
+
+This is a **transient Docker connection error** during Railway's build phase. It's usually harmless if:
+- The bot still goes online
+- The deployment completes successfully
+- The bot functions normally
+
+This can happen due to:
+- Temporary network issues during build
+- Railway's Docker daemon having brief connection hiccups
+- Build process timing
+
+**Solution**: Usually no action needed. If it persists, try:
+1. Redeploy the service
+2. Check Railway's status page for known issues
+3. Contact Railway support if it continues
+
 ## Prerequisites
 
 1. A GitHub account
