@@ -294,11 +294,12 @@ async def get_user_balance(guild_id: int, user_id: int) -> int:
         return row[0] if row else 0
 
 
-async def add_coins(guild_id: int, user_id: int, amount: int, transaction_type: str, description: str = None):
+async def add_coins(guild_id: int, user_id: int, amount: int, transaction_type: str, description: Optional[str] = None):
     """Add coins to a user's balance and log the transaction."""
     if amount <= 0:
         return
     
+    desc = description or ""
     async with aiosqlite.connect(DB_PATH) as db:
         # Insert or update balance
         await db.execute("""
@@ -313,12 +314,12 @@ async def add_coins(guild_id: int, user_id: int, amount: int, transaction_type: 
         await db.execute("""
             INSERT INTO economy_transactions (guild_id, user_id, amount, transaction_type, description, created_at)
             VALUES (?, ?, ?, ?, ?, ?)
-        """, (guild_id, user_id, amount, transaction_type, description or "", now_utc().isoformat()))
+        """, (guild_id, user_id, amount, transaction_type, desc, now_utc().isoformat()))
         
         await db.commit()
 
 
-async def remove_coins(guild_id: int, user_id: int, amount: int, transaction_type: str, description: str = None) -> bool:
+async def remove_coins(guild_id: int, user_id: int, amount: int, transaction_type: str, description: Optional[str] = None) -> bool:
     """Remove coins from a user's balance. Returns True if successful, False if insufficient balance."""
     if amount <= 0:
         return False
@@ -341,10 +342,11 @@ async def remove_coins(guild_id: int, user_id: int, amount: int, transaction_typ
         """, (amount, guild_id, user_id))
         
         # Log transaction
+        desc = description or ""
         await db.execute("""
             INSERT INTO economy_transactions (guild_id, user_id, amount, transaction_type, description, created_at)
             VALUES (?, ?, ?, ?, ?, ?)
-        """, (guild_id, user_id, -amount, transaction_type, description or "", now_utc().isoformat()))
+        """, (guild_id, user_id, -amount, transaction_type, desc, now_utc().isoformat()))
         
         await db.commit()
         return True
