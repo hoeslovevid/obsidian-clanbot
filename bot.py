@@ -1061,11 +1061,18 @@ class ComplaintPanel(discord.ui.View):
 
 
 class RequestInfoModal(discord.ui.Modal, title="Request Evidence"):
-    question = discord.ui.TextInput(label="Question to ask the user", style=discord.TextStyle.paragraph, max_length=800)
-
     def __init__(self, case_id: str):
         super().__init__(timeout=300)
         self.case_id = case_id
+        self.custom_id = f"request_info_{case_id}"
+        
+        self.question = discord.ui.TextInput(
+            label="Question to ask the user", 
+            style=discord.TextStyle.paragraph, 
+            max_length=800,
+            custom_id="question"
+        )
+        self.add_item(self.question)
         self.custom_id = f"request_info_{case_id}"
 
     async def on_submit(self, interaction: discord.Interaction):
