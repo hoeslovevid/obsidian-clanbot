@@ -1325,10 +1325,11 @@ async def on_interaction(interaction: discord.Interaction):
     We route button/select/modal interactions here so persistent views continue to work after restart.
     Application commands (slash commands) are handled automatically by discord.py.
     """
-    # Handle component interactions (buttons/selects) and modal submissions
-    # Let discord.py handle application commands automatically
+    # CRITICAL: Let discord.py handle application commands (slash commands) automatically
+    # Do NOT process them here - discord.py's command tree handles them
     if interaction.type == discord.InteractionType.application_command:
-        return  # Let discord.py handle slash commands
+        # Do nothing - let discord.py's built-in handler process it
+        return
     
     # Handle modal submissions
     if interaction.type == discord.InteractionType.modal_submit:
@@ -1607,7 +1608,12 @@ async def on_interaction(interaction: discord.Interaction):
                     return
 
     except Exception as e:
-        # Last-resort error handler
+        # Last-resort error handler - only for component/modal interactions
+        # Do NOT handle errors for application commands - let discord.py handle them
+        if interaction.type == discord.InteractionType.application_command:
+            # Re-raise to let discord.py handle it
+            raise
+        
         try:
             if interaction.response.is_done():
                 await interaction.followup.send(f"Something went wrong: {e}", ephemeral=True)
