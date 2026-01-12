@@ -918,6 +918,63 @@ class RSVPView(discord.ui.View):
 
 
 # --------------------- Slash Commands ---------------------
+@bot.tree.command(name="help", description="Get help and information about all bot commands.")
+async def help_command(interaction: discord.Interaction):
+    """Display a help embed with all available commands and their usage."""
+    is_user_mod = isinstance(interaction.user, discord.Member) and is_mod(interaction.user)
+    
+    desc = "**Obsidian Clan Bot Commands**\n\n"
+    desc += "Use these commands to interact with the bot:\n\n"
+    
+    # Public commands
+    desc += "**📅 Event Commands**\n"
+    desc += "• `/event_create` - Create an Ops event with RSVP and reminders\n"
+    desc += "  └ Usage: `/event_create title:<name> when:<time> description:<details> [role_ping:<@role>]`\n"
+    desc += "  └ Example: `/event_create title:Steel Path when:tomorrow 8pm description:Running ESO rotations`\n\n"
+    
+    desc += "**🩸 Complaint Commands**\n"
+    desc += "• `/complaint_status` - Check the status of your complaint case\n"
+    desc += "  └ Usage: `/complaint_status case_id:<OBS-...>`\n"
+    desc += "  └ Example: `/complaint_status case_id:OBS-1234567890-1234`\n\n"
+    
+    desc += "• `/complaint_add` - Add additional information to your complaint\n"
+    desc += "  └ Usage: `/complaint_add case_id:<OBS-...> details:<additional info>`\n"
+    desc += "  └ Example: `/complaint_add case_id:OBS-1234567890-1234 details:Here are screenshots`\n\n"
+    
+    # Mod-only commands
+    if is_user_mod:
+        desc += "**⚙️ Moderator Commands**\n"
+        desc += "• `/setup_obsidian` - Set up core channels and post Obsidian panels\n"
+        desc += "  └ Posts the Docket, Dojo Comms, and Ops Board panels in the current channel\n\n"
+        
+        desc += "• `/purge` - Clear messages from the current channel\n"
+        desc += "  └ Usage: `/purge amount:<1-100> or "all"`\n"
+        desc += "  └ Example: `/purge amount:50` or `/purge amount:all`\n"
+        desc += "  └ Note: Pinned messages are never deleted\n\n"
+    else:
+        desc += "**⚙️ Moderator Commands**\n"
+        desc += "• `/setup_obsidian` - (Mods only) Set up core channels and panels\n"
+        desc += "• `/purge` - (Mods only) Clear messages from channels\n\n"
+    
+    desc += "**💬 Other Features**\n"
+    desc += "• **Join-to-Create Voice Channels** - Join the trigger channel in Temp VCs to create your own squad channel\n"
+    desc += "• **Obsidian Docket** - Use the button panel to file complaints (mods will review)\n"
+    desc += "• **Voice Channel Controls** - Squad owners get control panels for their channels\n\n"
+    
+    desc += "**ℹ️ Notes**\n"
+    desc += "• Event times support natural language (e.g., `tomorrow 8pm`, `Jan 14 7:30pm`)\n"
+    desc += "• Complaint case IDs are sent to you via DM when you file a report\n"
+    desc += "• You'll receive DM updates on your complaint status (if DMs are enabled)\n"
+    
+    embed = obsidian_embed(
+        "Obsidian Clan Bot • Command Reference",
+        desc,
+        color=discord.Color.blurple(),
+    )
+    
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
 @bot.tree.command(name="setup_obsidian", description="Create/ensure core channels and post Obsidian panels (mods only).")
 async def setup_obsidian(interaction: discord.Interaction):
     if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
