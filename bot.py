@@ -172,6 +172,7 @@ def load_all_commands():
         "commands.general.help",
         "commands.general.setup_obsidian",
         "commands.general.setup_docket",
+        "commands.general.sync_commands",
         # Event commands
         "commands.events.event_create",
         # Complaint commands
@@ -194,10 +195,18 @@ def load_all_commands():
                 module.setup(bot)
                 loaded_count += 1
                 print(f"[commands] Loaded {module_name}")
+            else:
+                print(f"[commands] WARNING: {module_name} has no setup() function")
         except Exception as e:
-            print(f"[commands] Failed to load {module_name}: {e}")
+            print(f"[commands] ERROR: Failed to load {module_name}: {e}")
+            import traceback
+            traceback.print_exc()
     
-    print(f"[commands] Successfully loaded {loaded_count} command modules")
+    print(f"[commands] Successfully loaded {loaded_count}/{len(command_modules)} command modules")
+    
+    # Verify all commands are registered
+    all_commands = [cmd.name for cmd in bot.tree.get_commands(guild=None)]
+    print(f"[commands] Registered commands: {', '.join(sorted(all_commands))}")
 
 # Load commands BEFORE setup_hook runs
 load_all_commands()
