@@ -970,7 +970,7 @@ async def event_create(interaction: discord.Interaction, title: str, when: str, 
     dt = parse_time_natural(when)
     if not dt:
         return await interaction.response.send_message(
-            "Couldn’t parse that time. Try: `tomorrow 8pm`, `Jan 14 7:30pm`, etc.",
+            "Couldn't parse that time. Try: `tomorrow 8pm`, `Jan 14 7:30pm`, etc.",
             ephemeral=True,
         )
 
@@ -982,6 +982,9 @@ async def event_create(interaction: discord.Interaction, title: str, when: str, 
             "Events channel not configured. Set EVENTS_CHANNEL_ID or enable AUTO_SETUP.",
             ephemeral=True,
         )
+
+    # Defer response to prevent Discord from retrying the interaction
+    await interaction.response.defer(ephemeral=True)
 
     ts = int(dt.timestamp())
     role_id = extract_id(role_ping) if role_ping else None
@@ -1030,7 +1033,7 @@ async def event_create(interaction: discord.Interaction, title: str, when: str, 
         )
         await db.commit()
 
-    await interaction.response.send_message("Ops event posted.", ephemeral=True)
+    await interaction.followup.send("Ops event posted.", ephemeral=True)
 
 
 @bot.tree.command(name="complaint_add", description="Add information to an existing complaint case.")
