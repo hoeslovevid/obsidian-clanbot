@@ -1,6 +1,7 @@
 import os
 import re
 import asyncio
+import random
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any, Tuple
 
@@ -928,8 +929,36 @@ class ComplaintModal(discord.ui.Modal, title="Obsidian Docket Submission"):
 
     async def on_submit(self, interaction: discord.Interaction):
         guild = interaction.guild
-        case_id = f"OBS-{int(now_utc().timestamp())}-{interaction.user.id % 10000}"
-        created = now_utc().isoformat()
+        # Generate unique case_id with retry logic
+        created = now_utc()
+        max_retries = 10
+        case_id = None
+        
+        for attempt in range(max_retries):
+            # Use microseconds for better uniqueness, plus random component
+            timestamp_part = int(created.timestamp() * 1000000)  # microseconds
+            random_part = random.randint(1000, 9999)
+            user_part = interaction.user.id % 10000
+            case_id = f"OBS-{timestamp_part}-{user_part}-{random_part}"
+            
+            # Check if this case_id already exists
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute(
+                    "SELECT 1 FROM complaints WHERE guild_id=? AND case_id=?",
+                    (guild.id, case_id)
+                )
+                exists = await cur.fetchone()
+            
+            if not exists:
+                break  # Unique case_id found
+            
+            # If we've exhausted retries, use a more unique approach
+            if attempt == max_retries - 1:
+                # Fallback: use full timestamp with nanoseconds simulation
+                import time
+                case_id = f"OBS-{int(time.time() * 1000000)}-{interaction.user.id}-{random.randint(10000, 99999)}"
+        
+        created_iso = created.isoformat()
 
         async with aiosqlite.connect(DB_PATH) as db:
             await db.execute(
@@ -939,13 +968,13 @@ class ComplaintModal(discord.ui.Modal, title="Obsidian Docket Submission"):
                     guild.id,
                     case_id,
                     interaction.user.id,
-                    created,
+                    created_iso,
                     str(self.category),
                     str(self.details),
                     str(self.evidence),
                     "OPEN",
                     None,
-                    created,
+                    created_iso,
                 ),
             )
             await db.commit()
@@ -1359,8 +1388,36 @@ async def on_interaction(interaction: discord.Interaction):
                 if not guild:
                     return await interaction.response.send_message("This command can only be used in a server.", ephemeral=True)
                 
-                case_id = f"OBS-{int(now_utc().timestamp())}-{interaction.user.id % 10000}"
-                created = now_utc().isoformat()
+                # Generate unique case_id with retry logic
+                created = now_utc()
+                max_retries = 10
+                case_id = None
+                
+                for attempt in range(max_retries):
+                    # Use microseconds for better uniqueness, plus random component
+                    timestamp_part = int(created.timestamp() * 1000000)  # microseconds
+                    random_part = random.randint(1000, 9999)
+                    user_part = interaction.user.id % 10000
+                    case_id = f"OBS-{timestamp_part}-{user_part}-{random_part}"
+                    
+                    # Check if this case_id already exists
+                    async with aiosqlite.connect(DB_PATH) as db:
+                        cur = await db.execute(
+                            "SELECT 1 FROM complaints WHERE guild_id=? AND case_id=?",
+                            (guild.id, case_id)
+                        )
+                        exists = await cur.fetchone()
+                    
+                    if not exists:
+                        break  # Unique case_id found
+                    
+                    # If we've exhausted retries, use a more unique approach
+                    if attempt == max_retries - 1:
+                        # Fallback: use full timestamp with nanoseconds simulation
+                        import time
+                        case_id = f"OBS-{int(time.time() * 1000000)}-{interaction.user.id}-{random.randint(10000, 99999)}"
+                
+                created_iso = created.isoformat()
 
                 async with aiosqlite.connect(DB_PATH) as db:
                     await db.execute(
@@ -1370,13 +1427,13 @@ async def on_interaction(interaction: discord.Interaction):
                             guild.id,
                             case_id,
                             interaction.user.id,
-                            created,
+                            created_iso,
                             category_val,
                             details_val,
                             evidence_val,
                             "OPEN",
                             None,
-                            created,
+                            created_iso,
                         ),
                     )
                     await db.commit()
