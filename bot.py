@@ -933,9 +933,11 @@ async def help_command(interaction: discord.Interaction):
     desc += "  └ Example: `/event_create title:Steel Path when:tomorrow 8pm description:Running ESO rotations`\n\n"
     
     desc += "**🩸 Help & Complaint Commands**\n"
-    desc += "• `/request_help` - Check the status of your complaint/help request\n"
-    desc += "  └ Usage: `/request_help case_id:<OBS-...>`\n"
-    desc += "  └ Example: `/request_help case_id:OBS-1234567890-1234`\n\n"
+    desc += "• `/request_help` - Create a new help request OR check status of existing case\n"
+    desc += "  └ To create: `/request_help category:<type> details:<info> [evidence:<link>]`\n"
+    desc += "  └ To check status: `/request_help case_id:<OBS-...>`\n"
+    desc += "  └ Example (new): `/request_help category:harassment details:Someone was being rude`\n"
+    desc += "  └ Example (check): `/request_help case_id:OBS-1234567890-1234`\n\n"
     
     desc += "• `/submit_complaint` - Add additional information to your complaint/help request\n"
     desc += "  └ Usage: `/submit_complaint case_id:<OBS-...> details:<additional info>`\n"
@@ -1134,27 +1136,136 @@ async def submit_complaint(interaction: discord.Interaction, case_id: str, detai
     await interaction.response.send_message("Addendum submitted.", ephemeral=True)
 
 
-@bot.tree.command(name="request_help", description="Request help or check the status of your complaint/help request case.")
-@app_commands.describe(case_id="Your case id (e.g., OBS-...)")
-async def request_help(interaction: discord.Interaction, case_id: str):
-    async with aiosqlite.connect(DB_PATH) as db:
-        cur = await db.execute(
-            "SELECT user_id, status, last_update_at FROM complaints WHERE guild_id=? AND case_id=?",
-            (interaction.guild.id, case_id),
+@bot.tree.command(name="request_help", description="Request help or check the status of your help request case.")
+@app_commands.describe(
+    case_id="Your case id to check status (e.g., OBS-...). Leave empty to create new request.",
+    category="Category for new request (e.g., harassment / trade / voice conduct)",
+    details="Details of your request (required for new requests)",
+    evidence="Optional evidence link (for new requests)"
+)
+async def request_help(interaction: discord.Interaction, case_id: str = "", category: str = "", details: str = "", evidence: str = ""):
+    # If case_id is provided, check status (existing behavior)
+    if case_id:
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT user_id, status, last_update_at FROM complaints WHERE guild_id=? AND case_id=?",
+                (interaction.guild.id, case_id),
+            )
+            row = await cur.fetchone()
+        if not row:
+            return await interaction.response.send_message("Case not found.", ephemeral=True)
+
+        user_id, status, last_update_at = int(row[0]), str(row[1]), str(row[2])
+        if user_id != interaction.user.id and not (isinstance(interaction.user, discord.Member) and is_mod(interaction.user)):
+            return await interaction.response.send_message("You can only view your own case status.", ephemeral=True)
+
+        return await interaction.response.send_message(
+            embed=obsidian_embed(
+                f"Case Status • {case_id}",
+                f"**Status:** {display_case_status(status)}\n**Last update (UTC):** {last_update_at}",
+                color=discord.Color.blurple(),
+            ),
+            ephemeral=True,
         )
-        row = await cur.fetchone()
-    if not row:
-        return await interaction.response.send_message("Case not found.", ephemeral=True)
-
-    user_id, status, last_update_at = int(row[0]), str(row[1]), str(row[2])
-    if user_id != interaction.user.id and not (isinstance(interaction.user, discord.Member) and is_mod(interaction.user)):
-        return await interaction.response.send_message("You can only view your own case status.", ephemeral=True)
-
-    await interaction.response.send_message(
+    
+    # Create new help request (case_id not provided)
+    if not category or not details:
+        return await interaction.response.send_message(
+            "To create a new help request, please provide `category` and `details`. "
+            "To check an existing case, provide `case_id`.",
+            ephemeral=True,
+        )
+    
+    await ensure_core_channels(interaction.guild)
+    complaints_id = await resolve_channel_id(interaction.guild, "complaints_channel_id", COMPLAINTS_CHANNEL_ID, COMPLAINTS_CHANNEL_NAME)
+    ch = interaction.guild.get_channel(complaints_id) if complaints_id else None
+    if not isinstance(ch, discord.TextChannel):
+        return await interaction.response.send_message(
+            "Complaints channel not configured. Set COMPLAINTS_CHANNEL_ID or enable AUTO_SETUP.",
+            ephemeral=True,
+        )
+    
+    # Defer response since we'll be creating a post
+    await interaction.response.defer(ephemeral=True)
+    
+    guild = interaction.guild
+    case_id = f"OBS-{int(now_utc().timestamp())}-{interaction.user.id % 10000}"
+    created = now_utc().isoformat()
+    
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO complaints(guild_id,case_id,user_id,created_at,category,details,evidence,status,staff_thread_id,last_update_at) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?)",
+            (
+                guild.id,
+                case_id,
+                interaction.user.id,
+                created,
+                category,
+                details,
+                evidence or "",
+                "OPEN",
+                None,
+                created,
+            ),
+        )
+        await db.commit()
+    
+    mod_role = get_mod_role(guild)
+    mention = mod_role.mention if mod_role else f"@{MOD_ROLE_NAME}"
+    
+    desc = f"**Category:** {category}\n\n**Details:**\n{details}"
+    if evidence and evidence.strip():
+        desc += f"\n\n**Evidence:** {evidence}"
+    
+    embed = obsidian_embed(f"Docket Entry • {case_id}", desc, color=discord.Color.red())
+    embed.set_footer(text=f"Filed by: {interaction.user} • {interaction.user.id}")
+    
+    view = ComplaintModView(case_id)
+    msg = await ch.send(content=mention, embed=embed, view=view)
+    bot.add_view(view)
+    
+    # Thread for staff discussion (tries private first; falls back)
+    thread_id = None
+    try:
+        thread = await ch.create_thread(
+            name=f"{case_id} • Staff Review",
+            type=discord.ChannelType.private_thread,
+            invitable=False,
+            reason="Private staff thread for complaint",
+        )
+        thread_id = thread.id
+        if mod_role:
+            try:
+                await thread.add_user(interaction.user)
+            except Exception:
+                pass
+    except Exception:
+        try:
+            thread = await msg.create_thread(name=f"{case_id} • Staff Review", auto_archive_duration=1440)
+            thread_id = thread.id
+        except Exception:
+            thread = None
+    
+    if thread_id:
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute(
+                "UPDATE complaints SET staff_thread_id=? WHERE guild_id=? AND case_id=?",
+                (thread_id, guild.id, case_id),
+            )
+            await db.commit()
+        try:
+            await thread.send(embed=obsidian_embed("Staff Thread", "Use this thread for internal notes and resolution steps."))
+        except Exception:
+            pass
+    
+    await log_complaint_action(guild, case_id, interaction.user.id, "FILED")
+    
+    await interaction.followup.send(
         embed=obsidian_embed(
-            f"Case Status • {case_id}",
-            f"**Status:** {display_case_status(status)}\n**Last update (UTC):** {last_update_at}",
-            color=discord.Color.blurple(),
+            "Docket Sealed",
+            f"Your help request has been sealed as **`{case_id}`**.\nYou'll receive DM updates as it progresses.",
+            color=discord.Color.green(),
         ),
         ephemeral=True,
     )
