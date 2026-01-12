@@ -1634,8 +1634,12 @@ async def on_interaction(interaction: discord.Interaction):
                     pass
             finally:
                 # Clean up tracking after a delay (allow time for any duplicate processing to be caught)
-                await asyncio.sleep(2)
-                _processed_modal_submissions.discard(interaction_key)
+                if 'interaction_key' in locals():
+                    try:
+                        await asyncio.sleep(2)
+                        _processed_modal_submissions.discard(interaction_key)
+                    except Exception:
+                        pass
             return
         # For other modals, let discord.py handle them if they're still in memory
         return
@@ -1807,11 +1811,20 @@ async def on_interaction(interaction: discord.Interaction):
             # Re-raise to let discord.py handle it
             raise
         
+        # Also skip if this is a modal submission - it has its own error handler
+        if interaction.type == discord.InteractionType.modal_submit:
+            # Don't handle here - modal submission has its own handler
+            return
+        
         try:
             if interaction.response.is_done():
                 await interaction.followup.send(f"Something went wrong: {e}", ephemeral=True)
             else:
-                await interaction.response.send_message(f"Something went wrong: {e}", ephemeral=True)
+                try:
+                    await interaction.response.send_message(f"Something went wrong: {e}", ephemeral=True)
+                except (discord.errors.NotFound, discord.errors.InteractionResponded):
+                    # Interaction already expired or handled
+                    pass
         except Exception:
             pass
 
