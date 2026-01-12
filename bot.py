@@ -2,6 +2,7 @@ import os
 import re
 import asyncio
 import random
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any, Tuple
 
@@ -11,6 +12,14 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    force=True  # Force reconfiguration if already configured
+)
+logger = logging.getLogger(__name__)
 
 # ============================================================
 # Obsidian Clan Bot (Warframe Discord)
@@ -1390,9 +1399,7 @@ async def on_interaction(interaction: discord.Interaction):
         cid = interaction.data.get("custom_id") if interaction.data else None
         
         # Log that we received a modal submission
-        print(f"[modal] Received modal submission: {cid}")
-        import sys
-        sys.stdout.flush()
+        logger.info(f"[modal] Received modal submission: {cid} (ID: {interaction.id})")
         
         # Handle RequestInfoModal submissions
         if cid and cid.startswith("request_info_"):
@@ -1467,40 +1474,30 @@ async def on_interaction(interaction: discord.Interaction):
             # Use interaction ID as unique identifier
             interaction_key = f"{interaction.id}:{interaction.user.id}"
             if interaction_key in _processed_modal_submissions:
-                print(f"[modal] Already processed: {interaction_key}")
+                logger.info(f"[modal] Already processed: {interaction_key}")
                 return  # Already processed
             
             if interaction.response.is_done():
-                print(f"[modal] Interaction already done: {interaction_key}")
+                logger.info(f"[modal] Interaction already done: {interaction_key}")
                 return  # Already handled
             
             # Mark as processing immediately
             _processed_modal_submissions.add(interaction_key)
-            print(f"[modal] Processing complaint submission: {interaction_key}")
-            import sys
-            sys.stdout.flush()
+            logger.info(f"[modal] Processing complaint submission: {interaction_key}")
             
             try:
                 # Acknowledge the interaction first to prevent duplicate processing
                 # But check if it's still valid first
                 try:
                     await interaction.response.defer(ephemeral=True)
-                    print(f"[modal] Deferred interaction successfully: {interaction_key}")
-                    import sys
-                    sys.stdout.flush()
+                    logger.info(f"[modal] Deferred interaction successfully: {interaction_key}")
                 except (discord.errors.NotFound, discord.errors.InteractionResponded) as defer_err:
                     # Interaction already expired or was handled - ignore
-                    print(f"[modal] Could not defer (already handled/expired): {defer_err}")
-                    import sys
-                    sys.stdout.flush()
+                    logger.warning(f"[modal] Could not defer (already handled/expired): {defer_err}")
                     _processed_modal_submissions.discard(interaction_key)
                     return
                 except Exception as defer_err:
-                    print(f"[modal] Unexpected error during defer: {defer_err}")
-                    import traceback
-                    traceback.print_exc()
-                    import sys
-                    sys.stdout.flush()
+                    logger.error(f"[modal] Unexpected error during defer: {defer_err}", exc_info=True)
                     _processed_modal_submissions.discard(interaction_key)
                     return
                 
@@ -1656,15 +1653,10 @@ async def on_interaction(interaction: discord.Interaction):
                     ),
                     ephemeral=True,
                 )
-                print(f"[modal] Successfully created complaint: {case_id}")
+                logger.info(f"[modal] Successfully created complaint: {case_id}")
             except Exception as e:
                 # Handle errors in modal submission
-                import traceback
-                import sys
-                error_traceback = traceback.format_exc()
-                error_msg = f"[modal] Error in complaint modal submission: {e}\n{error_traceback}"
-                print(error_msg, file=sys.stderr, flush=True)
-                print(error_msg, flush=True)
+                logger.error(f"[modal] Error in complaint modal submission: {e}", exc_info=True)
                 try:
                     if interaction.response.is_done():
                         await interaction.followup.send(f"Error submitting docket: {str(e)}", ephemeral=True)
@@ -1672,11 +1664,10 @@ async def on_interaction(interaction: discord.Interaction):
                         try:
                             await interaction.response.send_message(f"Error submitting docket: {str(e)}", ephemeral=True)
                         except (discord.errors.NotFound, discord.errors.InteractionResponded) as err:
-                            print(f"[modal] Could not send error response: {err}")
+                            logger.warning(f"[modal] Could not send error response: {err}")
                 except Exception as err:
                     # If we can't send error message, log it
-                    print(f"[modal] Could not send error message: {err}")
-                    traceback.print_exc()
+                    logger.error(f"[modal] Could not send error message: {err}", exc_info=True)
             finally:
                 # Clean up tracking after a delay (allow time for any duplicate processing to be caught)
                 if 'interaction_key' in locals():
