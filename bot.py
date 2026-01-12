@@ -140,22 +140,22 @@ class ClanBot(commands.Bot):
 
     async def setup_hook(self):
         # Sync commands: to a single guild for speed if GUILD_ID set, else global.
+        # Note: Commands are already loaded via load_all_commands() before bot creation
         try:
             if GUILD_ID:
                 guild = discord.Object(id=GUILD_ID)
-                # Copy global commands to guild, then sync
-                try:
-                    self.tree.copy_global_to(guild=guild)
-                except AttributeError:
-                    # copy_global_to might not exist in all versions, skip if missing
-                    pass
+                # Don't use copy_global_to to avoid duplicates - just sync guild commands directly
                 await self.tree.sync(guild=guild)
-                print(f"[sync] Synced commands to guild {GUILD_ID}")
+                command_count = len([cmd for cmd in self.tree.get_commands(guild=guild)])
+                print(f"[sync] Synced {command_count} commands to guild {GUILD_ID}")
             else:
                 await self.tree.sync()
-                print("[sync] Synced commands globally (may take a while to appear)")
+                command_count = len([cmd for cmd in self.tree.get_commands(guild=None)])
+                print(f"[sync] Synced {command_count} commands globally (may take a while to appear)")
         except Exception as e:
             print(f"[sync] Failed to sync commands: {e}")
+            import traceback
+            traceback.print_exc()
 
 
 bot = ClanBot()
@@ -183,16 +183,20 @@ def load_all_commands():
         "commands.economy.daily",
     ]
     
+    loaded_count = 0
     for module_name in command_modules:
         try:
             module = importlib.import_module(module_name)
             if hasattr(module, "setup"):
                 module.setup(bot)
+                loaded_count += 1
                 print(f"[commands] Loaded {module_name}")
         except Exception as e:
             print(f"[commands] Failed to load {module_name}: {e}")
+    
+    print(f"[commands] Successfully loaded {loaded_count} command modules")
 
-# Load commands
+# Load commands BEFORE setup_hook runs
 load_all_commands()
 
 
