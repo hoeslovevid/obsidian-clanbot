@@ -13,7 +13,7 @@ def setup(bot):
     @bot.tree.command(name="setup_obsidian", description="Create/ensure core channels and post Obsidian panels (mods only).")
     async def setup_obsidian(interaction: discord.Interaction):
         # Import bot-specific functions inside the command to avoid circular imports
-        from bot import ensure_core_channels, ensure_join_to_create_channel, ComplaintPanel
+        from bot import ensure_join_to_create_channel
         from bot import CREATE_VC_NAME, TEMP_VC_CATEGORY_NAME, VOICE_PANEL_CHANNEL_NAME
         
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):

@@ -33,7 +33,21 @@ def setup(bot):
             await interaction.response.defer(ephemeral=True)
 
             # Only ensure the complaints channel (not all channels)
-            await resolve_channel_id(interaction.guild, "complaints_channel_id", COMPLAINTS_CHANNEL_ID, COMPLAINTS_CHANNEL_NAME)
+            try:
+                complaints_channel_id = await resolve_channel_id(interaction.guild, "complaints_channel_id", COMPLAINTS_CHANNEL_ID, COMPLAINTS_CHANNEL_NAME)
+                # Verify the channel exists
+                complaints_channel = interaction.guild.get_channel(complaints_channel_id)
+                if not isinstance(complaints_channel, discord.TextChannel):
+                    return await interaction.followup.send(
+                        "Complaints channel could not be created or found. Please ensure AUTO_SETUP is enabled or set COMPLAINTS_CHANNEL_ID.",
+                        ephemeral=True,
+                    )
+            except Exception as e:
+                return await interaction.followup.send(
+                    f"Failed to set up complaints channel: {e}\n\n"
+                    "Please ensure AUTO_SETUP is enabled or set COMPLAINTS_CHANNEL_ID in your environment variables.",
+                    ephemeral=True,
+                )
 
             # Post the Docket panel
             await interaction.channel.send(
