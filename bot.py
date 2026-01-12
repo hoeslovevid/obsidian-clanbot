@@ -57,6 +57,14 @@ COMPLAINTS_LOG_CHANNEL_NAME = os.getenv("COMPLAINTS_LOG_CHANNEL_NAME", "docket-l
 EVENTS_CHANNEL_ID = int(os.getenv("EVENTS_CHANNEL_ID", "0") or "0")
 EVENTS_CHANNEL_NAME = os.getenv("EVENTS_CHANNEL_NAME", "ops-board")
 
+# Economy config
+ECONOMY_ENABLED = os.getenv("ECONOMY_ENABLED", "true").lower() == "true"
+COINS_PER_MESSAGE = int(os.getenv("COINS_PER_MESSAGE", "5"))
+COINS_PER_MINUTE_VOICE = int(os.getenv("COINS_PER_MINUTE_VOICE", "2"))
+MESSAGE_COOLDOWN_SECONDS = int(os.getenv("MESSAGE_COOLDOWN_SECONDS", "60"))
+VOICE_REWARD_INTERVAL_MINUTES = int(os.getenv("VOICE_REWARD_INTERVAL_MINUTES", "1"))
+MIN_VOICE_MINUTES_FOR_REWARD = int(os.getenv("MIN_VOICE_MINUTES_FOR_REWARD", "1"))
+
 AUTO_SETUP = os.getenv("AUTO_SETUP", "true").lower() in ("1", "true", "yes", "y", "on")
 
 # Events
@@ -231,7 +239,160 @@ async def init_db():
             PRIMARY KEY (guild_id, message_id, user_id)
         )""")
 
+        # Economy tables
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS user_balances (
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            balance INTEGER NOT NULL DEFAULT 0,
+            total_earned INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (guild_id, user_id)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS economy_transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            amount INTEGER NOT NULL,
+            transaction_type TEXT NOT NULL,
+            description TEXT,
+            created_at TEXT NOT NULL
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS voice_activity (
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            channel_id INTEGER NOT NULL,
+            joined_at TEXT NOT NULL,
+            last_reward_at TEXT,
+            total_minutes INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (guild_id, user_id, channel_id)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS message_cooldowns (
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            last_message_at TEXT NOT NULL,
+            PRIMARY KEY (guild_id, user_id)
+        )""")
+
         await db.commit()
+
+
+# --------------------- Economy Functions ---------------------
+async def get_user_balance(guild_id: int, user_id: int) -> int:
+    """Get a user's current balance."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            "SELECT balance FROM user_balances WHERE guild_id=? AND user_id=?",
+            (guild_id, user_id),
+        )
+        row = await cur.fetchone()
+        return row[0] if row else 0
+
+
+async def add_coins(guild_id: int, user_id: int, amount: int, transaction_type: str, description: str = None):
+    """Add coins to a user's balance and log the transaction."""
+    if amount <= 0:
+        return
+    
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Insert or update balance
+        await db.execute("""
+            INSERT INTO user_balances (guild_id, user_id, balance, total_earned)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(guild_id, user_id) DO UPDATE SET
+                balance = balance + ?,
+                total_earned = total_earned + ?
+        """, (guild_id, user_id, amount, amount, amount, amount))
+        
+        # Log transaction
+        await db.execute("""
+            INSERT INTO economy_transactions (guild_id, user_id, amount, transaction_type, description, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (guild_id, user_id, amount, transaction_type, description or "", now_utc().isoformat()))
+        
+        await db.commit()
+
+
+async def remove_coins(guild_id: int, user_id: int, amount: int, transaction_type: str, description: str = None) -> bool:
+    """Remove coins from a user's balance. Returns True if successful, False if insufficient balance."""
+    if amount <= 0:
+        return False
+    
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Check current balance
+        cur = await db.execute(
+            "SELECT balance FROM user_balances WHERE guild_id=? AND user_id=?",
+            (guild_id, user_id),
+        )
+        row = await cur.fetchone()
+        current_balance = row[0] if row else 0
+        
+        if current_balance < amount:
+            return False
+        
+        # Update balance
+        await db.execute("""
+            UPDATE user_balances SET balance = balance - ? WHERE guild_id=? AND user_id=?
+        """, (amount, guild_id, user_id))
+        
+        # Log transaction
+        await db.execute("""
+            INSERT INTO economy_transactions (guild_id, user_id, amount, transaction_type, description, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (guild_id, user_id, -amount, transaction_type, description or "", now_utc().isoformat()))
+        
+        await db.commit()
+        return True
+
+
+async def transfer_coins(guild_id: int, from_user_id: int, to_user_id: int, amount: int) -> bool:
+    """Transfer coins between users. Returns True if successful."""
+    if amount <= 0 or from_user_id == to_user_id:
+        return False
+    
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Check sender balance
+        cur = await db.execute(
+            "SELECT balance FROM user_balances WHERE guild_id=? AND user_id=?",
+            (guild_id, from_user_id),
+        )
+        row = await cur.fetchone()
+        sender_balance = row[0] if row else 0
+        
+        if sender_balance < amount:
+            return False
+        
+        # Remove from sender
+        await db.execute("""
+            UPDATE user_balances SET balance = balance - ? WHERE guild_id=? AND user_id=?
+        """, (amount, guild_id, from_user_id))
+        
+        # Add to receiver
+        await db.execute("""
+            INSERT INTO user_balances (guild_id, user_id, balance, total_earned)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(guild_id, user_id) DO UPDATE SET balance = balance + ?
+        """, (guild_id, to_user_id, amount, 0, amount))
+        
+        # Log transactions
+        now = now_utc().isoformat()
+        await db.execute("""
+            INSERT INTO economy_transactions (guild_id, user_id, amount, transaction_type, description, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (guild_id, from_user_id, -amount, "TRANSFER_OUT", f"Transferred to user {to_user_id}", now))
+        
+        await db.execute("""
+            INSERT INTO economy_transactions (guild_id, user_id, amount, transaction_type, description, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (guild_id, to_user_id, amount, "TRANSFER_IN", f"Received from user {from_user_id}", now))
+        
+        await db.commit()
+        return True
 
 
 async def get_guild_setting(guild_id: int, key: str) -> Optional[str]:
@@ -958,15 +1119,27 @@ async def help_command(interaction: discord.Interaction):
         desc += "• `/setup_obsidian` - (Mods only) Set up core channels and panels\n"
         desc += "• `/purge` - (Mods only) Clear messages from channels\n\n"
     
+    desc += "**💰 Economy Commands**\n"
+    desc += "• `/balance` - Check your coin balance\n"
+    desc += "• `/leaderboard [limit]` - View top coin earners (default: 10, max: 25)\n"
+    desc += "• `/transfer user:<@user> amount:<number>` - Transfer coins to another user\n"
+    desc += "  └ Example: `/transfer user:@friend amount:100`\n\n"
+    
     desc += "**💬 Other Features**\n"
     desc += "• **Join-to-Create Voice Channels** - Join the trigger channel in Temp VCs to create your own squad channel\n"
     desc += "• **Obsidian Docket** - Use the button panel to file complaints (mods will review)\n"
-    desc += "• **Voice Channel Controls** - Squad owners get control panels for their channels\n\n"
+    desc += "• **Voice Channel Controls** - Squad owners get control panels for their channels\n"
+    if ECONOMY_ENABLED:
+        desc += "• **Economy System** - Earn coins by chatting and being active in voice channels\n"
+    desc += "\n"
     
     desc += "**ℹ️ Notes**\n"
     desc += "• Event times support natural language (e.g., `tomorrow 8pm`, `Jan 14 7:30pm`)\n"
     desc += "• Complaint case IDs are sent to you via DM when you file a report\n"
     desc += "• You'll receive DM updates on your complaint status (if DMs are enabled)\n"
+    if ECONOMY_ENABLED:
+        desc += f"• Earn {COINS_PER_MESSAGE} coins per message ({MESSAGE_COOLDOWN_SECONDS}s cooldown)\n"
+        desc += f"• Earn {COINS_PER_MINUTE_VOICE} coins per minute in voice channels\n"
     
     embed = obsidian_embed(
         "Obsidian Clan Bot • Command Reference",
@@ -1364,6 +1537,156 @@ async def purge(interaction: discord.Interaction, amount: str):
         await interaction.followup.send(f"Unexpected error: {e}", ephemeral=True)
 
 
+# --------------------- Economy Event Handlers ---------------------
+@bot.event
+async def on_message(message: discord.Message):
+    """Award coins for text messages (with cooldown)."""
+    # Ignore bot messages and DMs
+    if message.author.bot or not message.guild:
+        return
+    
+    # Check if economy is enabled
+    if not ECONOMY_ENABLED:
+        return
+    
+    # Ignore commands (they're handled separately)
+    if message.content.startswith("!"):
+        return
+    
+    # Check cooldown
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            "SELECT last_message_at FROM message_cooldowns WHERE guild_id=? AND user_id=?",
+            (message.guild.id, message.author.id),
+        )
+        row = await cur.fetchone()
+        
+        if row:
+            last_message_at = datetime.fromisoformat(row[0])
+            time_since = (now_utc() - last_message_at).total_seconds()
+            if time_since < MESSAGE_COOLDOWN_SECONDS:
+                return  # Still on cooldown
+        
+        # Update cooldown
+        await db.execute("""
+            INSERT INTO message_cooldowns (guild_id, user_id, last_message_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(guild_id, user_id) DO UPDATE SET last_message_at=?
+        """, (message.guild.id, message.author.id, now_utc().isoformat(), now_utc().isoformat()))
+        await db.commit()
+    
+    # Award coins
+    await add_coins(
+        message.guild.id,
+        message.author.id,
+        COINS_PER_MESSAGE,
+        "MESSAGE",
+        f"Message in #{message.channel.name}",
+    )
+
+
+@bot.event
+async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+    """Track voice channel activity for economy rewards and handle join-to-create."""
+    # Economy voice tracking (if enabled)
+    if ECONOMY_ENABLED:
+        now = now_utc()
+        
+        # User left a voice channel - remove tracking
+        if before.channel and isinstance(before.channel, discord.VoiceChannel):
+            async with aiosqlite.connect(DB_PATH) as db:
+                await db.execute(
+                    "DELETE FROM voice_activity WHERE guild_id=? AND user_id=? AND channel_id=?",
+                    (member.guild.id, member.id, before.channel.id),
+                )
+                await db.commit()
+        
+        # User joined a voice channel - start tracking (if not muted/deafened)
+        if after.channel and isinstance(after.channel, discord.VoiceChannel):
+            if not (after.self_mute or after.self_deaf):
+                async with aiosqlite.connect(DB_PATH) as db:
+                    await db.execute("""
+                        INSERT OR REPLACE INTO voice_activity (guild_id, user_id, channel_id, joined_at, last_reward_at, total_minutes)
+                        VALUES (?, ?, ?, ?, ?, COALESCE((SELECT total_minutes FROM voice_activity WHERE guild_id=? AND user_id=? AND channel_id=?), 0))
+                    """, (member.guild.id, member.id, after.channel.id, now.isoformat(), None, member.guild.id, member.id, after.channel.id))
+                    await db.commit()
+    
+    # Original join-to-create logic
+    if not after.channel:
+        return
+
+    create_id_s = await get_guild_setting(member.guild.id, "create_vc_channel_id")
+    if not (create_id_s and create_id_s.isdigit()):
+        return
+
+    create_id = int(create_id_s)
+    if after.channel.id != create_id:
+        # Track last non-empty times for cleanup
+        for ch in (before.channel, after.channel):
+            if ch and isinstance(ch, discord.VoiceChannel):
+                async with aiosqlite.connect(DB_PATH) as db:
+                    # Only track channels we own
+                    cur = await db.execute(
+                        "SELECT 1 FROM temp_vcs WHERE guild_id=? AND channel_id=?",
+                        (member.guild.id, ch.id),
+                    )
+                    exists = await cur.fetchone()
+                    if exists and len(ch.members) > 0:
+                        await db.execute(
+                            "UPDATE temp_vcs SET last_nonempty_at=? WHERE guild_id=? AND channel_id=?",
+                            (now_utc().isoformat(), member.guild.id, ch.id),
+                        )
+                        await db.commit()
+        return
+
+    guild = member.guild
+    category = await resolve_temp_vc_category(guild)
+    mod_role = get_mod_role(guild)
+
+    # Create VC
+    vc_name = f"{member.display_name} • Obsidian Squad"
+    overwrites = {
+        guild.default_role: discord.PermissionOverwrite(view_channel=True, connect=True, speak=True),
+        member: discord.PermissionOverwrite(
+            view_channel=True,
+            connect=True,
+            manage_channels=True,  # lets them edit it via Discord UI
+            move_members=True,
+            mute_members=True,
+            deafen_members=True,
+        ),
+    }
+    if mod_role:
+        overwrites[mod_role] = discord.PermissionOverwrite(view_channel=True, connect=True)
+
+    new_vc = await guild.create_voice_channel(
+        name=vc_name,
+        category=category,
+        overwrites=overwrites,
+        reason="Join-to-create Obsidian cell VC",
+    )
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT OR REPLACE INTO temp_vcs(guild_id,channel_id,owner_id,created_at,last_nonempty_at) VALUES(?,?,?,?,?)",
+            (guild.id, new_vc.id, member.id, now_utc().isoformat(), now_utc().isoformat()),
+        )
+        await db.commit()
+
+    # Move member into new VC
+    try:
+        await member.move_to(new_vc, reason="Move to created squad VC")
+    except discord.Forbidden:
+        # Needs Move Members permission
+        pass
+
+    # Post control panel
+    try:
+        await post_vc_panel(guild, new_vc, member)
+    except Exception:
+        pass
+
+
 # --------------------- Component Router ---------------------
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
@@ -1544,81 +1867,6 @@ async def on_interaction(interaction: discord.Interaction):
 
 
 # --------------------- Join-to-create logic ---------------------
-@bot.event
-async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
-    if not after.channel:
-        return
-
-    create_id_s = await get_guild_setting(member.guild.id, "create_vc_channel_id")
-    if not (create_id_s and create_id_s.isdigit()):
-        return
-
-    create_id = int(create_id_s)
-    if after.channel.id != create_id:
-        # Track last non-empty times for cleanup
-        for ch in (before.channel, after.channel):
-            if ch and isinstance(ch, discord.VoiceChannel):
-                async with aiosqlite.connect(DB_PATH) as db:
-                    # Only track channels we own
-                    cur = await db.execute(
-                        "SELECT 1 FROM temp_vcs WHERE guild_id=? AND channel_id=?",
-                        (member.guild.id, ch.id),
-                    )
-                    exists = await cur.fetchone()
-                    if exists and len(ch.members) > 0:
-                        await db.execute(
-                            "UPDATE temp_vcs SET last_nonempty_at=? WHERE guild_id=? AND channel_id=?",
-                            (now_utc().isoformat(), member.guild.id, ch.id),
-                        )
-                        await db.commit()
-        return
-
-    guild = member.guild
-    category = await resolve_temp_vc_category(guild)
-    mod_role = get_mod_role(guild)
-
-    # Create VC
-    vc_name = f"{member.display_name} • Obsidian Squad"
-    overwrites = {
-        guild.default_role: discord.PermissionOverwrite(view_channel=True, connect=True, speak=True),
-        member: discord.PermissionOverwrite(
-            view_channel=True,
-            connect=True,
-            manage_channels=True,  # lets them edit it via Discord UI
-            move_members=True,
-            mute_members=True,
-            deafen_members=True,
-        ),
-    }
-    if mod_role:
-        overwrites[mod_role] = discord.PermissionOverwrite(view_channel=True, connect=True)
-
-    new_vc = await guild.create_voice_channel(
-        name=vc_name,
-        category=category,
-        overwrites=overwrites,
-        reason="Join-to-create Obsidian cell VC",
-    )
-
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute(
-            "INSERT OR REPLACE INTO temp_vcs(guild_id,channel_id,owner_id,created_at,last_nonempty_at) VALUES(?,?,?,?,?)",
-            (guild.id, new_vc.id, member.id, now_utc().isoformat(), now_utc().isoformat()),
-        )
-        await db.commit()
-
-    # Move member into new VC
-    try:
-        await member.move_to(new_vc, reason="Move to created squad VC")
-    except discord.Forbidden:
-        # Needs Move Members permission
-        pass
-
-    # Post control panel
-    try:
-        await post_vc_panel(guild, new_vc, member)
-    except Exception:
-        pass
 
 
 @tasks.loop(minutes=VC_CLEANUP_INTERVAL_MINUTES)
@@ -1707,6 +1955,184 @@ async def before_event_reminder_loop():
     await bot.wait_until_ready()
 
 
+@tasks.loop(minutes=VOICE_REWARD_INTERVAL_MINUTES)
+async def voice_reward_loop():
+    """Award coins to users based on voice channel activity."""
+    if not ECONOMY_ENABLED:
+        return
+    
+    now = now_utc()
+    
+    for guild in bot.guilds:
+        async with aiosqlite.connect(DB_PATH) as db:
+            # Get all active voice sessions
+            cur = await db.execute("""
+                SELECT user_id, channel_id, joined_at, last_reward_at, total_minutes
+                FROM voice_activity
+                WHERE guild_id=?
+            """, (guild.id,))
+            rows = await cur.fetchall()
+            
+            for user_id, channel_id, joined_at_str, last_reward_at_str, total_minutes in rows:
+                try:
+                    user = guild.get_member(user_id)
+                    if not user:
+                        continue
+                    
+                    channel = guild.get_channel(channel_id)
+                    if not isinstance(channel, discord.VoiceChannel):
+                        continue
+                    
+                    # Check if user is still in the channel and not muted/deafened
+                    if user.voice and user.voice.channel and user.voice.channel.id == channel_id:
+                        if user.voice.self_mute or user.voice.self_deaf:
+                            continue
+                    else:
+                        # User left, remove tracking
+                        await db.execute(
+                            "DELETE FROM voice_activity WHERE guild_id=? AND user_id=? AND channel_id=?",
+                            (guild.id, user_id, channel_id),
+                        )
+                        await db.commit()
+                        continue
+                    
+                    # Calculate minutes since last reward (or since join)
+                    joined_at = datetime.fromisoformat(joined_at_str)
+                    if last_reward_at_str:
+                        last_reward_at = datetime.fromisoformat(last_reward_at_str)
+                        minutes_since = (now - last_reward_at).total_seconds() / 60
+                    else:
+                        minutes_since = (now - joined_at).total_seconds() / 60
+                    
+                    # Award coins for full minutes
+                    if minutes_since >= MIN_VOICE_MINUTES_FOR_REWARD:
+                        minutes_to_reward = int(minutes_since)
+                        coins = minutes_to_reward * COINS_PER_MINUTE_VOICE
+                        
+                        if coins > 0:
+                            await add_coins(
+                                guild.id,
+                                user_id,
+                                coins,
+                                "VOICE",
+                                f"Voice activity in #{channel.name}",
+                            )
+                            
+                            # Update tracking
+                            new_total = total_minutes + minutes_to_reward
+                            await db.execute("""
+                                UPDATE voice_activity
+                                SET last_reward_at=?, total_minutes=?
+                                WHERE guild_id=? AND user_id=? AND channel_id=?
+                            """, (now.isoformat(), new_total, guild.id, user_id, channel_id))
+                            await db.commit()
+                
+                except Exception as e:
+                    print(f"[economy] Error processing voice reward for {user_id} in {guild.id}: {e}")
+                    continue
+
+
+@voice_reward_loop.before_loop
+async def before_voice_reward_loop():
+    await bot.wait_until_ready()
+
+
+# --------------------- Economy Commands ---------------------
+@bot.tree.command(name="balance", description="Check your coin balance.")
+async def balance(interaction: discord.Interaction):
+    """Display the user's current coin balance."""
+    if not ECONOMY_ENABLED:
+        return await interaction.response.send_message("Economy system is disabled.", ephemeral=True)
+    
+    balance = await get_user_balance(interaction.guild.id, interaction.user.id)
+    
+    embed = obsidian_embed(
+        "💰 Coin Balance",
+        f"You have **{balance:,}** coins.\n\n"
+        f"Earn coins by:\n"
+        f"• Sending messages ({COINS_PER_MESSAGE} coins per message, {MESSAGE_COOLDOWN_SECONDS}s cooldown)\n"
+        f"• Being active in voice channels ({COINS_PER_MINUTE_VOICE} coins per minute)",
+        color=discord.Color.gold(),
+    )
+    
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
+@bot.tree.command(name="leaderboard", description="View the top coin earners.")
+@app_commands.describe(limit="Number of users to show (default: 10, max: 25)")
+async def leaderboard(interaction: discord.Interaction, limit: int = 10):
+    """Display the top coin earners."""
+    if not ECONOMY_ENABLED:
+        return await interaction.response.send_message("Economy system is disabled.", ephemeral=True)
+    
+    if limit < 1 or limit > 25:
+        limit = 10
+    
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("""
+            SELECT user_id, balance, total_earned
+            FROM user_balances
+            WHERE guild_id=?
+            ORDER BY balance DESC
+            LIMIT ?
+        """, (interaction.guild.id, limit))
+        rows = await cur.fetchall()
+    
+    if not rows:
+        return await interaction.response.send_message("No users have earned coins yet!", ephemeral=True)
+    
+    desc = ""
+    for i, (user_id, balance, total_earned) in enumerate(rows, 1):
+        user = interaction.guild.get_member(user_id)
+        username = user.display_name if user else f"User {user_id}"
+        medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
+        desc += f"{medal} **{username}** - {balance:,} coins (Total earned: {total_earned:,})\n"
+    
+    embed = obsidian_embed(
+        "🏆 Coin Leaderboard",
+        desc,
+        color=discord.Color.gold(),
+    )
+    
+    await interaction.response.send_message(embed=embed, ephemeral=False)
+
+
+@bot.tree.command(name="transfer", description="Transfer coins to another user.")
+@app_commands.describe(
+    user="The user to transfer coins to",
+    amount="Amount of coins to transfer"
+)
+async def transfer(interaction: discord.Interaction, user: discord.Member, amount: int):
+    """Transfer coins to another user."""
+    if not ECONOMY_ENABLED:
+        return await interaction.response.send_message("Economy system is disabled.", ephemeral=True)
+    
+    if amount <= 0:
+        return await interaction.response.send_message("Amount must be greater than 0.", ephemeral=True)
+    
+    if user.bot:
+        return await interaction.response.send_message("You cannot transfer coins to bots.", ephemeral=True)
+    
+    if user.id == interaction.user.id:
+        return await interaction.response.send_message("You cannot transfer coins to yourself.", ephemeral=True)
+    
+    success = await transfer_coins(interaction.guild.id, interaction.user.id, user.id, amount)
+    
+    if success:
+        embed = obsidian_embed(
+            "✅ Transfer Complete",
+            f"You transferred **{amount:,}** coins to {user.mention}.",
+            color=discord.Color.green(),
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+    else:
+        balance = await get_user_balance(interaction.guild.id, interaction.user.id)
+        await interaction.response.send_message(
+            f"Insufficient balance. You have {balance:,} coins.",
+            ephemeral=True,
+        )
+
+
 # --------------------- Install / startup hooks ---------------------
 @bot.event
 async def on_guild_join(guild: discord.Guild):
@@ -1767,6 +2193,8 @@ async def on_ready():
         temp_vc_cleanup.start()
     if not event_reminder_loop.is_running():
         event_reminder_loop.start()
+    if ECONOMY_ENABLED and not voice_reward_loop.is_running():
+        voice_reward_loop.start()
 
 
 async def main():
