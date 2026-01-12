@@ -933,7 +933,18 @@ class ComplaintModal(discord.ui.Modal, title="Obsidian Docket Submission"):
         # Check if already processed to prevent duplicates
         interaction_key = f"{interaction.id}:{interaction.user.id}"
         if interaction_key in _processed_modal_submissions:
+            print(f"[modal] ComplaintModal.on_submit: Already processed by on_interaction handler: {interaction_key}")
+            # Don't process again - our handler already handled it
+            if not interaction.response.is_done():
+                try:
+                    await interaction.response.defer(ephemeral=True)
+                except Exception:
+                    pass
             return  # Already processed by on_interaction handler
+        
+        print(f"[modal] ComplaintModal.on_submit: Processing (not in tracking set): {interaction_key}")
+        # Mark as processing to prevent on_interaction handler from also processing it
+        _processed_modal_submissions.add(interaction_key)
         
         guild = interaction.guild
         # Generate unique case_id with retry logic
@@ -1460,15 +1471,31 @@ async def on_interaction(interaction: discord.Interaction):
             
             # Mark as processing immediately
             _processed_modal_submissions.add(interaction_key)
-            print(f"[modal] Processing complaint submission: {interaction_key}")
+                print(f"[modal] Processing complaint submission: {interaction_key}")
+                import sys
+                sys.stdout.flush()
             
             try:
                 # Acknowledge the interaction first to prevent duplicate processing
                 # But check if it's still valid first
                 try:
                     await interaction.response.defer(ephemeral=True)
-                except (discord.errors.NotFound, discord.errors.InteractionResponded):
+                    print(f"[modal] Deferred interaction successfully: {interaction_key}")
+                    import sys
+                    sys.stdout.flush()
+                except (discord.errors.NotFound, discord.errors.InteractionResponded) as defer_err:
                     # Interaction already expired or was handled - ignore
+                    print(f"[modal] Could not defer (already handled/expired): {defer_err}")
+                    import sys
+                    sys.stdout.flush()
+                    _processed_modal_submissions.discard(interaction_key)
+                    return
+                except Exception as defer_err:
+                    print(f"[modal] Unexpected error during defer: {defer_err}")
+                    import traceback
+                    traceback.print_exc()
+                    import sys
+                    sys.stdout.flush()
                     _processed_modal_submissions.discard(interaction_key)
                     return
                 
