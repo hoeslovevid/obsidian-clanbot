@@ -1488,13 +1488,18 @@ async def on_interaction(interaction: discord.Interaction):
                 try:
                     await interaction.response.defer(ephemeral=True)
                     logger.info(f"[modal] Deferred interaction successfully: {interaction_key}")
-                except (discord.errors.NotFound, discord.errors.InteractionResponded, discord.errors.HTTPException) as defer_err:
-                    # Interaction already expired, handled, or acknowledged by on_submit
-                    logger.info(f"[modal] Could not defer (already handled/deferred): {defer_err}")
-                    # Check again - if it's done now, proceed with processing
-                    if not interaction.response.is_done():
-                        logger.warning(f"[modal] Interaction not done after defer error, returning")
-                        return
+                except discord.errors.NotFound as defer_err:
+                    # Interaction expired - can't process it
+                    logger.warning(f"[modal] Interaction expired (404), cannot process: {defer_err}")
+                    return
+                except (discord.errors.InteractionResponded, discord.errors.HTTPException) as defer_err:
+                    # Interaction already acknowledged by on_submit or another handler
+                    # Check if it's done now - if so, proceed with processing
+                    logger.info(f"[modal] Could not defer (already acknowledged): {defer_err}")
+                    # Even if is_done() is False, if we got "already acknowledged", 
+                    # it means someone else acknowledged it, so proceed with processing
+                    # The interaction will be marked as done when we try to use it
+                    logger.info(f"[modal] Proceeding with processing despite defer error (interaction was acknowledged)")
                 except Exception as defer_err:
                     logger.error(f"[modal] Unexpected error during defer: {defer_err}", exc_info=True)
                     return
