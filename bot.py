@@ -982,6 +982,9 @@ async def setup_obsidian(interaction: discord.Interaction):
     if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
         return await interaction.response.send_message("Obsidian Inheritors only.", ephemeral=True)
 
+    # Respond first, then do the work
+    await interaction.response.defer(ephemeral=True)
+
     await ensure_core_channels(interaction.guild)
     await ensure_join_to_create_channel(interaction.guild)
 
@@ -1015,7 +1018,7 @@ async def setup_obsidian(interaction: discord.Interaction):
         )
     )
 
-    await interaction.response.send_message("Obsidian systems deployed.", ephemeral=True)
+    await interaction.followup.send("Obsidian systems deployed.", ephemeral=True)
 
 
 @bot.tree.command(name="event_create", description="Create an Obsidian Ops event with RSVP + reminder.")
