@@ -24,7 +24,10 @@ load_dotenv()
 
 TOKEN = os.getenv("DISCORD_TOKEN", "").strip()
 if not TOKEN:
-    raise RuntimeError("Missing DISCORD_TOKEN in .env")
+    raise RuntimeError(
+        "Missing DISCORD_TOKEN environment variable. "
+        "Please set DISCORD_TOKEN in your environment variables or Railway dashboard."
+    )
 
 # Optional (faster command sync when set; otherwise global sync)
 GUILD_ID = int(os.getenv("GUILD_ID", "0") or "0")
