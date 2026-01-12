@@ -940,22 +940,11 @@ class ComplaintModal(discord.ui.Modal, title="Obsidian Docket Submission"):
 
     async def on_submit(self, interaction: discord.Interaction):
         # This method is disabled - modal submissions are handled entirely by the on_interaction handler
-        # for persistence after bot restarts. We just need to acknowledge the interaction to prevent errors.
+        # for persistence after bot restarts. We do NOTHING here - not even defer - let on_interaction handle everything.
         # DO NOT add to _processed_modal_submissions - let on_interaction handle processing
-        
-        # Check if interaction has already been responded to (by on_interaction handler)
-        if interaction.response.is_done():
-            logger.info(f"[modal] ComplaintModal.on_submit: Interaction already responded to (handled by on_interaction), skipping")
-            return
-        
-        # Just defer to acknowledge the interaction, but don't process it
-        # on_interaction will handle the actual processing
-        logger.info(f"[modal] ComplaintModal.on_submit: Deferring, letting on_interaction handle processing")
-        try:
-            await interaction.response.defer(ephemeral=True)
-        except (discord.errors.NotFound, discord.errors.InteractionResponded, discord.errors.HTTPException) as e:
-            logger.info(f"[modal] ComplaintModal.on_submit: Could not defer (already handled): {e}")
-        # Don't process here - let on_interaction handle it
+        # DO NOT defer - on_interaction will defer and process
+        logger.info(f"[modal] ComplaintModal.on_submit: Ignored - on_interaction will handle processing")
+        # Just return - do nothing. on_interaction handler will process the modal submission.
         return
         
         guild = interaction.guild
