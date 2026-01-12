@@ -1624,14 +1624,21 @@ async def on_interaction(interaction: discord.Interaction):
             except Exception as e:
                 # Handle errors in modal submission
                 import traceback
-                traceback.print_exc()
+                error_traceback = traceback.format_exc()
+                print(f"[modal] Error in complaint modal submission: {e}")
+                print(error_traceback)
                 try:
                     if interaction.response.is_done():
-                        await interaction.followup.send(f"Error submitting docket: {e}", ephemeral=True)
+                        await interaction.followup.send(f"Error submitting docket: {str(e)}", ephemeral=True)
                     else:
-                        await interaction.response.send_message(f"Error submitting docket: {e}", ephemeral=True)
-                except Exception:
-                    pass
+                        try:
+                            await interaction.response.send_message(f"Error submitting docket: {str(e)}", ephemeral=True)
+                        except (discord.errors.NotFound, discord.errors.InteractionResponded) as err:
+                            print(f"[modal] Could not send error response: {err}")
+                except Exception as err:
+                    # If we can't send error message, log it
+                    print(f"[modal] Could not send error message: {err}")
+                    traceback.print_exc()
             finally:
                 # Clean up tracking after a delay (allow time for any duplicate processing to be caught)
                 if 'interaction_key' in locals():
