@@ -1427,7 +1427,13 @@ async def on_interaction(interaction: discord.Interaction):
                         pass
 
                 await log_complaint_action(interaction.guild, case_id, interaction.user.id, "REQUEST_INFO", question_val)
-                await interaction.response.send_message("Requested evidence (DM sent if possible).", ephemeral=True)
+                
+                # Check if interaction is already responded to (shouldn't happen now that on_submit is disabled, but check anyway)
+                if interaction.response.is_done():
+                    # Already responded - use followup
+                    await interaction.followup.send("Requested evidence (DM sent if possible).", ephemeral=True)
+                else:
+                    await interaction.response.send_message("Requested evidence (DM sent if possible).", ephemeral=True)
             except Exception as e:
                 import traceback
                 traceback.print_exc()
