@@ -1654,6 +1654,16 @@ async def on_interaction(interaction: discord.Interaction):
                     except Exception:
                         pass
             return
+        
+        # For other modals (like ComplaintModal's on_submit being called by discord.py),
+        # we need to prevent discord.py from processing them to avoid duplicate processing
+        # Check if this modal might be handled by its own on_submit method
+        if cid and cid == "complaint_modal":
+            # We already handled it above, but if we reach here, something went wrong
+            # Let discord.py handle it - but this shouldn't happen
+            print(f"[modal] Warning: complaint_modal reached fallback handler")
+            return
+        
         # For other modals, let discord.py handle them if they're still in memory
         return
     
