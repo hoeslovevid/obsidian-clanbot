@@ -1677,18 +1677,196 @@ async def on_interaction(interaction: discord.Interaction):
                         pass
             return
         
-        # For other modals, let discord.py handle them if they're still in memory
-        # But we've already handled complaint_modal above, so this shouldn't be reached
-        if cid == "complaint_modal":
-            print(f"[modal] Warning: complaint_modal reached fallback - already handled above")
-            import sys
-            sys.stdout.flush()
-            return
+        # For other modals (with auto-generated custom_ids from previous bot sessions),
+        # try to extract data from the interaction and process it as a complaint
+        # This handles cases where the modal was created before the bot restarted
+        logger.info(f"[modal] Unknown modal custom_id: {cid} - attempting to extract as complaint modal")
         
-        # For other modals, let discord.py handle them
-        print(f"[modal] Letting discord.py handle modal: {cid}")
-        import sys
-        sys.stdout.flush()
+        # Extract modal data - helper function to get values from any modal submission
+        def extract_modal_values(interaction_data):
+            """Extract text input values from modal interaction data"""
+            values = {}
+            components = interaction_data.get("components", [])
+            for row in components:
+                if "components" in row:
+                    for component in row["components"]:
+                        comp_id = component.get("custom_id", "")
+                        comp_value = component.get("value", "")
+                        if comp_id:
+                            values[comp_id] = comp_value
+            return values
+        
+        # Try to extract complaint data from the modal submission
+        try:
+            values = extract_modal_values(interaction.data or {})
+            
+            # Check if this looks like a complaint modal (has category, details fields)
+            if "category" in values or "details" in values:
+                # This is likely a complaint modal submission - process it
+                logger.info(f"[modal] Detected complaint modal from auto-generated ID, extracting values: {list(values.keys())}")
+                
+                # Process it the same way as complaint_modal (reuse existing handler logic)
+                # Import the processing function or inline it here
+                interaction_key = f"{interaction.id}:{interaction.user.id}"
+                if interaction_key in _processed_modal_submissions:
+                    logger.info(f"[modal] Already processed: {interaction_key}")
+                    return
+                
+                _processed_modal_submissions.add(interaction_key)
+                
+                try:
+                    # Defer if not already done
+                    if not interaction.response.is_done():
+                        await interaction.response.defer(ephemeral=True)
+                    
+                    # Extract values
+                    category_val = values.get("category", "")
+                    details_val = values.get("details", "")
+                    evidence_val = values.get("evidence", "")
+                    
+                    # Process complaint using same logic as complaint_modal handler
+                    # This is duplicated but necessary for persistence after bot restarts
+                    guild = interaction.guild
+                    if not guild:
+                        return await interaction.followup.send("This command can only be used in a server.", ephemeral=True)
+                    
+                    # Generate unique case_id with retry logic
+                    created = now_utc()
+                    max_retries = 10
+                    case_id = None
+                    
+                    for attempt in range(max_retries):
+                        timestamp_part = int(created.timestamp() * 1000000)
+                        random_part = random.randint(1000, 9999)
+                        user_part = interaction.user.id % 10000
+                        case_id = f"OBS-{timestamp_part}-{user_part}-{random_part}"
+                        
+                        async with aiosqlite.connect(DB_PATH) as db:
+                            cur = await db.execute(
+                                "SELECT 1 FROM complaints WHERE guild_id=? AND case_id=?",
+                                (guild.id, case_id)
+                            )
+                            exists = await cur.fetchone()
+                        
+                        if not exists:
+                            break
+                        
+                        if attempt == max_retries - 1:
+                            import time
+                            case_id = f"OBS-{int(time.time() * 1000000)}-{interaction.user.id}-{random.randint(10000, 99999)}"
+                    
+                    created_iso = created.isoformat()
+
+                    # Check for duplicates
+                    async with aiosqlite.connect(DB_PATH) as db:
+                        check_cur = await db.execute(
+                            "SELECT case_id FROM complaints WHERE guild_id=? AND user_id=? AND category=? AND details=? AND created_at > datetime('now', '-5 seconds')",
+                            (guild.id, interaction.user.id, category_val, details_val)
+                        )
+                        existing = await check_cur.fetchone()
+                        if existing:
+                            _processed_modal_submissions.discard(interaction_key)
+                            await interaction.followup.send("This submission was already processed.", ephemeral=True)
+                            return
+                        
+                        await db.execute(
+                            "INSERT INTO complaints(guild_id,case_id,user_id,created_at,category,details,evidence,status,staff_thread_id,last_update_at) "
+                            "VALUES(?,?,?,?,?,?,?,?,?,?)",
+                            (guild.id, case_id, interaction.user.id, created_iso, category_val, details_val, evidence_val, "OPEN", None, created_iso),
+                        )
+                        await db.commit()
+
+                    complaints_id = await resolve_channel_id(guild, "complaints_channel_id", COMPLAINTS_CHANNEL_ID, COMPLAINTS_CHANNEL_NAME)
+                    ch = guild.get_channel(complaints_id) if complaints_id else None
+                    if not isinstance(ch, discord.TextChannel):
+                        return await interaction.followup.send(
+                            "Complaints channel not configured. Set COMPLAINTS_CHANNEL_ID or enable AUTO_SETUP.",
+                            ephemeral=True,
+                        )
+
+                    mod_role = get_mod_role(guild)
+                    mention = mod_role.mention if mod_role else f"@{MOD_ROLE_NAME}"
+
+                    desc = f"**Category:** {category_val}\n\n**Details:**\n{details_val}"
+                    if evidence_val.strip():
+                        desc += f"\n\n**Evidence:** {evidence_val}"
+
+                    embed = obsidian_embed(f"Docket Entry • {case_id}", desc, color=discord.Color.red())
+                    embed.set_footer(text=f"Filed by: {interaction.user} • {interaction.user.id}")
+
+                    view = ComplaintModView(case_id)
+                    msg = await ch.send(content=mention, embed=embed, view=view)
+                    bot.add_view(view)
+
+                    # Create staff thread
+                    thread_id = None
+                    try:
+                        thread = await ch.create_thread(
+                            name=f"{case_id} • Staff Review",
+                            type=discord.ChannelType.private_thread,
+                            invitable=False,
+                            reason="Private staff thread for complaint",
+                        )
+                        thread_id = thread.id
+                        if mod_role:
+                            try:
+                                await thread.add_user(interaction.user)
+                            except Exception:
+                                pass
+                    except Exception:
+                        try:
+                            thread = await msg.create_thread(name=f"{case_id} • Staff Review", auto_archive_duration=1440)
+                            thread_id = thread.id
+                        except Exception:
+                            thread = None
+
+                    if thread_id:
+                        async with aiosqlite.connect(DB_PATH) as db:
+                            await db.execute(
+                                "UPDATE complaints SET staff_thread_id=? WHERE guild_id=? AND case_id=?",
+                                (thread_id, guild.id, case_id),
+                            )
+                            await db.commit()
+                        try:
+                            if thread:
+                                await thread.send(embed=obsidian_embed("Staff Thread", "Use this thread for internal notes and resolution steps."))
+                        except Exception:
+                            pass
+
+                    await log_complaint_action(guild, case_id, interaction.user.id, "FILED")
+
+                    await interaction.followup.send(
+                        embed=obsidian_embed(
+                            "Docket Sealed",
+                            f"Your docket entry has been sealed as **`{case_id}`**.\nYou'll receive DM docket updates as it progresses.",
+                            color=discord.Color.green(),
+                        ),
+                        ephemeral=True,
+                    )
+                    logger.info(f"[modal] Successfully created complaint from auto-generated modal: {case_id}")
+                    
+                except Exception as e:
+                    logger.error(f"[modal] Error processing auto-generated modal: {e}", exc_info=True)
+                    try:
+                        if interaction.response.is_done():
+                            await interaction.followup.send("Error processing docket submission.", ephemeral=True)
+                        else:
+                            await interaction.response.send_message("Error processing docket submission.", ephemeral=True)
+                    except Exception:
+                        pass
+                finally:
+                    try:
+                        await asyncio.sleep(2)
+                        _processed_modal_submissions.discard(interaction_key)
+                    except Exception:
+                        pass
+                return
+        
+        except Exception as e:
+            logger.error(f"[modal] Error extracting data from unknown modal: {e}", exc_info=True)
+        
+        # If we can't handle it, let discord.py try (though it will likely fail)
+        logger.info(f"[modal] Could not handle modal: {cid} - letting discord.py handle it")
         return
     
     # Only handle component interactions (buttons/selects) from here
