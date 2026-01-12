@@ -1382,6 +1382,14 @@ async def on_interaction(interaction: discord.Interaction):
                 return
             
             try:
+                # Defer the interaction first to prevent expiration
+                try:
+                    await interaction.response.defer(ephemeral=True)
+                except (discord.errors.NotFound, discord.errors.InteractionResponded, discord.errors.HTTPException) as defer_err:
+                    # Interaction already expired or acknowledged - can't process it
+                    logger.warning(f"[modal] RequestInfoModal: Could not defer: {defer_err}")
+                    return
+                
                 # Extract question from interaction data
                 components = interaction.data.get("components", [])
                 question_val = ""
@@ -1395,7 +1403,8 @@ async def on_interaction(interaction: discord.Interaction):
                             question_val = value
                 
                 if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
-                    return await interaction.response.send_message("Obsidian Inheritors only.", ephemeral=True)
+                    await interaction.followup.send("Obsidian Inheritors only.", ephemeral=True)
+                    return
 
                 async with aiosqlite.connect(DB_PATH) as db:
                     cur = await db.execute(
@@ -1404,7 +1413,8 @@ async def on_interaction(interaction: discord.Interaction):
                     )
                     row = await cur.fetchone()
                 if not row:
-                    return await interaction.response.send_message("Case not found.", ephemeral=True)
+                    await interaction.followup.send("Case not found.", ephemeral=True)
+                    return
 
                 user_id = int(row[0])
 
@@ -1428,12 +1438,8 @@ async def on_interaction(interaction: discord.Interaction):
 
                 await log_complaint_action(interaction.guild, case_id, interaction.user.id, "REQUEST_INFO", question_val)
                 
-                # Check if interaction is already responded to (shouldn't happen now that on_submit is disabled, but check anyway)
-                if interaction.response.is_done():
-                    # Already responded - use followup
-                    await interaction.followup.send("Requested evidence (DM sent if possible).", ephemeral=True)
-                else:
-                    await interaction.response.send_message("Requested evidence (DM sent if possible).", ephemeral=True)
+                # Send followup since we deferred
+                await interaction.followup.send("Requested evidence (DM sent if possible).", ephemeral=True)
             except Exception as e:
                 import traceback
                 traceback.print_exc()
