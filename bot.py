@@ -1073,7 +1073,6 @@ class RequestInfoModal(discord.ui.Modal, title="Request Evidence"):
             custom_id="question"
         )
         self.add_item(self.question)
-        self.custom_id = f"request_info_{case_id}"
 
     async def on_submit(self, interaction: discord.Interaction):
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
