@@ -1335,114 +1335,129 @@ async def on_interaction(interaction: discord.Interaction):
     if interaction.type == discord.InteractionType.modal_submit:
         cid = interaction.data.get("custom_id") if interaction.data else None
         if cid == "complaint_modal":
-            # Extract values from interaction data
-            components = interaction.data.get("components", [])
-            category_val = ""
-            details_val = ""
-            evidence_val = ""
-            
-            for component in components:
-                components_list = component.get("components", [])
-                for comp in components_list:
-                    comp_id = comp.get("custom_id", "")
-                    value = comp.get("value", "")
-                    if comp_id == "category":
-                        category_val = value
-                    elif comp_id == "details":
-                        details_val = value
-                    elif comp_id == "evidence":
-                        evidence_val = value
-            
-            # Process complaint submission directly
-            guild = interaction.guild
-            case_id = f"OBS-{int(now_utc().timestamp())}-{interaction.user.id % 10000}"
-            created = now_utc().isoformat()
-
-            async with aiosqlite.connect(DB_PATH) as db:
-                await db.execute(
-                    "INSERT INTO complaints(guild_id,case_id,user_id,created_at,category,details,evidence,status,staff_thread_id,last_update_at) "
-                    "VALUES(?,?,?,?,?,?,?,?,?,?)",
-                    (
-                        guild.id,
-                        case_id,
-                        interaction.user.id,
-                        created,
-                        category_val,
-                        details_val,
-                        evidence_val,
-                        "OPEN",
-                        None,
-                        created,
-                    ),
-                )
-                await db.commit()
-
-            complaints_id = await resolve_channel_id(guild, "complaints_channel_id", COMPLAINTS_CHANNEL_ID, COMPLAINTS_CHANNEL_NAME)
-            ch = guild.get_channel(complaints_id) if complaints_id else None
-            if not isinstance(ch, discord.TextChannel):
-                return await interaction.response.send_message(
-                    "Complaints channel not configured. Set COMPLAINTS_CHANNEL_ID or enable AUTO_SETUP.",
-                    ephemeral=True,
-                )
-
-            mod_role = get_mod_role(guild)
-            mention = mod_role.mention if mod_role else f"@{MOD_ROLE_NAME}"
-
-            desc = f"**Category:** {category_val}\n\n**Details:**\n{details_val}"
-            if evidence_val.strip():
-                desc += f"\n\n**Evidence:** {evidence_val}"
-
-            embed = obsidian_embed(f"Docket Entry • {case_id}", desc, color=discord.Color.red())
-            embed.set_footer(text=f"Filed by: {interaction.user} • {interaction.user.id}")
-
-            view = ComplaintModView(case_id)
-            msg = await ch.send(content=mention, embed=embed, view=view)
-            bot.add_view(view)
-
-            # Thread for staff discussion (tries private first; falls back)
-            thread_id = None
             try:
-                thread = await ch.create_thread(
-                    name=f"{case_id} • Staff Review",
-                    type=discord.ChannelType.private_thread,
-                    invitable=False,
-                    reason="Private staff thread for complaint",
-                )
-                thread_id = thread.id
-                if mod_role:
-                    try:
-                        await thread.add_user(interaction.user)  # Might fail; ignore
-                    except Exception:
-                        pass
-            except Exception:
-                try:
-                    thread = await msg.create_thread(name=f"{case_id} • Staff Review", auto_archive_duration=1440)
-                    thread_id = thread.id
-                except Exception:
-                    thread = None
+                # Extract values from interaction data
+                components = interaction.data.get("components", [])
+                category_val = ""
+                details_val = ""
+                evidence_val = ""
+                
+                for component in components:
+                    components_list = component.get("components", [])
+                    for comp in components_list:
+                        comp_id = comp.get("custom_id", "")
+                        value = comp.get("value", "")
+                        if comp_id == "category":
+                            category_val = value
+                        elif comp_id == "details":
+                            details_val = value
+                        elif comp_id == "evidence":
+                            evidence_val = value
+                
+                # Process complaint submission directly
+                guild = interaction.guild
+                if not guild:
+                    return await interaction.response.send_message("This command can only be used in a server.", ephemeral=True)
+                
+                case_id = f"OBS-{int(now_utc().timestamp())}-{interaction.user.id % 10000}"
+                created = now_utc().isoformat()
 
-            if thread_id:
                 async with aiosqlite.connect(DB_PATH) as db:
                     await db.execute(
-                        "UPDATE complaints SET staff_thread_id=? WHERE guild_id=? AND case_id=?",
-                        (thread_id, guild.id, case_id),
+                        "INSERT INTO complaints(guild_id,case_id,user_id,created_at,category,details,evidence,status,staff_thread_id,last_update_at) "
+                        "VALUES(?,?,?,?,?,?,?,?,?,?)",
+                        (
+                            guild.id,
+                            case_id,
+                            interaction.user.id,
+                            created,
+                            category_val,
+                            details_val,
+                            evidence_val,
+                            "OPEN",
+                            None,
+                            created,
+                        ),
                     )
                     await db.commit()
+
+                complaints_id = await resolve_channel_id(guild, "complaints_channel_id", COMPLAINTS_CHANNEL_ID, COMPLAINTS_CHANNEL_NAME)
+                ch = guild.get_channel(complaints_id) if complaints_id else None
+                if not isinstance(ch, discord.TextChannel):
+                    return await interaction.response.send_message(
+                        "Complaints channel not configured. Set COMPLAINTS_CHANNEL_ID or enable AUTO_SETUP.",
+                        ephemeral=True,
+                    )
+
+                mod_role = get_mod_role(guild)
+                mention = mod_role.mention if mod_role else f"@{MOD_ROLE_NAME}"
+
+                desc = f"**Category:** {category_val}\n\n**Details:**\n{details_val}"
+                if evidence_val.strip():
+                    desc += f"\n\n**Evidence:** {evidence_val}"
+
+                embed = obsidian_embed(f"Docket Entry • {case_id}", desc, color=discord.Color.red())
+                embed.set_footer(text=f"Filed by: {interaction.user} • {interaction.user.id}")
+
+                view = ComplaintModView(case_id)
+                msg = await ch.send(content=mention, embed=embed, view=view)
+                bot.add_view(view)
+
+                # Thread for staff discussion (tries private first; falls back)
+                thread_id = None
                 try:
-                    await thread.send(embed=obsidian_embed("Staff Thread", "Use this thread for internal notes and resolution steps."))
+                    thread = await ch.create_thread(
+                        name=f"{case_id} • Staff Review",
+                        type=discord.ChannelType.private_thread,
+                        invitable=False,
+                        reason="Private staff thread for complaint",
+                    )
+                    thread_id = thread.id
+                    if mod_role:
+                        try:
+                            await thread.add_user(interaction.user)  # Might fail; ignore
+                        except Exception:
+                            pass
+                except Exception:
+                    try:
+                        thread = await msg.create_thread(name=f"{case_id} • Staff Review", auto_archive_duration=1440)
+                        thread_id = thread.id
+                    except Exception:
+                        thread = None
+
+                if thread_id:
+                    async with aiosqlite.connect(DB_PATH) as db:
+                        await db.execute(
+                            "UPDATE complaints SET staff_thread_id=? WHERE guild_id=? AND case_id=?",
+                            (thread_id, guild.id, case_id),
+                        )
+                        await db.commit()
+                    try:
+                        await thread.send(embed=obsidian_embed("Staff Thread", "Use this thread for internal notes and resolution steps."))
+                    except Exception:
+                        pass
+
+                await log_complaint_action(guild, case_id, interaction.user.id, "FILED")
+
+                await interaction.response.send_message(
+                    embed=obsidian_embed(
+                        "Docket Sealed",
+                        f"Your docket entry has been sealed as **`{case_id}`**.\nYou'll receive DM docket updates as it progresses.",
+                        color=discord.Color.green(),
+                    ),
+                    ephemeral=True,
+                )
+            except Exception as e:
+                # Handle errors in modal submission
+                import traceback
+                traceback.print_exc()
+                try:
+                    if interaction.response.is_done():
+                        await interaction.followup.send(f"Error submitting docket: {e}", ephemeral=True)
+                    else:
+                        await interaction.response.send_message(f"Error submitting docket: {e}", ephemeral=True)
                 except Exception:
                     pass
-
-            await log_complaint_action(guild, case_id, interaction.user.id, "FILED")
-
-            await interaction.response.send_message(
-                embed=obsidian_embed(
-                    "Docket Sealed",
-                    f"Your docket entry has been sealed as **`{case_id}`**.\nYou'll receive DM docket updates as it progresses.",
-                    color=discord.Color.green(),
-                ),
-                ephemeral=True,
-            )
             return
         # For other modals, let discord.py handle them if they're still in memory
         return
