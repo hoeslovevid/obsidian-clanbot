@@ -1441,8 +1441,16 @@ async def on_interaction(interaction: discord.Interaction):
         
         if cid == "complaint_modal":
             # Check if already processed (prevent duplicates)
+            # Use interaction ID as unique identifier
+            interaction_key = f"{interaction.id}:{interaction.user.id}"
+            if interaction_key in _processed_modal_submissions:
+                return  # Already processed
+            
             if interaction.response.is_done():
                 return  # Already handled
+            
+            # Mark as processing immediately
+            _processed_modal_submissions.add(interaction_key)
             
             try:
                 # Acknowledge the interaction first to prevent duplicate processing
@@ -1451,6 +1459,7 @@ async def on_interaction(interaction: discord.Interaction):
                     await interaction.response.defer(ephemeral=True)
                 except (discord.errors.NotFound, discord.errors.InteractionResponded):
                     # Interaction already expired or was handled - ignore
+                    _processed_modal_submissions.discard(interaction_key)
                     return
                 
                 # Extract values from interaction data
@@ -1603,6 +1612,10 @@ async def on_interaction(interaction: discord.Interaction):
                         await interaction.response.send_message(f"Error submitting docket: {e}", ephemeral=True)
                 except Exception:
                     pass
+            finally:
+                # Clean up tracking after a delay (allow time for any duplicate processing to be caught)
+                await asyncio.sleep(2)
+                _processed_modal_submissions.discard(interaction_key)
             return
         # For other modals, let discord.py handle them if they're still in memory
         return
