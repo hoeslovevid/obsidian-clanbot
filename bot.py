@@ -928,6 +928,13 @@ class ComplaintModal(discord.ui.Modal, title="Obsidian Docket Submission"):
         self.add_item(self.evidence)
 
     async def on_submit(self, interaction: discord.Interaction):
+        # This method is kept for backwards compatibility, but modal submissions
+        # are now primarily handled in the on_interaction handler for persistence after restarts.
+        # Check if already processed to prevent duplicates
+        interaction_key = f"{interaction.id}:{interaction.user.id}"
+        if interaction_key in _processed_modal_submissions:
+            return  # Already processed by on_interaction handler
+        
         guild = interaction.guild
         # Generate unique case_id with retry logic
         created = now_utc()
@@ -1516,7 +1523,20 @@ async def on_interaction(interaction: discord.Interaction):
                 
                 created_iso = created.isoformat()
 
+                # Check if case already exists before inserting (extra safety check)
                 async with aiosqlite.connect(DB_PATH) as db:
+                    # Check if this exact submission already exists (same user, same content, within last 5 seconds)
+                    check_cur = await db.execute(
+                        "SELECT case_id FROM complaints WHERE guild_id=? AND user_id=? AND category=? AND details=? AND created_at > datetime('now', '-5 seconds')",
+                        (guild.id, interaction.user.id, category_val, details_val)
+                    )
+                    existing = await check_cur.fetchone()
+                    if existing:
+                        # Duplicate detected - clean up and return
+                        _processed_modal_submissions.discard(interaction_key)
+                        await interaction.followup.send("This submission was already processed.", ephemeral=True)
+                        return
+                    
                     await db.execute(
                         "INSERT INTO complaints(guild_id,case_id,user_id,created_at,category,details,evidence,status,staff_thread_id,last_update_at) "
                         "VALUES(?,?,?,?,?,?,?,?,?,?)",
