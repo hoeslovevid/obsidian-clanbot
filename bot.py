@@ -948,7 +948,7 @@ async def help_command(interaction: discord.Interaction):
         desc += "  └ Posts the Docket, Dojo Comms, and Ops Board panels in the current channel\n\n"
         
         desc += "• `/purge` - Clear messages from the current channel\n"
-        desc += "  └ Usage: `/purge amount:<1-100> or "all"`\n"
+        desc += "  └ Usage: `/purge amount:<1-100> or 'all'`\n"
         desc += "  └ Example: `/purge amount:50` or `/purge amount:all`\n"
         desc += "  └ Note: Pinned messages are never deleted\n\n"
     else:
