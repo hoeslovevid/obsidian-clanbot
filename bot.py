@@ -1389,6 +1389,11 @@ async def on_interaction(interaction: discord.Interaction):
     if interaction.type == discord.InteractionType.modal_submit:
         cid = interaction.data.get("custom_id") if interaction.data else None
         
+        # Log that we received a modal submission
+        print(f"[modal] Received modal submission: {cid}")
+        import sys
+        sys.stdout.flush()
+        
         # Handle RequestInfoModal submissions
         if cid and cid.startswith("request_info_"):
             # Extract case_id from custom_id
@@ -1682,16 +1687,18 @@ async def on_interaction(interaction: discord.Interaction):
                         pass
             return
         
-        # For other modals (like ComplaintModal's on_submit being called by discord.py),
-        # we need to prevent discord.py from processing them to avoid duplicate processing
-        # Check if this modal might be handled by its own on_submit method
-        if cid and cid == "complaint_modal":
-            # We already handled it above, but if we reach here, something went wrong
-            # Let discord.py handle it - but this shouldn't happen
-            print(f"[modal] Warning: complaint_modal reached fallback handler")
+        # For other modals, let discord.py handle them if they're still in memory
+        # But we've already handled complaint_modal above, so this shouldn't be reached
+        if cid == "complaint_modal":
+            print(f"[modal] Warning: complaint_modal reached fallback - already handled above")
+            import sys
+            sys.stdout.flush()
             return
         
-        # For other modals, let discord.py handle them if they're still in memory
+        # For other modals, let discord.py handle them
+        print(f"[modal] Letting discord.py handle modal: {cid}")
+        import sys
+        sys.stdout.flush()
         return
     
     # Only handle component interactions (buttons/selects) from here
@@ -1864,19 +1871,33 @@ async def on_interaction(interaction: discord.Interaction):
         # Also skip if this is a modal submission - it has its own error handler
         if interaction.type == discord.InteractionType.modal_submit:
             # Don't handle here - modal submission has its own handler
+            # But log it for debugging
+            import traceback
+            import sys
+            error_msg = f"[outer_handler] Modal submission error (should be handled by modal handler): {e}\n{traceback.format_exc()}"
+            print(error_msg, file=sys.stderr, flush=True)
+            print(error_msg, flush=True)
             return
+        
+        # For component interactions, handle the error
+        import traceback
+        import sys
+        error_msg = f"[outer_handler] Component interaction error: {e}\n{traceback.format_exc()}"
+        print(error_msg, file=sys.stderr, flush=True)
+        print(error_msg, flush=True)
         
         try:
             if interaction.response.is_done():
-                await interaction.followup.send(f"Something went wrong: {e}", ephemeral=True)
+                await interaction.followup.send(f"Something went wrong: {str(e)}", ephemeral=True)
             else:
                 try:
-                    await interaction.response.send_message(f"Something went wrong: {e}", ephemeral=True)
+                    await interaction.response.send_message(f"Something went wrong: {str(e)}", ephemeral=True)
                 except (discord.errors.NotFound, discord.errors.InteractionResponded):
                     # Interaction already expired or handled
                     pass
-        except Exception:
-            pass
+        except Exception as err:
+            # If we can't send error message, log it
+            print(f"[outer_handler] Could not send error message: {err}", flush=True)
 
 
 # --------------------- Join-to-create logic ---------------------
