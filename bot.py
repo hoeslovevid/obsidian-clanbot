@@ -1951,8 +1951,34 @@ async def on_interaction(interaction: discord.Interaction):
                     return
 
                 if action == "needinfo":
-                    await interaction.response.send_modal(RequestInfoModal(case_id))
-                    return
+                    # Check if interaction is still valid
+                    if interaction.response.is_done():
+                        logger.warning(f"[button] Request Evidence - interaction already done: {case_id}")
+                        return
+                    try:
+                        modal = RequestInfoModal(case_id)
+                        await interaction.response.send_modal(modal)
+                        logger.info(f"[button] Sent RequestInfoModal for case: {case_id}")
+                        return
+                    except (discord.errors.NotFound, discord.errors.InteractionResponded) as e:
+                        logger.warning(f"[button] Request Evidence - interaction expired/already handled: {case_id}: {e}")
+                        # Interaction expired - try to send error via followup if possible
+                        try:
+                            if interaction.response.is_done():
+                                await interaction.followup.send("The interaction expired. Please try clicking the button again.", ephemeral=True)
+                        except Exception:
+                            pass
+                        return
+                    except Exception as e:
+                        logger.error(f"[button] Request Evidence - error sending modal: {case_id}: {e}", exc_info=True)
+                        try:
+                            if interaction.response.is_done():
+                                await interaction.followup.send("Failed to open evidence request form. Please try again.", ephemeral=True)
+                            else:
+                                await interaction.response.send_message("Failed to open evidence request form. Please try again.", ephemeral=True)
+                        except Exception:
+                            pass
+                        return
 
         # Events: RSVP
         if cid.startswith("events:rsvp:"):
