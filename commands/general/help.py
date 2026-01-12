@@ -48,6 +48,7 @@ def setup(bot):
             desc += "• `/purge` - (Mods only) Clear messages from channels\n\n"
         
         desc += "**💰 Economy Commands**\n"
+        desc += "• `/daily` - Claim your daily coin reward (once per day)\n"
         desc += "• `/balance` - Check your coin balance\n"
         desc += "• `/leaderboard [limit]` - View top coin earners (default: 10, max: 25)\n"
         desc += "• `/transfer user:<@user> amount:<number>` - Transfer coins to another user\n"

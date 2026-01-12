@@ -61,6 +61,7 @@ EVENTS_CHANNEL_NAME = os.getenv("EVENTS_CHANNEL_NAME", "ops-board")
 ECONOMY_ENABLED = os.getenv("ECONOMY_ENABLED", "true").lower() == "true"
 COINS_PER_MESSAGE = int(os.getenv("COINS_PER_MESSAGE", "5"))
 COINS_PER_MINUTE_VOICE = int(os.getenv("COINS_PER_MINUTE_VOICE", "2"))
+COINS_DAILY_REWARD = int(os.getenv("COINS_DAILY_REWARD", "100"))
 MESSAGE_COOLDOWN_SECONDS = int(os.getenv("MESSAGE_COOLDOWN_SECONDS", "60"))
 VOICE_REWARD_INTERVAL_MINUTES = int(os.getenv("VOICE_REWARD_INTERVAL_MINUTES", "1"))
 MIN_VOICE_MINUTES_FOR_REWARD = int(os.getenv("MIN_VOICE_MINUTES_FOR_REWARD", "1"))
@@ -178,6 +179,7 @@ def load_all_commands():
         "commands.economy.balance",
         "commands.economy.leaderboard",
         "commands.economy.transfer",
+        "commands.economy.daily",
     ]
     
     for module_name in command_modules:
@@ -309,6 +311,15 @@ async def init_db():
             guild_id INTEGER NOT NULL,
             user_id INTEGER NOT NULL,
             last_message_at TEXT NOT NULL,
+            PRIMARY KEY (guild_id, user_id)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS daily_claims (
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            last_claim_date TEXT NOT NULL,
+            streak_days INTEGER NOT NULL DEFAULT 1,
             PRIMARY KEY (guild_id, user_id)
         )""")
 

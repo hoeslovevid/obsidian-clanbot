@@ -1,0 +1,104 @@
+"""Daily reward command."""
+import discord
+from datetime import datetime, timezone
+
+from utils import obsidian_embed, ECONOMY_ENABLED, COINS_DAILY_REWARD
+
+
+def setup(bot):
+    """Register the daily command."""
+    @bot.tree.command(name="daily", description="Claim your daily coin reward!")
+    async def daily(interaction: discord.Interaction):
+        """Claim daily coins (once per day)."""
+        # Import bot-specific functions inside to avoid circular imports
+        from bot import add_coins, DB_PATH
+        import aiosqlite
+        
+        if not ECONOMY_ENABLED:
+            return await interaction.response.send_message("Economy system is disabled.", ephemeral=True)
+        
+        # Get current date in UTC
+        today = datetime.now(timezone.utc).date().isoformat()
+        
+        async with aiosqlite.connect(DB_PATH) as db:
+            # Check last claim
+            cur = await db.execute(
+                "SELECT last_claim_date, streak_days FROM daily_claims WHERE guild_id=? AND user_id=?",
+                (interaction.guild.id, interaction.user.id),
+            )
+            row = await cur.fetchone()
+            
+            if row:
+                last_claim_date, streak_days = row[0], int(row[1])
+                
+                # Check if already claimed today
+                if last_claim_date == today:
+                    # Calculate time until next claim (next day in UTC)
+                    tomorrow = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+                    tomorrow = tomorrow.replace(day=tomorrow.day + 1)
+                    time_until = tomorrow - datetime.now(timezone.utc)
+                    hours = int(time_until.total_seconds() // 3600)
+                    minutes = int((time_until.total_seconds() % 3600) // 60)
+                    
+                    return await interaction.response.send_message(
+                        embed=obsidian_embed(
+                            "⏰ Already Claimed",
+                            f"You've already claimed your daily reward today!\n\n"
+                            f"**Current Streak:** {streak_days} day(s)\n"
+                            f"**Next claim available in:** {hours}h {minutes}m",
+                            color=discord.Color.orange(),
+                        ),
+                        ephemeral=True,
+                    )
+                
+                # Check if streak continues (claimed yesterday)
+                yesterday = datetime.now(timezone.utc).date()
+                from datetime import timedelta
+                yesterday = (yesterday - timedelta(days=1)).isoformat()
+                
+                if last_claim_date == yesterday:
+                    # Streak continues
+                    new_streak = streak_days + 1
+                else:
+                    # Streak broken, reset to 1
+                    new_streak = 1
+            else:
+                # First time claiming
+                new_streak = 1
+            
+            # Award coins
+            await add_coins(
+                interaction.guild.id,
+                interaction.user.id,
+                COINS_DAILY_REWARD,
+                "DAILY",
+                f"Daily reward (streak: {new_streak})",
+            )
+            
+            # Update or insert claim record
+            await db.execute("""
+                INSERT INTO daily_claims (guild_id, user_id, last_claim_date, streak_days)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(guild_id, user_id) DO UPDATE SET
+                    last_claim_date = ?,
+                    streak_days = ?
+            """, (
+                interaction.guild.id,
+                interaction.user.id,
+                today,
+                new_streak,
+                today,
+                new_streak,
+            ))
+            await db.commit()
+        
+        # Success message
+        embed = obsidian_embed(
+            "🎁 Daily Reward Claimed!",
+            f"You received **{COINS_DAILY_REWARD:,}** coins!\n\n"
+            f"**Streak:** {new_streak} day(s) in a row\n\n"
+            f"Come back tomorrow for another reward!",
+            color=discord.Color.green(),
+        )
+        
+        await interaction.response.send_message(embed=embed, ephemeral=True)
