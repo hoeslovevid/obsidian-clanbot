@@ -1178,14 +1178,17 @@ async def purge(interaction: discord.Interaction, amount: str):
 async def on_interaction(interaction: discord.Interaction):
     """
     We route button/select interactions here so persistent views continue to work after restart.
+    Application commands (slash commands) are handled automatically by discord.py.
     """
-    try:
-        if interaction.type != discord.InteractionType.component:
-            return await bot.process_application_commands(interaction)
+    # Only handle component interactions (buttons/selects)
+    # Let discord.py handle application commands automatically
+    if interaction.type != discord.InteractionType.component:
+        return
 
+    try:
         cid = interaction.data.get("custom_id") if interaction.data else None
         if not cid:
-            return await bot.process_application_commands(interaction)
+            return
 
         # Complaints: open modal
         if cid == "complaints:open":
@@ -1337,9 +1340,6 @@ async def on_interaction(interaction: discord.Interaction):
                     await interaction.response.send_message("Cell dissolved.", ephemeral=True)
                     await delete_temp_vc_and_panel(interaction.guild, vc_id, reason="Disband via panel")
                     return
-
-        # Default: let discord.py handle other interactions/commands
-        return await bot.process_application_commands(interaction)
 
     except Exception as e:
         # Last-resort error handler
