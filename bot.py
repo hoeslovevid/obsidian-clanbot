@@ -1702,8 +1702,26 @@ async def on_interaction(interaction: discord.Interaction):
 
         # Complaints: open modal
         if cid == "complaints:open":
-            await interaction.response.send_modal(ComplaintModal())
-            return
+            # Check if interaction is still valid (not expired)
+            if interaction.response.is_done():
+                logger.warning(f"[button] complaints:open - interaction already done")
+                return
+            try:
+                modal = ComplaintModal()
+                await interaction.response.send_modal(modal)
+                logger.info(f"[button] Sent ComplaintModal with custom_id: {modal.custom_id}")
+                return
+            except (discord.errors.NotFound, discord.errors.InteractionResponded) as e:
+                logger.error(f"[button] complaints:open - interaction expired/already handled: {e}")
+                return
+            except Exception as e:
+                logger.error(f"[button] complaints:open - error sending modal: {e}", exc_info=True)
+                try:
+                    if not interaction.response.is_done():
+                        await interaction.response.send_message("Failed to open docket form. Please try again.", ephemeral=True)
+                except Exception:
+                    pass
+                return
 
         # Complaints: mod actions
         if cid.startswith("complaints:"):
