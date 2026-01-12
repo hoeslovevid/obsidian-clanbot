@@ -932,14 +932,14 @@ async def help_command(interaction: discord.Interaction):
     desc += "  └ Usage: `/event_create title:<name> when:<time> description:<details> [role_ping:<@role>]`\n"
     desc += "  └ Example: `/event_create title:Steel Path when:tomorrow 8pm description:Running ESO rotations`\n\n"
     
-    desc += "**🩸 Complaint Commands**\n"
-    desc += "• `/complaint_status` - Check the status of your complaint case\n"
-    desc += "  └ Usage: `/complaint_status case_id:<OBS-...>`\n"
-    desc += "  └ Example: `/complaint_status case_id:OBS-1234567890-1234`\n\n"
+    desc += "**🩸 Help & Complaint Commands**\n"
+    desc += "• `/request_help` - Check the status of your complaint/help request\n"
+    desc += "  └ Usage: `/request_help case_id:<OBS-...>`\n"
+    desc += "  └ Example: `/request_help case_id:OBS-1234567890-1234`\n\n"
     
-    desc += "• `/complaint_add` - Add additional information to your complaint\n"
-    desc += "  └ Usage: `/complaint_add case_id:<OBS-...> details:<additional info>`\n"
-    desc += "  └ Example: `/complaint_add case_id:OBS-1234567890-1234 details:Here are screenshots`\n\n"
+    desc += "• `/submit_complaint` - Add additional information to your complaint/help request\n"
+    desc += "  └ Usage: `/submit_complaint case_id:<OBS-...> details:<additional info>`\n"
+    desc += "  └ Example: `/submit_complaint case_id:OBS-1234567890-1234 details:Here are screenshots`\n\n"
     
     # Mod-only commands
     if is_user_mod:
@@ -1093,9 +1093,9 @@ async def event_create(interaction: discord.Interaction, title: str, when: str, 
     await interaction.followup.send("Ops event posted.", ephemeral=True)
 
 
-@bot.tree.command(name="complaint_add", description="Add information to an existing complaint case.")
+@bot.tree.command(name="submit_complaint", description="Submit additional information to an existing complaint/help request case.")
 @app_commands.describe(case_id="Your case id (e.g., OBS-...)", details="Additional details / links / screenshots")
-async def complaint_add(interaction: discord.Interaction, case_id: str, details: str):
+async def submit_complaint(interaction: discord.Interaction, case_id: str, details: str):
     async with aiosqlite.connect(DB_PATH) as db:
         cur = await db.execute(
             "SELECT user_id, staff_thread_id FROM complaints WHERE guild_id=? AND case_id=?",
@@ -1134,9 +1134,9 @@ async def complaint_add(interaction: discord.Interaction, case_id: str, details:
     await interaction.response.send_message("Addendum submitted.", ephemeral=True)
 
 
-@bot.tree.command(name="complaint_status", description="Check the status of one of your complaint cases.")
+@bot.tree.command(name="request_help", description="Request help or check the status of your complaint/help request case.")
 @app_commands.describe(case_id="Your case id (e.g., OBS-...)")
-async def complaint_status(interaction: discord.Interaction, case_id: str):
+async def request_help(interaction: discord.Interaction, case_id: str):
     async with aiosqlite.connect(DB_PATH) as db:
         cur = await db.execute(
             "SELECT user_id, status, last_update_at FROM complaints WHERE guild_id=? AND case_id=?",

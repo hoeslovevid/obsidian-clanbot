@@ -59,8 +59,8 @@ Run this command in the channel where you want the panels to appear:
 ## Commands
 - `/setup_obsidian` — posts the Obsidian panels (mods only)
 - `/event_create` — creates an ops event with RSVP buttons + reminder
-- `/complaint_add` — lets a user add more info to their case
-- `/complaint_status` — lets a user check their case status
+- `/submit_complaint` — lets a user add more info to their case
+- `/request_help` — lets a user check their case status
 - `/purge` — clears messages from the current channel (mods only)
   - Usage: `/purge amount:<number 1-100> or "all"`
 
