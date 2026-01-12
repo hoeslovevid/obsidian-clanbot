@@ -1066,6 +1066,7 @@ class RequestInfoModal(discord.ui.Modal, title="Request Evidence"):
     def __init__(self, case_id: str):
         super().__init__(timeout=300)
         self.case_id = case_id
+        self.custom_id = f"request_info_{case_id}"
 
     async def on_submit(self, interaction: discord.Interaction):
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
@@ -1363,6 +1364,75 @@ async def on_interaction(interaction: discord.Interaction):
     # Handle modal submissions
     if interaction.type == discord.InteractionType.modal_submit:
         cid = interaction.data.get("custom_id") if interaction.data else None
+        
+        # Handle RequestInfoModal submissions
+        if cid and cid.startswith("request_info_"):
+            # Extract case_id from custom_id
+            case_id = cid.replace("request_info_", "")
+            
+            # Check if already processed
+            if interaction.response.is_done():
+                return
+            
+            try:
+                # Extract question from interaction data
+                components = interaction.data.get("components", [])
+                question_val = ""
+                
+                for component in components:
+                    components_list = component.get("components", [])
+                    for comp in components_list:
+                        comp_id = comp.get("custom_id", "")
+                        value = comp.get("value", "")
+                        if comp_id == "question":
+                            question_val = value
+                
+                if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
+                    return await interaction.response.send_message("Obsidian Inheritors only.", ephemeral=True)
+
+                async with aiosqlite.connect(DB_PATH) as db:
+                    cur = await db.execute(
+                        "SELECT user_id FROM complaints WHERE guild_id=? AND case_id=?",
+                        (interaction.guild.id, case_id),
+                    )
+                    row = await cur.fetchone()
+                if not row:
+                    return await interaction.response.send_message("Case not found.", ephemeral=True)
+
+                user_id = int(row[0])
+
+                # Set status, DM user
+                await ComplaintModView(case_id).set_status(interaction, "NEEDS INFO", dm_override=False)
+
+                user = interaction.guild.get_member(user_id) or await bot.fetch_user(user_id)
+                if user:
+                    try:
+                        e = obsidian_embed(
+                            f"Evidence Requested • {case_id}",
+                            f"**Directive from Obsidian Inheritors:**\n{question_val}\n\n"
+                            "Respond using:\n"
+                            f"**/submit_complaint** (case_id: `{case_id}`)\n\n"
+                            "_If your DMs are closed, you may not receive updates._",
+                            color=discord.Color.orange(),
+                        )
+                        await user.send(embed=e)
+                    except discord.Forbidden:
+                        pass
+
+                await log_complaint_action(interaction.guild, case_id, interaction.user.id, "REQUEST_INFO", question_val)
+                await interaction.response.send_message("Requested evidence (DM sent if possible).", ephemeral=True)
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                try:
+                    if interaction.response.is_done():
+                        await interaction.followup.send(f"Error requesting evidence: {e}", ephemeral=True)
+                    else:
+                        await interaction.response.send_message(f"Error requesting evidence: {e}", ephemeral=True)
+                except Exception:
+                    pass
+            return
+        
         if cid == "complaint_modal":
             # Check if already processed (prevent duplicates)
             if interaction.response.is_done():
@@ -1370,7 +1440,12 @@ async def on_interaction(interaction: discord.Interaction):
             
             try:
                 # Acknowledge the interaction first to prevent duplicate processing
-                await interaction.response.defer(ephemeral=True)
+                # But check if it's still valid first
+                try:
+                    await interaction.response.defer(ephemeral=True)
+                except (discord.errors.NotFound, discord.errors.InteractionResponded):
+                    # Interaction already expired or was handled - ignore
+                    return
                 
                 # Extract values from interaction data
                 components = interaction.data.get("components", [])
