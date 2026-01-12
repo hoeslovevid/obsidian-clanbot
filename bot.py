@@ -2128,15 +2128,26 @@ async def on_interaction(interaction: discord.Interaction):
             logger.warning(f"[outer_handler] Ignoring process_application_commands error (likely cached/stale): {e}")
             return  # Don't send error message to user
         
+        # Don't send error messages for expired interactions (404) - we can't respond to them
+        if isinstance(e, discord.errors.NotFound) and "Unknown interaction" in str(e):
+            logger.warning(f"[outer_handler] Interaction expired (404), cannot send error message: {e}")
+            return  # Interaction expired, can't respond
+        
+        # Only try to send error message if interaction is still valid
         try:
             if interaction.response.is_done():
-                await interaction.followup.send(f"Something went wrong: {str(e)}", ephemeral=True)
+                # Try followup, but it might also fail if interaction expired
+                try:
+                    await interaction.followup.send(f"Something went wrong: {str(e)}", ephemeral=True)
+                except (discord.errors.NotFound, discord.errors.InteractionResponded, discord.errors.HTTPException):
+                    # Interaction expired or already handled - can't send error
+                    logger.warning(f"[outer_handler] Could not send error via followup (interaction expired/handled)")
             else:
                 try:
                     await interaction.response.send_message(f"Something went wrong: {str(e)}", ephemeral=True)
-                except (discord.errors.NotFound, discord.errors.InteractionResponded):
+                except (discord.errors.NotFound, discord.errors.InteractionResponded, discord.errors.HTTPException):
                     # Interaction already expired or handled
-                    pass
+                    logger.warning(f"[outer_handler] Could not send error via response (interaction expired/handled)")
         except Exception as err:
             # If we can't send error message, log it
             logger.error(f"[outer_handler] Could not send error message: {err}", exc_info=True)
