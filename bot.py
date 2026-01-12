@@ -1471,9 +1471,9 @@ async def on_interaction(interaction: discord.Interaction):
             
             # Mark as processing immediately
             _processed_modal_submissions.add(interaction_key)
-                print(f"[modal] Processing complaint submission: {interaction_key}")
-                import sys
-                sys.stdout.flush()
+            print(f"[modal] Processing complaint submission: {interaction_key}")
+            import sys
+            sys.stdout.flush()
             
             try:
                 # Acknowledge the interaction first to prevent duplicate processing
