@@ -1364,7 +1364,14 @@ async def on_interaction(interaction: discord.Interaction):
     if interaction.type == discord.InteractionType.modal_submit:
         cid = interaction.data.get("custom_id") if interaction.data else None
         if cid == "complaint_modal":
+            # Check if already processed (prevent duplicates)
+            if interaction.response.is_done():
+                return  # Already handled
+            
             try:
+                # Acknowledge the interaction first to prevent duplicate processing
+                await interaction.response.defer(ephemeral=True)
+                
                 # Extract values from interaction data
                 components = interaction.data.get("components", [])
                 category_val = ""
@@ -1386,7 +1393,7 @@ async def on_interaction(interaction: discord.Interaction):
                 # Process complaint submission directly
                 guild = interaction.guild
                 if not guild:
-                    return await interaction.response.send_message("This command can only be used in a server.", ephemeral=True)
+                    return await interaction.followup.send("This command can only be used in a server.", ephemeral=True)
                 
                 # Generate unique case_id with retry logic
                 created = now_utc()
@@ -1441,7 +1448,7 @@ async def on_interaction(interaction: discord.Interaction):
                 complaints_id = await resolve_channel_id(guild, "complaints_channel_id", COMPLAINTS_CHANNEL_ID, COMPLAINTS_CHANNEL_NAME)
                 ch = guild.get_channel(complaints_id) if complaints_id else None
                 if not isinstance(ch, discord.TextChannel):
-                    return await interaction.response.send_message(
+                    return await interaction.followup.send(
                         "Complaints channel not configured. Set COMPLAINTS_CHANNEL_ID or enable AUTO_SETUP.",
                         ephemeral=True,
                     )
@@ -1496,7 +1503,7 @@ async def on_interaction(interaction: discord.Interaction):
 
                 await log_complaint_action(guild, case_id, interaction.user.id, "FILED")
 
-                await interaction.response.send_message(
+                await interaction.followup.send(
                     embed=obsidian_embed(
                         "Docket Sealed",
                         f"Your docket entry has been sealed as **`{case_id}`**.\nYou'll receive DM docket updates as it progresses.",
