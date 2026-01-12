@@ -939,12 +939,25 @@ class ComplaintModal(discord.ui.Modal, title="Obsidian Docket Submission"):
         self.add_item(self.evidence)
 
     async def on_submit(self, interaction: discord.Interaction):
-        # This method is disabled - modal submissions are handled entirely by the on_interaction handler
-        # for persistence after bot restarts. We do NOTHING here - not even defer - let on_interaction handle everything.
-        # DO NOT add to _processed_modal_submissions - let on_interaction handle processing
-        # DO NOT defer - on_interaction will defer and process
-        logger.info(f"[modal] ComplaintModal.on_submit: Ignored - on_interaction will handle processing")
-        # Just return - do nothing. on_interaction handler will process the modal submission.
+        # This method defers the interaction to prevent expiration, but actual processing
+        # is handled by the on_interaction handler for persistence after bot restarts.
+        interaction_key = f"{interaction.id}:{interaction.user.id}"
+        
+        # Check if already processed (on_interaction got it first and processed it)
+        if interaction.response.is_done():
+            logger.info(f"[modal] ComplaintModal.on_submit: Already responded to (handled by on_interaction)")
+            return
+        
+        # Mark as deferred so on_interaction knows to use followup.send() instead of response
+        # But DON'T add to _processed_modal_submissions - let on_interaction process it
+        logger.info(f"[modal] ComplaintModal.on_submit: Deferring to prevent expiration, on_interaction will process")
+        try:
+            await interaction.response.defer(ephemeral=True)
+            # Mark that we've deferred so on_interaction knows it's already deferred
+            _processed_modal_submissions.add(f"{interaction_key}:deferred")
+        except (discord.errors.NotFound, discord.errors.InteractionResponded, discord.errors.HTTPException) as e:
+            logger.info(f"[modal] ComplaintModal.on_submit: Could not defer (already handled): {e}")
+        # Don't process here - let on_interaction handle it
         return
         
         guild = interaction.guild
