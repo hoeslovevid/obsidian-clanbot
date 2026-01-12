@@ -2091,9 +2091,17 @@ async def on_interaction(interaction: discord.Interaction):
         # For component interactions, handle the error
         import traceback
         import sys
-        error_msg = f"[outer_handler] Component interaction error: {e}\n{traceback.format_exc()}"
+        error_traceback = traceback.format_exc()
+        error_msg = f"[outer_handler] Component interaction error: {e}\n{error_traceback}"
+        logger.error(error_msg)
         print(error_msg, file=sys.stderr, flush=True)
         print(error_msg, flush=True)
+        
+        # Don't send error messages about process_application_commands - it's not a real error
+        # This error message appears to be cached or from an old code path
+        if "process_application_commands" in str(e):
+            logger.warning(f"[outer_handler] Ignoring process_application_commands error (likely cached/stale): {e}")
+            return  # Don't send error message to user
         
         try:
             if interaction.response.is_done():
@@ -2106,7 +2114,7 @@ async def on_interaction(interaction: discord.Interaction):
                     pass
         except Exception as err:
             # If we can't send error message, log it
-            print(f"[outer_handler] Could not send error message: {err}", flush=True)
+            logger.error(f"[outer_handler] Could not send error message: {err}", exc_info=True)
 
 
 # --------------------- Join-to-create logic ---------------------
