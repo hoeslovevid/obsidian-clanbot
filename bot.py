@@ -95,10 +95,8 @@ def now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def obsidian_embed(title: str, desc: str = "", *, color: discord.Color = discord.Color.dark_grey()) -> discord.Embed:
-    e = discord.Embed(title=title, description=desc, color=color)
-    e.timestamp = now_utc()
-    return e
+# Import obsidian_embed from utils (after bot is created to avoid circular imports)
+from utils import obsidian_embed
 
 
 def get_mod_role(guild: discord.Guild) -> Optional[discord.Role]:
@@ -2103,7 +2101,7 @@ async def on_interaction(interaction: discord.Interaction):
                         )
                         await db.commit()
                     try:
-                        await staff_thread.send(embed=obsidian_embed("Staff Thread", "Use this thread for internal notes and resolution steps."))
+                        await staff_thread.send(embed=obsidian_embed("Staff Thread", "Use this thread for internal notes and resolution steps.", client=bot))
                     except Exception:
                         pass
 
@@ -2114,6 +2112,7 @@ async def on_interaction(interaction: discord.Interaction):
                         "Docket Sealed",
                         f"Your docket entry has been sealed as **`{case_id}`**.\nYou'll receive DM docket updates as it progresses.",
                         color=discord.Color.green(),
+                        client=bot,
                     ),
                     ephemeral=True,
                 )
@@ -2302,7 +2301,7 @@ async def on_interaction(interaction: discord.Interaction):
                             )
                             await db.commit()
                         try:
-                            await staff_thread.send(embed=obsidian_embed("Staff Thread", "Use this thread for internal notes and resolution steps."))
+                            await staff_thread.send(embed=obsidian_embed("Staff Thread", "Use this thread for internal notes and resolution steps.", client=bot))
                         except Exception:
                             pass
 
