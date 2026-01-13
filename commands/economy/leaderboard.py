@@ -62,6 +62,7 @@ def setup(bot):
             "🏆 Coin Leaderboard",
             desc,
             color=discord.Color.gold(),
+            client=interaction.client,
         )
         
         await interaction.response.send_message(embed=embed, ephemeral=False)

@@ -43,7 +43,8 @@ def obsidian_embed(
     image: str = None,
     footer: str = None,
     footer_icon: str = None,
-    fields: list = None
+    fields: list = None,
+    client: discord.Client = None
 ) -> discord.Embed:
     """
     Create a standardized Obsidian-themed embed with enhanced styling.
@@ -99,7 +100,14 @@ def obsidian_embed(
     if footer:
         e.set_footer(text=footer, icon_url=footer_icon)
     else:
-        e.set_footer(text="Obsidian Clan Bot", icon_url="https://i.imgur.com/4M34hi2.png")  # Placeholder - can be updated
+        # Use bot's actual name and avatar if client is provided
+        if client and client.user:
+            bot_name = client.user.display_name or client.user.name
+            bot_avatar = client.user.display_avatar.url if hasattr(client.user, 'display_avatar') else client.user.avatar.url if client.user.avatar else None
+            e.set_footer(text=bot_name, icon_url=bot_avatar)
+        else:
+            # Fallback to default if no client provided
+            e.set_footer(text="Obsidian Clan Bot", icon_url="https://i.imgur.com/4M34hi2.png")
     
     return e
 

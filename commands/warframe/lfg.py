@@ -242,6 +242,7 @@ def setup(bot):
             desc,
             color=discord.Color.blue(),
             footer=f"LFG ID: {lfg_id} • Click buttons below to join/leave",
+            client=interaction.client,
         )
         
         # Add players field

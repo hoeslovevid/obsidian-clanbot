@@ -855,6 +855,7 @@ async def check_and_notify_baro_arrival():
                 "🛒 Baro Ki'Teer Has Arrived!",
                 desc,
                 color=discord.Color.gold(),
+                client=bot,
             )
             
             try:
@@ -889,7 +890,7 @@ async def log_complaint_action(guild: discord.Guild, case_id: str, actor_id: int
             desc = f"**Case:** `{case_id}`\n**Action:** {action}\n**By:** {actor.mention if actor else actor_id}"
             if note:
                 desc += f"\n**Note:** {note}"
-            await ch.send(embed=obsidian_embed("Docket Ledger", desc, color=discord.Color.dark_grey()))
+            await ch.send(embed=obsidian_embed("Docket Ledger", desc, color=discord.Color.dark_grey(), client=bot))
 
 
 # --------------------- Setup helpers ---------------------
@@ -1279,6 +1280,7 @@ async def post_vc_panel(guild: discord.Guild, vc: discord.VoiceChannel, owner: d
         "Configure your cell channel using the controls below.\n"
         "_Obsidian Inheritors retain oversight._",
         color=discord.Color.dark_grey(),
+        client=bot,
     )
     view = VCPanelView(vc.id)
     msg = await panel_ch.send(embed=embed, view=view)
@@ -1448,7 +1450,7 @@ class ComplaintModal(discord.ui.Modal, title="Obsidian Docket Submission"):  # t
         if str(self.evidence).strip():
             desc += f"\n\n**Evidence:** {self.evidence}"
 
-        embed = obsidian_embed(f"Docket Entry • {case_id}", desc, color=discord.Color.red())
+        embed = obsidian_embed(f"Docket Entry • {case_id}", desc, color=discord.Color.red(), client=bot)
         embed.set_footer(text=f"Filed by: {interaction.user} • {interaction.user.id}")
 
         view = ComplaintModView(case_id)
@@ -1486,7 +1488,7 @@ class ComplaintModal(discord.ui.Modal, title="Obsidian Docket Submission"):  # t
                 )
                 await db.commit()
             try:
-                await thread.send(embed=obsidian_embed("Staff Thread", "Use this thread for internal notes and resolution steps."))
+                await thread.send(embed=obsidian_embed("Staff Thread", "Use this thread for internal notes and resolution steps.", client=bot))
             except Exception:
                 pass
 
@@ -1496,8 +1498,9 @@ class ComplaintModal(discord.ui.Modal, title="Obsidian Docket Submission"):  # t
         await interaction.followup.send(
             embed=obsidian_embed(
                 "Docket Sealed",
-                f"Your docket entry has been sealed as **`{case_id}`**.\nYou’ll receive DM docket updates as it progresses.",
+                f"Your docket entry has been sealed as **`{case_id}`**.\nYou'll receive DM docket updates as it progresses.",
                 color=discord.Color.green(),
+                client=bot,
             ),
             ephemeral=True,
         )
@@ -1568,7 +1571,7 @@ class ComplaintModView(discord.ui.View):
         if not user:
             return
         try:
-            e = obsidian_embed(f"Docket Update • {self.case_id}", f"Status: **{display_case_status(status)}**")
+            e = obsidian_embed(f"Docket Update • {self.case_id}", f"Status: **{display_case_status(status)}**", client=bot)
             await user.send(embed=e)
         except discord.Forbidden:
             pass
@@ -1889,6 +1892,7 @@ async def on_interaction(interaction: discord.Interaction):
                             f"**/submit_complaint** (case_id: `{case_id}`)\n\n"
                             "_If your DMs are closed, you may not receive updates._",
                             color=discord.Color.orange(),
+                            client=bot,
                         )
                         await user.send(embed=e)
                     except discord.Forbidden:
@@ -2060,7 +2064,7 @@ async def on_interaction(interaction: discord.Interaction):
                 if evidence_val.strip():
                     desc += f"\n\n**Evidence:** {evidence_val}"
 
-                embed = obsidian_embed(f"Docket Entry • {case_id}", desc, color=discord.Color.red())
+                embed = obsidian_embed(f"Docket Entry • {case_id}", desc, color=discord.Color.red(), client=bot)
                 embed.set_footer(text=f"Filed by: {interaction.user} • {interaction.user.id}")
 
                 view = ComplaintModView(case_id)
@@ -2259,7 +2263,7 @@ async def on_interaction(interaction: discord.Interaction):
                     if evidence_val.strip():
                         desc += f"\n\n**Evidence:** {evidence_val}"
 
-                    embed = obsidian_embed(f"Docket Entry • {case_id}", desc, color=discord.Color.red())
+                    embed = obsidian_embed(f"Docket Entry • {case_id}", desc, color=discord.Color.red(), client=bot)
                     embed.set_footer(text=f"Filed by: {interaction.user} • {interaction.user.id}")
 
                     view = ComplaintModView(case_id)

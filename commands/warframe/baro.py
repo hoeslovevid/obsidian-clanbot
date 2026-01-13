@@ -73,6 +73,7 @@ def setup(bot):
                 desc,
                 color=discord.Color.green(),
                 thumbnail="https://vignette.wikia.nocookie.net/warframe/images/4/4a/BaroKiTeer.png/revision/latest?cb=20150213150000",
+                client=interaction.client,
             )
         else:
             # Baro is not active
@@ -105,6 +106,7 @@ def setup(bot):
                 desc,
                 color=discord.Color.orange(),
                 thumbnail="https://vignette.wikia.nocookie.net/warframe/images/4/4a/BaroKiTeer.png/revision/latest?cb=20150213150000",
+                client=interaction.client,
             )
         
         await interaction.followup.send(embed=embed, ephemeral=False)

@@ -27,6 +27,7 @@ def setup(bot):
             color=discord.Color.gold(),
             author=interaction.user,
             thumbnail=interaction.user.display_avatar.url if hasattr(interaction.user, 'display_avatar') else interaction.user.avatar.url if interaction.user.avatar else None,
+            client=interaction.client,
         )
         
         await interaction.response.send_message(embed=embed, ephemeral=True)
