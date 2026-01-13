@@ -451,6 +451,14 @@ async def init_db():
             UNIQUE(guild_id, archon_boss, expiry_time)
         )""")
 
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS member_count_channels (
+            guild_id INTEGER NOT NULL,
+            channel_id INTEGER NOT NULL,
+            channel_type TEXT NOT NULL DEFAULT 'voice',
+            PRIMARY KEY (guild_id)
+        )""")
+
         await db.commit()
 
 

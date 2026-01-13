@@ -809,6 +809,52 @@ def setup_tasks(bot):
     async def before_archon_check_loop():
         await bot.wait_until_ready()
 
+    @tasks.loop(minutes=5)  # Update every 5 minutes
+    async def member_count_update_loop():
+        """Update member count channel names."""
+        try:
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute(
+                    "SELECT guild_id, channel_id FROM member_count_channels"
+                )
+                channels = await cur.fetchall()
+            
+            for guild_id, channel_id in channels:
+                guild = bot.get_guild(guild_id)
+                if not guild:
+                    continue
+                
+                # Update member count channel
+                try:
+                    channel = guild.get_channel(channel_id)
+                    if not channel:
+                        continue
+                    
+                    # Get counts
+                    member_count = guild.member_count
+                    bot_count = sum(1 for member in guild.members if member.bot)
+                    human_count = member_count - bot_count
+                    
+                    # Format channel name
+                    name = f"👥 Members: {member_count:,} | 🤖 Bots: {bot_count:,} | 👤 Humans: {human_count:,}"
+                    if len(name) > 100:
+                        name = f"👥 {member_count:,} | 🤖 {bot_count:,} | 👤 {human_count:,}"
+                        if len(name) > 100:
+                            name = f"👥 Members: {member_count:,}"[:100]
+                    
+                    # Only update if name changed (to avoid rate limits)
+                    if channel.name != name:
+                        await channel.edit(name=name, reason="Member count update")
+                except Exception as e:
+                    logger.error(f"Error updating member count channel {channel_id} in {guild.id}: {e}")
+                
+        except Exception as e:
+            logger.error(f"Error in member_count_update_loop: {e}", exc_info=True)
+
+    @member_count_update_loop.before_loop
+    async def before_member_count_update_loop():
+        await bot.wait_until_ready()
+
     # Start all tasks
     temp_vc_cleanup.start()
     event_reminder_loop.start()
@@ -818,6 +864,7 @@ def setup_tasks(bot):
     cycle_check_loop.start()
     invasion_check_loop.start()
     archon_check_loop.start()
+    member_count_update_loop.start()
     
     return {
         'temp_vc_cleanup': temp_vc_cleanup,
@@ -828,4 +875,5 @@ def setup_tasks(bot):
         'cycle_check_loop': cycle_check_loop,
         'invasion_check_loop': invasion_check_loop,
         'archon_check_loop': archon_check_loop,
+        'member_count_update_loop': member_count_update_loop,
     }
