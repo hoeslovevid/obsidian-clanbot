@@ -104,6 +104,7 @@ def setup(bot):
                 "🛒 Baro Ki'Teer - Inactive",
                 desc,
                 color=discord.Color.orange(),
+                thumbnail="https://vignette.wikia.nocookie.net/warframe/images/4/4a/BaroKiTeer.png/revision/latest?cb=20150213150000",
             )
         
         await interaction.followup.send(embed=embed, ephemeral=False)
