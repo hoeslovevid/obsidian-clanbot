@@ -15,6 +15,12 @@ from channels import resolve_channel_id, delete_temp_vc_and_panel
 from warframe_api import get_baro_status, get_all_cycles, fetch_invasions, fetch_archon_hunt_data, fetch_events_data
 from utils import obsidian_embed, ECONOMY_ENABLED, COINS_PER_MINUTE_VOICE, MIN_VOICE_MINUTES_FOR_REWARD, XP_ENABLED, XP_PER_MINUTE_VOICE
 
+# Import Baro embed builder (lazy import to avoid circular dependency)
+def get_baro_embed_builder():
+    """Lazy import to avoid circular dependency."""
+    from commands.warframe.baro import build_baro_embed
+    return build_baro_embed
+
 logger = logging.getLogger(__name__)
 
 # Import config from environment
@@ -356,6 +362,105 @@ def setup_tasks(bot):
 
     @baro_check_loop.before_loop
     async def before_baro_check_loop():
+        await bot.wait_until_ready()
+
+    @tasks.loop(minutes=1)  # Update every minute
+    async def baro_live_update_loop():
+        """Update live Baro messages with current time remaining."""
+        try:
+            is_active, baro_data = await get_baro_status()
+            
+            if not is_active or not baro_data:
+                # Baro is not active, clean up all live messages
+                async with aiosqlite.connect(DB_PATH) as db:
+                    await db.execute("DELETE FROM baro_live_messages")
+                    await db.commit()
+                return
+            
+            # Get all live messages
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute("""
+                    SELECT guild_id, channel_id, message_id, expiry_time
+                    FROM baro_live_messages
+                """)
+                messages = await cur.fetchall()
+            
+            # Update each message
+            for guild_id, channel_id, message_id, expiry_time_str in messages:
+                try:
+                    guild = bot.get_guild(guild_id)
+                    if not guild:
+                        # Guild not found, remove from database
+                        async with aiosqlite.connect(DB_PATH) as db:
+                            await db.execute(
+                                "DELETE FROM baro_live_messages WHERE guild_id=? AND channel_id=? AND message_id=?",
+                                (guild_id, channel_id, message_id)
+                            )
+                            await db.commit()
+                        continue
+                    
+                    channel = guild.get_channel(channel_id)
+                    if not isinstance(channel, discord.TextChannel):
+                        # Channel not found or wrong type, remove from database
+                        async with aiosqlite.connect(DB_PATH) as db:
+                            await db.execute(
+                                "DELETE FROM baro_live_messages WHERE guild_id=? AND channel_id=? AND message_id=?",
+                                (guild_id, channel_id, message_id)
+                            )
+                            await db.commit()
+                        continue
+                    
+                    try:
+                        message = await channel.fetch_message(message_id)
+                    except discord.NotFound:
+                        # Message deleted, remove from database
+                        async with aiosqlite.connect(DB_PATH) as db:
+                            await db.execute(
+                                "DELETE FROM baro_live_messages WHERE guild_id=? AND channel_id=? AND message_id=?",
+                                (guild_id, channel_id, message_id)
+                            )
+                            await db.commit()
+                        continue
+                    
+                    # Check if Baro has expired
+                    try:
+                        expiry_time = datetime.fromisoformat(expiry_time_str.replace('Z', '+00:00'))
+                        if expiry_time <= datetime.now(timezone.utc):
+                            # Baro has expired, remove from database
+                            async with aiosqlite.connect(DB_PATH) as db:
+                                await db.execute(
+                                    "DELETE FROM baro_live_messages WHERE guild_id=? AND channel_id=? AND message_id=?",
+                                    (guild_id, channel_id, message_id)
+                                )
+                                await db.commit()
+                            continue
+                    except Exception:
+                        pass
+                    
+                    # Rebuild embed with updated time
+                    build_baro_embed = get_baro_embed_builder()
+                    updated_embed = build_baro_embed(baro_data, True, bot)
+                    
+                    # Update the message
+                    await message.edit(embed=updated_embed)
+                    
+                except discord.Forbidden:
+                    # Missing permissions, remove from database
+                    async with aiosqlite.connect(DB_PATH) as db:
+                        await db.execute(
+                            "DELETE FROM baro_live_messages WHERE guild_id=? AND channel_id=? AND message_id=?",
+                            (guild_id, channel_id, message_id)
+                        )
+                        await db.commit()
+                except Exception as e:
+                    logger.error(f"Error updating Baro live message {message_id} in {guild_id}: {e}")
+                    continue
+                    
+        except Exception as e:
+            logger.error(f"Error in baro_live_update_loop: {e}", exc_info=True)
+
+    @baro_live_update_loop.before_loop
+    async def before_baro_live_update_loop():
         await bot.wait_until_ready()
 
     @tasks.loop(hours=1)  # Check every hour for expired LFG posts
@@ -860,6 +965,7 @@ def setup_tasks(bot):
     event_reminder_loop.start()
     voice_reward_loop.start()
     baro_check_loop.start()
+    baro_live_update_loop.start()
     lfg_expire_loop.start()
     cycle_check_loop.start()
     invasion_check_loop.start()
@@ -871,6 +977,7 @@ def setup_tasks(bot):
         'event_reminder_loop': event_reminder_loop,
         'voice_reward_loop': voice_reward_loop,
         'baro_check_loop': baro_check_loop,
+        'baro_live_update_loop': baro_live_update_loop,
         'lfg_expire_loop': lfg_expire_loop,
         'cycle_check_loop': cycle_check_loop,
         'invasion_check_loop': invasion_check_loop,

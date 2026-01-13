@@ -368,6 +368,17 @@ async def init_db():
         )""")
 
         await db.execute("""
+        CREATE TABLE IF NOT EXISTS baro_live_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            channel_id INTEGER NOT NULL,
+            message_id INTEGER NOT NULL,
+            expiry_time TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE(guild_id, channel_id, message_id)
+        )""")
+
+        await db.execute("""
         CREATE TABLE IF NOT EXISTS lfg_posts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             guild_id INTEGER NOT NULL,
