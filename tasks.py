@@ -1,0 +1,563 @@
+"""
+Background tasks for the bot.
+This module contains all periodic tasks and loops.
+"""
+import logging
+import os
+from datetime import datetime, timedelta, timezone
+import aiosqlite  # type: ignore
+import dateparser  # type: ignore
+import discord
+from discord.ext import tasks  # type: ignore
+
+from database import DB_PATH, now_utc, get_guild_setting, add_coins, add_xp, get_user_xp
+from channels import resolve_channel_id, delete_temp_vc_and_panel
+from warframe_api import get_baro_status, get_all_cycles
+from utils import obsidian_embed, ECONOMY_ENABLED, COINS_PER_MINUTE_VOICE, MIN_VOICE_MINUTES_FOR_REWARD, XP_ENABLED, XP_PER_MINUTE_VOICE
+
+logger = logging.getLogger(__name__)
+
+# Import config from environment
+VOICE_IDLE_DELETE_MINUTES = int(os.getenv("VOICE_IDLE_DELETE_MINUTES", "5"))
+VC_CLEANUP_INTERVAL_MINUTES = int(os.getenv("VC_CLEANUP_INTERVAL_MINUTES", "2"))
+VOICE_REWARD_INTERVAL_MINUTES = int(os.getenv("VOICE_REWARD_INTERVAL_MINUTES", "1"))
+EVENT_REMINDER_MINUTES_BEFORE = int(os.getenv("EVENT_REMINDER_MINUTES_BEFORE", "60"))
+EVENT_REMINDER_LOOP_MINUTES = int(os.getenv("EVENT_REMINDER_LOOP_MINUTES", "1"))
+VOICE_PANEL_CHANNEL_ID = int(os.getenv("VOICE_PANEL_CHANNEL_ID", "0") or "0")
+VOICE_PANEL_CHANNEL_NAME = os.getenv("VOICE_PANEL_CHANNEL_NAME", "obsidian-console")
+COMPLAINTS_CHANNEL_ID = int(os.getenv("COMPLAINTS_CHANNEL_ID", "0") or "0")
+COMPLAINTS_CHANNEL_NAME = os.getenv("COMPLAINTS_CHANNEL_NAME", "inheritor-docket")
+EVENTS_CHANNEL_ID = int(os.getenv("EVENTS_CHANNEL_ID", "0") or "0")
+EVENTS_CHANNEL_NAME = os.getenv("EVENTS_CHANNEL_NAME", "ops-board")
+
+
+async def check_and_notify_baro_arrival(bot):
+    """Check if Baro has arrived and send notifications if needed."""
+    is_active, baro_data = await get_baro_status()
+    
+    if not baro_data:
+        return
+    
+    activation = baro_data.get("activation", "")
+    if not activation:
+        return
+    
+    # Check if we've already notified for this visit
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            "SELECT id FROM baro_visits WHERE arrival_time=? AND notified=1",
+            (activation,)
+        )
+        existing = await cur.fetchone()
+        
+        if existing:
+            return  # Already notified
+        
+        # Check if this visit exists
+        cur = await db.execute(
+            "SELECT id, notified FROM baro_visits WHERE arrival_time=?",
+            (activation,)
+        )
+        visit = await cur.fetchone()
+        
+        visit_id = None
+        if visit:
+            visit_id, notified = visit
+            if notified:
+                return  # Already notified, exit
+        else:
+            # Create new visit record
+            import json
+            inventory_json = json.dumps(baro_data.get("inventory", []))
+            await db.execute("""
+                INSERT INTO baro_visits (arrival_time, departure_time, location, inventory_json, notified, created_at)
+                VALUES (?, ?, ?, ?, 0, ?)
+            """, (
+                activation,
+                baro_data.get("expiry", ""),
+                baro_data.get("location", "Unknown"),
+                inventory_json,
+                now_utc().isoformat(),
+            ))
+            await db.commit()
+            
+            # Get the visit ID
+            cur = await db.execute(
+                "SELECT id FROM baro_visits WHERE arrival_time=?",
+                (activation,)
+            )
+            visit = await cur.fetchone()
+            visit_id = visit[0] if visit else None
+        
+        # Send notifications to all guilds that have it enabled
+        for guild in bot.guilds:
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute(
+                    "SELECT channel_id, enabled FROM baro_notification_settings WHERE guild_id=?",
+                    (guild.id,)
+                )
+                setting = await cur.fetchone()
+            
+            if not setting or not setting[1]:  # Not enabled or not set
+                continue
+            
+            channel_id = setting[0]
+            if not channel_id:
+                continue
+            
+            ch = guild.get_channel(channel_id)
+            if not isinstance(ch, discord.TextChannel):
+                continue
+            
+            # Build notification embed
+            location = baro_data.get("location", "Unknown")
+            expiry = baro_data.get("expiry", "")
+            inventory = baro_data.get("inventory", [])
+            
+            try:
+                expiry_time = dateparser.parse(expiry, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
+                if expiry_time:
+                    time_remaining = expiry_time - datetime.now(timezone.utc)
+                    hours = int(time_remaining.total_seconds() // 3600)
+                    minutes = int((time_remaining.total_seconds() % 3600) // 60)
+                    time_str = f"{hours}h {minutes}m"
+                else:
+                    time_str = "Unknown"
+            except Exception:
+                time_str = "Unknown"
+            
+            desc = f"**Location:** {location}\n"
+            desc += f"**Time Remaining:** {time_str}\n\n"
+            
+            if inventory:
+                desc += "**Inventory:**\n"
+                for item in inventory[:10]:  # Limit to first 10 items
+                    item_name = item.get("item", "Unknown")
+                    ducats = item.get("ducats", 0)
+                    credits = item.get("credits", 0)
+                    desc += f"• {item_name} - {ducats} ducats, {credits:,} credits\n"
+                if len(inventory) > 10:
+                    desc += f"\n_...and {len(inventory) - 10} more items_"
+            else:
+                desc += "Inventory not available yet."
+            
+            embed = obsidian_embed(
+                "🛒 Baro Ki'Teer Has Arrived!",
+                desc,
+                color=discord.Color.gold(),
+                client=bot,
+            )
+            
+            try:
+                await ch.send(embed=embed)
+                
+                # Mark as notified
+                if visit_id:
+                    async with aiosqlite.connect(DB_PATH) as db:
+                        await db.execute(
+                            "UPDATE baro_visits SET notified=1 WHERE id=?",
+                            (visit_id,)
+                        )
+                        await db.commit()
+            except Exception as e:
+                logger.error(f"Error sending Baro notification to {guild.id}: {e}")
+
+
+def setup_tasks(bot):
+    """Set up all background tasks. Must be called after bot is created."""
+    
+    @tasks.loop(minutes=VC_CLEANUP_INTERVAL_MINUTES)
+    async def temp_vc_cleanup():
+        cutoff = now_utc() - timedelta(minutes=VOICE_IDLE_DELETE_MINUTES)
+
+        for guild in bot.guilds:
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute(
+                    "SELECT channel_id, last_nonempty_at FROM temp_vcs WHERE guild_id=?",
+                    (guild.id,),
+                )
+                rows = await cur.fetchall()
+
+            for channel_id, last_nonempty_at in rows:
+                vc = guild.get_channel(int(channel_id))
+                if not isinstance(vc, discord.VoiceChannel):
+                    await delete_temp_vc_and_panel(guild, int(channel_id), reason="Cleanup missing VC")
+                    continue
+
+                # Never delete join-to-create trigger
+                create_id_s = await get_guild_setting(guild.id, "create_vc_channel_id")
+                if create_id_s and create_id_s.isdigit() and vc.id == int(create_id_s):
+                    continue
+
+                try:
+                    last_dt = datetime.fromisoformat(last_nonempty_at)
+                except Exception:
+                    last_dt = now_utc()
+
+                if len(vc.members) == 0 and last_dt < cutoff:
+                    await delete_temp_vc_and_panel(guild, vc.id, reason="Temp VC idle cleanup")
+
+    @temp_vc_cleanup.before_loop
+    async def before_temp_vc_cleanup():
+        await bot.wait_until_ready()
+
+    @tasks.loop(minutes=EVENT_REMINDER_LOOP_MINUTES)
+    async def event_reminder_loop():
+        for guild in bot.guilds:
+            events_id = await resolve_channel_id(guild, "events_channel_id", EVENTS_CHANNEL_ID, EVENTS_CHANNEL_NAME)
+            ch = guild.get_channel(events_id) if events_id else None
+            if not isinstance(ch, discord.TextChannel):
+                continue
+            # Type narrowing: ch is now guaranteed to be discord.TextChannel
+            assert isinstance(ch, discord.TextChannel)
+
+            now_ts = int(now_utc().timestamp())
+            soon_ts = int((now_utc() + timedelta(minutes=EVENT_REMINDER_MINUTES_BEFORE)).timestamp())
+
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute(
+                    "SELECT message_id,title,start_ts,role_id FROM events "
+                    "WHERE guild_id=? AND reminder_sent=0 AND start_ts BETWEEN ? AND ?",
+                    (guild.id, now_ts, soon_ts),
+                )
+                rows = await cur.fetchall()
+
+            for message_id, title, start_ts, role_id in rows:
+                mention = ""
+                if int(role_id or 0):
+                    role = guild.get_role(int(role_id))
+                    if role:
+                        mention = role.mention
+
+                if ch:
+                    await ch.send(
+                        content=mention if mention else None,
+                        embed=obsidian_embed(
+                            "⏳ Operation Reminder",
+                            f"**{title}** begins in ~{EVENT_REMINDER_MINUTES_BEFORE} minutes.\n"
+                            f"**Time:** <t:{int(start_ts)}:F>  _( <t:{int(start_ts)}:R> )_",
+                            color=discord.Color.orange(),
+                            client=bot,
+                        ),
+                    )
+
+                async with aiosqlite.connect(DB_PATH) as db:
+                    await db.execute(
+                        "UPDATE events SET reminder_sent=1 WHERE guild_id=? AND message_id=?",
+                        (guild.id, int(message_id)),
+                    )
+                    await db.commit()
+
+    @event_reminder_loop.before_loop
+    async def before_event_reminder_loop():
+        await bot.wait_until_ready()
+
+    @tasks.loop(minutes=VOICE_REWARD_INTERVAL_MINUTES)
+    async def voice_reward_loop():
+        """Award coins to users based on voice channel activity."""
+        if not ECONOMY_ENABLED:
+            return
+        
+        now = now_utc()
+        
+        for guild in bot.guilds:
+            async with aiosqlite.connect(DB_PATH) as db:
+                # Get all active voice sessions
+                cur = await db.execute("""
+                    SELECT user_id, channel_id, joined_at, last_reward_at, total_minutes
+                    FROM voice_activity
+                    WHERE guild_id=?
+                """, (guild.id,))
+                rows = await cur.fetchall()
+                
+                for user_id, channel_id, joined_at_str, last_reward_at_str, total_minutes in rows:
+                    try:
+                        user = guild.get_member(user_id)
+                        if not user:
+                            continue
+                        
+                        channel = guild.get_channel(channel_id)
+                        if not isinstance(channel, discord.VoiceChannel):
+                            continue
+                        
+                        # Check if user is still in the channel and not muted/deafened
+                        if user.voice and user.voice.channel and user.voice.channel.id == channel_id:
+                            if user.voice.self_mute or user.voice.self_deaf:
+                                continue
+                        else:
+                            # User left, remove tracking
+                            await db.execute(
+                                "DELETE FROM voice_activity WHERE guild_id=? AND user_id=? AND channel_id=?",
+                                (guild.id, user_id, channel_id),
+                            )
+                            await db.commit()
+                            continue
+                        
+                        # Calculate minutes since last reward (or since join)
+                        joined_at = datetime.fromisoformat(joined_at_str)
+                        if last_reward_at_str:
+                            last_reward_at = datetime.fromisoformat(last_reward_at_str)
+                            minutes_since = (now - last_reward_at).total_seconds() / 60
+                        else:
+                            minutes_since = (now - joined_at).total_seconds() / 60
+                        
+                        # Award coins for full minutes
+                        if minutes_since >= MIN_VOICE_MINUTES_FOR_REWARD:
+                            minutes_to_reward = int(minutes_since)
+                            coins = minutes_to_reward * COINS_PER_MINUTE_VOICE
+                            
+                            if coins > 0:
+                                await add_coins(
+                                    guild.id,
+                                    user_id,
+                                    coins,
+                                    "VOICE",
+                                    f"Voice activity in #{channel.name}",
+                                )
+                                
+                                # Award XP (if enabled)
+                                if XP_ENABLED:
+                                    xp_amount = minutes_to_reward * XP_PER_MINUTE_VOICE
+                                    if xp_amount > 0:
+                                        leveled_up = await add_xp(
+                                            guild.id,
+                                            user_id,
+                                            xp_amount,
+                                            "VOICE",
+                                        )
+                                        if leveled_up:
+                                            xp, level, total_xp = await get_user_xp(guild.id, user_id)
+                                            logger.info(f"User {user_id} leveled up to level {level} in guild {guild.id} (voice activity)")
+                                
+                                # Update tracking
+                                new_total = total_minutes + minutes_to_reward
+                                await db.execute("""
+                                    UPDATE voice_activity
+                                    SET last_reward_at=?, total_minutes=?
+                                    WHERE guild_id=? AND user_id=? AND channel_id=?
+                                """, (now.isoformat(), new_total, guild.id, user_id, channel_id))
+                                await db.commit()
+                    
+                    except Exception as e:
+                        logger.error(f"[economy] Error processing voice reward for {user_id} in {guild.id}: {e}")
+                        continue
+
+    @voice_reward_loop.before_loop
+    async def before_voice_reward_loop():
+        await bot.wait_until_ready()
+
+    @tasks.loop(hours=1)  # Check every hour for Baro
+    async def baro_check_loop():
+        """Check for Baro Ki'Teer arrivals and send notifications."""
+        try:
+            await check_and_notify_baro_arrival(bot)
+        except Exception as e:
+            logger.error(f"Error in baro_check_loop: {e}", exc_info=True)
+
+    @baro_check_loop.before_loop
+    async def before_baro_check_loop():
+        await bot.wait_until_ready()
+
+    @tasks.loop(hours=1)  # Check every hour for expired LFG posts
+    async def lfg_expire_loop():
+        """Auto-expire LFG posts that have passed their expiry time."""
+        try:
+            async with aiosqlite.connect(DB_PATH) as db:
+                now = datetime.now(timezone.utc).isoformat()
+                
+                # Find expired posts
+                cur = await db.execute("""
+                    SELECT id, guild_id, channel_id, message_id
+                    FROM lfg_posts
+                    WHERE status='OPEN' AND expires_at < ?
+                """, (now,))
+                
+                expired = await cur.fetchall()
+                
+                for lfg_id, guild_id, channel_id, message_id in expired:
+                    try:
+                        guild = bot.get_guild(guild_id)
+                        if not guild:
+                            continue
+                        
+                        channel = guild.get_channel(channel_id)
+                        if not channel:
+                            continue
+                        
+                        try:
+                            message = await channel.fetch_message(message_id)
+                            
+                            # Update embed
+                            embed = message.embeds[0] if message.embeds else None
+                            if embed:
+                                embed.color = discord.Color.grey()
+                                embed.set_footer(text="⏰ Expired")
+                                
+                                # Disable buttons
+                                view = discord.ui.View()
+                                for item in message.components[0].children if message.components else []:
+                                    if hasattr(item, 'disabled'):
+                                        item.disabled = True
+                                        view.add_item(item)
+                                
+                                await message.edit(embed=embed, view=view)
+                        except discord.NotFound:
+                            pass
+                        
+                        # Mark as expired in database
+                        await db.execute(
+                            "UPDATE lfg_posts SET status='EXPIRED' WHERE id=?",
+                            (lfg_id,)
+                        )
+                        await db.commit()
+                    except Exception as e:
+                        logger.error(f"Error expiring LFG post {lfg_id}: {e}", exc_info=True)
+                        continue
+        except Exception as e:
+            logger.error(f"Error in lfg_expire_loop: {e}", exc_info=True)
+
+    @lfg_expire_loop.before_loop
+    async def before_lfg_expire_loop():
+        await bot.wait_until_ready()
+
+    @tasks.loop(minutes=5)  # Check every 5 minutes for cycle changes
+    async def cycle_check_loop():
+        """Check for cycle changes and send notifications."""
+        try:
+            cycles_data = await get_all_cycles()
+            
+            if not cycles_data:
+                return
+            
+            # Check each cycle type
+            for cycle_type, data in cycles_data.items():
+                if not data:
+                    continue
+                
+                expiry = data.get('expiry', '')
+                if not expiry:
+                    continue
+                
+                try:
+                    expiry_time = dateparser.parse(expiry, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
+                    if not expiry_time:
+                        continue
+                    
+                    now = datetime.now(timezone.utc)
+                    time_until_change = expiry_time - now
+                    
+                    # Only notify if cycle is about to change (within 2 minutes)
+                    if 0 <= time_until_change.total_seconds() <= 120:
+                        # Check if we've already notified for this cycle change
+                        cycle_state = None
+                        cycle_display = None
+                        
+                        if cycle_type == 'cetus':
+                            is_day = data.get('isDay', False)
+                            cycle_state = 'day' if is_day else 'night'
+                            cycle_display = "☀️ Day" if is_day else "🌙 Night"
+                        elif cycle_type == 'vallis':
+                            is_warm = data.get('isWarm', False)
+                            cycle_state = 'warm' if is_warm else 'cold'
+                            cycle_display = "🔥 Warm" if is_warm else "❄️ Cold"
+                        elif cycle_type == 'cambion':
+                            state = data.get('state', '').lower()
+                            cycle_state = state
+                            cycle_display = "🔴 Fass" if state == 'fass' else "🟢 Vome" if state == 'vome' else state.title()
+                        
+                        if not cycle_state:
+                            continue
+                        
+                        # Map cycle types to database columns and display names
+                        column_map = {
+                            'cetus': ('cetus_enabled', 'Cetus (Plains of Eidolon)'),
+                            'vallis': ('fortuna_enabled', 'Fortuna (Orb Vallis)'),
+                            'cambion': ('deimos_enabled', 'Deimos (Cambion Drift)'),
+                        }
+                        
+                        column, display_name = column_map.get(cycle_type, (None, None))
+                        if not column:
+                            continue
+                        
+                        # Send notifications to all guilds that have it enabled
+                        for guild in bot.guilds:
+                            async with aiosqlite.connect(DB_PATH) as db:
+                                cur = await db.execute(
+                                    f"SELECT channel_id, {column} FROM cycle_notification_settings WHERE guild_id=?",
+                                    (guild.id,)
+                                )
+                                setting = await cur.fetchone()
+                            
+                            if not setting or not setting[1]:  # Not enabled
+                                continue
+                            
+                            channel_id = setting[0]
+                            if not channel_id:
+                                continue
+                            
+                            ch = guild.get_channel(channel_id)
+                            if not isinstance(ch, discord.TextChannel):
+                                continue
+                            
+                            # Check if we've already notified for this cycle change
+                            async with aiosqlite.connect(DB_PATH) as db:
+                                cur = await db.execute("""
+                                    SELECT 1 FROM cycle_notifications_sent
+                                    WHERE guild_id=? AND cycle_type=? AND cycle_state=? AND notified_at > datetime('now', '-5 minutes')
+                                """, (guild.id, cycle_type, cycle_state))
+                                already_notified = await cur.fetchone()
+                            
+                            if already_notified:
+                                continue
+                            
+                            # Send notification
+                            desc = f"**{display_name}** cycle is changing!\n\n"
+                            desc += f"**New State:** {cycle_display}\n"
+                            desc += f"**Time:** <t:{int(expiry_time.timestamp())}:F>"
+                            
+                            embed = obsidian_embed(
+                                f"🌍 Cycle Change: {display_name}",
+                                desc,
+                                color=discord.Color.blue(),
+                                client=bot,
+                            )
+                            
+                            try:
+                                await ch.send(embed=embed)
+                                
+                                # Record notification
+                                async with aiosqlite.connect(DB_PATH) as db:
+                                    await db.execute("""
+                                        INSERT INTO cycle_notifications_sent (guild_id, cycle_type, cycle_state, notified_at)
+                                        VALUES (?, ?, ?, ?)
+                                    """, (guild.id, cycle_type, cycle_state, datetime.now(timezone.utc).isoformat()))
+                                    await db.commit()
+                            except Exception as e:
+                                logger.error(f"Error sending cycle notification to {guild.id}: {e}")
+                                continue
+                except Exception as e:
+                    logger.error(f"Error processing {cycle_type} cycle: {e}")
+                    continue
+        except Exception as e:
+            logger.error(f"Error in cycle_check_loop: {e}", exc_info=True)
+
+    @cycle_check_loop.before_loop
+    async def before_cycle_check_loop():
+        await bot.wait_until_ready()
+
+    # Start all tasks
+    temp_vc_cleanup.start()
+    event_reminder_loop.start()
+    voice_reward_loop.start()
+    baro_check_loop.start()
+    lfg_expire_loop.start()
+    cycle_check_loop.start()
+    
+    return {
+        'temp_vc_cleanup': temp_vc_cleanup,
+        'event_reminder_loop': event_reminder_loop,
+        'voice_reward_loop': voice_reward_loop,
+        'baro_check_loop': baro_check_loop,
+        'lfg_expire_loop': lfg_expire_loop,
+        'cycle_check_loop': cycle_check_loop,
+    }
