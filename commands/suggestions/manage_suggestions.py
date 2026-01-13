@@ -235,34 +235,3 @@ def setup(bot):
         )
         
         await interaction.followup.send(embed=embed, ephemeral=True)
-        
-        # Also post individual suggestion messages with buttons if there are pending ones
-        if not status_filter or status_filter == "PENDING":
-            pending_suggestions = [r for r in rows if r[3] == "PENDING"]
-            if pending_suggestions:
-                for suggestion_id, user_id, suggestion_text, _, created_at, _ in pending_suggestions[:5]:  # Limit to 5 to avoid spam
-                    user = interaction.guild.get_member(user_id)
-                    username = user.display_name if user else f"User {user_id}"
-                    
-                    fields = [
-                        ("Suggestion", suggestion_text, False),
-                        ("Status", "⏳ Pending Review", True),
-                        ("Submitted By", username, True),
-                        ("Suggestion ID", f"#{suggestion_id}", True),
-                    ]
-                    
-                    embed = obsidian_embed(
-                        "💡 Suggestion",
-                        "",
-                        color=discord.Color.blue(),
-                        fields=fields,
-                        client=interaction.client,
-                    )
-                    
-                    view = SuggestionView(suggestion_id)
-                    bot.add_view(view)
-                    
-                    try:
-                        await interaction.channel.send(embed=embed, view=view)
-                    except Exception:
-                        pass  # If we can't send to channel, skip

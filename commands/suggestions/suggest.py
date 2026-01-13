@@ -65,12 +65,24 @@ def setup(bot):
             )
         
         # Try to find suggestions channel or create one
-        from channels import find_or_create_text_channel
+        # First check if there's already a suggestions channel (case-insensitive)
+        suggestions_channel = None
+        for channel in interaction.guild.text_channels:
+            if channel.name.lower() in ("suggestions", "suggestion", "💡-suggestions", "💡suggestions"):
+                suggestions_channel = channel
+                break
         
-        suggestions_channel = await find_or_create_text_channel(
-            interaction.guild,
-            name="suggestions"
-        )
+        # If not found, create one
+        if not suggestions_channel:
+            try:
+                suggestions_channel = await interaction.guild.create_text_channel(
+                    name="suggestions",
+                    reason="Auto-created for bot suggestions"
+                )
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(f"Error creating suggestions channel: {e}")
+                suggestions_channel = None
         
         if suggestions_channel:
             # Create embed for the suggestion
