@@ -12,7 +12,7 @@ from discord.ext import tasks  # type: ignore
 
 from database import DB_PATH, now_utc, get_guild_setting, add_coins, add_xp, get_user_xp
 from channels import resolve_channel_id, delete_temp_vc_and_panel
-from warframe_api import get_baro_status, get_all_cycles, fetch_invasions
+from warframe_api import get_baro_status, get_all_cycles, fetch_invasions, fetch_archon_hunt_data
 from utils import obsidian_embed, ECONOMY_ENABLED, COINS_PER_MINUTE_VOICE, MIN_VOICE_MINUTES_FOR_REWARD, XP_ENABLED, XP_PER_MINUTE_VOICE
 
 logger = logging.getLogger(__name__)
@@ -681,6 +681,134 @@ def setup_tasks(bot):
     async def before_invasion_check_loop():
         await bot.wait_until_ready()
 
+    @tasks.loop(hours=1)  # Check every hour for archon hunt resets
+    async def archon_check_loop():
+        """Check for new Archon Hunts and send notifications."""
+        try:
+            archon_data = await fetch_archon_hunt_data()
+            
+            if not archon_data:
+                return
+            
+            boss = archon_data.get("boss", "Unknown")
+            expiry = archon_data.get("expiry", "")
+            
+            if not boss or not expiry:
+                return
+            
+            # Map archon names to shard types
+            archon_shards = {
+                "Amar": "Crimson Archon Shard",
+                "Nira": "Amber Archon Shard",
+                "Boreal": "Azure Archon Shard"
+            }
+            
+            shard_type = archon_shards.get(boss, "Unknown Shard")
+            faction = archon_data.get("faction", "Unknown")
+            missions = archon_data.get("missions", [])
+            
+            # Parse expiry time
+            try:
+                expiry_time = dateparser.parse(expiry, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
+                if not expiry_time:
+                    return
+            except Exception:
+                return
+            
+            # Send notifications to all guilds that have it enabled
+            for guild in bot.guilds:
+                async with aiosqlite.connect(DB_PATH) as db:
+                    cur = await db.execute(
+                        "SELECT channel_id, enabled FROM archon_notification_settings WHERE guild_id=?",
+                        (guild.id,)
+                    )
+                    setting = await cur.fetchone()
+                
+                if not setting or not setting[1]:  # Not enabled or not set
+                    continue
+                
+                channel_id = setting[0]
+                if not channel_id:
+                    continue
+                
+                ch = guild.get_channel(channel_id)
+                if not isinstance(ch, discord.TextChannel):
+                    continue
+                
+                # Check if we've already notified this guild for this hunt
+                async with aiosqlite.connect(DB_PATH) as db:
+                    cur = await db.execute("""
+                        SELECT 1 FROM archon_notifications_sent
+                        WHERE guild_id=? AND archon_boss=? AND expiry_time=?
+                    """, (guild.id, boss, expiry))
+                    already_notified = await cur.fetchone()
+                
+                if already_notified:
+                    continue
+                
+                # Build notification embed
+                time_remaining = expiry_time - datetime.now(timezone.utc)
+                total_seconds = int(time_remaining.total_seconds())
+                days = total_seconds // 86400
+                hours = (total_seconds % 86400) // 3600
+                minutes = (total_seconds % 3600) // 60
+                
+                if days > 0:
+                    time_str = f"{days}d {hours}h {minutes}m"
+                elif hours > 0:
+                    time_str = f"{hours}h {minutes}m"
+                else:
+                    time_str = f"{minutes}m"
+                
+                desc = f"**Archon:** {boss}\n"
+                desc += f"**Reward:** {shard_type}\n"
+                desc += f"**Faction:** {faction}\n"
+                desc += f"**Time Remaining:** {time_str}\n"
+                desc += f"**Expires:** <t:{int(expiry_time.timestamp())}:R>\n\n"
+                
+                # Add mission information
+                if missions:
+                    desc += "**Missions:**\n"
+                    for i, mission in enumerate(missions, 1):
+                        node = mission.get("node", "Unknown")
+                        mission_type = mission.get("type", "Unknown")
+                        desc += f"{i}. {node} - {mission_type}\n"
+                
+                # Determine color based on archon
+                color_map = {
+                    "Amar": discord.Color.red(),
+                    "Nira": discord.Color.gold(),
+                    "Boreal": discord.Color.blue()
+                }
+                color = color_map.get(boss, discord.Color.purple())
+                
+                embed = obsidian_embed(
+                    "⚔️ New Archon Hunt Available!",
+                    desc,
+                    color=color,
+                    client=bot,
+                )
+                
+                try:
+                    await ch.send(embed=embed)
+                    
+                    # Record notification
+                    async with aiosqlite.connect(DB_PATH) as db:
+                        await db.execute("""
+                            INSERT INTO archon_notifications_sent (guild_id, archon_boss, expiry_time, notified_at)
+                            VALUES (?, ?, ?, ?)
+                        """, (guild.id, boss, expiry, datetime.now(timezone.utc).isoformat()))
+                        await db.commit()
+                except Exception as e:
+                    logger.error(f"Error sending archon hunt notification to {guild.id}: {e}")
+                    continue
+        except Exception as e:
+            logger.error(f"Error in archon_check_loop: {e}", exc_info=True)
+
+    @archon_check_loop.before_loop
+    async def before_archon_check_loop():
+        await bot.wait_until_ready()
+
     # Start all tasks
     temp_vc_cleanup.start()
     event_reminder_loop.start()
@@ -689,6 +817,7 @@ def setup_tasks(bot):
     lfg_expire_loop.start()
     cycle_check_loop.start()
     invasion_check_loop.start()
+    archon_check_loop.start()
     
     return {
         'temp_vc_cleanup': temp_vc_cleanup,
@@ -698,4 +827,5 @@ def setup_tasks(bot):
         'lfg_expire_loop': lfg_expire_loop,
         'cycle_check_loop': cycle_check_loop,
         'invasion_check_loop': invasion_check_loop,
+        'archon_check_loop': archon_check_loop,
     }

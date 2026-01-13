@@ -179,6 +179,8 @@ def load_all_commands():
         "commands.warframe.cycle_notify",
         "commands.warframe.invasions",
         "commands.warframe.invasion_notify",
+        "commands.warframe.archon",
+        "commands.warframe.archon_notify",
     ]
     
     loaded_count = 0
@@ -428,6 +430,24 @@ async def init_db():
             reward_lower TEXT NOT NULL,
             notified_at TEXT NOT NULL,
             UNIQUE(guild_id, invasion_id, reward_lower)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS archon_notification_settings (
+            guild_id INTEGER NOT NULL,
+            channel_id INTEGER,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            PRIMARY KEY (guild_id)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS archon_notifications_sent (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            archon_boss TEXT NOT NULL,
+            expiry_time TEXT NOT NULL,
+            notified_at TEXT NOT NULL,
+            UNIQUE(guild_id, archon_boss, expiry_time)
         )""")
 
         await db.commit()
