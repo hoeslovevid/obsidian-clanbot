@@ -182,6 +182,7 @@ def load_all_commands():
         "commands.warframe.invasion_notify",
         "commands.warframe.archon",
         "commands.warframe.archon_notify",
+        "commands.warframe.warframe_event_notify",
     ]
     
     loaded_count = 0
@@ -458,6 +459,23 @@ async def init_db():
             channel_id INTEGER NOT NULL,
             channel_type TEXT NOT NULL DEFAULT 'voice',
             PRIMARY KEY (guild_id)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS warframe_event_settings (
+            guild_id INTEGER NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            PRIMARY KEY (guild_id)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS warframe_discord_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            warframe_event_id TEXT NOT NULL,
+            discord_event_id INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE(guild_id, warframe_event_id)
         )""")
 
         await db.commit()

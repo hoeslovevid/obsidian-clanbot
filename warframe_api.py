@@ -132,3 +132,21 @@ async def fetch_archon_hunt_data() -> Optional[Dict[str, Any]]:
     except Exception as e:
         logger.error(f"Error fetching archon hunt data: {e}")
         return None
+
+
+async def fetch_events_data() -> Optional[List[Dict[str, Any]]]:
+    """Fetch active events data from Warframe World State API."""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get("https://api.warframestat.us/pc/events", timeout=aiohttp.ClientTimeout(total=10)) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    # Filter for active events only
+                    active_events = [event for event in data if event.get("expired", False) == False]
+                    return active_events
+                else:
+                    logger.warning(f"Warframe API returned status {response.status} for events")
+                    return None
+    except Exception as e:
+        logger.error(f"Error fetching events data: {e}")
+        return None
