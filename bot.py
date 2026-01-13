@@ -1875,8 +1875,18 @@ async def on_interaction(interaction: discord.Interaction):
         except Exception as e:
             logger.error(f"[modal] Error extracting data from unknown modal: {e}", exc_info=True)
         
-        # If we can't handle it, let discord.py try (though it will likely fail)
-        logger.info(f"[modal] Could not handle modal: {cid} - letting discord.py handle it")
+        # If we can't handle it, defer and send a generic error message instead of letting discord.py handle it
+        # (which would cause the "process_application_commands" error)
+        logger.warning(f"[modal] Could not handle modal with custom_id: {cid} - sending generic error")
+        try:
+            if not interaction.response.is_done():
+                await interaction.response.defer(ephemeral=True)
+                await interaction.followup.send("This modal is no longer valid. Please try again.", ephemeral=True)
+            else:
+                await interaction.followup.send("This modal is no longer valid. Please try again.", ephemeral=True)
+        except (discord.errors.NotFound, discord.errors.InteractionResponded, discord.errors.HTTPException):
+            # Interaction expired or already handled - can't send error message
+            logger.warning(f"[modal] Could not send error message for unknown modal: {cid}")
         return
     
     # Only handle component interactions (buttons/selects) from here
