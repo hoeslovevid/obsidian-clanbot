@@ -37,13 +37,6 @@ def setup(bot):
                 ephemeral=True
             )
         
-        target_channel = channel or interaction.channel
-        if not isinstance(target_channel, discord.TextChannel):
-            return await interaction.response.send_message(
-                "Invalid channel specified.",
-                ephemeral=True
-            )
-        
         is_enabled = enabled.value == "enable"
         cycle_value = cycle_type.value
         
@@ -61,32 +54,57 @@ def setup(bot):
                 ephemeral=True
             )
         
+        # If enabling, require a channel. If disabling, channel is optional.
+        if is_enabled:
+            target_channel = channel or interaction.channel
+            if not isinstance(target_channel, discord.TextChannel):
+                return await interaction.response.send_message(
+                    "Please specify a valid channel to send notifications to when enabling.",
+                    ephemeral=True
+                )
+        else:
+            # When disabling, use existing channel or current channel (won't matter since it's disabled)
+            target_channel = channel or interaction.channel
+            if not isinstance(target_channel, discord.TextChannel):
+                target_channel = interaction.channel  # Fallback to current channel
+        
         # Update database
         async with aiosqlite.connect(DB_PATH) as db:
             # Check if settings exist
             cur = await db.execute(
-                "SELECT channel_id FROM cycle_notification_settings WHERE guild_id=?",
+                f"SELECT channel_id, {column} FROM cycle_notification_settings WHERE guild_id=?",
                 (interaction.guild.id,)
             )
             existing = await cur.fetchone()
             
             if existing:
+                current_channel_id, current_enabled = existing
+                # If enabling, update channel. If disabling, keep existing channel.
+                new_channel_id = target_channel.id if is_enabled else (current_channel_id or target_channel.id)
+                
                 # Update existing settings
                 await db.execute(f"""
                     UPDATE cycle_notification_settings
                     SET channel_id=?, {column}=?
                     WHERE guild_id=?
-                """, (target_channel.id, 1 if is_enabled else 0, interaction.guild.id))
+                """, (new_channel_id, 1 if is_enabled else 0, interaction.guild.id))
             else:
-                # Create new settings
-                cetus_val = 1 if (cycle_value == 'cetus' and is_enabled) else 0
-                fortuna_val = 1 if (cycle_value == 'vallis' and is_enabled) else 0
-                deimos_val = 1 if (cycle_value == 'cambion' and is_enabled) else 0
-                
-                await db.execute("""
-                    INSERT INTO cycle_notification_settings (guild_id, channel_id, cetus_enabled, fortuna_enabled, deimos_enabled)
-                    VALUES (?, ?, ?, ?, ?)
-                """, (interaction.guild.id, target_channel.id, cetus_val, fortuna_val, deimos_val))
+                # Create new settings (only if enabling)
+                if is_enabled:
+                    cetus_val = 1 if (cycle_value == 'cetus') else 0
+                    fortuna_val = 1 if (cycle_value == 'vallis') else 0
+                    deimos_val = 1 if (cycle_value == 'cambion') else 0
+                    
+                    await db.execute("""
+                        INSERT INTO cycle_notification_settings (guild_id, channel_id, cetus_enabled, fortuna_enabled, deimos_enabled)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, (interaction.guild.id, target_channel.id, cetus_val, fortuna_val, deimos_val))
+                else:
+                    # Can't disable something that doesn't exist
+                    return await interaction.response.send_message(
+                        "This cycle notification is not currently enabled. Use 'Enable' to set it up first.",
+                        ephemeral=True
+                    )
             
             await db.commit()
         
@@ -99,11 +117,18 @@ def setup(bot):
         cycle_display = cycle_names.get(cycle_value, cycle_value)
         
         status = "enabled" if is_enabled else "disabled"
+        
+        if is_enabled:
+            desc = f"**{cycle_display}** cycle notifications are now **{status}**.\n\n"
+            desc += f"**Notification Channel:** {target_channel.mention}\n\n"
+            desc += f"When the cycle changes, a notification will be sent to this channel."
+        else:
+            desc = f"**{cycle_display}** cycle notifications are now **{status}**.\n\n"
+            desc += "Notifications for this cycle will no longer be sent."
+        
         embed = obsidian_embed(
             "✅ Cycle Notifications Updated",
-            f"**{cycle_display}** cycle notifications are now **{status}**.\n\n"
-            f"**Notification Channel:** {target_channel.mention}\n\n"
-            f"When the cycle changes, a notification will be sent to this channel.",
+            desc,
             color=discord.Color.green() if is_enabled else discord.Color.orange(),
             client=interaction.client,
         )
