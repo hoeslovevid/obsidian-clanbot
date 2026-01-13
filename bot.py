@@ -1384,18 +1384,27 @@ async def on_interaction(interaction: discord.Interaction):
             # Extract case_id from custom_id
             case_id = cid.replace("request_info_", "")
             
-            # Check if already processed
-            if interaction.response.is_done():
-                return
-            
-            try:
-                # Defer the interaction first to prevent expiration
+            # Check if interaction is already responded to (by on_submit or another handler)
+            # If not done, try to defer (but handle race condition where on_submit defers first)
+            if not interaction.response.is_done():
+                # Need to defer - on_submit didn't catch it (or we got here first)
+                logger.info(f"[modal] RequestInfoModal: Interaction not deferred yet, deferring now")
                 try:
                     await interaction.response.defer(ephemeral=True)
-                except (discord.errors.NotFound, discord.errors.InteractionResponded, discord.errors.HTTPException) as defer_err:
-                    # Interaction already expired or acknowledged - can't process it
-                    logger.warning(f"[modal] RequestInfoModal: Could not defer: {defer_err}")
+                    logger.info(f"[modal] RequestInfoModal: Deferred interaction successfully")
+                except discord.errors.NotFound as defer_err:
+                    # Interaction expired - can't process it
+                    logger.warning(f"[modal] RequestInfoModal: Interaction expired (404), cannot process: {defer_err}")
                     return
+                except (discord.errors.InteractionResponded, discord.errors.HTTPException) as defer_err:
+                    # Interaction already acknowledged by on_submit or another handler
+                    logger.info(f"[modal] RequestInfoModal: Could not defer (already acknowledged): {defer_err}")
+                    # Proceed with processing - interaction was acknowledged
+                    logger.info(f"[modal] RequestInfoModal: Proceeding with processing despite defer error (interaction was acknowledged)")
+            else:
+                logger.info(f"[modal] RequestInfoModal: Interaction already done (deferred by on_submit), proceeding with processing")
+            
+            try:
                 
                 # Extract question from interaction data
                 components = interaction.data.get("components", [])
