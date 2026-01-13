@@ -171,3 +171,50 @@ async def ensure_core_channels(guild: discord.Guild):
     await resolve_channel_id(guild, "complaints_channel_id", COMPLAINTS_CHANNEL_ID, COMPLAINTS_CHANNEL_NAME)
     await resolve_channel_id(guild, "complaints_log_channel_id", COMPLAINTS_LOG_CHANNEL_ID, COMPLAINTS_LOG_CHANNEL_NAME)
     await resolve_channel_id(guild, "events_channel_id", EVENTS_CHANNEL_ID, EVENTS_CHANNEL_NAME)
+
+
+async def delete_vc_panel_message(guild: discord.Guild, vc_id: int):
+    """Delete the VC panel message for a given voice channel."""
+    from bot import VOICE_PANEL_CHANNEL_ID, VOICE_PANEL_CHANNEL_NAME
+    
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            "SELECT message_id FROM vc_panels WHERE guild_id=? AND channel_id=?",
+            (guild.id, vc_id),
+        )
+        row = await cur.fetchone()
+        if row:
+            msg_id = int(row[0])
+            await db.execute("DELETE FROM vc_panels WHERE guild_id=? AND channel_id=?", (guild.id, vc_id))
+            await db.commit()
+        else:
+            msg_id = 0
+
+    if msg_id:
+        ch_id = await resolve_channel_id(guild, "voice_panel_channel_id", VOICE_PANEL_CHANNEL_ID, VOICE_PANEL_CHANNEL_NAME)
+        ch = guild.get_channel(ch_id) if ch_id else None
+        if isinstance(ch, discord.TextChannel):
+            # Type narrowing: ch is now guaranteed to be discord.TextChannel
+            text_ch: discord.TextChannel = ch  # type: ignore
+            try:
+                msg = await text_ch.fetch_message(msg_id)
+                if msg:
+                    await msg.delete()
+            except Exception:
+                pass
+
+
+async def delete_temp_vc_and_panel(guild: discord.Guild, vc_id: int, *, reason: str):
+    """Delete a temporary VC and its associated panel message."""
+    vc = guild.get_channel(vc_id)
+    if isinstance(vc, discord.VoiceChannel):
+        try:
+            await vc.delete(reason=reason)
+        except Exception:
+            pass
+
+    await delete_vc_panel_message(guild, vc_id)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("DELETE FROM temp_vcs WHERE guild_id=? AND channel_id=?", (guild.id, vc_id))
+        await db.commit()

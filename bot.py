@@ -101,7 +101,8 @@ from database import (
 from warframe_api import fetch_baro_data, fetch_cycle_data, get_all_cycles, get_baro_status
 from channels import (
     resolve_channel_id, find_or_create_text_channel,
-    resolve_temp_vc_category, ensure_join_to_create_channel, ensure_core_channels
+    resolve_temp_vc_category, ensure_join_to_create_channel, ensure_core_channels,
+    delete_temp_vc_and_panel, delete_vc_panel_message
 )
 from modals import RenameVCModal, InviteModal, RemoveAccessModal, TransferOwnerModal, ComplaintModal, RequestInfoModal
 from views import VCPanelView, ComplaintPanel, ComplaintModView, RSVPView, SetLimitView, SetLimitSelect
@@ -491,6 +492,7 @@ async def log_complaint_action(guild: discord.Guild, case_id: str, actor_id: int
 
 
 async def post_vc_panel(guild: discord.Guild, vc: discord.VoiceChannel, owner: discord.Member):
+    """Post a VC control panel message."""
     panel_ch_id = await resolve_channel_id(guild, "voice_panel_channel_id", VOICE_PANEL_CHANNEL_ID, VOICE_PANEL_CHANNEL_NAME)
     if not panel_ch_id:
         return
@@ -519,49 +521,6 @@ async def post_vc_panel(guild: discord.Guild, vc: discord.VoiceChannel, owner: d
 
     # Register persistent view (so buttons keep working after restart)
     bot.add_view(view)
-
-
-async def delete_vc_panel_message(guild: discord.Guild, vc_id: int):
-    async with aiosqlite.connect(DB_PATH) as db:
-        cur = await db.execute(
-            "SELECT message_id FROM vc_panels WHERE guild_id=? AND channel_id=?",
-            (guild.id, vc_id),
-        )
-        row = await cur.fetchone()
-        if row:
-            msg_id = int(row[0])
-            await db.execute("DELETE FROM vc_panels WHERE guild_id=? AND channel_id=?", (guild.id, vc_id))
-            await db.commit()
-        else:
-            msg_id = 0
-
-    if msg_id:
-        ch_id = await resolve_channel_id(guild, "voice_panel_channel_id", VOICE_PANEL_CHANNEL_ID, VOICE_PANEL_CHANNEL_NAME)
-        ch = guild.get_channel(ch_id) if ch_id else None
-        if isinstance(ch, discord.TextChannel):
-            # Type narrowing: ch is now guaranteed to be discord.TextChannel
-            text_ch: discord.TextChannel = ch  # type: ignore
-            try:
-                msg = await text_ch.fetch_message(msg_id)
-                if msg:
-                    await msg.delete()
-            except Exception:
-                pass
-
-
-async def delete_temp_vc_and_panel(guild: discord.Guild, vc_id: int, *, reason: str):
-    vc = guild.get_channel(vc_id)
-    if isinstance(vc, discord.VoiceChannel):
-        try:
-            await vc.delete(reason=reason)
-        except Exception:
-            pass
-
-    await delete_vc_panel_message(guild, vc_id)
-
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("DELETE FROM temp_vcs WHERE guild_id=? AND channel_id=?", (guild.id, vc_id))
-        await db.commit()
 
 
 # Complaint and Event modals/views are now in modals.py and views.py
