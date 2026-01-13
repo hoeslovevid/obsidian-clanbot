@@ -7,11 +7,13 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any, Tuple
 
 import aiosqlite  # type: ignore
+import aiohttp  # type: ignore
 import dateparser  # type: ignore
 import discord  # type: ignore
 from discord import app_commands  # type: ignore
 from discord.ext import commands, tasks  # type: ignore
 from dotenv import load_dotenv  # type: ignore
+import json
 
 # Configure logging
 logging.basicConfig(
@@ -201,6 +203,9 @@ def load_all_commands():
         "commands.economy.xp",
         "commands.economy.xpleaderboard",
         "commands.economy.add_coins",
+        # Warframe commands
+        "commands.warframe.baro",
+        "commands.warframe.baro_notify",
     ]
     
     loaded_count = 0
@@ -364,6 +369,25 @@ async def init_db():
             last_claim_date TEXT NOT NULL,
             streak_days INTEGER NOT NULL DEFAULT 1,
             PRIMARY KEY (guild_id, user_id)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS baro_visits (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            arrival_time TEXT NOT NULL,
+            departure_time TEXT NOT NULL,
+            location TEXT NOT NULL,
+            inventory_json TEXT,
+            notified INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS baro_notification_settings (
+            guild_id INTEGER NOT NULL,
+            channel_id INTEGER,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            PRIMARY KEY (guild_id)
         )""")
 
         await db.commit()
@@ -638,6 +662,185 @@ def format_thread_name(case_id: str, user: discord.Member, category: str = "", d
                 thread_name = f"{username} • {date_formatted} • {case_id}"
     
     return thread_name[:100]  # Final safety check
+
+
+# --------------------- Warframe API Functions ---------------------
+async def fetch_baro_data() -> Optional[Dict[str, Any]]:
+    """Fetch Baro Ki'Teer data from Warframe World State API."""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get("https://api.warframestat.us/pc/voidTrader", timeout=aiohttp.ClientTimeout(total=10)) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data
+                else:
+                    logger.warning(f"Warframe API returned status {response.status}")
+                    return None
+    except Exception as e:
+        logger.error(f"Error fetching Baro data: {e}")
+        return None
+
+
+async def get_baro_status() -> Tuple[bool, Optional[Dict[str, Any]]]:
+    """
+    Get current Baro Ki'Teer status.
+    Returns (is_active, baro_data)
+    """
+    data = await fetch_baro_data()
+    if not data:
+        return (False, None)
+    
+    # Check if Baro is active
+    activation = data.get("activation", "")
+    expiry = data.get("expiry", "")
+    
+    if not activation or not expiry:
+        return (False, data)
+    
+    try:
+        # Parse ISO format timestamps
+        activation_time = dateparser.parse(activation, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
+        expiry_time = dateparser.parse(expiry, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
+        
+        if not activation_time or not expiry_time:
+            return (False, data)
+        
+        now = datetime.now(timezone.utc)
+        is_active = activation_time <= now <= expiry_time
+        return (is_active, data)
+    except Exception as e:
+        logger.error(f"Error parsing Baro timestamps: {e}")
+        return (False, data)
+
+
+async def check_and_notify_baro_arrival():
+    """Check if Baro has arrived and send notifications if needed."""
+    is_active, baro_data = await get_baro_status()
+    
+    if not baro_data:
+        return
+    
+    activation = baro_data.get("activation", "")
+    if not activation:
+        return
+    
+    # Check if we've already notified for this visit
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            "SELECT id FROM baro_visits WHERE arrival_time=? AND notified=1",
+            (activation,)
+        )
+        existing = await cur.fetchone()
+        
+        if existing:
+            return  # Already notified
+        
+        # Check if this visit exists
+        cur = await db.execute(
+            "SELECT id, notified FROM baro_visits WHERE arrival_time=?",
+            (activation,)
+        )
+        visit = await cur.fetchone()
+        
+        visit_id = None
+        if visit:
+            visit_id, notified = visit
+            if notified:
+                return  # Already notified, exit
+        else:
+            # Create new visit record
+            inventory_json = json.dumps(baro_data.get("inventory", []))
+            await db.execute("""
+                INSERT INTO baro_visits (arrival_time, departure_time, location, inventory_json, notified, created_at)
+                VALUES (?, ?, ?, ?, 0, ?)
+            """, (
+                activation,
+                baro_data.get("expiry", ""),
+                baro_data.get("location", "Unknown"),
+                inventory_json,
+                now_utc().isoformat(),
+            ))
+            await db.commit()
+            
+            # Get the visit ID
+            cur = await db.execute(
+                "SELECT id FROM baro_visits WHERE arrival_time=?",
+                (activation,)
+            )
+            visit = await cur.fetchone()
+            visit_id = visit[0] if visit else None
+        
+        # Send notifications to all guilds that have it enabled
+        for guild in bot.guilds:
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute(
+                    "SELECT channel_id, enabled FROM baro_notification_settings WHERE guild_id=?",
+                    (guild.id,)
+                )
+                setting = await cur.fetchone()
+            
+            if not setting or not setting[1]:  # Not enabled or not set
+                continue
+            
+            channel_id = setting[0]
+            if not channel_id:
+                continue
+            
+            ch = guild.get_channel(channel_id)
+            if not isinstance(ch, discord.TextChannel):
+                continue
+            
+            # Build notification embed
+            location = baro_data.get("location", "Unknown")
+            expiry = baro_data.get("expiry", "")
+            inventory = baro_data.get("inventory", [])
+            
+            try:
+                expiry_time = dateparser.parse(expiry, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
+                if expiry_time:
+                    time_remaining = expiry_time - datetime.now(timezone.utc)
+                    hours = int(time_remaining.total_seconds() // 3600)
+                    minutes = int((time_remaining.total_seconds() % 3600) // 60)
+                    time_str = f"{hours}h {minutes}m"
+                else:
+                    time_str = "Unknown"
+            except Exception:
+                time_str = "Unknown"
+            
+            desc = f"**Location:** {location}\n"
+            desc += f"**Time Remaining:** {time_str}\n\n"
+            
+            if inventory:
+                desc += "**Inventory:**\n"
+                for item in inventory[:10]:  # Limit to first 10 items
+                    item_name = item.get("item", "Unknown")
+                    ducats = item.get("ducats", 0)
+                    credits = item.get("credits", 0)
+                    desc += f"• {item_name} - {ducats} ducats, {credits:,} credits\n"
+                if len(inventory) > 10:
+                    desc += f"\n_...and {len(inventory) - 10} more items_"
+            else:
+                desc += "Inventory not available yet."
+            
+            embed = obsidian_embed(
+                "🛒 Baro Ki'Teer Has Arrived!",
+                desc,
+                color=discord.Color.gold(),
+            )
+            
+            try:
+                await ch.send(embed=embed)
+                
+                # Mark as notified
+                if visit_id:
+                    async with aiosqlite.connect(DB_PATH) as db:
+                        await db.execute(
+                            "UPDATE baro_visits SET notified=1 WHERE id=?",
+                            (visit_id,)
+                        )
+                        await db.commit()
+            except Exception as e:
+                logger.error(f"Error sending Baro notification to {guild.id}: {e}")
 
 
 async def log_complaint_action(guild: discord.Guild, case_id: str, actor_id: int, action: str, note: str = ""):
@@ -2597,6 +2800,20 @@ async def before_voice_reward_loop():
     await bot.wait_until_ready()
 
 
+@tasks.loop(hours=1)  # Check every hour for Baro
+async def baro_check_loop():
+    """Check for Baro Ki'Teer arrivals and send notifications."""
+    try:
+        await check_and_notify_baro_arrival()
+    except Exception as e:
+        logger.error(f"Error in baro_check_loop: {e}", exc_info=True)
+
+
+@baro_check_loop.before_loop
+async def before_baro_check_loop():
+    await bot.wait_until_ready()
+
+
 # --------------------- Economy Commands ---------------------
 # Economy commands are now loaded from commands/economy/ folder via load_all_commands()
 
@@ -2663,6 +2880,8 @@ async def on_ready():
         event_reminder_loop.start()
     if ECONOMY_ENABLED and not voice_reward_loop.is_running():
         voice_reward_loop.start()
+    if not baro_check_loop.is_running():
+        baro_check_loop.start()
 
 
 async def main():
