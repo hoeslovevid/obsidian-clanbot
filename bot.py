@@ -151,6 +151,7 @@ def load_all_commands():
     command_modules = [
         # General commands
         "commands.general.help",
+        "commands.general.member_count",
         "commands.general.setup_obsidian",
         "commands.general.setup_docket",
         "commands.general.sync_commands",
