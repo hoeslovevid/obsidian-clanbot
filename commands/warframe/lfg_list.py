@@ -40,6 +40,7 @@ def setup(bot):
                     "🔍 No Active Groups",
                     "There are no active LFG posts in this channel.\n\nUse `/lfg` to create one!",
                     color=discord.Color.orange(),
+                    client=interaction.client,
                 ),
                 ephemeral=True
             )
@@ -79,6 +80,7 @@ def setup(bot):
             f"🔍 Active LFG Posts ({len(posts)})",
             desc,
             color=discord.Color.blue(),
+            client=interaction.client,
         )
         
         await interaction.response.send_message(embed=embed, ephemeral=False)

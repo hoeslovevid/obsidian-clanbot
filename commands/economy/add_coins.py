@@ -69,6 +69,7 @@ def setup(bot):
                 f"**Previous Balance:** {current_balance:,} coins\n"
                 f"**New Balance:** {new_balance:,} coins",
                 color=discord.Color.green(),
+                client=interaction.client,
             )
         else:
             # Remove coins

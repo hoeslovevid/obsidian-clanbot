@@ -56,6 +56,7 @@ def setup(bot):
             f"**Notification Channel:** {target_channel.mention}\n\n"
             f"When Baro arrives, a notification will be sent to this channel with his inventory and location.",
             color=discord.Color.green() if is_enabled else discord.Color.orange(),
+            client=interaction.client,
         )
         
         await interaction.response.send_message(embed=embed, ephemeral=False)

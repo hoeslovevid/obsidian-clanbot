@@ -45,6 +45,7 @@ def setup(bot):
             "⭐ XP Leaderboard",
             desc,
             color=discord.Color.blue(),
+            client=interaction.client,
         )
         
         await interaction.response.send_message(embed=embed, ephemeral=False)
