@@ -333,10 +333,20 @@ def setup(bot):
         thread = None
         thread_id = None
         try:
-            # Create thread name (max 100 chars)
-            thread_name = f"{mission_name[:50]} - LFG {lfg_id}"
+            # Create thread name with creator and mission (max 100 chars)
+            creator_name = interaction.user.display_name or interaction.user.name
+            # Format: "CreatorName - Mission Type"
+            thread_name = f"{creator_name} - {mission_name}"
+            
+            # Truncate if too long (Discord limit is 100 chars)
             if len(thread_name) > 100:
-                thread_name = f"LFG {lfg_id}"
+                # Try to fit both names by truncating mission name
+                max_mission_len = 100 - len(creator_name) - 3  # 3 for " - "
+                if max_mission_len > 0:
+                    thread_name = f"{creator_name} - {mission_name[:max_mission_len]}"
+                else:
+                    # If creator name is too long, just use mission name
+                    thread_name = mission_name[:100]
             
             # Create thread with auto-archive duration
             thread = await message.create_thread(
