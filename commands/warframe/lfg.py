@@ -40,6 +40,16 @@ class LFGView(discord.ui.View):
     def __init__(self, lfg_id: int):
         super().__init__(timeout=None)
         self.lfg_id = lfg_id
+        # Set custom_id for each button to make them persistent
+        # Custom IDs must be unique per LFG post
+        for item in self.children:
+            if isinstance(item, discord.ui.Button):
+                if item.label == "Join":
+                    item.custom_id = f"lfg:{lfg_id}:join"
+                elif item.label == "Leave":
+                    item.custom_id = f"lfg:{lfg_id}:leave"
+                elif item.label == "Complete":
+                    item.custom_id = f"lfg:{lfg_id}:complete"
     
     @discord.ui.button(label="Join", style=discord.ButtonStyle.success, emoji="✅")
     async def join(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -80,7 +90,7 @@ class LFGView(discord.ui.View):
         
         # Update the embed
         embed = interaction.message.embeds[0]
-        embed.color = discord.Color.grey()
+        embed.color = discord.Color.light_grey()
         embed.set_footer(text="✅ Mission Completed")
         
         # Disable all buttons
