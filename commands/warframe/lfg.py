@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from datetime import datetime, timedelta, timezone
 
-from utils import obsidian_embed
+from utils import obsidian_embed, get_mod_role
 from bot import DB_PATH
 import aiosqlite
 
@@ -125,9 +125,9 @@ class LFGView(discord.ui.View):
     async def _handle_rsvp(self, interaction: discord.Interaction, response: str):
         """Handle RSVP (join/leave)."""
         async with aiosqlite.connect(DB_PATH) as db:
-            # Get LFG post info
+            # Get LFG post info including thread_id
             cur = await db.execute(
-                "SELECT creator_id, max_players, status FROM lfg_posts WHERE id=?",
+                "SELECT creator_id, max_players, status, thread_id FROM lfg_posts WHERE id=?",
                 (self.lfg_id,)
             )
             post = await cur.fetchone()
@@ -135,7 +135,7 @@ class LFGView(discord.ui.View):
             if not post:
                 return await interaction.response.send_message("LFG post not found.", ephemeral=True)
             
-            creator_id, max_players, status = post
+            creator_id, max_players, status, thread_id = post
             
             if status != "OPEN":
                 return await interaction.response.send_message("This LFG post is no longer open.", ephemeral=True)
@@ -176,6 +176,33 @@ class LFGView(discord.ui.View):
             rsvps = await cur.fetchall()
             current_count = len(rsvps)
         
+        # Update thread permissions if thread exists
+        if thread_id:
+            try:
+                thread = interaction.guild.get_thread(thread_id)
+                if thread:
+                    if response == "JOIN":
+                        # Add user to thread permissions
+                        await thread.set_permissions(
+                            interaction.user,
+                            view_channel=True,
+                            send_messages=True,
+                            read_message_history=True
+                        )
+                    else:  # LEAVE
+                        # Remove user from thread permissions (unless they're the creator)
+                        if interaction.user.id != creator_id:
+                            await thread.set_permissions(
+                                interaction.user,
+                                view_channel=False,
+                                send_messages=False
+                            )
+            except Exception as e:
+                # If thread permission update fails, log but continue
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Failed to update thread permissions for LFG {self.lfg_id}: {e}")
+        
         # Update embed
         embed = interaction.message.embeds[0]
         
@@ -200,7 +227,15 @@ class LFGView(discord.ui.View):
         await interaction.response.edit_message(embed=embed, view=self)
         
         action = "joined" if response == "JOIN" else "left"
-        await interaction.followup.send(f"You {action} the group! ({current_count}/{max_players})", ephemeral=True)
+        thread_mention = ""
+        if thread_id:
+            try:
+                thread = interaction.guild.get_thread(thread_id)
+                if thread:
+                    thread_mention = f" Check the thread: {thread.mention}"
+            except Exception:
+                pass
+        await interaction.followup.send(f"You {action} the group! ({current_count}/{max_players}){thread_mention}", ephemeral=True)
 
 
 def setup(bot):
@@ -294,10 +329,68 @@ def setup(bot):
         message = await interaction.original_response()
         message_id = message.id
         
+        # Create a thread for this LFG post
+        thread = None
+        thread_id = None
+        try:
+            # Create thread name (max 100 chars)
+            thread_name = f"{mission_name[:50]} - LFG {lfg_id}"
+            if len(thread_name) > 100:
+                thread_name = f"LFG {lfg_id}"
+            
+            # Create thread with auto-archive duration
+            thread = await message.create_thread(
+                name=thread_name,
+                auto_archive_duration=1440,  # 24 hours
+                reason="LFG group discussion thread"
+            )
+            thread_id = thread.id
+            
+            # Set up thread permissions: only creator, RSVPs, and moderators can see it
+            # First, deny @everyone from viewing
+            await thread.edit(
+                overwrites={
+                    interaction.guild.default_role: discord.PermissionOverwrite(view_channel=False)
+                }
+            )
+            
+            # Allow creator to view
+            creator = interaction.guild.get_member(interaction.user.id)
+            if creator:
+                await thread.set_permissions(
+                    creator,
+                    view_channel=True,
+                    send_messages=True,
+                    read_message_history=True
+                )
+            
+            # Allow moderators to view
+            mod_role = get_mod_role(interaction.guild)
+            if mod_role:
+                await thread.set_permissions(
+                    mod_role,
+                    view_channel=True,
+                    send_messages=True,
+                    read_message_history=True,
+                    manage_messages=True
+                )
+            
+            # Send welcome message in thread
+            welcome_msg = f"Welcome to the {mission_name} LFG thread!\n\n"
+            welcome_msg += f"This thread is for coordinating with {interaction.user.mention} and other players who join.\n"
+            welcome_msg += "Only the creator, RSVPs, and moderators can see this thread."
+            await thread.send(welcome_msg)
+            
+        except Exception as e:
+            # If thread creation fails, log but continue
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to create thread for LFG {lfg_id}: {e}")
+        
         async with aiosqlite.connect(DB_PATH) as db:
             await db.execute(
-                "UPDATE lfg_posts SET message_id=? WHERE id=?",
-                (message_id, lfg_id)
+                "UPDATE lfg_posts SET message_id=?, thread_id=? WHERE id=?",
+                (message_id, thread_id, lfg_id)
             )
             await db.commit()
         

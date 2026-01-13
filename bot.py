@@ -379,7 +379,8 @@ async def init_db():
             description TEXT,
             created_at TEXT NOT NULL,
             expires_at TEXT,
-            status TEXT NOT NULL DEFAULT 'OPEN'
+            status TEXT NOT NULL DEFAULT 'OPEN',
+            thread_id INTEGER
         )""")
 
         await db.execute("""
