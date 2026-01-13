@@ -206,6 +206,8 @@ def load_all_commands():
         # Warframe commands
         "commands.warframe.baro",
         "commands.warframe.baro_notify",
+        "commands.warframe.lfg",
+        "commands.warframe.lfg_list",
     ]
     
     loaded_count = 0
@@ -388,6 +390,34 @@ async def init_db():
             channel_id INTEGER,
             enabled INTEGER NOT NULL DEFAULT 1,
             PRIMARY KEY (guild_id)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS lfg_posts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            channel_id INTEGER NOT NULL,
+            message_id INTEGER NOT NULL,
+            creator_id INTEGER NOT NULL,
+            mission_type TEXT NOT NULL,
+            player_count INTEGER NOT NULL,
+            max_players INTEGER NOT NULL,
+            description TEXT,
+            created_at TEXT NOT NULL,
+            expires_at TEXT,
+            status TEXT NOT NULL DEFAULT 'OPEN',
+            PRIMARY KEY (id)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS lfg_rsvps (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lfg_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            response TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (lfg_id) REFERENCES lfg_posts(id) ON DELETE CASCADE,
+            UNIQUE(lfg_id, user_id)
         )""")
 
         await db.commit()
@@ -2814,6 +2844,71 @@ async def before_baro_check_loop():
     await bot.wait_until_ready()
 
 
+@tasks.loop(hours=1)  # Check every hour for expired LFG posts
+async def lfg_expire_loop():
+    """Auto-expire LFG posts that have passed their expiry time."""
+    try:
+        from datetime import datetime, timezone
+        async with aiosqlite.connect(DB_PATH) as db:
+            now = datetime.now(timezone.utc).isoformat()
+            
+            # Find expired posts
+            cur = await db.execute("""
+                SELECT id, guild_id, channel_id, message_id
+                FROM lfg_posts
+                WHERE status='OPEN' AND expires_at < ?
+            """, (now,))
+            
+            expired = await cur.fetchall()
+            
+            for lfg_id, guild_id, channel_id, message_id in expired:
+                try:
+                    guild = bot.get_guild(guild_id)
+                    if not guild:
+                        continue
+                    
+                    channel = guild.get_channel(channel_id)
+                    if not channel:
+                        continue
+                    
+                    try:
+                        message = await channel.fetch_message(message_id)
+                        
+                        # Update embed
+                        embed = message.embeds[0] if message.embeds else None
+                        if embed:
+                            embed.color = discord.Color.grey()
+                            embed.set_footer(text="⏰ Expired")
+                            
+                            # Disable buttons
+                            view = discord.ui.View()
+                            for item in message.components[0].children if message.components else []:
+                                if hasattr(item, 'disabled'):
+                                    item.disabled = True
+                                    view.add_item(item)
+                            
+                            await message.edit(embed=embed, view=view)
+                    except discord.NotFound:
+                        pass
+                    
+                    # Mark as expired in database
+                    await db.execute(
+                        "UPDATE lfg_posts SET status='EXPIRED' WHERE id=?",
+                        (lfg_id,)
+                    )
+                    await db.commit()
+                except Exception as e:
+                    logger.error(f"Error expiring LFG post {lfg_id}: {e}", exc_info=True)
+                    continue
+    except Exception as e:
+        logger.error(f"Error in lfg_expire_loop: {e}", exc_info=True)
+
+
+@lfg_expire_loop.before_loop
+async def before_lfg_expire_loop():
+    await bot.wait_until_ready()
+
+
 # --------------------- Economy Commands ---------------------
 # Economy commands are now loaded from commands/economy/ folder via load_all_commands()
 
@@ -2860,6 +2955,21 @@ async def on_ready():
                 except Exception:
                     pass
 
+    # Re-register LFG views for active posts
+    async with aiosqlite.connect(DB_PATH) as db:
+        for g in bot.guilds:
+            cur = await db.execute(
+                "SELECT id FROM lfg_posts WHERE guild_id=? AND status='OPEN'",
+                (g.id,),
+            )
+            rows = await cur.fetchall()
+            for (lfg_id,) in rows:
+                try:
+                    from commands.warframe.lfg import LFGView
+                    bot.add_view(LFGView(int(lfg_id)))
+                except Exception:
+                    pass
+
     # Re-register complaint views for open-ish cases
     async with aiosqlite.connect(DB_PATH) as db:
         for g in bot.guilds:
@@ -2882,6 +2992,8 @@ async def on_ready():
         voice_reward_loop.start()
     if not baro_check_loop.is_running():
         baro_check_loop.start()
+    if not lfg_expire_loop.is_running():
+        lfg_expire_loop.start()
 
 
 async def main():
