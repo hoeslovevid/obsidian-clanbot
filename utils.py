@@ -18,6 +18,7 @@ COINS_PER_MESSAGE = int(os.getenv("COINS_PER_MESSAGE", "5"))
 COINS_PER_MINUTE_VOICE = int(os.getenv("COINS_PER_MINUTE_VOICE", "2"))
 COINS_DAILY_REWARD = int(os.getenv("COINS_DAILY_REWARD", "100"))
 MESSAGE_COOLDOWN_SECONDS = int(os.getenv("MESSAGE_COOLDOWN_SECONDS", "60"))
+MIN_VOICE_MINUTES_FOR_REWARD = int(os.getenv("MIN_VOICE_MINUTES_FOR_REWARD", "1"))
 
 # XP System
 XP_ENABLED = os.getenv("XP_ENABLED", "true").lower() == "true"
