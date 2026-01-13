@@ -160,6 +160,9 @@ def load_all_commands():
         # Complaint commands
         "commands.complaints.submit_complaint",
         "commands.complaints.request_help",
+        # Suggestion commands
+        "commands.suggestions.suggest",
+        "commands.suggestions.manage_suggestions",
         # Moderation commands
         "commands.moderation.purge",
         # Economy commands
@@ -487,6 +490,20 @@ async def init_db():
             discord_event_id INTEGER NOT NULL,
             created_at TEXT NOT NULL,
             UNIQUE(guild_id, warframe_event_id)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS suggestions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            suggestion_text TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'PENDING',
+            message_id INTEGER,
+            created_at TEXT NOT NULL,
+            reviewed_by INTEGER,
+            reviewed_at TEXT,
+            review_note TEXT
         )""")
 
         await db.commit()
@@ -1705,6 +1722,21 @@ async def on_ready():
             for (case_id,) in rows:
                 try:
                     bot.add_view(ComplaintModView(str(case_id)))
+                except Exception:
+                    pass
+
+    # Re-register suggestion views for pending suggestions
+    async with aiosqlite.connect(DB_PATH) as db:
+        for g in bot.guilds:
+            cur = await db.execute(
+                "SELECT id FROM suggestions WHERE guild_id=? AND status='PENDING'",
+                (g.id,),
+            )
+            rows = await cur.fetchall()
+            for (suggestion_id,) in rows:
+                try:
+                    from commands.suggestions.manage_suggestions import SuggestionView
+                    bot.add_view(SuggestionView(int(suggestion_id)))
                 except Exception:
                     pass
 
