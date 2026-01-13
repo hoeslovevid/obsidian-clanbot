@@ -206,6 +206,8 @@ def load_all_commands():
         "commands.warframe.baro_notify",
         "commands.warframe.lfg",
         "commands.warframe.lfg_list",
+        "commands.warframe.cycles",
+        "commands.warframe.cycle_notify",
     ]
     
     loaded_count = 0
@@ -415,6 +417,26 @@ async def init_db():
             created_at TEXT NOT NULL,
             FOREIGN KEY (lfg_id) REFERENCES lfg_posts(id) ON DELETE CASCADE,
             UNIQUE(lfg_id, user_id)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS cycle_notification_settings (
+            guild_id INTEGER NOT NULL,
+            channel_id INTEGER,
+            cetus_enabled INTEGER NOT NULL DEFAULT 0,
+            fortuna_enabled INTEGER NOT NULL DEFAULT 0,
+            deimos_enabled INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (guild_id)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS cycle_notifications_sent (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            cycle_type TEXT NOT NULL,
+            cycle_state TEXT NOT NULL,
+            notified_at TEXT NOT NULL,
+            UNIQUE(guild_id, cycle_type, cycle_state, notified_at)
         )""")
 
         await db.commit()
@@ -706,6 +728,47 @@ async def fetch_baro_data() -> Optional[Dict[str, Any]]:
     except Exception as e:
         logger.error(f"Error fetching Baro data: {e}")
         return None
+
+
+async def fetch_cycle_data(cycle_type: str) -> Optional[Dict[str, Any]]:
+    """Fetch cycle data from Warframe World State API.
+    
+    Args:
+        cycle_type: One of 'cetus', 'vallis', or 'cambion'
+    
+    Returns:
+        Cycle data dict or None if error
+    """
+    endpoints = {
+        'cetus': 'https://api.warframestat.us/pc/cetusCycle',
+        'vallis': 'https://api.warframestat.us/pc/vallisCycle',
+        'cambion': 'https://api.warframestat.us/pc/cambionCycle',
+    }
+    
+    if cycle_type not in endpoints:
+        return None
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(endpoints[cycle_type], timeout=aiohttp.ClientTimeout(total=10)) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data
+                else:
+                    logger.warning(f"Warframe API returned status {response.status} for {cycle_type}")
+                    return None
+    except Exception as e:
+        logger.error(f"Error fetching {cycle_type} cycle data: {e}")
+        return None
+
+
+async def get_all_cycles() -> Dict[str, Optional[Dict[str, Any]]]:
+    """Fetch all cycle data (Cetus, Fortuna, Deimos)."""
+    return {
+        'cetus': await fetch_cycle_data('cetus'),
+        'vallis': await fetch_cycle_data('vallis'),
+        'cambion': await fetch_cycle_data('cambion'),
+    }
 
 
 async def get_baro_status() -> Tuple[bool, Optional[Dict[str, Any]]]:
@@ -2997,6 +3060,8 @@ async def on_ready():
         baro_check_loop.start()
     if not lfg_expire_loop.is_running():
         lfg_expire_loop.start()
+    if not cycle_check_loop.is_running():
+        cycle_check_loop.start()
 
 
 async def main():
