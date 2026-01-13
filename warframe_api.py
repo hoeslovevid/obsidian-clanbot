@@ -3,7 +3,7 @@ Warframe API functions for fetching game data.
 This module handles all Warframe World State API calls.
 """
 import logging
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, List
 import aiohttp  # type: ignore
 import dateparser  # type: ignore
 from datetime import datetime, timezone
