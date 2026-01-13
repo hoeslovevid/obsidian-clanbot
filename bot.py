@@ -2719,6 +2719,7 @@ async def event_reminder_loop():
                         f"**{title}** begins in ~{EVENT_REMINDER_MINUTES_BEFORE} minutes.\n"
                         f"**Time:** <t:{int(start_ts)}:F>  _( <t:{int(start_ts)}:R> )_",
                         color=discord.Color.orange(),
+                        client=bot,
                     ),
                 )
 
