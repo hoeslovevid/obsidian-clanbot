@@ -79,6 +79,33 @@ def setup(bot):
             
             if existing:
                 current_channel_id, current_enabled = existing
+                
+                # Check if already enabled/disabled
+                if is_enabled and current_enabled:
+                    # Already enabled - show current settings
+                    current_channel = interaction.guild.get_channel(current_channel_id) if current_channel_id else None
+                    channel_mention = current_channel.mention if current_channel else f"<#{current_channel_id}>" if current_channel_id else "Not set"
+                    
+                    embed = obsidian_embed(
+                        "ℹ️ Already Enabled",
+                        f"**{cycle_display}** cycle notifications are already enabled.\n\n"
+                        f"**Current Notification Channel:** {channel_mention}\n\n"
+                        f"To change the channel, disable and re-enable with a new channel.",
+                        color=discord.Color.blue(),
+                        client=interaction.client,
+                    )
+                    return await interaction.response.send_message(embed=embed, ephemeral=False)
+                
+                if not is_enabled and not current_enabled:
+                    # Already disabled
+                    embed = obsidian_embed(
+                        "ℹ️ Already Disabled",
+                        f"**{cycle_display}** cycle notifications are already disabled.",
+                        color=discord.Color.blue(),
+                        client=interaction.client,
+                    )
+                    return await interaction.response.send_message(embed=embed, ephemeral=False)
+                
                 # If enabling, update channel. If disabling, keep existing channel.
                 new_channel_id = target_channel.id if is_enabled else (current_channel_id or target_channel.id)
                 
