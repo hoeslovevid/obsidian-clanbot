@@ -69,9 +69,7 @@ def setup(bot):
         
         suggestions_channel = await find_or_create_text_channel(
             interaction.guild,
-            "suggestions",
-            "💡 Suggestions",
-            "Channel for bot suggestions and feature requests"
+            name="suggestions"
         )
         
         if suggestions_channel:
