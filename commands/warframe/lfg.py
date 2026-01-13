@@ -88,17 +88,39 @@ class LFGView(discord.ui.View):
             )
             await db.commit()
         
-        # Update the embed
-        embed = interaction.message.embeds[0]
-        embed.color = discord.Color.light_grey()
-        embed.set_footer(text="✅ Mission Completed")
-        
-        # Disable all buttons
-        for item in self.children:
-            item.disabled = True
-        
-        await interaction.response.edit_message(embed=embed, view=self)
-        await interaction.followup.send("Mission marked as complete!", ephemeral=True)
+        # Delete the message instead of editing it
+        try:
+            # Defer first so we can delete the message
+            await interaction.response.defer(ephemeral=True)
+            # Delete the LFG message
+            await interaction.message.delete()
+            await interaction.followup.send("Mission marked as complete! The LFG post has been removed.", ephemeral=True)
+        except discord.errors.NotFound:
+            # Message already deleted (maybe by another action)
+            try:
+                await interaction.followup.send("Mission marked as complete!", ephemeral=True)
+            except Exception:
+                pass  # Interaction might be expired
+        except Exception as e:
+            # If deletion fails (e.g., missing permissions), fall back to editing
+            embed = interaction.message.embeds[0]
+            embed.color = discord.Color.light_grey()
+            embed.set_footer(text="✅ Mission Completed")
+            
+            # Disable all buttons
+            for item in self.children:
+                item.disabled = True
+            
+            try:
+                # Try to edit the message
+                await interaction.message.edit(embed=embed, view=self)
+                await interaction.followup.send("Mission marked as complete! (Could not delete message - missing permissions?)", ephemeral=True)
+            except Exception:
+                # If editing also fails, just send confirmation
+                try:
+                    await interaction.followup.send("Mission marked as complete!", ephemeral=True)
+                except Exception:
+                    pass  # Interaction might be expired
     
     async def _handle_rsvp(self, interaction: discord.Interaction, response: str):
         """Handle RSVP (join/leave)."""
