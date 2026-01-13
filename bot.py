@@ -198,6 +198,8 @@ def load_all_commands():
         "commands.economy.leaderboard",
         "commands.economy.transfer",
         "commands.economy.daily",
+        "commands.economy.xp",
+        "commands.economy.xpleaderboard",
     ]
     
     loaded_count = 0
@@ -345,6 +347,16 @@ async def init_db():
         )""")
 
         await db.execute("""
+        CREATE TABLE IF NOT EXISTS user_xp (
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            xp INTEGER NOT NULL DEFAULT 0,
+            level INTEGER NOT NULL DEFAULT 0,
+            total_xp INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (guild_id, user_id)
+        )""")
+
+        await db.execute("""
         CREATE TABLE IF NOT EXISTS daily_claims (
             guild_id INTEGER NOT NULL,
             user_id INTEGER NOT NULL,
@@ -471,6 +483,94 @@ async def transfer_coins(guild_id: int, from_user_id: int, to_user_id: int, amou
         return True
 
 
+# --------------------- XP Functions ---------------------
+def calculate_level(xp: int, multiplier: int = 100) -> int:
+    """Calculate level from XP. Formula: XP = level^2 * multiplier"""
+    if xp <= 0:
+        return 0
+    import math
+    level = int(math.sqrt(xp / multiplier))
+    return max(0, level)
+
+
+def xp_for_level(level: int, multiplier: int = 100) -> int:
+    """Calculate XP needed for a specific level."""
+    return int(level ** 2 * multiplier)
+
+
+def xp_for_next_level(current_level: int, multiplier: int = 100) -> int:
+    """Calculate XP needed to reach the next level."""
+    return xp_for_level(current_level + 1, multiplier)
+
+
+async def get_user_xp(guild_id: int, user_id: int) -> Tuple[int, int, int]:
+    """Get a user's XP, level, and total XP. Returns (xp, level, total_xp)."""
+    from utils import XP_LEVEL_MULTIPLIER
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            "SELECT xp, level, total_xp FROM user_xp WHERE guild_id=? AND user_id=?",
+            (guild_id, user_id),
+        )
+        row = await cur.fetchone()
+        if row:
+            xp, level, total_xp = row
+            # Recalculate level in case XP changed
+            actual_level = calculate_level(xp, XP_LEVEL_MULTIPLIER)
+            if actual_level != level:
+                # Update level if it changed
+                await db.execute(
+                    "UPDATE user_xp SET level=? WHERE guild_id=? AND user_id=?",
+                    (actual_level, guild_id, user_id),
+                )
+                await db.commit()
+                return (xp, actual_level, total_xp)
+            return (xp, level, total_xp)
+        return (0, 0, 0)
+
+
+async def add_xp(guild_id: int, user_id: int, amount: int, source: str = "ACTIVITY"):
+    """Add XP to a user and update their level."""
+    from utils import XP_LEVEL_MULTIPLIER
+    if amount <= 0:
+        return False
+    
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Get current XP
+        cur = await db.execute(
+            "SELECT xp, level, total_xp FROM user_xp WHERE guild_id=? AND user_id=?",
+            (guild_id, user_id),
+        )
+        row = await cur.fetchone()
+        
+        if row:
+            current_xp, current_level, total_xp = row
+            new_xp = current_xp + amount
+            new_total_xp = total_xp + amount
+        else:
+            current_xp = 0
+            current_level = 0
+            new_xp = amount
+            new_total_xp = amount
+        
+        # Calculate new level
+        new_level = calculate_level(new_xp, XP_LEVEL_MULTIPLIER)
+        
+        # Update or insert
+        await db.execute("""
+            INSERT INTO user_xp (guild_id, user_id, xp, level, total_xp)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(guild_id, user_id) DO UPDATE SET
+                xp = ?,
+                level = ?,
+                total_xp = ?
+        """, (guild_id, user_id, new_xp, new_level, new_total_xp, new_xp, new_level, new_total_xp))
+        
+        await db.commit()
+        
+        # Return if user leveled up
+        return new_level > current_level
+
+
 async def get_guild_setting(guild_id: int, key: str) -> Optional[str]:
     async with aiosqlite.connect(DB_PATH) as db:
         cur = await db.execute(
@@ -529,7 +629,8 @@ async def resolve_channel_id(
     Resolve a channel ID in this order:
     1) guild_settings value
     2) env ID (if provided)
-    3) find by fallback_name (create if AUTO_SETUP)
+    3) find by fallback_name (case-insensitive, partial match)
+    4) create if AUTO_SETUP (only if no existing channel found)
     Saves the resolved ID into guild_settings.
     """
     saved = await get_guild_setting(guild.id, setting_key)
@@ -544,16 +645,39 @@ async def resolve_channel_id(
             await set_guild_setting(guild.id, setting_key, str(ch.id))
             return ch.id
 
-    # find by name
+    # find by exact name match (case-sensitive)
     ch = discord.utils.get(guild.channels, name=fallback_name)
     if ch:
         await set_guild_setting(guild.id, setting_key, str(ch.id))
         return ch.id
 
+    # find by case-insensitive name match (in case moderators created it with different casing)
+    fallback_lower = fallback_name.lower()
+    for ch in guild.channels:
+        if isinstance(ch, (discord.TextChannel, discord.VoiceChannel, discord.CategoryChannel)):
+            if ch.name.lower() == fallback_lower:
+                await set_guild_setting(guild.id, setting_key, str(ch.id))
+                return ch.id
+
+    # Before creating, check if there's already a channel that might be serving this purpose
+    # by checking if any text channel contains key words from the fallback name
+    if setting_key in ("voice_panel_channel_id", "complaints_channel_id", "complaints_log_channel_id", "events_channel_id"):
+        # Extract key words from fallback_name (e.g., "obsidian-console" -> ["obsidian", "console"])
+        key_words = [word.lower() for word in fallback_name.replace("-", " ").replace("_", " ").split() if len(word) > 2]
+        
+        for ch in guild.text_channels:
+            ch_name_lower = ch.name.lower()
+            # Check if channel name contains key words (e.g., "obsidian-console" matches "obsidian console" or "console-obsidian")
+            if key_words and any(word in ch_name_lower for word in key_words):
+                # Found a potential match - save it and return
+                logger.info(f"Found existing channel '{ch.name}' for {setting_key} (matched keywords: {key_words})")
+                await set_guild_setting(guild.id, setting_key, str(ch.id))
+                return ch.id
+
     if not AUTO_SETUP:
         return 0
 
-    # create missing text channels only
+    # create missing text channels only (as last resort)
     if setting_key in ("voice_panel_channel_id", "complaints_channel_id", "complaints_log_channel_id", "events_channel_id"):
         created = await find_or_create_text_channel(guild, name=fallback_name)
         await set_guild_setting(guild.id, setting_key, str(created.id))
@@ -1255,6 +1379,20 @@ async def on_message(message: discord.Message):
         "MESSAGE",
         f"Message in #{message.channel.name}",
     )
+    
+    # Award XP (if enabled)
+    from utils import XP_ENABLED, XP_PER_MESSAGE
+    if XP_ENABLED:
+        leveled_up = await add_xp(
+            message.guild.id,
+            message.author.id,
+            XP_PER_MESSAGE,
+            "MESSAGE",
+        )
+        if leveled_up:
+            # User leveled up! Could send a notification here if desired
+            xp, level, total_xp = await get_user_xp(message.guild.id, message.author.id)
+            logger.info(f"User {message.author.id} leveled up to level {level} in guild {message.guild.id}")
 
 
 @bot.event
@@ -2332,6 +2470,21 @@ async def voice_reward_loop():
                                 "VOICE",
                                 f"Voice activity in #{channel.name}",
                             )
+                            
+                            # Award XP (if enabled)
+                            from utils import XP_ENABLED, XP_PER_MINUTE_VOICE
+                            if XP_ENABLED:
+                                xp_amount = minutes_to_reward * XP_PER_MINUTE_VOICE
+                                if xp_amount > 0:
+                                    leveled_up = await add_xp(
+                                        guild.id,
+                                        user_id,
+                                        xp_amount,
+                                        "VOICE",
+                                    )
+                                    if leveled_up:
+                                        xp, level, total_xp = await get_user_xp(guild.id, user_id)
+                                        logger.info(f"User {user_id} leveled up to level {level} in guild {guild.id} (voice activity)")
                             
                             # Update tracking
                             new_total = total_minutes + minutes_to_reward

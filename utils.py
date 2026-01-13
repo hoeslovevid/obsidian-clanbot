@@ -19,6 +19,12 @@ COINS_PER_MINUTE_VOICE = int(os.getenv("COINS_PER_MINUTE_VOICE", "2"))
 COINS_DAILY_REWARD = int(os.getenv("COINS_DAILY_REWARD", "100"))
 MESSAGE_COOLDOWN_SECONDS = int(os.getenv("MESSAGE_COOLDOWN_SECONDS", "60"))
 
+# XP System
+XP_ENABLED = os.getenv("XP_ENABLED", "true").lower() == "true"
+XP_PER_MESSAGE = int(os.getenv("XP_PER_MESSAGE", "10"))
+XP_PER_MINUTE_VOICE = int(os.getenv("XP_PER_MINUTE_VOICE", "5"))
+XP_LEVEL_MULTIPLIER = int(os.getenv("XP_LEVEL_MULTIPLIER", "100"))  # XP needed = level^2 * multiplier
+
 
 def now_utc() -> datetime:
     """Get current UTC datetime."""
