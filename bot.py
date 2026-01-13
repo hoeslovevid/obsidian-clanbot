@@ -591,6 +591,54 @@ async def set_guild_setting(guild_id: int, key: str, value: str):
         await db.commit()
 
 
+def format_thread_name(case_id: str, user: discord.Member, category: str = "", date_str: Optional[str] = None) -> str:
+    """
+    Format a thread name for complaint threads.
+    Format: "{username} • {date} • {case_id}"
+    Discord thread names max at 100 characters.
+    """
+    # Get username (display_name or name, max 30 chars)
+    username = user.display_name or user.name
+    if len(username) > 30:
+        username = username[:27] + "..."
+    
+    # Format date (MM/DD or YYYY-MM-DD)
+    if date_str:
+        try:
+            from datetime import datetime
+            dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+            date_formatted = dt.strftime("%m/%d")
+        except Exception:
+            date_formatted = ""
+    else:
+        from datetime import datetime
+        date_formatted = datetime.now().strftime("%m/%d")
+    
+    # Build thread name
+    # Format: "{username} • {date} • {case_id}"
+    # If category is short, we can include it: "{username} • {category} • {date} • {case_id}"
+    if category and len(category) <= 15:
+        thread_name = f"{username} • {category} • {date_formatted} • {case_id}"
+    else:
+        thread_name = f"{username} • {date_formatted} • {case_id}"
+    
+    # Ensure it doesn't exceed 100 characters (Discord limit)
+    if len(thread_name) > 100:
+        # Truncate username if needed
+        max_username_len = 100 - len(f" • {date_formatted} • {case_id}")
+        if max_username_len < 5:
+            # If even that's too long, just use case_id
+            thread_name = f"{case_id} • {date_formatted}"
+        else:
+            username = (user.display_name or user.name)[:max_username_len]
+            if category and len(category) <= 15:
+                thread_name = f"{username} • {category} • {date_formatted} • {case_id}"
+            else:
+                thread_name = f"{username} • {date_formatted} • {case_id}"
+    
+    return thread_name[:100]  # Final safety check
+
+
 async def log_complaint_action(guild: discord.Guild, case_id: str, actor_id: int, action: str, note: str = ""):
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
@@ -1173,9 +1221,10 @@ class ComplaintModal(discord.ui.Modal, title="Obsidian Docket Submission"):
 
         # Thread for staff discussion (tries private first; falls back)
         thread_id = None
+        thread_name = format_thread_name(case_id, interaction.user, str(self.category), created_iso)
         try:
             thread = await ch.create_thread(
-                name=f"{case_id} • Staff Review",
+                name=thread_name,
                 type=discord.ChannelType.private_thread,
                 invitable=False,
                 reason="Private staff thread for complaint",
@@ -1188,7 +1237,7 @@ class ComplaintModal(discord.ui.Modal, title="Obsidian Docket Submission"):
                     pass
         except Exception:
             try:
-                thread = await msg.create_thread(name=f"{case_id} • Staff Review", auto_archive_duration=1440)
+                thread = await msg.create_thread(name=thread_name, auto_archive_duration=1440)
                 thread_id = thread.id
             except Exception:
                 thread = None
@@ -1777,9 +1826,10 @@ async def on_interaction(interaction: discord.Interaction):
 
                 # Thread for staff discussion (tries private first; falls back)
                 thread_id = None
+                thread_name = format_thread_name(case_id, interaction.user, category_val, created_iso)
                 try:
                     thread = await ch.create_thread(
-                        name=f"{case_id} • Staff Review",
+                        name=thread_name,
                         type=discord.ChannelType.private_thread,
                         invitable=False,
                         reason="Private staff thread for complaint",
@@ -1792,7 +1842,7 @@ async def on_interaction(interaction: discord.Interaction):
                             pass
                 except Exception:
                     try:
-                        thread = await msg.create_thread(name=f"{case_id} • Staff Review", auto_archive_duration=1440)
+                        thread = await msg.create_thread(name=thread_name, auto_archive_duration=1440)
                         thread_id = thread.id
                     except Exception:
                         thread = None
@@ -1967,9 +2017,10 @@ async def on_interaction(interaction: discord.Interaction):
 
                     # Create staff thread
                     thread_id = None
+                    thread_name = format_thread_name(case_id, interaction.user, category_val, created_iso)
                     try:
                         thread = await ch.create_thread(
-                            name=f"{case_id} • Staff Review",
+                            name=thread_name,
                             type=discord.ChannelType.private_thread,
                             invitable=False,
                             reason="Private staff thread for complaint",
@@ -1982,7 +2033,7 @@ async def on_interaction(interaction: discord.Interaction):
                                 pass
                     except Exception:
                         try:
-                            thread = await msg.create_thread(name=f"{case_id} • Staff Review", auto_archive_duration=1440)
+                            thread = await msg.create_thread(name=thread_name, auto_archive_duration=1440)
                             thread_id = thread.id
                         except Exception:
                             thread = None
