@@ -1102,10 +1102,17 @@ class RequestInfoModal(discord.ui.Modal, title="Request Evidence"):
         self.add_item(self.question)
 
     async def on_submit(self, interaction: discord.Interaction):
-        # This method is disabled - modal submissions are handled entirely by the on_interaction handler
-        # for persistence after bot restarts. We do NOTHING here - let on_interaction handle everything.
-        logger.info(f"[modal] RequestInfoModal.on_submit: Ignored - on_interaction will handle processing")
-        # Just return - do nothing. on_interaction handler will process the modal submission.
+        # This method defers the interaction to prevent expiration, but actual processing
+        # is handled by the on_interaction handler for persistence after bot restarts.
+        # We defer unconditionally (if possible) - on_interaction will check is_done() before deferring
+        logger.info(f"[modal] RequestInfoModal.on_submit: Attempting to defer (on_interaction will process)")
+        try:
+            await interaction.response.defer(ephemeral=True)
+            logger.info(f"[modal] RequestInfoModal.on_submit: Successfully deferred")
+        except (discord.errors.NotFound, discord.errors.InteractionResponded, discord.errors.HTTPException) as e:
+            # Interaction already handled or expired - on_interaction may have gotten it first
+            logger.info(f"[modal] RequestInfoModal.on_submit: Could not defer: {e}")
+        # Don't process here - let on_interaction handle it
         return
 
 
