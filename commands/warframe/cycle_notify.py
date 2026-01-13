@@ -54,6 +54,14 @@ def setup(bot):
                 ephemeral=True
             )
         
+        # Get cycle display name (needed for messages)
+        cycle_names = {
+            'cetus': 'Cetus (Plains of Eidolon)',
+            'vallis': 'Fortuna (Orb Vallis)',
+            'cambion': 'Deimos (Cambion Drift)',
+        }
+        cycle_display = cycle_names.get(cycle_value, cycle_value)
+        
         # If enabling, require a channel. If disabling, channel is optional.
         if is_enabled:
             target_channel = channel or interaction.channel
@@ -134,14 +142,6 @@ def setup(bot):
                     )
             
             await db.commit()
-        
-        # Get cycle display name
-        cycle_names = {
-            'cetus': 'Cetus (Plains of Eidolon)',
-            'vallis': 'Fortuna (Orb Vallis)',
-            'cambion': 'Deimos (Cambion Drift)',
-        }
-        cycle_display = cycle_names.get(cycle_value, cycle_value)
         
         status = "enabled" if is_enabled else "disabled"
         
