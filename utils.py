@@ -6,8 +6,8 @@ import re
 from datetime import datetime, timezone
 from typing import Optional
 
-import discord
-import dateparser
+import discord  # type: ignore
+import dateparser  # type: ignore
 
 # Import config from bot (will be set when bot.py loads)
 MOD_ROLE_NAME = os.getenv("MOD_ROLE_NAME", "Obsidian Inheritor")
@@ -36,16 +36,16 @@ def obsidian_embed(
     title: str, 
     desc: str = "", 
     *, 
-    color: discord.Color = None,
-    author: discord.Member = None,
-    author_name: str = None,
-    author_icon: str = None,
-    thumbnail: str = None,
-    image: str = None,
-    footer: str = None,
-    footer_icon: str = None,
-    fields: list = None,
-    client: discord.Client = None
+    color: Optional[discord.Color] = None,
+    author: Optional[discord.Member] = None,
+    author_name: Optional[str] = None,
+    author_icon: Optional[str] = None,
+    thumbnail: Optional[str] = None,
+    image: Optional[str] = None,
+    footer: Optional[str] = None,
+    footer_icon: Optional[str] = None,
+    fields: Optional[list] = None,
+    client: Optional[discord.Client] = None
 ) -> discord.Embed:
     """
     Create a standardized Obsidian-themed embed with enhanced styling.
