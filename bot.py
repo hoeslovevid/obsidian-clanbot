@@ -663,16 +663,35 @@ async def resolve_channel_id(
     # by checking if any text channel contains key words from the fallback name
     if setting_key in ("voice_panel_channel_id", "complaints_channel_id", "complaints_log_channel_id", "events_channel_id"):
         # Extract key words from fallback_name (e.g., "obsidian-console" -> ["obsidian", "console"])
-        key_words = [word.lower() for word in fallback_name.replace("-", " ").replace("_", " ").split() if len(word) > 2]
+        # Normalize by replacing hyphens/underscores with spaces, then split
+        normalized_fallback = fallback_name.replace("-", " ").replace("_", " ").lower()
+        key_words = [word for word in normalized_fallback.split() if len(word) >= 2]  # Lowered threshold to catch "ops"
         
         for ch in guild.text_channels:
             ch_name_lower = ch.name.lower()
-            # Check if channel name contains key words (e.g., "obsidian-console" matches "obsidian console" or "console-obsidian")
-            if key_words and any(word in ch_name_lower for word in key_words):
+            # Normalize channel name the same way (replace hyphens/underscores with spaces for comparison)
+            ch_normalized = ch_name_lower.replace("-", " ").replace("_", " ")
+            
+            # Check if channel name contains ALL key words (e.g., "ops-board" matches "ops board" or "ops-board" or "board-ops")
+            # This is more strict than matching any single keyword
+            if key_words and all(word in ch_normalized for word in key_words):
                 # Found a potential match - save it and return
-                logger.info(f"Found existing channel '{ch.name}' for {setting_key} (matched keywords: {key_words})")
+                logger.info(f"Found existing channel '{ch.name}' for {setting_key} (matched keywords: {key_words}, fallback: '{fallback_name}')")
                 await set_guild_setting(guild.id, setting_key, str(ch.id))
                 return ch.id
+        
+        # Additional fallback: for events channel, also check for common variations
+        if setting_key == "events_channel_id":
+            # Check for common event-related channel names
+            event_keywords = ["event", "ops", "operation", "mission", "raid"]
+            for ch in guild.text_channels:
+                ch_name_lower = ch.name.lower()
+                ch_normalized = ch_name_lower.replace("-", " ").replace("_", " ")
+                # Check if channel name contains "ops" or "event" or similar
+                if any(keyword in ch_normalized for keyword in event_keywords):
+                    logger.info(f"Found potential events channel '{ch.name}' for {setting_key} (matched event keywords)")
+                    await set_guild_setting(guild.id, setting_key, str(ch.id))
+                    return ch.id
 
     if not AUTO_SETUP:
         return 0
