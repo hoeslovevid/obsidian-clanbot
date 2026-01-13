@@ -1929,21 +1929,36 @@ async def on_interaction(interaction: discord.Interaction):
 
                 if action == "ack":
                     # Defer first to prevent timeout
-                    await interaction.response.defer(ephemeral=True)
+                    try:
+                        await interaction.response.defer(ephemeral=True)
+                    except (discord.errors.NotFound, discord.errors.InteractionResponded, discord.errors.HTTPException) as e:
+                        # Interaction expired or already handled - can't process it
+                        logger.warning(f"[button] complaints:ack - interaction expired/already handled: {e}")
+                        return
                     await view.set_status(interaction, "ACKNOWLEDGED")
                     await interaction.followup.send(f"`{case_id}` marked reviewed.", ephemeral=True)
                     return
 
                 if action == "resolve":
                     # Defer first to prevent timeout
-                    await interaction.response.defer(ephemeral=True)
+                    try:
+                        await interaction.response.defer(ephemeral=True)
+                    except (discord.errors.NotFound, discord.errors.InteractionResponded, discord.errors.HTTPException) as e:
+                        # Interaction expired or already handled - can't process it
+                        logger.warning(f"[button] complaints:resolve - interaction expired/already handled: {e}")
+                        return
                     await view.set_status(interaction, "RESOLVED")
                     await interaction.followup.send(f"`{case_id}` closed.", ephemeral=True)
                     return
 
                 if action == "reject":
                     # Defer first to prevent timeout
-                    await interaction.response.defer(ephemeral=True)
+                    try:
+                        await interaction.response.defer(ephemeral=True)
+                    except (discord.errors.NotFound, discord.errors.InteractionResponded, discord.errors.HTTPException) as e:
+                        # Interaction expired or already handled - can't process it
+                        logger.warning(f"[button] complaints:reject - interaction expired/already handled: {e}")
+                        return
                     await view.set_status(interaction, "REJECTED")
                     await interaction.followup.send(f"`{case_id}` dismissed.", ephemeral=True)
                     return
