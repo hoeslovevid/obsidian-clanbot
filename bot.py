@@ -176,6 +176,8 @@ def load_all_commands():
         "commands.warframe.lfg_list",
         "commands.warframe.cycles",
         "commands.warframe.cycle_notify",
+        "commands.warframe.invasions",
+        "commands.warframe.invasion_notify",
     ]
     
     loaded_count = 0
@@ -405,6 +407,26 @@ async def init_db():
             cycle_state TEXT NOT NULL,
             notified_at TEXT NOT NULL,
             UNIQUE(guild_id, cycle_type, cycle_state, notified_at)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS invasion_notification_settings (
+            guild_id INTEGER NOT NULL,
+            reward_lower TEXT NOT NULL,
+            reward_display TEXT NOT NULL,
+            channel_id INTEGER,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            PRIMARY KEY (guild_id, reward_lower)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS invasion_notifications_sent (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            invasion_id TEXT NOT NULL,
+            reward_lower TEXT NOT NULL,
+            notified_at TEXT NOT NULL,
+            UNIQUE(guild_id, invasion_id, reward_lower)
         )""")
 
         await db.commit()

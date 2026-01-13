@@ -12,7 +12,7 @@ from discord.ext import tasks  # type: ignore
 
 from database import DB_PATH, now_utc, get_guild_setting, add_coins, add_xp, get_user_xp
 from channels import resolve_channel_id, delete_temp_vc_and_panel
-from warframe_api import get_baro_status, get_all_cycles
+from warframe_api import get_baro_status, get_all_cycles, fetch_invasions
 from utils import obsidian_embed, ECONOMY_ENABLED, COINS_PER_MINUTE_VOICE, MIN_VOICE_MINUTES_FOR_REWARD, XP_ENABLED, XP_PER_MINUTE_VOICE
 
 logger = logging.getLogger(__name__)
@@ -545,6 +545,142 @@ def setup_tasks(bot):
     async def before_cycle_check_loop():
         await bot.wait_until_ready()
 
+    @tasks.loop(minutes=10)  # Check every 10 minutes for new invasions
+    async def invasion_check_loop():
+        """Check for new invasions and send notifications for configured rewards."""
+        try:
+            invasions_data = await fetch_invasions()
+            
+            if not invasions_data:
+                return
+            
+            # Get all notification settings
+            for guild in bot.guilds:
+                async with aiosqlite.connect(DB_PATH) as db:
+                    cur = await db.execute("""
+                        SELECT reward_lower, reward_display, channel_id
+                        FROM invasion_notification_settings
+                        WHERE guild_id=? AND enabled=1
+                    """, (guild.id,))
+                    settings = await cur.fetchall()
+                
+                if not settings:
+                    continue
+                
+                # Check each invasion for matching rewards
+                for inv in invasions_data:
+                    invasion_id = inv.get("id", "")
+                    if not invasion_id:
+                        continue
+                    
+                    # Get rewards from both sides
+                    attacker_reward = inv.get("attackerReward", {})
+                    defender_reward = inv.get("defenderReward", {})
+                    
+                    rewards_found = []
+                    
+                    # Check attacker rewards
+                    if attacker_reward:
+                        counted_items = attacker_reward.get("countedItems", [])
+                        for item in counted_items:
+                            item_type = item.get("itemType", "").lower()
+                            rewards_found.append(item_type)
+                    
+                    # Check defender rewards
+                    if defender_reward:
+                        counted_items = defender_reward.get("countedItems", [])
+                        for item in counted_items:
+                            item_type = item.get("itemType", "").lower()
+                            rewards_found.append(item_type)
+                    
+                    # Check if any configured reward matches
+                    for reward_lower, reward_display, channel_id in settings:
+                        if reward_lower in rewards_found and channel_id:
+                            # Check if we've already notified for this invasion
+                            async with aiosqlite.connect(DB_PATH) as db:
+                                cur = await db.execute("""
+                                    SELECT 1 FROM invasion_notifications_sent
+                                    WHERE guild_id=? AND invasion_id=? AND reward_lower=?
+                                """, (guild.id, invasion_id, reward_lower))
+                                already_notified = await cur.fetchone()
+                            
+                            if already_notified:
+                                continue
+                            
+                            # Get channel
+                            ch = guild.get_channel(channel_id)
+                            if not isinstance(ch, discord.TextChannel):
+                                continue
+                            
+                            # Build notification
+                            node = inv.get("node", "Unknown Location")
+                            attacker = inv.get("attackingFaction", "Unknown")
+                            defender = inv.get("defendingFaction", "Unknown")
+                            completion = inv.get("completion", 0)
+                            eta = inv.get("eta", "")
+                            
+                            # Format ETA
+                            eta_str = "Unknown"
+                            if eta:
+                                try:
+                                    eta_time = dateparser.parse(eta, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
+                                    if eta_time:
+                                        time_remaining = eta_time - datetime.now(timezone.utc)
+                                        hours = int(time_remaining.total_seconds() // 3600)
+                                        minutes = int((time_remaining.total_seconds() % 3600) // 60)
+                                        eta_str = f"{hours}h {minutes}m"
+                                except Exception:
+                                    pass
+                            
+                            # Get full reward list
+                            reward_list = []
+                            if attacker_reward:
+                                items = attacker_reward.get("countedItems", [])
+                                for item in items:
+                                    item_type = item.get("itemType", "")
+                                    if item_type.lower() == reward_lower:
+                                        reward_list.append(f"**{attacker}:** {item_type}")
+                            
+                            if defender_reward:
+                                items = defender_reward.get("countedItems", [])
+                                for item in items:
+                                    item_type = item.get("itemType", "")
+                                    if item_type.lower() == reward_lower:
+                                        reward_list.append(f"**{defender}:** {item_type}")
+                            
+                            desc = f"**Location:** {node}\n"
+                            desc += f"**Factions:** {attacker} vs {defender}\n"
+                            desc += f"**Progress:** {completion:.1f}%\n"
+                            desc += f"**Time Remaining:** {eta_str}\n\n"
+                            desc += "**Reward Found:**\n" + "\n".join(reward_list)
+                            
+                            embed = obsidian_embed(
+                                f"⚔️ Invasion Alert: {reward_display}",
+                                desc,
+                                color=discord.Color.orange(),
+                                client=bot,
+                            )
+                            
+                            try:
+                                await ch.send(embed=embed)
+                                
+                                # Record notification
+                                async with aiosqlite.connect(DB_PATH) as db:
+                                    await db.execute("""
+                                        INSERT INTO invasion_notifications_sent (guild_id, invasion_id, reward_lower, notified_at)
+                                        VALUES (?, ?, ?, ?)
+                                    """, (guild.id, invasion_id, reward_lower, datetime.now(timezone.utc).isoformat()))
+                                    await db.commit()
+                            except Exception as e:
+                                logger.error(f"Error sending invasion notification to {guild.id}: {e}")
+                                continue
+        except Exception as e:
+            logger.error(f"Error in invasion_check_loop: {e}", exc_info=True)
+
+    @invasion_check_loop.before_loop
+    async def before_invasion_check_loop():
+        await bot.wait_until_ready()
+
     # Start all tasks
     temp_vc_cleanup.start()
     event_reminder_loop.start()
@@ -552,6 +688,7 @@ def setup_tasks(bot):
     baro_check_loop.start()
     lfg_expire_loop.start()
     cycle_check_loop.start()
+    invasion_check_loop.start()
     
     return {
         'temp_vc_cleanup': temp_vc_cleanup,
@@ -560,4 +697,5 @@ def setup_tasks(bot):
         'baro_check_loop': baro_check_loop,
         'lfg_expire_loop': lfg_expire_loop,
         'cycle_check_loop': cycle_check_loop,
+        'invasion_check_loop': invasion_check_loop,
     }

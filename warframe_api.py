@@ -98,3 +98,21 @@ async def get_baro_status() -> Tuple[bool, Optional[Dict[str, Any]]]:
     except Exception as e:
         logger.error(f"Error parsing Baro timestamps: {e}")
         return (False, data)
+
+
+async def fetch_invasions() -> Optional[list]:
+    """Fetch invasion data from Warframe World State API."""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get("https://api.warframestat.us/pc/invasions", timeout=aiohttp.ClientTimeout(total=10)) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    # Filter out completed invasions
+                    active_invasions = [inv for inv in data if inv.get("completed", False) == False]
+                    return active_invasions
+                else:
+                    logger.warning(f"Warframe API returned status {response.status} for invasions")
+                    return None
+    except Exception as e:
+        logger.error(f"Error fetching invasion data: {e}")
+        return None
