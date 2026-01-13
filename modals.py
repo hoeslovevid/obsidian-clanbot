@@ -3,7 +3,7 @@ Modal classes for Discord interactions.
 This module contains all Modal classes used by the bot.
 """
 import logging
-import discord
+import discord  # type: ignore
 import aiosqlite  # type: ignore
 from typing import Optional
 
