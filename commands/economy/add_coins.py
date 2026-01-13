@@ -88,6 +88,7 @@ def setup(bot):
                         f"{user.mention} only has **{current_balance:,}** coins.\n"
                         f"Cannot remove **{amount:,}** coins.",
                         color=discord.Color.red(),
+                        client=interaction.client,
                     ),
                     ephemeral=True
                 )
@@ -101,6 +102,7 @@ def setup(bot):
                 f"**Previous Balance:** {current_balance:,} coins\n"
                 f"**New Balance:** {new_balance:,} coins",
                 color=discord.Color.orange(),
+                client=interaction.client,
             )
         
         await interaction.response.send_message(embed=embed, ephemeral=False)
