@@ -31,10 +31,76 @@ def now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def obsidian_embed(title: str, desc: str = "", *, color: discord.Color = discord.Color.dark_grey()) -> discord.Embed:
-    """Create a standardized Obsidian-themed embed."""
+def obsidian_embed(
+    title: str, 
+    desc: str = "", 
+    *, 
+    color: discord.Color = None,
+    author: discord.Member = None,
+    author_name: str = None,
+    author_icon: str = None,
+    thumbnail: str = None,
+    image: str = None,
+    footer: str = None,
+    footer_icon: str = None,
+    fields: list = None
+) -> discord.Embed:
+    """
+    Create a standardized Obsidian-themed embed with enhanced styling.
+    
+    Args:
+        title: Embed title
+        desc: Embed description
+        color: Embed color (defaults to Obsidian purple-blue)
+        author: Discord member to set as author
+        author_name: Custom author name
+        author_icon: Custom author icon URL
+        thumbnail: Thumbnail image URL
+        image: Large image URL
+        footer: Custom footer text
+        footer_icon: Custom footer icon URL
+        fields: List of (name, value, inline) tuples for fields
+    """
+    # Default to a nice purple-blue color for Obsidian theme
+    if color is None:
+        color = discord.Color.from_rgb(75, 0, 130)  # Indigo/purple
+    
     e = discord.Embed(title=title, description=desc, color=color)
     e.timestamp = now_utc()
+    
+    # Set author (member takes priority)
+    if author:
+        e.set_author(
+            name=author.display_name,
+            icon_url=author.display_avatar.url if hasattr(author, 'display_avatar') else author.avatar.url if author.avatar else None
+        )
+    elif author_name:
+        e.set_author(name=author_name, icon_url=author_icon)
+    
+    # Set thumbnail
+    if thumbnail:
+        e.set_thumbnail(url=thumbnail)
+    
+    # Set image
+    if image:
+        e.set_image(url=image)
+    
+    # Add fields
+    if fields:
+        for field in fields:
+            if len(field) == 2:
+                name, value = field
+                inline = False
+            else:
+                name, value, inline = field
+            e.add_field(name=name, value=value, inline=inline)
+    
+    # Set footer (default to bot name with icon if not specified)
+    if footer:
+        e.set_footer(text=footer, icon_url=footer_icon)
+    else:
+        e.set_footer(text="Obsidian Clan Bot", icon_url="https://i.imgur.com/4M34hi2.png")  # Placeholder - can be updated
+    
     return e
 
 

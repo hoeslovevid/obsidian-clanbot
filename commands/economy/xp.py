@@ -40,10 +40,12 @@ def setup(bot):
         desc += f"`{progress_bar}` {progress_percent}%\n"
         desc += f"({xp_needed:,} XP needed)"
         
-        embed = obsidian_embed(
-            f"⭐ {target_user.display_name}'s XP",
-            desc,
-            color=discord.Color.blue(),
-        )
+               embed = obsidian_embed(
+                   f"⭐ {target_user.display_name}'s XP",
+                   desc,
+                   color=discord.Color.blue(),
+                   author=target_user,
+                   thumbnail=target_user.display_avatar.url if hasattr(target_user, 'display_avatar') else target_user.avatar.url if target_user.avatar else None,
+               )
         
         await interaction.response.send_message(embed=embed, ephemeral=(target_user != interaction.user))

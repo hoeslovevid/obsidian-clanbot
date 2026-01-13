@@ -241,8 +241,8 @@ def setup(bot):
             "🔍 Looking for Group",
             desc,
             color=discord.Color.blue(),
+            footer=f"LFG ID: {lfg_id} • Click buttons below to join/leave",
         )
-        embed.set_footer(text=f"LFG ID: {lfg_id}")
         
         # Add players field
         embed.add_field(

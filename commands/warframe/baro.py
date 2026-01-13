@@ -72,6 +72,7 @@ def setup(bot):
                 "🛒 Baro Ki'Teer - Active",
                 desc,
                 color=discord.Color.green(),
+                thumbnail="https://vignette.wikia.nocookie.net/warframe/images/4/4a/BaroKiTeer.png/revision/latest?cb=20150213150000",
             )
         else:
             # Baro is not active

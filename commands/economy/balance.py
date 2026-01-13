@@ -25,6 +25,8 @@ def setup(bot):
             f"• Sending messages ({COINS_PER_MESSAGE} coins per message, {MESSAGE_COOLDOWN_SECONDS}s cooldown)\n"
             f"• Being active in voice channels ({COINS_PER_MINUTE_VOICE} coins per minute)",
             color=discord.Color.gold(),
+            author=interaction.user,
+            thumbnail=interaction.user.display_avatar.url if hasattr(interaction.user, 'display_avatar') else interaction.user.avatar.url if interaction.user.avatar else None,
         )
         
         await interaction.response.send_message(embed=embed, ephemeral=True)
