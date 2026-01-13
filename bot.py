@@ -2104,7 +2104,11 @@ async def on_interaction(interaction: discord.Interaction):
         # Also skip if this is a modal submission - it has its own error handler
         if interaction.type == discord.InteractionType.modal_submit:
             # Don't handle here - modal submission has its own handler
-            # But log it for debugging
+            # Filter out process_application_commands errors (they're not real errors)
+            if "process_application_commands" in str(e):
+                logger.warning(f"[outer_handler] Ignoring process_application_commands error in modal submission (likely stale/cached): {e}")
+                return  # Don't send error message to user
+            # But log other errors for debugging
             import traceback
             import sys
             error_msg = f"[outer_handler] Modal submission error (should be handled by modal handler): {e}\n{traceback.format_exc()}"
