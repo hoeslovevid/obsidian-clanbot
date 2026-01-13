@@ -22,17 +22,34 @@ def setup(bot):
             limit = 10
         
         async with aiosqlite.connect(DB_PATH) as db:
+            # Only show users with balance > 0
             cur = await db.execute("""
                 SELECT user_id, balance, total_earned
                 FROM user_balances
-                WHERE guild_id=?
+                WHERE guild_id=? AND balance > 0
                 ORDER BY balance DESC
                 LIMIT ?
             """, (interaction.guild.id, limit))
             rows = await cur.fetchall()
         
         if not rows:
-            return await interaction.response.send_message("No users have earned coins yet!", ephemeral=True)
+            # Check if there are any users at all in the database for debugging
+            async with aiosqlite.connect(DB_PATH) as db:
+                debug_cur = await db.execute("""
+                    SELECT COUNT(*) FROM user_balances WHERE guild_id=?
+                """, (interaction.guild.id,))
+                total_count = (await debug_cur.fetchone())[0]
+            
+            if total_count == 0:
+                return await interaction.response.send_message(
+                    "No users have earned coins yet! Start chatting or use `/daily` to earn coins.",
+                    ephemeral=True
+                )
+            else:
+                return await interaction.response.send_message(
+                    "No users currently have coins! Users need a balance greater than 0 to appear on the leaderboard.",
+                    ephemeral=True
+                )
         
         desc = ""
         for i, (user_id, balance, total_earned) in enumerate(rows, 1):
