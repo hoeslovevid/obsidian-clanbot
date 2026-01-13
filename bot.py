@@ -405,8 +405,7 @@ async def init_db():
             description TEXT,
             created_at TEXT NOT NULL,
             expires_at TEXT,
-            status TEXT NOT NULL DEFAULT 'OPEN',
-            PRIMARY KEY (id)
+            status TEXT NOT NULL DEFAULT 'OPEN'
         )""")
 
         await db.execute("""
