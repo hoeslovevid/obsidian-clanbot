@@ -200,6 +200,7 @@ def load_all_commands():
         "commands.economy.daily",
         "commands.economy.xp",
         "commands.economy.xpleaderboard",
+        "commands.economy.add_coins",
     ]
     
     loaded_count = 0
