@@ -232,6 +232,44 @@ async def add_xp(guild_id: int, user_id: int, amount: int, source: str = "ACTIVI
         return new_level > current_level
 
 
+async def remove_xp(guild_id: int, user_id: int, amount: int) -> bool:
+    """Remove XP from a user. Returns True if successful, False if insufficient XP."""
+    from utils import XP_LEVEL_MULTIPLIER
+    if amount <= 0:
+        return False
+    
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Get current XP
+        cur = await db.execute(
+            "SELECT xp, level, total_xp FROM user_xp WHERE guild_id=? AND user_id=?",
+            (guild_id, user_id),
+        )
+        row = await cur.fetchone()
+        
+        if not row:
+            return False  # User has no XP
+        
+        current_xp, current_level, total_xp = row
+        
+        if current_xp < amount:
+            return False  # Insufficient XP
+        
+        # Calculate new values
+        new_xp = max(0, current_xp - amount)
+        # Note: total_xp should not decrease (it's a lifetime total)
+        new_level = calculate_level(new_xp, XP_LEVEL_MULTIPLIER)
+        
+        # Update
+        await db.execute("""
+            UPDATE user_xp
+            SET xp = ?, level = ?
+            WHERE guild_id=? AND user_id=?
+        """, (new_xp, new_level, guild_id, user_id))
+        
+        await db.commit()
+        return True
+
+
 # --------------------- Complaint Functions ---------------------
 async def log_complaint_action(guild_id: int, case_id: str, actor_id: int, action: str, note: str = ""):
     """Log a complaint action."""

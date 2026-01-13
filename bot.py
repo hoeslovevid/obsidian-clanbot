@@ -169,6 +169,7 @@ def load_all_commands():
         "commands.economy.xp",
         "commands.economy.xpleaderboard",
         "commands.economy.add_coins",
+        "commands.economy.manage_xp",
         # Warframe commands
         "commands.warframe.baro",
         "commands.warframe.baro_notify",

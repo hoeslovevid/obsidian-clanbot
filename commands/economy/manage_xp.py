@@ -1,0 +1,120 @@
+"""Manage XP command (moderators only)."""
+import discord
+from discord import app_commands
+
+from utils import obsidian_embed, XP_ENABLED, is_mod
+
+
+def setup(bot):
+    """Register the manage_xp command."""
+    @bot.tree.command(name="manage_xp", description="Add or remove XP from a user (moderators only).")
+    @app_commands.describe(
+        action="Whether to add or remove XP",
+        user="The user to modify XP for",
+        amount="The amount of XP (must be positive)"
+    )
+    @app_commands.choices(action=[
+        app_commands.Choice(name="Add XP", value="add"),
+        app_commands.Choice(name="Remove XP", value="remove"),
+    ])
+    async def manage_xp_cmd(
+        interaction: discord.Interaction,
+        action: app_commands.Choice[str],
+        user: discord.Member,
+        amount: int
+    ):
+        """Add or remove XP from a user (moderators only)."""
+        # Import bot-specific functions inside to avoid circular imports
+        from database import add_xp, remove_xp, get_user_xp, calculate_level
+        from utils import XP_LEVEL_MULTIPLIER
+        
+        if not XP_ENABLED:
+            return await interaction.response.send_message("XP system is disabled.", ephemeral=True)
+        
+        # Check if user is a moderator
+        if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
+            return await interaction.response.send_message(
+                "Only moderators can use this command.",
+                ephemeral=True
+            )
+        
+        # Validate amount
+        if amount <= 0:
+            return await interaction.response.send_message(
+                "Amount must be greater than 0.",
+                ephemeral=True
+            )
+        
+        action_value = action.value if isinstance(action.value, str) else action
+        is_add = action_value == "add"
+        
+        # Get current XP before modification
+        current_xp, current_level, total_xp = await get_user_xp(interaction.guild.id, user.id)
+        
+        if is_add:
+            # Add XP
+            leveled_up = await add_xp(
+                interaction.guild.id,
+                user.id,
+                amount,
+                "MOD_ADD",
+            )
+            
+            # Get new XP
+            new_xp, new_level, new_total_xp = await get_user_xp(interaction.guild.id, user.id)
+            
+            level_message = ""
+            if leveled_up:
+                level_message = f"\n\n🎉 **Level Up!** {user.mention} reached level **{new_level}**!"
+            
+            embed = obsidian_embed(
+                "✅ XP Added",
+                f"Added **{amount:,}** XP to {user.mention}.\n\n"
+                f"**Previous XP:** {current_xp:,} (Level {current_level})\n"
+                f"**New XP:** {new_xp:,} (Level {new_level}){level_message}",
+                color=discord.Color.green(),
+                author=user,
+                thumbnail=user.display_avatar.url if user.display_avatar else None,
+                client=interaction.client,
+            )
+        else:
+            # Remove XP
+            success = await remove_xp(
+                interaction.guild.id,
+                user.id,
+                amount,
+            )
+            
+            if not success:
+                return await interaction.response.send_message(
+                    embed=obsidian_embed(
+                        "❌ Insufficient XP",
+                        f"{user.mention} only has **{current_xp:,}** XP.\n"
+                        f"Cannot remove **{amount:,}** XP.",
+                        color=discord.Color.red(),
+                        author=user,
+                        thumbnail=user.display_avatar.url if user.display_avatar else None,
+                        client=interaction.client,
+                    ),
+                    ephemeral=True
+                )
+            
+            # Get new XP
+            new_xp, new_level, new_total_xp = await get_user_xp(interaction.guild.id, user.id)
+            
+            level_message = ""
+            if new_level < current_level:
+                level_message = f"\n\n⚠️ {user.mention} dropped to level **{new_level}**."
+            
+            embed = obsidian_embed(
+                "✅ XP Removed",
+                f"Removed **{amount:,}** XP from {user.mention}.\n\n"
+                f"**Previous XP:** {current_xp:,} (Level {current_level})\n"
+                f"**New XP:** {new_xp:,} (Level {new_level}){level_message}",
+                color=discord.Color.orange(),
+                author=user,
+                thumbnail=user.display_avatar.url if user.display_avatar else None,
+                client=interaction.client,
+            )
+        
+        await interaction.response.send_message(embed=embed, ephemeral=False)
