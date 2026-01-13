@@ -3126,10 +3126,10 @@ async def on_ready():
     # Set custom status
     activity = discord.Activity(
         type=discord.ActivityType.watching,
-        name="over The Land of The Obsidian Oath Legion"
+        name="Over The Land of The Obsidian Oath Legion"
     )
     await bot.change_presence(activity=activity, status=discord.Status.online)
-    print(f"[ready] Status set: Watching over The Land of The Obsidian Oath Legion")
+    print(f"[ready] Status set: Watching Over The Land of The Obsidian Oath Legion")
 
     # Ensure channels + join-to-create exist on startup (covers restarts)
     for g in bot.guilds:
