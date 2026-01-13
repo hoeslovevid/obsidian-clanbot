@@ -295,28 +295,28 @@ def setup(bot):
             cur = await db.execute("SELECT last_insert_rowid()")
             lfg_id = (await cur.fetchone())[0]
         
-        # Create embed
+        # Create embed with better formatting
         mission_name = mission_type.value
-        desc = f"**Mission:** {mission_name}\n"
-        desc += f"**Created by:** {interaction.user.mention}\n"
-        desc += f"**Players:** 1/{max_players}\n"
+        
+        fields = [
+            ("🎯 Mission", mission_name, True),
+            ("👤 Created by", interaction.user.mention, True),
+            ("⏰ Expires", f"<t:{int(expires_at.timestamp())}:R>", True),
+        ]
+        
         if description:
-            desc += f"\n**Notes:** {description}\n"
-        desc += f"\n**Expires:** <t:{int(expires_at.timestamp())}:R>"
+            fields.append(("📝 Notes", description[:500], False))
+        
+        # Add players field
+        fields.append(("👥 Players", f"1. {interaction.user.display_name}\n\n_{max_players - 1} slot(s) remaining_", False))
         
         embed = obsidian_embed(
             "🔍 Looking for Group",
-            desc,
+            "",
             color=discord.Color.blue(),
+            fields=fields,
             footer=f"LFG ID: {lfg_id} • Click buttons below to join/leave",
             client=interaction.client,
-        )
-        
-        # Add players field
-        embed.add_field(
-            name="Players",
-            value=f"1. {interaction.user.display_name}\n\n_{max_players - 1} slot(s) remaining_",
-            inline=False
         )
         
         # Create view with buttons

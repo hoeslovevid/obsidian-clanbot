@@ -45,7 +45,8 @@ def obsidian_embed(
     footer: Optional[str] = None,
     footer_icon: Optional[str] = None,
     fields: Optional[list] = None,
-    client: Optional[discord.Client] = None
+    client: Optional[discord.Client] = None,
+    timestamp: bool = True
 ) -> discord.Embed:
     """
     Create a standardized Obsidian-themed embed with enhanced styling.
@@ -62,13 +63,17 @@ def obsidian_embed(
         footer: Custom footer text
         footer_icon: Custom footer icon URL
         fields: List of (name, value, inline) tuples for fields
+        timestamp: Whether to include timestamp (default: True)
     """
     # Default to a nice purple-blue color for Obsidian theme
     if color is None:
         color = discord.Color.from_rgb(75, 0, 130)  # Indigo/purple
     
     e = discord.Embed(title=title, description=desc, color=color)
-    e.timestamp = now_utc()
+    
+    # Only add timestamp if requested (default True for consistency)
+    if timestamp:
+        e.timestamp = now_utc()
     
     # Set author (member takes priority)
     if author:

@@ -40,9 +40,9 @@ def setup(bot):
         # Sort invasions by completion percentage (ascending - most urgent first)
         invasions_data.sort(key=lambda x: x.get("completion", 0))
         
-        desc = f"**Active Invasions:** {len(invasions_data)}\n\n"
-        
-        for inv in invasions_data[:10]:  # Limit to first 10 invasions
+        # Build fields for invasions (limit to 5 to avoid embed limits)
+        fields = []
+        for inv in invasions_data[:5]:
             node = inv.get("node", "Unknown Location")
             attacker = inv.get("attackingFaction", "Unknown")
             defender = inv.get("defendingFaction", "Unknown")
@@ -58,22 +58,22 @@ def setup(bot):
                 count = attacker_reward.get("countedItems", [])
                 if count:
                     items = [item.get("itemType", "Unknown") for item in count]
-                    attacker_reward_str = ", ".join(items[:3])  # Limit to first 3 items
-                    if len(items) > 3:
-                        attacker_reward_str += f" (+{len(items) - 3} more)"
+                    attacker_reward_str = ", ".join(items[:2])  # Limit to first 2 items
+                    if len(items) > 2:
+                        attacker_reward_str += f" +{len(items) - 2}"
             
             defender_reward_str = "None"
             if defender_reward:
                 count = defender_reward.get("countedItems", [])
                 if count:
                     items = [item.get("itemType", "Unknown") for item in count]
-                    defender_reward_str = ", ".join(items[:3])  # Limit to first 3 items
-                    if len(items) > 3:
-                        defender_reward_str += f" (+{len(items) - 3} more)"
+                    defender_reward_str = ", ".join(items[:2])  # Limit to first 2 items
+                    if len(items) > 2:
+                        defender_reward_str += f" +{len(items) - 2}"
             
             # Calculate progress bar
-            progress = int(completion / 100 * 10)  # 10 character progress bar
-            progress_bar = "█" * progress + "░" * (10 - progress)
+            progress = int(completion / 100 * 8)  # 8 character progress bar
+            progress_bar = "█" * progress + "░" * (8 - progress)
             
             # Format ETA
             eta_str = "Unknown"
@@ -88,20 +88,24 @@ def setup(bot):
                 except Exception:
                     pass
             
-            desc += f"**{node}**\n"
-            desc += f"`{attacker}` vs `{defender}`\n"
-            desc += f"Progress: `{progress_bar}` {completion:.1f}%\n"
-            desc += f"⏱️ ETA: {eta_str}\n"
-            desc += f"**{attacker} Reward:** {attacker_reward_str}\n"
-            desc += f"**{defender} Reward:** {defender_reward_str}\n\n"
+            # Build invasion field value
+            value = f"`{attacker}` ⚔️ `{defender}`\n"
+            value += f"`{progress_bar}` **{completion:.1f}%**\n"
+            value += f"⏱️ {eta_str}\n\n"
+            value += f"**{attacker}:** {attacker_reward_str}\n"
+            value += f"**{defender}:** {defender_reward_str}"
+            
+            fields.append((f"📍 {node}", value, False))
         
-        if len(invasions_data) > 10:
-            desc += f"_...and {len(invasions_data) - 10} more invasions_"
+        desc = f"**{len(invasions_data)} Active Invasion{'s' if len(invasions_data) != 1 else ''}**"
+        if len(invasions_data) > 5:
+            desc += f"\n_Showing 5 of {len(invasions_data)} invasions_"
         
         embed = obsidian_embed(
             "⚔️ Active Invasions",
             desc,
             color=discord.Color.orange(),
+            fields=fields,
             client=interaction.client,
         )
         

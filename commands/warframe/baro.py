@@ -42,41 +42,54 @@ def setup(bot):
                     hours = int(time_remaining.total_seconds() // 3600)
                     minutes = int((time_remaining.total_seconds() % 3600) // 60)
                     time_str = f"{hours}h {minutes}m"
+                    expiry_discord = f"<t:{int(expiry_time.timestamp())}:R>"
                 else:
                     time_str = "Unknown"
+                    expiry_discord = "Unknown"
             except Exception:
                 time_str = "Unknown"
+                expiry_discord = "Unknown"
             
-            desc = f"**Status:** 🟢 Active\n"
-            desc += f"**Location:** {location}\n"
-            desc += f"**Time Remaining:** {time_str}\n\n"
+            # Build inventory list
+            inventory_list = ""
+            total_ducats = 0
+            total_credits = 0
             
             if inventory:
-                desc += "**Inventory:**\n"
-                total_ducats = 0
-                total_credits = 0
-                
-                for item in inventory:
+                for item in inventory[:15]:  # Limit to 15 items to avoid embed limits
                     item_name = item.get("item", "Unknown")
                     ducats = item.get("ducats", 0)
                     credits = item.get("credits", 0)
                     total_ducats += ducats
                     total_credits += credits
-                    desc += f"• **{item_name}** - {ducats} ducats, {credits:,} credits\n"
+                    inventory_list += f"`{item_name}`\n"
+                    inventory_list += f"💎 {ducats} ducats • 💰 {credits:,} credits\n\n"
                 
-                desc += f"\n**Total Cost:** {total_ducats} ducats, {total_credits:,} credits"
+                if len(inventory) > 15:
+                    inventory_list += f"_...and {len(inventory) - 15} more items_"
             else:
-                desc += "Inventory not available yet."
+                inventory_list = "Inventory not available yet."
+            
+            fields = [
+                ("📍 Location", location, True),
+                ("⏰ Time Remaining", f"{time_str}\n{expiry_discord}", True),
+                ("📦 Inventory", inventory_list, False),
+            ]
+            
+            if inventory:
+                fields.append(("💰 Total Cost", f"💎 **{total_ducats} ducats**\n💰 **{total_credits:,} credits**", True))
             
             embed = obsidian_embed(
-                "🛒 Baro Ki'Teer - Active",
-                desc,
+                "🛒 Baro Ki'Teer",
+                "🟢 **Currently Active**",
                 color=discord.Color.green(),
                 thumbnail="https://vignette.wikia.nocookie.net/warframe/images/4/4a/BaroKiTeer.png/revision/latest?cb=20150213150000",
+                fields=fields,
                 client=interaction.client,
             )
         else:
             # Baro is not active
+            fields = []
             if activation:
                 try:
                     activation_time = dateparser.parse(activation, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
@@ -86,26 +99,28 @@ def setup(bot):
                             days = int(time_until.total_seconds() // 86400)
                             hours = int((time_until.total_seconds() % 86400) // 3600)
                             time_str = f"{days}d {hours}h"
+                            arrival_discord = f"<t:{int(activation_time.timestamp())}:R>"
                         else:
                             time_str = "Recently departed"
+                            arrival_discord = "Recently departed"
                     else:
                         time_str = "Unknown"
+                        arrival_discord = "Unknown"
                 except Exception:
                     time_str = "Unknown"
+                    arrival_discord = "Unknown"
                 
-                desc = f"**Status:** 🔴 Not Active\n"
-                desc += f"**Next Arrival:** {time_str}\n"
-                desc += f"**Location:** {location if location != 'Unknown' else 'TBA'}\n\n"
-                desc += "Baro Ki'Teer is not currently visiting. Prepare your ducats!"
-            else:
-                desc = "**Status:** 🔴 Not Active\n\n"
-                desc += "Baro Ki'Teer is not currently visiting."
+                fields = [
+                    ("⏰ Next Arrival", f"{time_str}\n{arrival_discord}", True),
+                    ("📍 Location", location if location != 'Unknown' else 'TBA', True),
+                ]
             
             embed = obsidian_embed(
-                "🛒 Baro Ki'Teer - Inactive",
-                desc,
+                "🛒 Baro Ki'Teer",
+                "🔴 **Not Currently Active**\n\nPrepare your ducats for the next visit!",
                 color=discord.Color.orange(),
                 thumbnail="https://vignette.wikia.nocookie.net/warframe/images/4/4a/BaroKiTeer.png/revision/latest?cb=20150213150000",
+                fields=fields,
                 client=interaction.client,
             )
         

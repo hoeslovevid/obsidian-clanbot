@@ -63,18 +63,23 @@ def setup(bot):
             # Get new XP
             new_xp, new_level, new_total_xp = await get_user_xp(interaction.guild.id, user.id)
             
-            level_message = ""
+            fields = [
+                ("💎 XP Added", f"**+{amount:,}** XP", True),
+                ("⭐ Previous", f"{current_xp:,} XP (Level {current_level})", True),
+                ("⭐ New", f"{new_xp:,} XP (Level {new_level})", True),
+            ]
+            
+            desc = f"Added **{amount:,}** XP to {user.mention}."
             if leveled_up:
-                level_message = f"\n\n🎉 **Level Up!** {user.mention} reached level **{new_level}**!"
+                desc += f"\n\n🎉 **Level Up!** {user.mention} reached level **{new_level}**!"
             
             embed = obsidian_embed(
                 "✅ XP Added",
-                f"Added **{amount:,}** XP to {user.mention}.\n\n"
-                f"**Previous XP:** {current_xp:,} (Level {current_level})\n"
-                f"**New XP:** {new_xp:,} (Level {new_level}){level_message}",
+                desc,
                 color=discord.Color.green(),
                 author=user,
                 thumbnail=user.display_avatar.url if user.display_avatar else None,
+                fields=fields,
                 client=interaction.client,
             )
         else:
@@ -102,18 +107,23 @@ def setup(bot):
             # Get new XP
             new_xp, new_level, new_total_xp = await get_user_xp(interaction.guild.id, user.id)
             
-            level_message = ""
+            fields = [
+                ("💎 XP Removed", f"**-{amount:,}** XP", True),
+                ("⭐ Previous", f"{current_xp:,} XP (Level {current_level})", True),
+                ("⭐ New", f"{new_xp:,} XP (Level {new_level})", True),
+            ]
+            
+            desc = f"Removed **{amount:,}** XP from {user.mention}."
             if new_level < current_level:
-                level_message = f"\n\n⚠️ {user.mention} dropped to level **{new_level}**."
+                desc += f"\n\n⚠️ {user.mention} dropped to level **{new_level}**."
             
             embed = obsidian_embed(
                 "✅ XP Removed",
-                f"Removed **{amount:,}** XP from {user.mention}.\n\n"
-                f"**Previous XP:** {current_xp:,} (Level {current_level})\n"
-                f"**New XP:** {new_xp:,} (Level {new_level}){level_message}",
+                desc,
                 color=discord.Color.orange(),
                 author=user,
                 thumbnail=user.display_avatar.url if user.display_avatar else None,
+                fields=fields,
                 client=interaction.client,
             )
         

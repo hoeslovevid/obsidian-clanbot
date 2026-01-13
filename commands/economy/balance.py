@@ -17,16 +17,22 @@ def setup(bot):
         
         balance = await get_user_balance(interaction.guild.id, interaction.user.id)
         
+        fields = [
+            ("💰 Balance", f"**{balance:,}** coins", True),
+            ("📊 Earning Methods", 
+             f"• `/daily` - {COINS_DAILY_REWARD:,} coins/day\n"
+             f"• Messages - {COINS_PER_MESSAGE} coins ({MESSAGE_COOLDOWN_SECONDS}s cooldown)\n"
+             f"• Voice - {COINS_PER_MINUTE_VOICE} coins/minute", 
+             False)
+        ]
+        
         embed = obsidian_embed(
             "💰 Coin Balance",
-            f"You have **{balance:,}** coins.\n\n"
-            f"Earn coins by:\n"
-            f"• `/daily` - Claim {COINS_DAILY_REWARD:,} coins once per day\n"
-            f"• Sending messages ({COINS_PER_MESSAGE} coins per message, {MESSAGE_COOLDOWN_SECONDS}s cooldown)\n"
-            f"• Being active in voice channels ({COINS_PER_MINUTE_VOICE} coins per minute)",
+            "",
             color=discord.Color.gold(),
             author=interaction.user,
             thumbnail=interaction.user.display_avatar.url if hasattr(interaction.user, 'display_avatar') else interaction.user.avatar.url if interaction.user.avatar else None,
+            fields=fields,
             client=interaction.client,
         )
         

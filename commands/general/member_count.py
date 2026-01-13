@@ -236,18 +236,19 @@ def setup(bot):
         
         # Success message
         channel_type_display = channel_type_value.title()
-        desc = f"Member count channel **{channel_type_display}** has been {'created' if was_created else 'updated'}.\n\n"
-        desc += f"**Channel:** {channel.mention}\n"
-        desc += f"**Current Count:**\n"
-        desc += f"👥 Total Members: {member_count:,}\n"
-        desc += f"👤 Humans: {human_count:,}\n"
-        desc += f"🤖 Bots: {bot_count:,}\n\n"
-        desc += "The channel name will be updated automatically every 5 minutes."
+        fields = [
+            ("📢 Channel", channel.mention, True),
+            ("📊 Type", channel_type_display, True),
+            ("👥 Total Members", f"{member_count:,}", True),
+            ("👤 Humans", f"{human_count:,}", True),
+            ("🤖 Bots", f"{bot_count:,}", True),
+        ]
         
         embed = obsidian_embed(
             "✅ Member Count Channel Ready",
-            desc,
+            f"Member count channel **{channel_type_display}** has been {'created' if was_created else 'updated'}.\n\nThe channel name will be updated automatically every 5 minutes.",
             color=discord.Color.green(),
+            fields=fields,
             client=interaction.client,
         )
         

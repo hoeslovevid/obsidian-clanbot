@@ -111,20 +111,21 @@ def setup(bot):
             
             await db.commit()
         
+        fields = [
+            ("📢 Status", f"**{'Enabled' if is_enabled else 'Disabled'}**", True),
+            ("📢 Channel", f"<#{target_channel_id}>", True),
+        ]
+        
         if is_enabled:
-            status_message = f"**{reward}** invasion notifications are now **enabled**.\n\n" \
-                            f"**Notification Channel:** <#{target_channel_id}>\n\n" \
-                            f"When an invasion appears with this reward, a notification will be sent to this channel."
-            color = discord.Color.green()
+            desc = f"**{reward}** invasion notifications are now **enabled**.\n\nWhen an invasion appears with this reward, a notification will be sent to this channel."
         else:
-            status_message = f"**{reward}** invasion notifications are now **disabled**.\n\n" \
-                            f"Notifications for this reward will no longer be sent."
-            color = discord.Color.orange()
+            desc = f"**{reward}** invasion notifications are now **disabled**.\n\nNotifications for this reward will no longer be sent."
         
         embed = obsidian_embed(
             "✅ Invasion Notifications Updated",
-            status_message,
-            color=color,
+            desc,
+            color=discord.Color.green() if is_enabled else discord.Color.orange(),
+            fields=fields,
             client=interaction.client,
         )
         

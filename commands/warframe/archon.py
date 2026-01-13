@@ -64,27 +64,37 @@ def setup(bot):
         
         shard_type = archon_shards.get(boss, "Unknown Shard")
         
-        desc = f"**Archon:** {boss}\n"
-        desc += f"**Reward:** {shard_type}\n"
-        desc += f"**Faction:** {faction}\n\n"
-        
         # Parse expiry time
+        expiry_time = None
+        time_str = "Unknown"
         try:
             expiry_time = dateparser.parse(expiry, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
             if expiry_time:
                 time_str = format_time_remaining(expiry_time)
-                desc += f"**Time Remaining:** {time_str}\n"
-                desc += f"**Expires:** <t:{int(expiry_time.timestamp())}:R>\n\n"
         except Exception:
             pass
         
-        # Add mission information
+        # Build mission list
+        mission_list = ""
         if missions:
-            desc += "**Missions:**\n"
             for i, mission in enumerate(missions, 1):
                 node = mission.get("node", "Unknown")
                 mission_type = mission.get("type", "Unknown")
-                desc += f"{i}. {node} - {mission_type}\n"
+                mission_list += f"**{i}.** `{node}`\n{mission_type}\n\n"
+        else:
+            mission_list = "No mission data available."
+        
+        # Build fields
+        fields = [
+            ("⚔️ Archon", boss, True),
+            ("💎 Reward", shard_type, True),
+            ("🏛️ Faction", faction, True),
+        ]
+        
+        if expiry_time:
+            fields.append(("⏰ Time Remaining", f"{time_str}\n<t:{int(expiry_time.timestamp())}:R>", True))
+        
+        fields.append(("📍 Missions", mission_list.strip() or "No missions available.", False))
         
         # Determine color based on archon
         color_map = {
@@ -96,8 +106,9 @@ def setup(bot):
         
         embed = obsidian_embed(
             "⚔️ Archon Hunt",
-            desc,
+            "",
             color=color,
+            fields=fields,
             client=interaction.client,
         )
         

@@ -40,13 +40,18 @@ def setup(bot):
                     hours = int(time_until.total_seconds() // 3600)
                     minutes = int((time_until.total_seconds() % 3600) // 60)
                     
+                    fields = [
+                        ("🔥 Current Streak", f"{streak_days} day(s)", True),
+                        ("⏰ Next Claim", f"{hours}h {minutes}m", True),
+                    ]
+                    
                     return await interaction.response.send_message(
                         embed=obsidian_embed(
                             "⏰ Already Claimed",
-                            f"You've already claimed your daily reward today!\n\n"
-                            f"**Current Streak:** {streak_days} day(s)\n"
-                            f"**Next claim available in:** {hours}h {minutes}m",
+                            "You've already claimed your daily reward today!",
                             color=discord.Color.orange(),
+                            fields=fields,
+                            client=interaction.client,
                         ),
                         ephemeral=True,
                     )
@@ -93,12 +98,17 @@ def setup(bot):
             await db.commit()
         
         # Success message
+        fields = [
+            ("💰 Reward", f"**{COINS_DAILY_REWARD:,}** coins", True),
+            ("🔥 Streak", f"{new_streak} day(s)", True),
+        ]
+        
         embed = obsidian_embed(
             "🎁 Daily Reward Claimed!",
-            f"You received **{COINS_DAILY_REWARD:,}** coins!\n\n"
-            f"**Streak:** {new_streak} day(s) in a row\n\n"
-            f"Come back tomorrow for another reward!",
+            "Come back tomorrow for another reward!",
             color=discord.Color.green(),
+            fields=fields,
+            client=interaction.client,
         )
         
         await interaction.response.send_message(embed=embed, ephemeral=True)

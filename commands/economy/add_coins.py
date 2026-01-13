@@ -63,12 +63,17 @@ def setup(bot):
             # Get new balance
             new_balance = await get_user_balance(interaction.guild.id, user.id)
             
+            fields = [
+                ("💰 Coins Added", f"**+{amount:,}** coins", True),
+                ("💵 Previous Balance", f"{current_balance:,} coins", True),
+                ("💵 New Balance", f"{new_balance:,} coins", True),
+            ]
+            
             embed = obsidian_embed(
                 "✅ Coins Added",
-                f"Added **{amount:,}** coins to {user.mention}.\n\n"
-                f"**Previous Balance:** {current_balance:,} coins\n"
-                f"**New Balance:** {new_balance:,} coins",
+                f"Added **{amount:,}** coins to {user.mention}.",
                 color=discord.Color.green(),
+                fields=fields,
                 client=interaction.client,
             )
         else:
@@ -96,12 +101,17 @@ def setup(bot):
             # Get new balance
             new_balance = await get_user_balance(interaction.guild.id, user.id)
             
+            fields = [
+                ("💰 Coins Removed", f"**-{amount:,}** coins", True),
+                ("💵 Previous Balance", f"{current_balance:,} coins", True),
+                ("💵 New Balance", f"{new_balance:,} coins", True),
+            ]
+            
             embed = obsidian_embed(
                 "✅ Coins Removed",
-                f"Removed **{amount:,}** coins from {user.mention}.\n\n"
-                f"**Previous Balance:** {current_balance:,} coins\n"
-                f"**New Balance:** {new_balance:,} coins",
+                f"Removed **{amount:,}** coins from {user.mention}.",
                 color=discord.Color.orange(),
+                fields=fields,
                 client=interaction.client,
             )
         

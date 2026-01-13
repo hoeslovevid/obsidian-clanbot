@@ -51,17 +51,20 @@ def setup(bot):
                     ephemeral=True
                 )
         
-        desc = ""
+        # Build leaderboard entries
+        leaderboard_text = ""
         for i, (user_id, balance, total_earned) in enumerate(rows, 1):
             user = interaction.guild.get_member(user_id)
             username = user.display_name if user else f"User {user_id}"
-            medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
-            desc += f"{medal} **{username}** - {balance:,} coins (Total earned: {total_earned:,})\n"
+            medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"`{i}.`"
+            leaderboard_text += f"{medal} **{username}**\n"
+            leaderboard_text += f"💰 {balance:,} coins • 📊 {total_earned:,} total\n\n"
         
         embed = obsidian_embed(
             "🏆 Coin Leaderboard",
-            desc,
+            f"Top {len(rows)} coin earners",
             color=discord.Color.gold(),
+            fields=[("Rankings", leaderboard_text.strip(), False)],
             client=interaction.client,
         )
         

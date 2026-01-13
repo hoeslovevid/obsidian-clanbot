@@ -50,12 +50,18 @@ def setup(bot):
             await db.commit()
         
         status = "enabled" if is_enabled else "disabled"
+        fields = [
+            ("📢 Status", f"**{status.title()}**", True),
+            ("📢 Channel", target_channel.mention, True),
+        ]
+        
+        desc = "When Baro arrives, a notification will be sent with his inventory and location." if is_enabled else "Notifications will no longer be sent."
+        
         embed = obsidian_embed(
             "✅ Baro Notifications Updated",
-            f"Baro Ki'Teer arrival notifications are now **{status}**.\n\n"
-            f"**Notification Channel:** {target_channel.mention}\n\n"
-            f"When Baro arrives, a notification will be sent to this channel with his inventory and location.",
+            desc,
             color=discord.Color.green() if is_enabled else discord.Color.orange(),
+            fields=fields,
             client=interaction.client,
         )
         

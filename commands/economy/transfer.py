@@ -32,10 +32,23 @@ def setup(bot):
         success = await transfer_coins(interaction.guild.id, interaction.user.id, user.id, amount)
         
         if success:
+            # Get new balances
+            sender_balance = await get_user_balance(interaction.guild.id, interaction.user.id)
+            receiver_balance = await get_user_balance(interaction.guild.id, user.id)
+            
+            fields = [
+                ("💰 Amount", f"**{amount:,}** coins", True),
+                ("👤 Recipient", user.mention, True),
+                ("💵 Your Balance", f"{sender_balance:,} coins", True),
+                ("💵 Their Balance", f"{receiver_balance:,} coins", True),
+            ]
+            
             embed = obsidian_embed(
                 "✅ Transfer Complete",
                 f"You transferred **{amount:,}** coins to {user.mention}.",
                 color=discord.Color.green(),
+                fields=fields,
+                client=interaction.client,
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
         else:

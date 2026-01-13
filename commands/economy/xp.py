@@ -29,23 +29,24 @@ def setup(bot):
         progress_percent = int((progress / progress_needed * 100)) if progress_needed > 0 else 100
         
         # Create progress bar
-        bar_length = 20
+        bar_length = 15
         filled = int(bar_length * progress / progress_needed) if progress_needed > 0 else bar_length
         progress_bar = "█" * filled + "░" * (bar_length - filled)
         
-        desc = f"**Level:** {level}\n"
-        desc += f"**XP:** {xp:,} / {xp_for_next:,}\n"
-        desc += f"**Total XP Earned:** {total_xp:,}\n\n"
-        desc += f"**Progress to Level {level + 1}:**\n"
-        desc += f"`{progress_bar}` {progress_percent}%\n"
-        desc += f"({xp_needed:,} XP needed)"
+        fields = [
+            ("⭐ Level", f"**{level}**", True),
+            ("💎 Current XP", f"{xp:,} / {xp_for_next:,}", True),
+            ("📊 Total XP", f"{total_xp:,}", True),
+            ("📈 Progress to Level {level + 1}", f"`{progress_bar}` **{progress_percent}%**\n{xp_needed:,} XP needed", False)
+        ]
         
         embed = obsidian_embed(
             f"⭐ {target_user.display_name}'s XP",
-            desc,
+            "",
             color=discord.Color.blue(),
             author=target_user,
             thumbnail=target_user.display_avatar.url if hasattr(target_user, 'display_avatar') else target_user.avatar.url if target_user.avatar else None,
+            fields=fields,
             client=interaction.client,
         )
         

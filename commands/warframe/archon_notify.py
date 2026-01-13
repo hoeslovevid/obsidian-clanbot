@@ -64,12 +64,16 @@ def setup(bot):
                     current_channel = interaction.guild.get_channel(current_channel_id) if current_channel_id else None
                     channel_mention = current_channel.mention if current_channel else f"<#{current_channel_id}>" if current_channel_id else "Not set"
                     
+                    fields = [
+                        ("📢 Status", "**Enabled**", True),
+                        ("📢 Channel", channel_mention, True),
+                    ]
+                    
                     embed = obsidian_embed(
                         "ℹ️ Already Enabled",
-                        f"Archon Hunt notifications are already enabled.\n\n"
-                        f"**Current Notification Channel:** {channel_mention}\n\n"
-                        f"To change the channel, disable and re-enable with a new channel.",
+                        "Archon Hunt notifications are already enabled.\n\nTo change the channel, disable and re-enable with a new channel.",
                         color=discord.Color.blue(),
+                        fields=fields,
                         client=interaction.client,
                     )
                     return await interaction.response.send_message(embed=embed, ephemeral=False)
@@ -111,18 +115,21 @@ def setup(bot):
         
         status = "enabled" if is_enabled else "disabled"
         
+        fields = [
+            ("📢 Status", f"**{status.title()}**", True),
+            ("📢 Channel", target_channel.mention, True),
+        ]
+        
         if is_enabled:
-            desc = f"Archon Hunt notifications are now **{status}**.\n\n"
-            desc += f"**Notification Channel:** {target_channel.mention}\n\n"
-            desc += f"When a new Archon Hunt becomes available, a notification will be sent to this channel."
+            desc = f"Archon Hunt notifications are now **{status}**.\n\nWhen a new Archon Hunt becomes available, a notification will be sent to this channel."
         else:
-            desc = f"Archon Hunt notifications are now **{status}**.\n\n"
-            desc += "Notifications for Archon Hunts will no longer be sent."
+            desc = f"Archon Hunt notifications are now **{status}**.\n\nNotifications for Archon Hunts will no longer be sent."
         
         embed = obsidian_embed(
             "✅ Archon Hunt Notifications Updated",
             desc,
             color=discord.Color.green() if is_enabled else discord.Color.orange(),
+            fields=fields,
             client=interaction.client,
         )
         

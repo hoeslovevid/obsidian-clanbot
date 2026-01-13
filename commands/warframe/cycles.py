@@ -49,7 +49,7 @@ def setup(bot):
                 ephemeral=True
             )
         
-        desc = ""
+        fields = []
         
         # Cetus Cycle (Plains of Eidolon)
         cetus = cycles_data.get('cetus')
@@ -62,13 +62,13 @@ def setup(bot):
                 expiry_time = dateparser.parse(expiry, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
                 if expiry_time:
                     time_str = format_time_remaining(expiry_time)
-                    desc += f"**Cetus (Plains of Eidolon):** {state}\n"
-                    desc += f"Time remaining: {time_str}\n"
-                    desc += f"Changes: <t:{int(expiry_time.timestamp())}:R>\n\n"
+                    value = f"{state}\n⏱️ {time_str}\n<t:{int(expiry_time.timestamp())}:R>"
                 else:
-                    desc += f"**Cetus (Plains of Eidolon):** {state}\n\n"
+                    value = state
             except Exception:
-                desc += f"**Cetus (Plains of Eidolon):** {state}\n\n"
+                value = state
+            
+            fields.append(("🌅 Cetus", value, True))
         
         # Fortuna Cycle (Orb Vallis)
         vallis = cycles_data.get('vallis')
@@ -81,13 +81,13 @@ def setup(bot):
                 expiry_time = dateparser.parse(expiry, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
                 if expiry_time:
                     time_str = format_time_remaining(expiry_time)
-                    desc += f"**Fortuna (Orb Vallis):** {state}\n"
-                    desc += f"Time remaining: {time_str}\n"
-                    desc += f"Changes: <t:{int(expiry_time.timestamp())}:R>\n\n"
+                    value = f"{state}\n⏱️ {time_str}\n<t:{int(expiry_time.timestamp())}:R>"
                 else:
-                    desc += f"**Fortuna (Orb Vallis):** {state}\n\n"
+                    value = state
             except Exception:
-                desc += f"**Fortuna (Orb Vallis):** {state}\n\n"
+                value = state
+            
+            fields.append(("❄️ Fortuna", value, True))
         
         # Deimos Cycle (Cambion Drift)
         cambion = cycles_data.get('cambion')
@@ -101,21 +101,24 @@ def setup(bot):
                 expiry_time = dateparser.parse(expiry, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
                 if expiry_time:
                     time_str = format_time_remaining(expiry_time)
-                    desc += f"**Deimos (Cambion Drift):** {state_display}\n"
-                    desc += f"Time remaining: {time_str}\n"
-                    desc += f"Changes: <t:{int(expiry_time.timestamp())}:R>\n"
+                    value = f"{state_display}\n⏱️ {time_str}\n<t:{int(expiry_time.timestamp())}:R>"
                 else:
-                    desc += f"**Deimos (Cambion Drift):** {state_display}\n"
+                    value = state_display
             except Exception:
-                desc += f"**Deimos (Cambion Drift):** {state_display}\n"
+                value = state_display
+            
+            fields.append(("🦠 Deimos", value, True))
         
-        if not desc:
+        if not fields:
             desc = "No cycle data available."
+        else:
+            desc = None
         
         embed = obsidian_embed(
             "🌍 Open World Cycles",
-            desc,
+            desc or "",
             color=discord.Color.blue(),
+            fields=fields if fields else None,
             client=interaction.client,
         )
         

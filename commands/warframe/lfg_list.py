@@ -45,7 +45,8 @@ def setup(bot):
                 ephemeral=True
             )
         
-        desc = ""
+        # Build fields for each LFG post
+        fields = []
         for lfg_id, creator_id, mission_type_val, max_players, description, expires_at, created_at in posts:
             # Get RSVP count
             async with aiosqlite.connect(DB_PATH) as db:
@@ -70,16 +71,20 @@ def setup(bot):
             except Exception:
                 time_str = "Unknown"
             
-            desc += f"**{mission_type_val}** - {rsvp_count}/{max_players} players\n"
-            desc += f"Created by: {creator_name} • {time_str}\n"
+            value = f"👥 {rsvp_count}/{max_players} players\n"
+            value += f"👤 {creator_name}\n"
+            value += f"⏰ {time_str}\n"
             if description:
-                desc += f"_{description[:50]}{'...' if len(description) > 50 else ''}_\n"
-            desc += f"ID: {lfg_id}\n\n"
+                value += f"📝 _{description[:60]}{'...' if len(description) > 60 else ''}_\n"
+            value += f"`ID: {lfg_id}`"
+            
+            fields.append((f"🎯 {mission_type_val}", value, True))
         
         embed = obsidian_embed(
-            f"🔍 Active LFG Posts ({len(posts)})",
-            desc,
+            f"🔍 Active LFG Posts",
+            f"**{len(posts)}** active group{'s' if len(posts) != 1 else ''} in this channel",
             color=discord.Color.blue(),
+            fields=fields,
             client=interaction.client,
         )
         

@@ -34,17 +34,20 @@ def setup(bot):
         if not rows:
             return await interaction.response.send_message("No users have earned XP yet!", ephemeral=True)
         
-        desc = ""
+        # Build leaderboard entries
+        leaderboard_text = ""
         for i, (user_id, xp, level, total_xp) in enumerate(rows, 1):
             user = interaction.guild.get_member(user_id)
             username = user.display_name if user else f"User {user_id}"
-            medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
-            desc += f"{medal} **{username}** - Level {level} ({xp:,} XP)\n"
+            medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"`{i}.`"
+            leaderboard_text += f"{medal} **{username}**\n"
+            leaderboard_text += f"⭐ Level {level} • 💎 {xp:,} XP • 📊 {total_xp:,} total\n\n"
         
         embed = obsidian_embed(
             "⭐ XP Leaderboard",
-            desc,
+            f"Top {len(rows)} XP earners",
             color=discord.Color.blue(),
+            fields=[("Rankings", leaderboard_text.strip(), False)],
             client=interaction.client,
         )
         

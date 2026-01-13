@@ -94,12 +94,16 @@ def setup(bot):
                     current_channel = interaction.guild.get_channel(current_channel_id) if current_channel_id else None
                     channel_mention = current_channel.mention if current_channel else f"<#{current_channel_id}>" if current_channel_id else "Not set"
                     
+                    fields = [
+                        ("📢 Status", "**Enabled**", True),
+                        ("📢 Channel", channel_mention, True),
+                    ]
+                    
                     embed = obsidian_embed(
                         "ℹ️ Already Enabled",
-                        f"**{cycle_display}** cycle notifications are already enabled.\n\n"
-                        f"**Current Notification Channel:** {channel_mention}\n\n"
-                        f"To change the channel, disable and re-enable with a new channel.",
+                        f"**{cycle_display}** cycle notifications are already enabled.\n\nTo change the channel, disable and re-enable with a new channel.",
                         color=discord.Color.blue(),
+                        fields=fields,
                         client=interaction.client,
                     )
                     return await interaction.response.send_message(embed=embed, ephemeral=False)
@@ -145,18 +149,22 @@ def setup(bot):
         
         status = "enabled" if is_enabled else "disabled"
         
+        fields = [
+            ("📢 Status", f"**{status.title()}**", True),
+            ("📢 Channel", target_channel.mention, True),
+        ]
+        
+        desc = f"**{cycle_display}** cycle notifications are now **{status}**."
         if is_enabled:
-            desc = f"**{cycle_display}** cycle notifications are now **{status}**.\n\n"
-            desc += f"**Notification Channel:** {target_channel.mention}\n\n"
-            desc += f"When the cycle changes, a notification will be sent to this channel."
+            desc += "\n\nWhen the cycle changes, a notification will be sent to this channel."
         else:
-            desc = f"**{cycle_display}** cycle notifications are now **{status}**.\n\n"
-            desc += "Notifications for this cycle will no longer be sent."
+            desc += "\n\nNotifications for this cycle will no longer be sent."
         
         embed = obsidian_embed(
             "✅ Cycle Notifications Updated",
             desc,
             color=discord.Color.green() if is_enabled else discord.Color.orange(),
+            fields=fields,
             client=interaction.client,
         )
         
