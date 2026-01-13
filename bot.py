@@ -6,12 +6,12 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any, Tuple
 
-import aiosqlite
-import dateparser
-import discord
-from discord import app_commands
-from discord.ext import commands, tasks
-from dotenv import load_dotenv
+import aiosqlite  # type: ignore
+import dateparser  # type: ignore
+import discord  # type: ignore
+from discord import app_commands  # type: ignore
+from discord.ext import commands, tasks  # type: ignore
+from dotenv import load_dotenv  # type: ignore
 
 # Configure logging
 logging.basicConfig(
@@ -808,7 +808,7 @@ async def ensure_core_channels(guild: discord.Guild):
 
 
 # --------------------- Voice panel views ---------------------
-class RenameVCModal(discord.ui.Modal, title="Recalibrate Comms Node"):
+class RenameVCModal(discord.ui.Modal, title="Recalibrate Comms Node"):  # type: ignore
     new_name = discord.ui.TextInput(label="New designation", max_length=80)
 
     def __init__(self, vc_id: int):
@@ -823,7 +823,7 @@ class RenameVCModal(discord.ui.Modal, title="Recalibrate Comms Node"):
         await interaction.response.send_message("Renamed.", ephemeral=True)
 
 
-class InviteModal(discord.ui.Modal, title="Grant Access"):
+class InviteModal(discord.ui.Modal, title="Grant Access"):  # type: ignore
     target = discord.ui.TextInput(label="User (@mention or ID)", max_length=60)
 
     def __init__(self, vc_id: int):
@@ -852,7 +852,7 @@ class InviteModal(discord.ui.Modal, title="Grant Access"):
         await interaction.response.send_message(f"Invited {member.mention}.", ephemeral=True)
 
 
-class RemoveAccessModal(discord.ui.Modal, title="Revoke Access"):
+class RemoveAccessModal(discord.ui.Modal, title="Revoke Access"):  # type: ignore
     target = discord.ui.TextInput(label="User (@mention or ID)", max_length=60)
 
     def __init__(self, vc_id: int):
@@ -879,7 +879,7 @@ class RemoveAccessModal(discord.ui.Modal, title="Revoke Access"):
         await interaction.response.send_message(f"Access removed for {member.mention}.", ephemeral=True)
 
 
-class TransferOwnerModal(discord.ui.Modal, title="Pass Command"):
+class TransferOwnerModal(discord.ui.Modal, title="Pass Command"):  # type: ignore
     target = discord.ui.TextInput(label="New owner (@mention or ID)", max_length=60)
 
     def __init__(self, vc_id: int):
@@ -1079,9 +1079,12 @@ async def delete_vc_panel_message(guild: discord.Guild, vc_id: int):
         ch_id = await resolve_channel_id(guild, "voice_panel_channel_id", VOICE_PANEL_CHANNEL_ID, VOICE_PANEL_CHANNEL_NAME)
         ch = guild.get_channel(ch_id) if ch_id else None
         if isinstance(ch, discord.TextChannel):
+            # Type narrowing: ch is now guaranteed to be discord.TextChannel
+            text_ch: discord.TextChannel = ch  # type: ignore
             try:
-                msg = await ch.fetch_message(msg_id)
-                await msg.delete()
+                msg = await text_ch.fetch_message(msg_id)
+                if msg:
+                    await msg.delete()
             except Exception:
                 pass
 
@@ -1102,7 +1105,7 @@ async def delete_temp_vc_and_panel(guild: discord.Guild, vc_id: int, *, reason: 
 
 
 # --------------------- Complaints ---------------------
-class ComplaintModal(discord.ui.Modal, title="Obsidian Docket Submission"):
+class ComplaintModal(discord.ui.Modal, title="Obsidian Docket Submission"):  # type: ignore
     def __init__(self):
         super().__init__(timeout=300, custom_id="complaint_modal")
         
@@ -1280,7 +1283,7 @@ class ComplaintPanel(discord.ui.View):
         )
 
 
-class RequestInfoModal(discord.ui.Modal, title="Request Evidence"):
+class RequestInfoModal(discord.ui.Modal, title="Request Evidence"):  # type: ignore
     def __init__(self, case_id: str):
         super().__init__(timeout=300, custom_id=f"request_info_{case_id}")
         self.case_id = case_id
@@ -1810,6 +1813,13 @@ async def on_interaction(interaction: discord.Interaction):
                         ephemeral=True,
                     )
 
+                # Type guard: ensure case_id is not None
+                if not case_id:
+                    return await interaction.followup.send("Error: Failed to generate case ID.", ephemeral=True)
+
+                # Type narrowing: ch is now guaranteed to be discord.TextChannel
+                assert isinstance(ch, discord.TextChannel)
+
                 mod_role = get_mod_role(guild)
                 mention = mod_role.mention if mod_role else f"@{MOD_ROLE_NAME}"
 
@@ -1821,33 +1831,34 @@ async def on_interaction(interaction: discord.Interaction):
                 embed.set_footer(text=f"Filed by: {interaction.user} • {interaction.user.id}")
 
                 view = ComplaintModView(case_id)
-                msg = await ch.send(content=mention, embed=embed, view=view)
+                msg = await ch.send(content=mention, embed=embed, view=view)  # type: ignore
                 bot.add_view(view)
 
                 # Thread for staff discussion (tries private first; falls back)
-                thread_id = None
+                thread_id: Optional[int] = None  # type: ignore
                 thread_name = format_thread_name(case_id, interaction.user, category_val, created_iso)
+                staff_thread: Optional[discord.Thread] = None  # type: ignore
                 try:
-                    thread = await ch.create_thread(
+                    staff_thread = await ch.create_thread(  # type: ignore
                         name=thread_name,
                         type=discord.ChannelType.private_thread,
                         invitable=False,
                         reason="Private staff thread for complaint",
                     )
-                    thread_id = thread.id
-                    if mod_role:
+                    thread_id = staff_thread.id if staff_thread else None
+                    if mod_role and staff_thread:
                         try:
-                            await thread.add_user(interaction.user)  # Might fail; ignore
+                            await staff_thread.add_user(interaction.user)  # Might fail; ignore
                         except Exception:
                             pass
                 except Exception:
                     try:
-                        thread = await msg.create_thread(name=thread_name, auto_archive_duration=1440)
-                        thread_id = thread.id
+                        staff_thread = await msg.create_thread(name=thread_name, auto_archive_duration=1440)
+                        thread_id = staff_thread.id if staff_thread else None
                     except Exception:
-                        thread = None
+                        staff_thread = None
 
-                if thread_id:
+                if thread_id and staff_thread:
                     async with aiosqlite.connect(DB_PATH) as db:
                         await db.execute(
                             "UPDATE complaints SET staff_thread_id=? WHERE guild_id=? AND case_id=?",
@@ -1855,7 +1866,7 @@ async def on_interaction(interaction: discord.Interaction):
                         )
                         await db.commit()
                     try:
-                        await thread.send(embed=obsidian_embed("Staff Thread", "Use this thread for internal notes and resolution steps."))
+                        await staff_thread.send(embed=obsidian_embed("Staff Thread", "Use this thread for internal notes and resolution steps."))
                     except Exception:
                         pass
 
@@ -2001,6 +2012,13 @@ async def on_interaction(interaction: discord.Interaction):
                             ephemeral=True,
                         )
 
+                    # Type guard: ensure case_id is not None
+                    if not case_id:
+                        return await interaction.followup.send("Error: Failed to generate case ID.", ephemeral=True)
+
+                    # Type narrowing: ch is now guaranteed to be discord.TextChannel
+                    assert isinstance(ch, discord.TextChannel)
+
                     mod_role = get_mod_role(guild)
                     mention = mod_role.mention if mod_role else f"@{MOD_ROLE_NAME}"
 
@@ -2012,33 +2030,34 @@ async def on_interaction(interaction: discord.Interaction):
                     embed.set_footer(text=f"Filed by: {interaction.user} • {interaction.user.id}")
 
                     view = ComplaintModView(case_id)
-                    msg = await ch.send(content=mention, embed=embed, view=view)
+                    msg = await ch.send(content=mention, embed=embed, view=view)  # type: ignore
                     bot.add_view(view)
 
                     # Create staff thread
-                    thread_id = None
+                    thread_id: Optional[int] = None  # type: ignore
                     thread_name = format_thread_name(case_id, interaction.user, category_val, created_iso)
+                    staff_thread: Optional[discord.Thread] = None  # type: ignore
                     try:
-                        thread = await ch.create_thread(
+                        staff_thread = await ch.create_thread(  # type: ignore
                             name=thread_name,
                             type=discord.ChannelType.private_thread,
                             invitable=False,
                             reason="Private staff thread for complaint",
                         )
-                        thread_id = thread.id
-                        if mod_role:
+                        thread_id = staff_thread.id if staff_thread else None
+                        if mod_role and staff_thread:
                             try:
-                                await thread.add_user(interaction.user)
+                                await staff_thread.add_user(interaction.user)
                             except Exception:
                                 pass
                     except Exception:
                         try:
-                            thread = await msg.create_thread(name=thread_name, auto_archive_duration=1440)
-                            thread_id = thread.id
+                            staff_thread = await msg.create_thread(name=thread_name, auto_archive_duration=1440)
+                            thread_id = staff_thread.id if staff_thread else None
                         except Exception:
-                            thread = None
+                            staff_thread = None
 
-                    if thread_id:
+                    if thread_id and staff_thread:
                         async with aiosqlite.connect(DB_PATH) as db:
                             await db.execute(
                                 "UPDATE complaints SET staff_thread_id=? WHERE guild_id=? AND case_id=?",
@@ -2046,8 +2065,7 @@ async def on_interaction(interaction: discord.Interaction):
                             )
                             await db.commit()
                         try:
-                            if thread:
-                                await thread.send(embed=obsidian_embed("Staff Thread", "Use this thread for internal notes and resolution steps."))
+                            await staff_thread.send(embed=obsidian_embed("Staff Thread", "Use this thread for internal notes and resolution steps."))
                         except Exception:
                             pass
 
@@ -2436,6 +2454,8 @@ async def event_reminder_loop():
         ch = guild.get_channel(events_id) if events_id else None
         if not isinstance(ch, discord.TextChannel):
             continue
+        # Type narrowing: ch is now guaranteed to be discord.TextChannel
+        assert isinstance(ch, discord.TextChannel)
 
         now_ts = int(now_utc().timestamp())
         soon_ts = int((now_utc() + timedelta(minutes=EVENT_REMINDER_MINUTES_BEFORE)).timestamp())
@@ -2455,15 +2475,16 @@ async def event_reminder_loop():
                 if role:
                     mention = role.mention
 
-            await ch.send(
-                content=mention if mention else None,
-                embed=obsidian_embed(
-                    "⏳ Operation Reminder",
-                    f"**{title}** begins in ~{EVENT_REMINDER_MINUTES_BEFORE} minutes.\n"
-                    f"**Time:** <t:{int(start_ts)}:F>  _( <t:{int(start_ts)}:R> )_",
-                    color=discord.Color.orange(),
-                ),
-            )
+            if ch:
+                await ch.send(
+                    content=mention if mention else None,
+                    embed=obsidian_embed(
+                        "⏳ Operation Reminder",
+                        f"**{title}** begins in ~{EVENT_REMINDER_MINUTES_BEFORE} minutes.\n"
+                        f"**Time:** <t:{int(start_ts)}:F>  _( <t:{int(start_ts)}:R> )_",
+                        color=discord.Color.orange(),
+                    ),
+                )
 
             async with aiosqlite.connect(DB_PATH) as db:
                 await db.execute(
