@@ -2975,6 +2975,134 @@ async def before_lfg_expire_loop():
     await bot.wait_until_ready()
 
 
+@tasks.loop(minutes=5)  # Check every 5 minutes for cycle changes
+async def cycle_check_loop():
+    """Check for cycle changes and send notifications."""
+    try:
+        from datetime import datetime, timezone
+        cycles_data = await get_all_cycles()
+        
+        if not cycles_data:
+            return
+        
+        # Check each cycle type
+        for cycle_type, data in cycles_data.items():
+            if not data:
+                continue
+            
+            expiry = data.get('expiry', '')
+            if not expiry:
+                continue
+            
+            try:
+                expiry_time = dateparser.parse(expiry, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
+                if not expiry_time:
+                    continue
+                
+                now = datetime.now(timezone.utc)
+                time_until_change = expiry_time - now
+                
+                # Only notify if cycle is about to change (within 2 minutes)
+                if 0 <= time_until_change.total_seconds() <= 120:
+                    # Check if we've already notified for this cycle change
+                    cycle_state = None
+                    cycle_display = None
+                    
+                    if cycle_type == 'cetus':
+                        is_day = data.get('isDay', False)
+                        cycle_state = 'day' if is_day else 'night'
+                        cycle_display = "☀️ Day" if is_day else "🌙 Night"
+                    elif cycle_type == 'vallis':
+                        is_warm = data.get('isWarm', False)
+                        cycle_state = 'warm' if is_warm else 'cold'
+                        cycle_display = "🔥 Warm" if is_warm else "❄️ Cold"
+                    elif cycle_type == 'cambion':
+                        state = data.get('state', '').lower()
+                        cycle_state = state
+                        cycle_display = "🔴 Fass" if state == 'fass' else "🟢 Vome" if state == 'vome' else state.title()
+                    
+                    if not cycle_state:
+                        continue
+                    
+                    # Map cycle types to database columns and display names
+                    column_map = {
+                        'cetus': ('cetus_enabled', 'Cetus (Plains of Eidolon)'),
+                        'vallis': ('fortuna_enabled', 'Fortuna (Orb Vallis)'),
+                        'cambion': ('deimos_enabled', 'Deimos (Cambion Drift)'),
+                    }
+                    
+                    column, display_name = column_map.get(cycle_type, (None, None))
+                    if not column:
+                        continue
+                    
+                    # Send notifications to all guilds that have it enabled
+                    for guild in bot.guilds:
+                        async with aiosqlite.connect(DB_PATH) as db:
+                            cur = await db.execute(
+                                f"SELECT channel_id, {column} FROM cycle_notification_settings WHERE guild_id=?",
+                                (guild.id,)
+                            )
+                            setting = await cur.fetchone()
+                        
+                        if not setting or not setting[1]:  # Not enabled
+                            continue
+                        
+                        channel_id = setting[0]
+                        if not channel_id:
+                            continue
+                        
+                        ch = guild.get_channel(channel_id)
+                        if not isinstance(ch, discord.TextChannel):
+                            continue
+                        
+                        # Check if we've already notified for this cycle change
+                        async with aiosqlite.connect(DB_PATH) as db:
+                            cur = await db.execute("""
+                                SELECT 1 FROM cycle_notifications_sent
+                                WHERE guild_id=? AND cycle_type=? AND cycle_state=? AND notified_at > datetime('now', '-5 minutes')
+                            """, (guild.id, cycle_type, cycle_state))
+                            already_notified = await cur.fetchone()
+                        
+                        if already_notified:
+                            continue
+                        
+                        # Send notification
+                        desc = f"**{display_name}** cycle is changing!\n\n"
+                        desc += f"**New State:** {cycle_display}\n"
+                        desc += f"**Time:** <t:{int(expiry_time.timestamp())}:F>"
+                        
+                        embed = obsidian_embed(
+                            f"🌍 Cycle Change: {display_name}",
+                            desc,
+                            color=discord.Color.blue(),
+                            client=bot,
+                        )
+                        
+                        try:
+                            await ch.send(embed=embed)
+                            
+                            # Record notification
+                            async with aiosqlite.connect(DB_PATH) as db:
+                                await db.execute("""
+                                    INSERT INTO cycle_notifications_sent (guild_id, cycle_type, cycle_state, notified_at)
+                                    VALUES (?, ?, ?, ?)
+                                """, (guild.id, cycle_type, cycle_state, datetime.now(timezone.utc).isoformat()))
+                                await db.commit()
+                        except Exception as e:
+                            logger.error(f"Error sending cycle notification to {guild.id}: {e}")
+                            continue
+            except Exception as e:
+                logger.error(f"Error processing {cycle_type} cycle: {e}")
+                continue
+    except Exception as e:
+        logger.error(f"Error in cycle_check_loop: {e}", exc_info=True)
+
+
+@cycle_check_loop.before_loop
+async def before_cycle_check_loop():
+    await bot.wait_until_ready()
+
+
 # --------------------- Economy Commands ---------------------
 # Economy commands are now loaded from commands/economy/ folder via load_all_commands()
 
