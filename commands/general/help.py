@@ -58,6 +58,15 @@ def setup(bot):
         desc += "• `/transfer user:<@user> amount:<number>` - Transfer coins to another user\n"
         desc += "  └ Example: `/transfer user:@friend amount:100`\n\n"
         
+        desc += "**💡 Suggestion Commands**\n"
+        desc += "• `/suggest` - Submit a suggestion for the bot (new commands, features, improvements, etc.)\n"
+        desc += "  └ Usage: `/suggest suggestion:<your suggestion>`\n"
+        desc += "  └ Example: `/suggest suggestion:Add a command to check daily login rewards`\n"
+        if is_user_mod:
+            desc += "• `/suggestions` - View and manage suggestions (moderators only)\n"
+            desc += "  └ Usage: `/suggestions [status:<all/pending/approved/rejected/implemented>] [limit:<number>]`\n"
+        desc += "\n"
+        
         desc += "**💬 Other Features**\n"
         desc += "• **Join-to-Create Voice Channels** - Join the trigger channel in Temp VCs to create your own squad channel\n"
         desc += "• **Obsidian Docket** - Use the button panel to file complaints (mods will review)\n"
