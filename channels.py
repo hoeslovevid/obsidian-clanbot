@@ -3,7 +3,7 @@ Channel resolution and management functions.
 This module handles channel finding, creation, and resolution logic.
 """
 import logging
-import discord
+import discord  # type: ignore
 from typing import Optional
 import aiosqlite  # type: ignore
 
