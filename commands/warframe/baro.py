@@ -39,9 +39,17 @@ def setup(bot):
                 expiry_time = dateparser.parse(expiry, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
                 if expiry_time:
                     time_remaining = expiry_time - datetime.now(timezone.utc)
-                    hours = int(time_remaining.total_seconds() // 3600)
-                    minutes = int((time_remaining.total_seconds() % 3600) // 60)
-                    time_str = f"{hours}h {minutes}m"
+                    total_seconds = int(time_remaining.total_seconds())
+                    days = total_seconds // 86400
+                    hours = (total_seconds % 86400) // 3600
+                    minutes = (total_seconds % 3600) // 60
+                    
+                    # Format with days if applicable
+                    if days > 0:
+                        time_str = f"{days}d {hours}h {minutes}m"
+                    else:
+                        time_str = f"{hours}h {minutes}m"
+                    
                     expiry_discord = f"<t:{int(expiry_time.timestamp())}:R>"
                 else:
                     time_str = "Unknown"
