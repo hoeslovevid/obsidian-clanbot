@@ -120,6 +120,12 @@ def setup(bot):
                 description_parts.append(f"✅ **Added:** {', '.join(sorted(added_commands))}")
             if removed_commands:
                 description_parts.append(f"❌ **Removed:** {', '.join(sorted(removed_commands))}")
+        elif current_commands:
+            # No changes detected, but show current commands
+            if description_parts:
+                description_parts.append(f"\n**Current commands:** {', '.join(sorted(current_commands))}")
+            else:
+                description_parts.append(f"**Current commands:** {', '.join(sorted(current_commands))}")
         
         if not description_parts:
             description_parts.append(f"Bot has been updated to version {current_version}.")

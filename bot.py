@@ -2022,18 +2022,31 @@ async def detect_and_update_version(bot) -> Tuple[str, list]:
             if current_commands:
                 changes.append(f"**Commands:** {', '.join(sorted(current_commands))}")
             logger.info(f"[version] First run detected, will post initial version {new_version}")
+            # Store current commands as previous_commands for next comparison
+            current_commands_str = ",".join(sorted(current_commands)) if current_commands else ""
+            await db.execute("""
+                INSERT OR REPLACE INTO bot_version_tracking (id, current_version, feature_hash, last_updated, previous_commands)
+                VALUES (1, ?, ?, ?, ?)
+            """, (new_version, current_hash, datetime.now(timezone.utc).isoformat(), current_commands_str))
+            await db.commit()
+            logger.info(f"[version] Version set to {new_version} (from N/A)")
+            return new_version, changes
         else:
             stored_version = row[0]
             stored_hash = row[1] if len(row) > 1 else ""
             previous_commands_str = row[2] if len(row) > 2 and row[2] else None
             
-            # Get previous commands from stored data
+            # Get previous commands from stored data (these are the commands from the LAST version)
             previous_commands = set()
             if previous_commands_str:
                 try:
                     previous_commands = set(previous_commands_str.split(",")) if previous_commands_str else set()
-                except Exception:
+                    logger.info(f"[version] Previous commands loaded: {len(previous_commands)} commands")
+                except Exception as e:
+                    logger.warning(f"[version] Error parsing previous commands: {e}")
                     previous_commands = set()
+            else:
+                logger.info(f"[version] No previous commands stored (first change detection)")
             
             # Check if BOT_VERSION env var has changed (manual version update)
             if stored_version != BOT_VERSION:
