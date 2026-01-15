@@ -1978,18 +1978,24 @@ def calculate_feature_hash(bot) -> str:
     # Also include hash of key bot files to detect code changes
     # This ensures version updates even when code changes without command changes
     file_hashes = []
-    key_files = ["bot.py", "database.py", "warframe_api.py", "tasks.py"]
+    key_files = ["bot.py", "database.py"]
+    
+    # Get the directory where bot.py is located
+    bot_dir = os.path.dirname(os.path.abspath(__file__))
     
     for filename in key_files:
-        filepath = os.path.join(os.path.dirname(__file__), filename) if os.path.dirname(__file__) else filename
+        filepath = os.path.join(bot_dir, filename)
         if os.path.exists(filepath):
             try:
                 with open(filepath, 'rb') as f:
                     file_content = f.read()
                     file_hash = hashlib.md5(file_content).hexdigest()[:8]  # First 8 chars
                     file_hashes.append(f"{filename}:{file_hash}")
+                    logger.debug(f"[version] Hashed {filename}: {file_hash}")
             except Exception as e:
-                logger.debug(f"[version] Could not hash {filename}: {e}")
+                logger.warning(f"[version] Could not hash {filename}: {e}")
+        else:
+            logger.debug(f"[version] File not found for hashing: {filepath}")
     
     # Combine commands and file hashes
     combined_str = commands_str + "|" + "|".join(file_hashes)
