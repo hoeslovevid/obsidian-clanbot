@@ -37,6 +37,26 @@ EVENTS_CHANNEL_ID = int(os.getenv("EVENTS_CHANNEL_ID", "0") or "0")
 EVENTS_CHANNEL_NAME = os.getenv("EVENTS_CHANNEL_NAME", "ops-board")
 
 
+async def check_ended_giveaways(bot):
+    """Check for ended giveaways and select winners."""
+    from commands.giveaways.giveaway_end import end_giveaway
+    
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("""
+            SELECT id FROM giveaways
+            WHERE ended = 0 AND datetime(end_time) <= datetime('now')
+        """)
+        ended_giveaways = await cur.fetchall()
+    
+    for (giveaway_id,) in ended_giveaways:
+        try:
+            success, message, winners = await end_giveaway(giveaway_id, bot)
+            if success:
+                logger.info(f"[giveaway] Ended giveaway {giveaway_id}, selected {len(winners)} winner(s)")
+        except Exception as e:
+            logger.error(f"[giveaway] Error ending giveaway {giveaway_id}: {e}", exc_info=True)
+
+
 async def check_and_notify_baro_arrival(bot):
     """Check if Baro has arrived and send notifications if needed."""
     is_active, baro_data = await get_baro_status()
