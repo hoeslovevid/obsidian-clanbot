@@ -2180,9 +2180,12 @@ async def check_and_post_updates(bot):
             
             # Build description
             if changes:
-                description = "\n".join(changes)
+                # Format changes nicely
+                changes_text = "\n".join(f"• {change}" if not change.startswith("**") else change for change in changes)
                 if BOT_CHANGELOG:
-                    description = f"{BOT_CHANGELOG}\n\n**Auto-detected changes:**\n{description}"
+                    description = f"{BOT_CHANGELOG}\n\n**Changes:**\n{changes_text}"
+                else:
+                    description = f"**Changes:**\n{changes_text}"
             else:
                 description = BOT_CHANGELOG if BOT_CHANGELOG else f"Bot has been updated to version {version_to_use}."
             
