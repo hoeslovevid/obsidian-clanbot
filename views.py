@@ -170,6 +170,14 @@ class RSVPView(discord.ui.View):
         msg_id = interaction.message.id
 
         async with aiosqlite.connect(DB_PATH) as db:
+            # Check if this is a new RSVP (not just updating)
+            cur = await db.execute(
+                "SELECT response FROM event_rsvps WHERE guild_id=? AND message_id=? AND user_id=?",
+                (guild_id, msg_id, interaction.user.id),
+            )
+            existing = await cur.fetchone()
+            is_new_rsvp = existing is None or existing[0] != response
+            
             await db.execute(
                 "INSERT INTO event_rsvps(guild_id,message_id,user_id,response) VALUES(?,?,?,?) "
                 "ON CONFLICT(guild_id,message_id,user_id) DO UPDATE SET response=excluded.response",
@@ -182,6 +190,15 @@ class RSVPView(discord.ui.View):
                 (guild_id, msg_id),
             )
             rows = await cur.fetchall()
+
+        # Track event attendance if RSVPing "GOING"
+        if is_new_rsvp and response == "GOING":
+            try:
+                from database import track_event_attendance
+                await track_event_attendance(guild_id, interaction.user.id)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).debug(f"Failed to track event attendance: {e}")
 
         counts = {"GOING": 0, "MAYBE": 0, "NO": 0}
         for r, c in rows:

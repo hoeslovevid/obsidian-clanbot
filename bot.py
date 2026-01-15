@@ -209,6 +209,10 @@ def load_all_commands():
         "commands.warframe.archon",
         "commands.warframe.archon_notify",
         "commands.warframe.warframe_event_notify",
+        "commands.warframe.resource",
+        # Activity commands
+        "commands.activity.activity",
+        "commands.activity.activity_leaderboard",
     ]
     
     loaded_count = 0
@@ -628,6 +632,30 @@ async def init_db():
             channel_id INTEGER
         )""")
 
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS activity_stats (
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            commands_used INTEGER NOT NULL DEFAULT 0,
+            events_attended INTEGER NOT NULL DEFAULT 0,
+            voice_minutes INTEGER NOT NULL DEFAULT 0,
+            messages_sent INTEGER NOT NULL DEFAULT 0,
+            last_activity_date TEXT NOT NULL,
+            weekly_score INTEGER NOT NULL DEFAULT 0,
+            monthly_score INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (guild_id, user_id)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS activity_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            activity_type TEXT NOT NULL,
+            activity_date TEXT NOT NULL,
+            points INTEGER NOT NULL DEFAULT 0
+        )""")
+
         await db.commit()
 
 
@@ -925,7 +953,14 @@ async def on_interaction(interaction: discord.Interaction):
     # CRITICAL: Let discord.py handle application commands (slash commands) automatically
     # Do NOT process them here - discord.py's command tree handles them
     if interaction.type == discord.InteractionType.application_command:
-        # Do nothing - let discord.py's built-in handler process it
+        # Track command usage for activity
+        if isinstance(interaction.user, discord.Member) and interaction.guild:
+            try:
+                from database import track_command_usage
+                await track_command_usage(interaction.guild.id, interaction.user.id)
+            except Exception as e:
+                logger.debug(f"Failed to track command usage: {e}")
+        # Do nothing else - let discord.py's built-in handler process it
         return
     
     # Handle modal submissions

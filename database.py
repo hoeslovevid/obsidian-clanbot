@@ -3,7 +3,7 @@ Database functions for economy, XP, and guild settings.
 This module handles all database operations to keep bot.py clean.
 """
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional, Tuple
 import aiosqlite  # type: ignore
 
