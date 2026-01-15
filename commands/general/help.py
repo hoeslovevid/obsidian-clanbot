@@ -67,6 +67,16 @@ def setup(bot):
             desc += "  └ Usage: `/suggestions [status:<all/pending/approved/rejected/implemented>] [limit:<number>]`\n"
         desc += "\n"
         
+        desc += "**📝 Application Commands**\n"
+        desc += "• `/application` - Start a clan application (use in the designated application channel)\n"
+        desc += "  └ You'll receive questions via DM. Answer them to complete your application.\n"
+        if is_user_mod:
+            desc += "• `/application_setup` - Configure the application system (moderators only)\n"
+            desc += "  └ Set the application channel and manage questions\n"
+            desc += "• `/manage_applications` - View and manage applications (moderators only)\n"
+            desc += "  └ Usage: `/manage_applications [status:<all/in_progress/pending/approved/rejected>] [limit:<number>]`\n"
+        desc += "\n"
+        
         desc += "**💬 Other Features**\n"
         desc += "• **Join-to-Create Voice Channels** - Join the trigger channel in Temp VCs to create your own squad channel\n"
         desc += "• **Obsidian Docket** - Use the button panel to file complaints (mods will review)\n"

@@ -163,6 +163,10 @@ def load_all_commands():
         # Suggestion commands
         "commands.suggestions.suggest",
         "commands.suggestions.manage_suggestions",
+        # Application commands
+        "commands.applications.application",
+        "commands.applications.application_setup",
+        "commands.applications.manage_applications",
         # Moderation commands
         "commands.moderation.purge",
         # Economy commands
@@ -504,6 +508,46 @@ async def init_db():
             reviewed_by INTEGER,
             reviewed_at TEXT,
             review_note TEXT
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS application_settings (
+            guild_id INTEGER NOT NULL PRIMARY KEY,
+            channel_id INTEGER
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS application_questions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            question_order INTEGER NOT NULL,
+            question_text TEXT NOT NULL,
+            UNIQUE(guild_id, question_order)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS applications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            status TEXT NOT NULL DEFAULT 'IN_PROGRESS',
+            current_question_index INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            submitted_at TEXT,
+            reviewed_by INTEGER,
+            reviewed_at TEXT,
+            review_note TEXT,
+            message_id INTEGER
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS application_responses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            application_id INTEGER NOT NULL,
+            question_id INTEGER NOT NULL,
+            response_text TEXT NOT NULL,
+            FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE,
+            FOREIGN KEY (question_id) REFERENCES application_questions(id) ON DELETE CASCADE
         )""")
 
         await db.commit()
@@ -1133,6 +1177,90 @@ async def on_interaction(interaction: discord.Interaction):
                         pass
             return
         
+        # Handle ApplicationResponseModal submissions
+        if cid and cid.startswith("application_response_"):
+            # Extract application_id and question_id from custom_id
+            # Format: application_response_{application_id}_{question_id}
+            parts = cid.replace("application_response_", "").split("_")
+            if len(parts) >= 2:
+                application_id = int(parts[0])
+                question_id = int(parts[1])
+                
+                if not interaction.response.is_done():
+                    try:
+                        await interaction.response.defer(ephemeral=True)
+                    except (discord.errors.NotFound, discord.errors.InteractionResponded, discord.errors.HTTPException):
+                        pass
+                
+                # Extract response from interaction data
+                components = interaction.data.get("components", [])
+                response_text = ""
+                
+                for component in components:
+                    components_list = component.get("components", [])
+                    for comp in components_list:
+                        comp_id = comp.get("custom_id", "")
+                        value = comp.get("value", "")
+                        if comp_id == "response":
+                            response_text = value
+                
+                if not response_text.strip():
+                    await interaction.followup.send("Response cannot be empty.", ephemeral=True)
+                    return
+                
+                # Save response
+                async with aiosqlite.connect(DB_PATH) as db:
+                    await db.execute("""
+                        INSERT INTO application_responses (application_id, question_id, response_text)
+                        VALUES (?, ?, ?)
+                    """, (application_id, question_id, response_text))
+                    
+                    # Update current_question_index
+                    await db.execute("""
+                        UPDATE applications
+                        SET current_question_index = current_question_index + 1
+                        WHERE id = ?
+                    """, (application_id,))
+                    await db.commit()
+                    
+                    # Get guild_id and user_id
+                    cur = await db.execute("""
+                        SELECT guild_id, user_id FROM applications WHERE id = ?
+                    """, (application_id,))
+                    row = await cur.fetchone()
+                
+                if row:
+                    guild_id, user_id = row[0], row[1]
+                    
+                    # Send next question or submit application
+                    from commands.applications.application import send_next_question
+                    await send_next_question(bot, guild_id, user_id, application_id)
+                    
+                    await interaction.followup.send("Response saved! Check your DMs for the next question.", ephemeral=True)
+                else:
+                    await interaction.followup.send("Application not found.", ephemeral=True)
+            return
+        
+        # Handle ApplicationQuestionModal submissions
+        if cid and cid.startswith("application_question_"):
+            # This is handled in the modal's on_submit, but we can add logging here if needed
+            if not interaction.response.is_done():
+                try:
+                    await interaction.response.defer(ephemeral=True)
+                except (discord.errors.NotFound, discord.errors.InteractionResponded, discord.errors.HTTPException):
+                    pass
+            return
+        
+        # Handle ApplicationRejectModal submissions
+        if cid and cid.startswith("application_reject_"):
+            # This is handled in the modal's on_submit
+            if not interaction.response.is_done():
+                try:
+                    await interaction.response.defer(ephemeral=True)
+                except (discord.errors.NotFound, discord.errors.InteractionResponded, discord.errors.HTTPException):
+                    pass
+            return
+        
         # For other modals (with auto-generated custom_ids from previous bot sessions),
         # try to extract data from the interaction and process it as a complaint
         # This handles cases where the modal was created before the bot restarted
@@ -1737,6 +1865,21 @@ async def on_ready():
                 try:
                     from commands.suggestions.manage_suggestions import SuggestionView
                     bot.add_view(SuggestionView(int(suggestion_id)))
+                except Exception:
+                    pass
+    
+    # Re-register application views for pending applications
+    from views import ApplicationManageView
+    async with aiosqlite.connect(DB_PATH) as db:
+        for g in bot.guilds:
+            cur = await db.execute(
+                "SELECT id FROM applications WHERE guild_id=? AND status='PENDING'",
+                (g.id,),
+            )
+            rows = await cur.fetchall()
+            for (application_id,) in rows:
+                try:
+                    bot.add_view(ApplicationManageView(int(application_id)))
                 except Exception:
                     pass
 

@@ -191,3 +191,74 @@ class RSVPView(discord.ui.View):
         embed.set_footer(text=f"✅ {counts['GOING']}  |  ❔ {counts['MAYBE']}  |  ❌ {counts['NO']}")
         await interaction.message.edit(embed=embed, view=self)
         await interaction.response.send_message("RSVP recorded.", ephemeral=True)
+
+
+class ApplicationManageView(discord.ui.View):
+    """View for moderators to manage applications."""
+    def __init__(self, application_id: int):
+        super().__init__(timeout=None)
+        self.application_id = application_id
+    
+    @discord.ui.button(label="Approve", style=discord.ButtonStyle.success, emoji="✅", custom_id=None)
+    async def approve_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
+            return await interaction.response.send_message("Only moderators can use this.", ephemeral=True)
+        
+        await interaction.response.defer(ephemeral=True)
+        
+        # Update application status
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute("""
+                UPDATE applications
+                SET status = 'APPROVED', reviewed_by = ?, reviewed_at = ?
+                WHERE id = ?
+            """, (interaction.user.id, now_utc().isoformat(), self.application_id))
+            await db.commit()
+            
+            # Get user_id
+            cur = await db.execute("SELECT user_id FROM applications WHERE id = ?", (self.application_id,))
+            row = await cur.fetchone()
+            user_id = row[0] if row else None
+        
+        # Update embed
+        embed = interaction.message.embeds[0]
+        embed.color = discord.Color.green()
+        # Update status field
+        for i, field in enumerate(embed.fields):
+            if field.name == "Status":
+                embed.set_field_at(i, name="Status", value="✅ Approved", inline=True)
+                break
+        
+        # Disable buttons
+        for item in self.children:
+            item.disabled = True
+        
+        await interaction.message.edit(embed=embed, view=self)
+        
+        # Notify user
+        if user_id:
+            user = interaction.guild.get_member(user_id)
+            if user:
+                try:
+                    await user.send(
+                        embed=obsidian_embed(
+                            "✅ Application Approved",
+                            f"Congratulations! Your application to join {interaction.guild.name} has been approved.",
+                            color=discord.Color.green(),
+                            client=interaction.client,
+                        )
+                    )
+                except discord.Forbidden:
+                    pass
+        
+        await interaction.followup.send("Application approved.", ephemeral=True)
+    
+    @discord.ui.button(label="Reject", style=discord.ButtonStyle.danger, emoji="❌", custom_id=None)
+    async def reject_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
+            return await interaction.response.send_message("Only moderators can use this.", ephemeral=True)
+        
+        # Show modal for rejection reason
+        from modals import ApplicationRejectModal
+        modal = ApplicationRejectModal(self.application_id)
+        await interaction.response.send_modal(modal)

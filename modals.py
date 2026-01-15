@@ -8,7 +8,7 @@ import aiosqlite  # type: ignore
 from typing import Optional
 
 from utils import extract_id, get_mod_role, is_mod, MOD_ROLE_NAME
-from database import DB_PATH
+from database import DB_PATH, now_utc
 
 logger = logging.getLogger(__name__)
 
@@ -224,4 +224,156 @@ class RequestInfoModal(discord.ui.Modal, title="Request Evidence"):  # type: ign
             # Interaction already handled or expired - on_interaction may have gotten it first
             logger.info(f"[modal] RequestInfoModal.on_submit: Could not defer: {e}")
         # Don't process here - let on_interaction handle it
+        return
+
+
+class ApplicationQuestionModal(discord.ui.Modal, title="Add Application Question"):  # type: ignore
+    def __init__(self, guild_id: int):
+        super().__init__(timeout=300, custom_id=f"application_question_{guild_id}")
+        self.guild_id = guild_id
+        
+        self.question_text = discord.ui.TextInput(
+            label="Question",
+            style=discord.TextStyle.paragraph,
+            placeholder="e.g., Why do you want to join our clan?",
+            max_length=500,
+            custom_id="question_text"
+        )
+        self.add_item(self.question_text)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        
+        question_text = str(self.question_text).strip()
+        if not question_text:
+            return await interaction.followup.send("Question cannot be empty.", ephemeral=True)
+        
+        # Get the next question order
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute("""
+                SELECT MAX(question_order) FROM application_questions WHERE guild_id = ?
+            """, (self.guild_id,))
+            row = await cur.fetchone()
+            next_order = (row[0] or 0) + 1
+            
+            await db.execute("""
+                INSERT INTO application_questions (guild_id, question_order, question_text)
+                VALUES (?, ?, ?)
+            """, (self.guild_id, next_order, question_text))
+            await db.commit()
+        
+        from utils import obsidian_embed
+        await interaction.followup.send(
+            embed=obsidian_embed(
+                "✅ Question Added",
+                f"Question {next_order} has been added:\n\n{question_text}",
+                color=discord.Color.green(),
+                client=interaction.client,
+            ),
+            ephemeral=True
+        )
+
+
+class ApplicationRejectModal(discord.ui.Modal, title="Reject Application"):  # type: ignore
+    def __init__(self, application_id: int):
+        super().__init__(timeout=300, custom_id=f"application_reject_{application_id}")
+        self.application_id = application_id
+        
+        self.reason = discord.ui.TextInput(
+            label="Rejection Reason (optional)",
+            style=discord.TextStyle.paragraph,
+            placeholder="Provide a reason for rejection (optional)...",
+            required=False,
+            max_length=500,
+            custom_id="reason"
+        )
+        self.add_item(self.reason)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        
+        reason = str(self.reason).strip() if self.reason.value else None
+        
+        # Update application status
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute("""
+                UPDATE applications
+                SET status = 'REJECTED', reviewed_by = ?, reviewed_at = ?, review_note = ?
+                WHERE id = ?
+            """, (interaction.user.id, now_utc().isoformat(), reason, self.application_id))
+            await db.commit()
+            
+            # Get user_id
+            cur = await db.execute("SELECT user_id FROM applications WHERE id = ?", (self.application_id,))
+            row = await cur.fetchone()
+            user_id = row[0] if row else None
+        
+        # Update embed
+        embed = interaction.message.embeds[0]
+        embed.color = discord.Color.red()
+        # Update status field
+        for i, field in enumerate(embed.fields):
+            if field.name == "Status":
+                embed.set_field_at(i, name="Status", value="❌ Rejected", inline=True)
+                break
+        
+        if reason:
+            embed.add_field(name="Rejection Reason", value=reason, inline=False)
+        
+        # Disable buttons - get the view from the message
+        if interaction.message.components:
+            # Disable all buttons in the existing view
+            view = discord.ui.View.from_message(interaction.message)
+            for item in view.children:
+                item.disabled = True
+            await interaction.message.edit(embed=embed, view=view)
+        else:
+            await interaction.message.edit(embed=embed)
+        
+        # Notify user
+        if user_id:
+            user = interaction.guild.get_member(user_id)
+            if user:
+                try:
+                    rejection_msg = f"Your application to join {interaction.guild.name} has been rejected."
+                    if reason:
+                        rejection_msg += f"\n\n**Reason:** {reason}"
+                    
+                    await user.send(
+                        embed=obsidian_embed(
+                            "❌ Application Rejected",
+                            rejection_msg,
+                            color=discord.Color.red(),
+                            client=interaction.client,
+                        )
+                    )
+                except discord.Forbidden:
+                    pass
+        
+        await interaction.followup.send("Application rejected.", ephemeral=True)
+
+
+class ApplicationResponseModal(discord.ui.Modal, title="Application Question"):  # type: ignore
+    def __init__(self, application_id: int, question_id: int, question_text: str):
+        super().__init__(timeout=600, custom_id=f"application_response_{application_id}_{question_id}")
+        self.application_id = application_id
+        self.question_id = question_id
+        
+        # Create a text input for the response
+        self.response = discord.ui.TextInput(
+            label=question_text[:45] + "..." if len(question_text) > 45 else question_text,
+            style=discord.TextStyle.paragraph,
+            placeholder="Type your answer here...",
+            max_length=1000,
+            custom_id="response"
+        )
+        self.add_item(self.response)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        # This will be handled in bot.py's on_interaction handler
+        logger.info(f"[modal] ApplicationResponseModal.on_submit: Deferring (on_interaction will process)")
+        try:
+            await interaction.response.defer(ephemeral=True)
+        except (discord.errors.NotFound, discord.errors.InteractionResponded, discord.errors.HTTPException):
+            pass
         return
