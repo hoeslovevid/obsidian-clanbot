@@ -174,6 +174,12 @@ def load_all_commands():
         # Update log commands
         "commands.updates.update_log",
         "commands.updates.update_log_setup",
+        # Trading commands
+        "commands.trading.trade",
+        "commands.trading.trade_price",
+        "commands.trading.trade_search",
+        "commands.trading.trade_list",
+        "commands.trading.trade_setup",
         # Moderation commands
         "commands.moderation.purge",
         # Economy commands

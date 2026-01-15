@@ -86,6 +86,20 @@ def setup(bot):
             desc += "  └ Example: `/update_log title:New Command Added description:Added /application command for clan recruitment`\n"
             desc += "\n"
         
+        desc += "**💼 Trading Commands**\n"
+        desc += "• `/trade` - Post a WTS (Want To Sell) or WTB (Want To Buy) listing\n"
+        desc += "  └ Usage: `/trade listing_type:<WTS/WTB> item:<item name> [price:<platinum>] [quantity:<number>] [description:<details>]`\n"
+        desc += "  └ Example: `/trade listing_type:WTS item:Mesa Prime Set price:200 quantity:1`\n"
+        desc += "• `/trade_price` - Check current market prices for an item\n"
+        desc += "  └ Usage: `/trade_price item:<item name> [platform:<pc/xbox/ps4/switch>]`\n"
+        desc += "  └ Example: `/trade_price item:Primed Continuity platform:pc`\n"
+        desc += "• `/trade_search` - Search active trading listings\n"
+        desc += "  └ Usage: `/trade_search [query:<search term>] [listing_type:<WTS/WTB>] [platform:<platform>]`\n"
+        desc += "• `/trade_list` - View your active trading listings\n"
+        if is_user_mod:
+            desc += "• `/trade_setup` - Configure the trading channel (moderators only)\n"
+        desc += "\n"
+        
         desc += "**💬 Other Features**\n"
         desc += "• **Join-to-Create Voice Channels** - Join the trigger channel in Temp VCs to create your own squad channel\n"
         desc += "• **Obsidian Docket** - Use the button panel to file complaints (mods will review)\n"
