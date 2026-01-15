@@ -2065,22 +2065,22 @@ async def detect_and_update_version(bot) -> Tuple[str, list]:
                     patch = 0  # Reset patch
                     new_version = f"{major}.{minor}.{patch}"
                 else:
-                    # Fallback: just increment
-                    new_version = f"{stored_version}.1"
+                    # Fallback: start at 1.0.0
+                    new_version = "1.0.0"
             except (ValueError, IndexError):
-                # Invalid version format, use timestamp-based version
-                new_version = f"2.{int(datetime.now(timezone.utc).timestamp())}"
-        
-        # Update stored version, hash, and current commands
-        current_commands_str = ",".join(sorted(current_commands)) if current_commands else ""
-        await db.execute("""
-            INSERT OR REPLACE INTO bot_version_tracking (id, current_version, feature_hash, last_updated, previous_commands)
-            VALUES (1, ?, ?, ?, ?)
-        """, (new_version, current_hash, datetime.now(timezone.utc).isoformat(), current_commands_str))
-        await db.commit()
-        
-        logger.info(f"[version] Version set to {new_version} (from {stored_version if 'stored_version' in locals() else 'N/A'})")
-        return new_version, changes
+                # Invalid version format, start at 1.0.0
+                new_version = "1.0.0"
+            
+            # Update stored version, hash, and store CURRENT commands as previous_commands for next comparison
+            current_commands_str = ",".join(sorted(current_commands)) if current_commands else ""
+            await db.execute("""
+                INSERT OR REPLACE INTO bot_version_tracking (id, current_version, feature_hash, last_updated, previous_commands)
+                VALUES (1, ?, ?, ?, ?)
+            """, (new_version, current_hash, datetime.now(timezone.utc).isoformat(), current_commands_str))
+            await db.commit()
+            
+            logger.info(f"[version] Version incremented to {new_version} (from {stored_version}), stored {len(current_commands)} commands as previous_commands")
+            return new_version, changes
 
 
 async def check_and_post_updates(bot):
