@@ -2024,7 +2024,13 @@ async def on_ready():
             print(f"[startup] Ensure failed in {g.name}: {e}")
 
     # Setup background tasks
-    setup_tasks(bot)
+    try:
+        tasks_dict = setup_tasks(bot)
+        print(f"[ready] Background tasks initialized: {len(tasks_dict)} tasks")
+    except Exception as e:
+        print(f"[ready] ERROR: Failed to setup background tasks: {e}")
+        import traceback
+        traceback.print_exc()
     
     # Re-register persistent views
     bot.add_view(ComplaintPanel())

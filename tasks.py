@@ -529,6 +529,9 @@ def setup_tasks(bot):
     async def cycle_check_loop():
         """Check for cycle changes and send notifications."""
         try:
+            # Verify bot is ready
+            if not bot.is_ready():
+                return
             cycles_data = await get_all_cycles()
             
             if not cycles_data:
@@ -654,6 +657,9 @@ def setup_tasks(bot):
     async def invasion_check_loop():
         """Check for new invasions and send notifications for configured rewards."""
         try:
+            # Verify bot is ready
+            if not bot.is_ready():
+                return
             invasions_data = await fetch_invasions()
             
             if not invasions_data:
@@ -790,6 +796,9 @@ def setup_tasks(bot):
     async def archon_check_loop():
         """Check for new Archon Hunts and send notifications."""
         try:
+            # Verify bot is ready
+            if not bot.is_ready():
+                return
             archon_data = await fetch_archon_hunt_data()
             
             if not archon_data:
@@ -960,27 +969,41 @@ def setup_tasks(bot):
     async def before_member_count_update_loop():
         await bot.wait_until_ready()
 
-    # Start all tasks
-    temp_vc_cleanup.start()
-    event_reminder_loop.start()
-    voice_reward_loop.start()
-    baro_check_loop.start()
-    baro_live_update_loop.start()
-    lfg_expire_loop.start()
-    cycle_check_loop.start()
-    invasion_check_loop.start()
-    archon_check_loop.start()
-    member_count_update_loop.start()
+    # Start all tasks with error handling
+    tasks_to_start = [
+        ('temp_vc_cleanup', temp_vc_cleanup),
+        ('event_reminder_loop', event_reminder_loop),
+        ('voice_reward_loop', voice_reward_loop),
+        ('baro_check_loop', baro_check_loop),
+        ('baro_live_update_loop', baro_live_update_loop),
+        ('lfg_expire_loop', lfg_expire_loop),
+        ('cycle_check_loop', cycle_check_loop),
+        ('invasion_check_loop', invasion_check_loop),
+        ('archon_check_loop', archon_check_loop),
+        ('member_count_update_loop', member_count_update_loop),
+    ]
     
-    return {
-        'temp_vc_cleanup': temp_vc_cleanup,
-        'event_reminder_loop': event_reminder_loop,
-        'voice_reward_loop': voice_reward_loop,
-        'baro_check_loop': baro_check_loop,
-        'baro_live_update_loop': baro_live_update_loop,
-        'lfg_expire_loop': lfg_expire_loop,
-        'cycle_check_loop': cycle_check_loop,
-        'invasion_check_loop': invasion_check_loop,
-        'archon_check_loop': archon_check_loop,
-        'member_count_update_loop': member_count_update_loop,
-    }
+    started_tasks = {}
+    for task_name, task in tasks_to_start:
+        try:
+            # Restart task if it's already running (handles bot restarts)
+            if task.is_running():
+                task.restart()
+                logger.info(f"[tasks] Restarted {task_name}")
+            else:
+                task.start()
+                logger.info(f"[tasks] Started {task_name}")
+            started_tasks[task_name] = task
+        except Exception as e:
+            logger.error(f"[tasks] Failed to start {task_name}: {e}", exc_info=True)
+            # Try to start it anyway
+            try:
+                task.start()
+                started_tasks[task_name] = task
+                logger.info(f"[tasks] Successfully started {task_name} on retry")
+            except Exception as e2:
+                logger.error(f"[tasks] Failed to start {task_name} on retry: {e2}")
+    
+    logger.info(f"[tasks] Started {len(started_tasks)}/{len(tasks_to_start)} background tasks")
+    
+    return started_tasks
