@@ -20,7 +20,7 @@ def format_baro_time(expiry_time: datetime) -> str:
     
     days = total_seconds // 86400
     hours = (total_seconds % 86400) // 3600
-    minutes = (total_seconds % 86400) // 60
+    minutes = (total_seconds % 3600) // 60
     
     # Format with days if applicable
     if days > 0:
