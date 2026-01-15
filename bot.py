@@ -2275,6 +2275,33 @@ async def on_ready():
                 except Exception:
                     pass
     
+    # Verify update log settings persistence
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("""
+            SELECT guild_id, channel_id FROM update_log_settings WHERE channel_id IS NOT NULL
+        """)
+        settings = await cur.fetchall()
+        if settings:
+            logger.info(f"[ready] Loaded {len(settings)} update log channel setting(s) from database")
+            for guild_id, channel_id in settings:
+                guild = bot.get_guild(guild_id)
+                if guild:
+                    channel = guild.get_channel(channel_id)
+                    if channel:
+                        logger.info(f"[ready] Update log channel configured: {guild.name} -> #{channel.name}")
+                    else:
+                        logger.warning(f"[ready] Update log channel not found: guild {guild.name}, channel_id {channel_id}")
+        else:
+            logger.info("[ready] No update log channels configured")
+        
+        # Verify version tracking exists
+        cur = await db.execute("SELECT current_version FROM bot_version_tracking WHERE id = 1")
+        version_row = await cur.fetchone()
+        if version_row:
+            logger.info(f"[ready] Bot version tracking loaded: {version_row[0]}")
+        else:
+            logger.info("[ready] No version tracking found (will be created on first update check)")
+    
     # Check and post automatic update logs
     try:
         logger.info("[ready] Checking for automatic updates...")
