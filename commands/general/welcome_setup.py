@@ -55,12 +55,16 @@ def setup(bot):
         
         await interaction.response.send_message(
             embed=obsidian_embed(
-                "Welcome Messages Configured",
+                "✅ Welcome Messages Configured",
                 f"**Channel:** {channel_mention}\n"
                 f"**Status:** {status}\n"
                 f"**Message:** {new_message}\n\n"
-                f"Variables: `{{user}}` = user mention, `{{server}}` = server name, `{{member_count}}` = member count",
+                f"**Variables:**\n"
+                f"• `{{user}}` - User mention\n"
+                f"• `{{server}}` - Server name\n"
+                f"• `{{member_count}}` - Total member count",
                 color=discord.Color.green(),
+                client=interaction.client,
             ),
             ephemeral=True,
         )
@@ -78,7 +82,15 @@ def setup(bot):
         enabled: Optional[bool] = None
     ):
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
-            return await interaction.response.send_message("Obsidian Inheritors only.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Permission Denied",
+                    "Only Obsidian Inheritors can use this command.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
         
         async with aiosqlite.connect(DB_PATH) as db:
             # Get current settings
@@ -109,12 +121,16 @@ def setup(bot):
         
         await interaction.response.send_message(
             embed=obsidian_embed(
-                "Leave Messages Configured",
+                "✅ Leave Messages Configured",
                 f"**Channel:** {channel_mention}\n"
                 f"**Status:** {status}\n"
                 f"**Message:** {new_message}\n\n"
-                f"Variables: `{{user}}` = username, `{{server}}` = server name, `{{member_count}}` = member count",
+                f"**Variables:**\n"
+                f"• `{{user}}` - Username\n"
+                f"• `{{server}}` - Server name\n"
+                f"• `{{member_count}}` - Total member count",
                 color=discord.Color.green(),
+                client=interaction.client,
             ),
             ephemeral=True,
         )

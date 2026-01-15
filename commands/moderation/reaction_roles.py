@@ -24,10 +24,26 @@ def setup(bot):
         role: discord.Role
     ):
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
-            return await interaction.response.send_message("Obsidian Inheritors only.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Permission Denied",
+                    "Only Obsidian Inheritors can use this command.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
         
         if not isinstance(interaction.channel, discord.TextChannel):
-            return await interaction.response.send_message("This command can only be used in text channels.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Invalid Channel",
+                    "This command can only be used in text channels.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
         
         # Parse message ID from input (could be just ID, or a message link)
         message_id = None
@@ -38,23 +54,63 @@ def setup(bot):
             else:
                 message_id = int(message)
         except ValueError:
-            return await interaction.response.send_message("Invalid message ID or link.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Invalid Input",
+                    "Invalid message ID or link. Please provide a valid message ID or message link.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
         
         # Fetch the message
         try:
             target_message = await interaction.channel.fetch_message(message_id)
         except discord.NotFound:
-            return await interaction.response.send_message("Message not found in this channel.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Message Not Found",
+                    "The message was not found in this channel. Make sure you're using the correct message ID or link.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
         except discord.Forbidden:
-            return await interaction.response.send_message("I don't have permission to access that message.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Permission Denied",
+                    "I don't have permission to access that message.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
         
         # Check if bot can manage roles
         if not interaction.guild.me.guild_permissions.manage_roles:
-            return await interaction.response.send_message("I don't have permission to manage roles.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Missing Permissions",
+                    "I don't have permission to manage roles. Please grant me the 'Manage Roles' permission.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
         
         # Check if bot's role is high enough
         if interaction.guild.me.top_role <= role:
-            return await interaction.response.send_message("My role must be higher than the role I'm assigning.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Role Hierarchy",
+                    "My role must be higher than the role I'm assigning. Please move my role above the target role in the server settings.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
         
         # Parse emoji (could be unicode or custom)
         emoji_str = emoji
@@ -62,7 +118,15 @@ def setup(bot):
             # Try to add the reaction first to validate it
             await target_message.add_reaction(emoji)
         except discord.HTTPException:
-            return await interaction.response.send_message("Invalid emoji or I can't use that emoji.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Invalid Emoji",
+                    "Invalid emoji or I can't use that emoji. Please use a standard Discord emoji or a custom emoji from this server.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
         
         # Store in database
         async with aiosqlite.connect(DB_PATH) as db:
@@ -75,16 +139,22 @@ def setup(bot):
             except aiosqlite.IntegrityError:
                 # Already exists
                 return await interaction.response.send_message(
-                    f"This emoji ({emoji}) is already set up for a role on this message.",
+                    embed=obsidian_embed(
+                        "❌ Already Configured",
+                        f"This emoji ({emoji}) is already set up for a role on this message. Use `/reaction_role_remove` to remove it first.",
+                        color=discord.Color.orange(),
+                        client=interaction.client,
+                    ),
                     ephemeral=True
                 )
         
         await interaction.response.send_message(
             embed=obsidian_embed(
-                "Reaction Role Added",
-                f"Users can now react with {emoji} to get the {role.mention} role.\n"
-                f"Message: [Jump to message]({target_message.jump_url})",
+                "✅ Reaction Role Added",
+                f"Users can now react with {emoji} to get the {role.mention} role.\n\n"
+                f"[Jump to message]({target_message.jump_url})",
                 color=discord.Color.green(),
+                client=interaction.client,
             ),
             ephemeral=True,
         )
@@ -100,7 +170,15 @@ def setup(bot):
         emoji: str
     ):
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
-            return await interaction.response.send_message("Obsidian Inheritors only.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Permission Denied",
+                    "Only Obsidian Inheritors can use this command.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
         
         # Parse message ID
         message_id = None
@@ -110,7 +188,15 @@ def setup(bot):
             else:
                 message_id = int(message)
         except ValueError:
-            return await interaction.response.send_message("Invalid message ID or link.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Invalid Input",
+                    "Invalid message ID or link. Please provide a valid message ID or message link.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
         
         # Remove from database
         async with aiosqlite.connect(DB_PATH) as db:
@@ -122,15 +208,21 @@ def setup(bot):
             
             if cur.rowcount == 0:
                 return await interaction.response.send_message(
-                    f"No reaction role found for emoji {emoji} on that message.",
+                    embed=obsidian_embed(
+                        "❌ Not Found",
+                        f"No reaction role found for emoji {emoji} on that message.",
+                        color=discord.Color.red(),
+                        client=interaction.client,
+                    ),
                     ephemeral=True
                 )
         
         await interaction.response.send_message(
             embed=obsidian_embed(
-                "Reaction Role Removed",
-                f"Removed reaction role for {emoji}.",
+                "✅ Reaction Role Removed",
+                f"Successfully removed reaction role for {emoji}.",
                 color=discord.Color.green(),
+                client=interaction.client,
             ),
             ephemeral=True,
         )
@@ -144,7 +236,15 @@ def setup(bot):
         message: Optional[str] = None
     ):
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
-            return await interaction.response.send_message("Obsidian Inheritors only.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Permission Denied",
+                    "Only Obsidian Inheritors can use this command.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
         
         async with aiosqlite.connect(DB_PATH) as db:
             if message:
@@ -156,7 +256,15 @@ def setup(bot):
                     else:
                         message_id = int(message)
                 except ValueError:
-                    return await interaction.response.send_message("Invalid message ID or link.", ephemeral=True)
+                    return await interaction.response.send_message(
+                        embed=obsidian_embed(
+                            "❌ Invalid Input",
+                            "Invalid message ID or link. Please provide a valid message ID or message link.",
+                            color=discord.Color.red(),
+                            client=interaction.client,
+                        ),
+                        ephemeral=True
+                    )
                 
                 cur = await db.execute("""
                     SELECT emoji, role_id FROM reaction_roles
@@ -174,7 +282,12 @@ def setup(bot):
         
         if not rows:
             return await interaction.response.send_message(
-                "No reaction roles found." + (" for that message." if message else " in this server."),
+                embed=obsidian_embed(
+                    "📋 No Reaction Roles",
+                    "No reaction roles found." + (" for that message." if message else " in this server.") + "\n\nUse `/reaction_role_setup` to add reaction roles.",
+                    color=discord.Color.blue(),
+                    client=interaction.client,
+                ),
                 ephemeral=True
             )
         
@@ -203,9 +316,10 @@ def setup(bot):
         
         await interaction.response.send_message(
             embed=obsidian_embed(
-                "Reaction Roles",
+                "📋 Reaction Roles",
                 description,
                 color=discord.Color.blue(),
+                client=interaction.client,
             ),
             ephemeral=True,
         )

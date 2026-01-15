@@ -13,7 +13,15 @@ def setup(bot):
         from bot import get_user_balance
         
         if not ECONOMY_ENABLED:
-            return await interaction.response.send_message("Economy system is disabled.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Economy Disabled",
+                    "The economy system is currently disabled.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
         
         balance = await get_user_balance(interaction.guild.id, interaction.user.id)
         

@@ -30,17 +30,34 @@ def setup(bot):
                 )
                 row = await cur.fetchone()
             if not row:
-                return await interaction.response.send_message("Case not found.", ephemeral=True)
+                return await interaction.response.send_message(
+                    embed=obsidian_embed(
+                        "❌ Case Not Found",
+                        "The case ID you provided was not found. Please check the case ID and try again.",
+                        color=discord.Color.red(),
+                        client=interaction.client,
+                    ),
+                    ephemeral=True
+                )
 
             user_id, status, last_update_at = int(row[0]), str(row[1]), str(row[2])
             if user_id != interaction.user.id and not (isinstance(interaction.user, discord.Member) and is_mod(interaction.user)):
-                return await interaction.response.send_message("You can only view your own case status.", ephemeral=True)
+                return await interaction.response.send_message(
+                    embed=obsidian_embed(
+                        "❌ Access Denied",
+                        "You can only view your own case status.",
+                        color=discord.Color.red(),
+                        client=interaction.client,
+                    ),
+                    ephemeral=True
+                )
 
             return await interaction.response.send_message(
                 embed=obsidian_embed(
-                    f"Case Status • {case_id}",
-                    f"**Status:** {display_case_status(status)}\n**Last update (UTC):** {last_update_at}",
+                    f"📋 Case Status • {case_id}",
+                    f"**Status:** {display_case_status(status)}\n**Last Update (UTC):** {last_update_at}",
                     color=discord.Color.blurple(),
+                    client=interaction.client,
                 ),
                 ephemeral=True,
             )
@@ -48,8 +65,13 @@ def setup(bot):
         # Create new help request (case_id not provided)
         if not category or not details:
             return await interaction.response.send_message(
-                "To create a new help request, please provide `category` and `details`. "
-                "To check an existing case, provide `case_id`.",
+                embed=obsidian_embed(
+                    "❌ Missing Information",
+                    "To create a new help request, please provide `category` and `details`.\n"
+                    "To check an existing case, provide `case_id`.",
+                    color=discord.Color.orange(),
+                    client=interaction.client,
+                ),
                 ephemeral=True,
             )
         
@@ -58,7 +80,12 @@ def setup(bot):
         ch = interaction.guild.get_channel(complaints_id) if complaints_id else None
         if not isinstance(ch, discord.TextChannel):
             return await interaction.response.send_message(
-                "Complaints channel not configured. Set COMPLAINTS_CHANNEL_ID or enable AUTO_SETUP.",
+                embed=obsidian_embed(
+                    "❌ Channel Not Configured",
+                    "Complaints channel not configured. Set COMPLAINTS_CHANNEL_ID or enable AUTO_SETUP.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
                 ephemeral=True,
             )
         
@@ -140,9 +167,10 @@ def setup(bot):
         
         await interaction.followup.send(
             embed=obsidian_embed(
-                "Docket Sealed",
-                f"Your help request has been sealed as **`{case_id}`**.\nYou'll receive DM updates as it progresses.",
+                "✅ Docket Sealed",
+                f"Your help request has been sealed as **`{case_id}`**.\n\nYou'll receive DM updates as it progresses.",
                 color=discord.Color.green(),
+                client=interaction.client,
             ),
             ephemeral=True,
         )

@@ -18,7 +18,12 @@ def setup(bot):
         """Configure the update log channel."""
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
             return await interaction.response.send_message(
-                "Only moderators can use this command.",
+                embed=obsidian_embed(
+                    "❌ Permission Denied",
+                    "Only moderators can use this command.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
                 ephemeral=True
             )
         
