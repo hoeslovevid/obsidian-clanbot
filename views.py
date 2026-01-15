@@ -288,10 +288,6 @@ class GiveawayView(discord.ui.View):
     def __init__(self, giveaway_id: Optional[int] = None):
         super().__init__(timeout=None)
         self.giveaway_id = giveaway_id
-        # Set custom_id based on giveaway_id for persistence
-        if giveaway_id:
-            self.enter_button.custom_id = f"giveaway:enter:{giveaway_id}"
-            self.leave_button.custom_id = f"giveaway:leave:{giveaway_id}"
     
     @discord.ui.button(label="Enter Giveaway", style=discord.ButtonStyle.green, emoji="🎉", custom_id="giveaway:enter")
     async def enter_giveaway(self, interaction: discord.Interaction, button: discord.ui.Button):
