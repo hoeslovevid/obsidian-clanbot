@@ -106,7 +106,7 @@ def setup(bot):
         added_commands = current_commands - previous_commands
         removed_commands = previous_commands - current_commands
         
-        # Build description - prioritize BOT_CHANGELOG, then detected changes, then command changes
+        # Build description - prioritize BOT_CHANGELOG, then detected changes
         from bot import BOT_CHANGELOG
         description_parts = []
         
@@ -114,31 +114,29 @@ def setup(bot):
         if BOT_CHANGELOG:
             description_parts.append(BOT_CHANGELOG)
         
-        # Add detected changes from version detection (if any)
+        # Add detected changes from version detection (if any) - filter out generic messages
         if detected_changes:
-            if description_parts:
-                description_parts.append("\n**Auto-detected Changes:**")
-            else:
-                description_parts.append("**Auto-detected Changes:**")
-            description_parts.extend(detected_changes)
+            # Filter to only show meaningful changes (added/removed commands, not full command lists)
+            meaningful_changes = [c for c in detected_changes if any(keyword in c.lower() for keyword in ["added", "removed", "internal", "initial", "first", "✅", "❌", "🔄", "🚀"])]
+            if meaningful_changes:
+                if description_parts:
+                    description_parts.append("\n**Changes:**")
+                else:
+                    description_parts.append("**What's New:**")
+                description_parts.extend(meaningful_changes)
         
-        # Only show command changes as supplementary info if there are actual changes
-        if added_commands or removed_commands:
-            if description_parts:
-                description_parts.append("\n**Command Changes:**")
-            else:
-                description_parts.append("**Command Changes:**")
-            
-            if added_commands:
-                description_parts.append(f"✅ **Added:** {', '.join(sorted(added_commands))}")
-            if removed_commands:
-                description_parts.append(f"❌ **Removed:** {', '.join(sorted(removed_commands))}")
-        
-        # If no changelog and no changes, show a generic message
+        # If no changelog and no meaningful changes, show a generic message
         if not description_parts:
             description_parts.append(f"Bot has been updated to version {current_version}.")
             if added_commands or removed_commands:
-                description_parts.append("\n**Note:** Command changes detected but no changelog summary available.")
+                # Show command changes if detected
+                change_parts = []
+                if added_commands:
+                    change_parts.append(f"✅ **Added {len(added_commands)} command(s):** {', '.join(sorted(added_commands))}")
+                if removed_commands:
+                    change_parts.append(f"❌ **Removed {len(removed_commands)} command(s):** {', '.join(sorted(removed_commands))}")
+                if change_parts:
+                    description_parts.append("\n**Changes:**\n" + "\n".join(change_parts))
         
         description = "\n".join(description_parts)
         

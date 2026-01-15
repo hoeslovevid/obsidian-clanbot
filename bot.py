@@ -2041,18 +2041,24 @@ async def detect_and_update_version(bot) -> Tuple[str, list]:
             if stored_version != BOT_VERSION:
                 logger.info(f"[version] BOT_VERSION env var changed from {stored_version} to {BOT_VERSION}")
                 new_version = BOT_VERSION
-                changes = ["Bot version updated from environment variable"]
+                changes = []
                 
                 # Compare with previous commands
                 added_commands = current_commands - previous_commands
                 removed_commands = previous_commands - current_commands
                 
-                if added_commands:
-                    changes.append(f"**Added commands:** {', '.join(sorted(added_commands))}")
-                if removed_commands:
-                    changes.append(f"**Removed commands:** {', '.join(sorted(removed_commands))}")
-                if current_commands and not added_commands and not removed_commands:
-                    changes.append(f"**Current commands:** {', '.join(sorted(current_commands))}")
+                # Build a better summary
+                if added_commands or removed_commands:
+                    if added_commands:
+                        changes.append(f"✅ **Added {len(added_commands)} command(s):** {', '.join(sorted(added_commands))}")
+                    if removed_commands:
+                        changes.append(f"❌ **Removed {len(removed_commands)} command(s):** {', '.join(sorted(removed_commands))}")
+                elif previous_commands:
+                    # Version changed but no command changes - internal update
+                    changes.append("🔄 **Internal updates:** Bot logic or configuration updated")
+                else:
+                    # First time with version set
+                    changes.append("🚀 **Initial version:** Bot initialized with version tracking")
                 
                 # Update hash too to reflect current state
                 current_commands_str = ",".join(sorted(current_commands)) if current_commands else ""
@@ -2082,16 +2088,15 @@ async def detect_and_update_version(bot) -> Tuple[str, list]:
             logger.info(f"[version] Command changes detected: +{len(added_commands)} added, -{len(removed_commands)} removed")
             
             if added_commands:
-                changes.append(f"**Added commands:** {', '.join(sorted(added_commands))}")
+                changes.append(f"✅ **Added {len(added_commands)} command(s):** {', '.join(sorted(added_commands))}")
             if removed_commands:
-                changes.append(f"**Removed commands:** {', '.join(sorted(removed_commands))}")
+                changes.append(f"❌ **Removed {len(removed_commands)} command(s):** {', '.join(sorted(removed_commands))}")
             if not added_commands and not removed_commands and previous_commands:
                 # Commands exist but changed in some way (maybe internal changes)
-                changes.append("Commands or features have been modified")
+                changes.append("🔄 **Internal updates:** Commands or features have been modified")
             elif not previous_commands:
-                # First time detecting changes, show all current commands
-                if current_commands:
-                    changes.append(f"**Current commands:** {', '.join(sorted(current_commands))}")
+                # First time detecting changes - don't show all commands, just note it's the first change
+                changes.append("🚀 **First feature update:** Bot features have been updated")
             
             # Commands have changed - increment version
             try:
