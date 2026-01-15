@@ -2103,37 +2103,9 @@ async def detect_and_update_version(bot) -> Tuple[str, list]:
             else:
                 logger.info(f"[version] No previous commands stored (first change detection)")
             
-            # Check if BOT_VERSION env var has changed (manual version update)
-            if stored_version != BOT_VERSION:
-                logger.info(f"[version] BOT_VERSION env var changed from {stored_version} to {BOT_VERSION}")
-                new_version = BOT_VERSION
-                changes = []
-                
-                # Compare with previous commands
-                added_commands = current_commands - previous_commands
-                removed_commands = previous_commands - current_commands
-                
-                # Build a better summary
-                if added_commands or removed_commands:
-                    if added_commands:
-                        changes.append(f"✅ **Added {len(added_commands)} command(s):** {', '.join(sorted(added_commands))}")
-                    if removed_commands:
-                        changes.append(f"❌ **Removed {len(removed_commands)} command(s):** {', '.join(sorted(removed_commands))}")
-                elif previous_commands:
-                    # Version changed but no command changes - internal update
-                    changes.append("🔄 **Internal updates:** Bot logic or configuration updated")
-                else:
-                    # First time with version set
-                    changes.append("🚀 **Initial version:** Bot initialized with version tracking")
-                
-                # Update hash too to reflect current state
-                current_commands_str = ",".join(sorted(current_commands)) if current_commands else ""
-                await db.execute("""
-                    INSERT OR REPLACE INTO bot_version_tracking (id, current_version, feature_hash, last_updated, previous_commands)
-                    VALUES (1, ?, ?, ?, ?)
-                """, (new_version, current_hash, datetime.now(timezone.utc).isoformat(), current_commands_str))
-                await db.commit()
-                return new_version, changes
+            # Note: We ignore BOT_VERSION env var for automatic versioning
+            # It's only used as a fallback if no version is stored yet
+            # This ensures automatic versioning works correctly
             
             # If hash hasn't changed, no update needed - return stored version with no changes
             if stored_hash == current_hash:
