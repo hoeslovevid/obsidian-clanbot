@@ -2235,7 +2235,12 @@ async def on_ready():
                     pass
     
     # Check and post automatic update logs
-    await check_and_post_updates(bot)
+    try:
+        logger.info("[ready] Checking for automatic updates...")
+        await check_and_post_updates(bot)
+        logger.info("[ready] Automatic update check completed")
+    except Exception as e:
+        logger.error(f"[ready] Error during automatic update check: {e}", exc_info=True)
 
 
 
