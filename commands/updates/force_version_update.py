@@ -103,13 +103,15 @@ def setup(bot):
         added_commands = current_commands - previous_commands
         removed_commands = previous_commands - current_commands
         
-        # Build description with changes
+        # Build description - prioritize BOT_CHANGELOG as the main summary
         from bot import BOT_CHANGELOG
         description_parts = []
         
+        # Main summary from BOT_CHANGELOG (this is the primary content)
         if BOT_CHANGELOG:
             description_parts.append(BOT_CHANGELOG)
         
+        # Only show command changes as supplementary info if there are actual changes
         if added_commands or removed_commands:
             if description_parts:
                 description_parts.append("\n**Command Changes:**")
@@ -120,15 +122,12 @@ def setup(bot):
                 description_parts.append(f"✅ **Added:** {', '.join(sorted(added_commands))}")
             if removed_commands:
                 description_parts.append(f"❌ **Removed:** {', '.join(sorted(removed_commands))}")
-        elif current_commands:
-            # No changes detected, but show current commands
-            if description_parts:
-                description_parts.append(f"\n**Current commands:** {', '.join(sorted(current_commands))}")
-            else:
-                description_parts.append(f"**Current commands:** {', '.join(sorted(current_commands))}")
         
+        # If no changelog and no command changes, show a generic message
         if not description_parts:
             description_parts.append(f"Bot has been updated to version {current_version}.")
+            if added_commands or removed_commands:
+                description_parts.append("\n**Note:** Command changes detected but no changelog summary available.")
         
         description = "\n".join(description_parts)
         

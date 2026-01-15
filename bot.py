@@ -589,10 +589,17 @@ async def init_db():
         )""")
         
         # Add previous_commands column if it doesn't exist (for existing databases)
+        # Check if column exists first to avoid errors
         try:
-            await db.execute("ALTER TABLE bot_version_tracking ADD COLUMN previous_commands TEXT")
-        except aiosqlite.OperationalError:
-            pass  # Column already exists
+            cur = await db.execute("PRAGMA table_info(bot_version_tracking)")
+            columns = await cur.fetchall()
+            column_names = [col[1] for col in columns]
+            if "previous_commands" not in column_names:
+                await db.execute("ALTER TABLE bot_version_tracking ADD COLUMN previous_commands TEXT")
+                await db.commit()
+                logger.info("[db] Added previous_commands column to bot_version_tracking table")
+        except Exception as e:
+            logger.warning(f"[db] Error checking/adding previous_commands column: {e}")
 
         await db.execute("""
         CREATE TABLE IF NOT EXISTS trading_posts (
@@ -2191,18 +2198,23 @@ async def check_and_post_updates(bot):
             
             logger.info(f"[update_log] Version {version_to_use} not yet posted to {guild.name} (#{channel.name}), posting now...")
             
-            # Build description
-            if changes:
-                # Format changes nicely - each change on its own line
-                changes_text = "\n".join(changes)
-                if BOT_CHANGELOG:
-                    description = f"{BOT_CHANGELOG}\n\n{changes_text}"
-                else:
-                    description = changes_text
+            # Build description - prioritize BOT_CHANGELOG as the main summary
+            if BOT_CHANGELOG:
+                # Use BOT_CHANGELOG as primary summary
+                description = BOT_CHANGELOG
+                # Add command changes as supplementary info if available
+                if changes:
+                    # Filter out generic messages, keep only command-specific changes
+                    command_changes = [c for c in changes if "command" in c.lower() or "Added" in c or "Removed" in c]
+                    if command_changes:
+                        description += "\n\n**Command Changes:**\n" + "\n".join(command_changes)
+            elif changes:
+                # No BOT_CHANGELOG, use detected changes
+                description = "\n".join(changes)
             else:
-                # No changes detected, but still post if version changed
-                description = BOT_CHANGELOG if BOT_CHANGELOG else f"Bot has been updated to version {version_to_use}."
-                logger.warning(f"[update_log] No changes detected for version {version_to_use}, posting anyway")
+                # No changelog and no changes detected
+                description = f"Bot has been updated to version {version_to_use}."
+                logger.warning(f"[update_log] No changelog or changes detected for version {version_to_use}, posting generic message")
             
             # Post the update
             title = f"Bot Updated to v{version_to_use}"
