@@ -2091,6 +2091,11 @@ async def check_and_post_updates(bot):
     # First, detect if version should be auto-updated
     detected_version, changes = await detect_and_update_version(bot)
     
+    # If no changes detected, don't post an update (version persists, no need to post)
+    if not changes:
+        logger.info(f"[update_log] No changes detected, version remains at {detected_version}, skipping update post")
+        return
+    
     # Use detected version (or fallback to env version)
     version_to_use = detected_version if detected_version else BOT_VERSION
     
@@ -2098,7 +2103,7 @@ async def check_and_post_updates(bot):
         logger.warning("[update_log] No version set, skipping update check")
         return  # No version set, skip
     
-    logger.info(f"[update_log] Using version: {version_to_use}, changes detected: {len(changes)}")
+    logger.info(f"[update_log] Version changed to {version_to_use}, posting update with {len(changes)} change(s)")
     
     async with aiosqlite.connect(DB_PATH) as db:
         # Get all guilds with update log channels configured
