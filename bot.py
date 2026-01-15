@@ -2138,6 +2138,21 @@ async def on_ready():
                 except Exception:
                     pass
     
+    # Re-register trading post views for active listings
+    from views import TradingPostView
+    async with aiosqlite.connect(DB_PATH) as db:
+        for g in bot.guilds:
+            cur = await db.execute(
+                "SELECT id, user_id FROM trading_posts WHERE guild_id=? AND status='ACTIVE'",
+                (g.id,),
+            )
+            rows = await cur.fetchall()
+            for (listing_id, user_id) in rows:
+                try:
+                    bot.add_view(TradingPostView(int(listing_id), int(user_id)))
+                except Exception:
+                    pass
+    
     # Check and post automatic update logs
     await check_and_post_updates(bot)
 
