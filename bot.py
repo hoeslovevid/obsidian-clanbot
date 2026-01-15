@@ -953,13 +953,15 @@ async def on_interaction(interaction: discord.Interaction):
     # CRITICAL: Let discord.py handle application commands (slash commands) automatically
     # Do NOT process them here - discord.py's command tree handles them
     if interaction.type == discord.InteractionType.application_command:
-        # Track command usage for activity
+        # Track command usage for activity (skip activity commands themselves to avoid recursion)
         if isinstance(interaction.user, discord.Member) and interaction.guild:
-            try:
-                from database import track_command_usage
-                await track_command_usage(interaction.guild.id, interaction.user.id)
-            except Exception as e:
-                logger.debug(f"Failed to track command usage: {e}")
+            command_name = interaction.data.get("name", "") if interaction.data else ""
+            if command_name not in ["activity", "activity_leaderboard"]:  # Don't track these
+                try:
+                    from database import track_command_usage
+                    await track_command_usage(interaction.guild.id, interaction.user.id)
+                except Exception as e:
+                    logger.debug(f"Failed to track command usage: {e}")
         # Do nothing else - let discord.py's built-in handler process it
         return
     
