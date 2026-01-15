@@ -167,6 +167,9 @@ def load_all_commands():
         "commands.applications.application",
         "commands.applications.application_setup",
         "commands.applications.manage_applications",
+        # Update log commands
+        "commands.updates.update_log",
+        "commands.updates.update_log_setup",
         # Moderation commands
         "commands.moderation.purge",
         # Economy commands
