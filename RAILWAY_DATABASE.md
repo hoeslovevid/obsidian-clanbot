@@ -90,9 +90,15 @@ The bot uses the `DB_PATH` environment variable, defaulting to `obsidian_clanbot
 
 1. Railway Dashboard → Your Service → Look for **"Volumes"** (in Settings tab or as a separate tab)
 2. If available, click **"New Volume"** or **"+ Add Volume"**
-3. Mount path: `/data`
-4. Variables tab → Add `DB_PATH=/data/obsidian_clanbot.db`
-5. Redeploy
+3. **Mount path:** Enter `/data` (this is the directory path inside the container)
+4. **Name:** Enter `bot-data` (or any name - just a label)
+5. Variables tab → Add `DB_PATH=/data/obsidian_clanbot.db`
+6. Redeploy
+
+**What is Mount Path?**
+- The mount path is the directory path **inside your container** where the volume will be accessible
+- `/data` means the volume will be mounted at the `/data` directory
+- Your bot will save files to `/data/obsidian_clanbot.db` which will persist across deployments
 
 **If Volumes aren't available:** Use Railway's PostgreSQL addon (Option 2) - it's free and more reliable!
 
