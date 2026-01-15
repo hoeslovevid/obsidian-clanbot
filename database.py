@@ -279,3 +279,98 @@ async def log_complaint_action(guild_id: int, case_id: str, actor_id: int, actio
             VALUES (?, ?, ?, ?, ?, ?)
         """, (guild_id, case_id, actor_id, action, note, now_utc().isoformat()))
         await db.commit()
+
+
+# --------------------- Activity Functions ---------------------
+async def track_command_usage(guild_id: int, user_id: int):
+    """Track that a user used a command."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        now = now_utc()
+        today = now.date().isoformat()
+        
+        # Update or insert activity stats
+        await db.execute("""
+            INSERT INTO activity_stats (guild_id, user_id, commands_used, last_activity_date, weekly_score, monthly_score)
+            VALUES (?, ?, 1, ?, 1, 1)
+            ON CONFLICT(guild_id, user_id) DO UPDATE SET
+                commands_used = commands_used + 1,
+                last_activity_date = ?,
+                weekly_score = weekly_score + 1,
+                monthly_score = monthly_score + 1
+        """, (guild_id, user_id, today, today))
+        
+        # Log activity
+        await db.execute("""
+            INSERT INTO activity_log (guild_id, user_id, activity_type, activity_date, points)
+            VALUES (?, ?, 'command', ?, 1)
+        """, (guild_id, user_id, now.isoformat()))
+        
+        await db.commit()
+
+
+async def track_event_attendance(guild_id: int, user_id: int):
+    """Track that a user attended an event."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        now = now_utc()
+        today = now.date().isoformat()
+        
+        # Update or insert activity stats
+        await db.execute("""
+            INSERT INTO activity_stats (guild_id, user_id, events_attended, last_activity_date, weekly_score, monthly_score)
+            VALUES (?, ?, 1, ?, 10, 10)
+            ON CONFLICT(guild_id, user_id) DO UPDATE SET
+                events_attended = events_attended + 1,
+                last_activity_date = ?,
+                weekly_score = weekly_score + 10,
+                monthly_score = monthly_score + 10
+        """, (guild_id, user_id, today, today))
+        
+        # Log activity
+        await db.execute("""
+            INSERT INTO activity_log (guild_id, user_id, activity_type, activity_date, points)
+            VALUES (?, ?, 'event', ?, 10)
+        """, (guild_id, user_id, now.isoformat()))
+        
+        await db.commit()
+
+
+async def update_activity_voice_minutes(guild_id: int, user_id: int, minutes: int):
+    """Update voice minutes in activity stats."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Get current voice minutes from voice_activity table
+        cur = await db.execute("""
+            SELECT SUM(total_minutes) FROM voice_activity
+            WHERE guild_id = ? AND user_id = ?
+        """, (guild_id, user_id))
+        row = await cur.fetchone()
+        total_voice_minutes = row[0] if row and row[0] else 0
+        
+        # Update activity stats
+        today = now_utc().date().isoformat()
+        points = minutes // 10  # 1 point per 10 minutes
+        
+        await db.execute("""
+            INSERT INTO activity_stats (guild_id, user_id, voice_minutes, last_activity_date, weekly_score, monthly_score)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(guild_id, user_id) DO UPDATE SET
+                voice_minutes = ?,
+                last_activity_date = ?,
+                weekly_score = weekly_score + ?,
+                monthly_score = monthly_score + ?
+        """, (guild_id, user_id, total_voice_minutes, today, points, points, total_voice_minutes, today, points, points))
+        
+        await db.commit()
+
+
+async def reset_weekly_scores():
+    """Reset weekly scores (should be called weekly)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("UPDATE activity_stats SET weekly_score = 0")
+        await db.commit()
+
+
+async def reset_monthly_scores():
+    """Reset monthly scores (should be called monthly)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("UPDATE activity_stats SET monthly_score = 0")
+        await db.commit()
