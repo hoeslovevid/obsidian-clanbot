@@ -49,8 +49,8 @@ TIMEZONE = os.getenv("TIMEZONE", "America/New_York")
 
 DB_PATH = os.getenv("DB_PATH", "obsidian_clanbot.db")
 
-# Bot version - update this when making significant changes
-BOT_VERSION = os.getenv("BOT_VERSION", "2.0.0")
+# Bot version - starts at 1.0.0, auto-increments on changes
+BOT_VERSION = os.getenv("BOT_VERSION", "1.0.0")
 BOT_CHANGELOG = os.getenv("BOT_CHANGELOG", "")  # Optional: changelog text for this version
 
 # Temp VC config
@@ -1955,65 +1955,6 @@ async def detect_and_update_version(bot) -> Tuple[str, list]:
             current_commands = set(cmd.name for cmd in bot.tree.get_commands(guild=None))
     except Exception:
         pass
-    
-    if not current_hash:
-        # Can't calculate hash, but still check if BOT_VERSION changed
-        async with aiosqlite.connect(DB_PATH) as db:
-            cur = await db.execute("""
-                SELECT current_version, feature_hash FROM bot_version_tracking WHERE id = 1
-            """)
-            row = await cur.fetchone()
-            stored_version = row[0] if row else None
-            stored_hash = row[1] if row else ""
-            
-            # Get previous commands if available
-            cur = await db.execute("""
-                SELECT previous_commands FROM bot_version_tracking WHERE id = 1
-            """)
-            prev_row = await cur.fetchone()
-            previous_commands = set()
-            if prev_row and prev_row[0]:
-                try:
-                    previous_commands = set(prev_row[0].split(",")) if prev_row[0] else set()
-                except Exception:
-                    previous_commands = set()
-            
-            # If BOT_VERSION env var is different from stored, use it
-            if stored_version and stored_version != BOT_VERSION:
-                logger.info(f"[version] BOT_VERSION env var changed from {stored_version} to {BOT_VERSION}")
-                current_commands_str = ",".join(sorted(current_commands)) if current_commands else ""
-                await db.execute("""
-                    INSERT OR REPLACE INTO bot_version_tracking (id, current_version, feature_hash, last_updated, previous_commands)
-                    VALUES (1, ?, ?, ?, ?)
-                """, (BOT_VERSION, "", datetime.now(timezone.utc).isoformat(), current_commands_str))
-                await db.commit()
-                changes = ["Bot version updated from environment variable"]
-                
-                # Compare with previous commands
-                added_commands = current_commands - previous_commands
-                removed_commands = previous_commands - current_commands
-                
-                if added_commands:
-                    changes.append(f"**Added commands:** {', '.join(sorted(added_commands))}")
-                if removed_commands:
-                    changes.append(f"**Removed commands:** {', '.join(sorted(removed_commands))}")
-                if current_commands and not added_commands and not removed_commands:
-                    changes.append(f"**Current commands:** {', '.join(sorted(current_commands))}")
-                return BOT_VERSION, changes
-            elif not stored_version:
-                # First run
-                current_commands_str = ",".join(sorted(current_commands)) if current_commands else ""
-                await db.execute("""
-                    INSERT OR REPLACE INTO bot_version_tracking (id, current_version, feature_hash, last_updated, previous_commands)
-                    VALUES (1, ?, ?, ?, ?)
-                """, (BOT_VERSION, "", datetime.now(timezone.utc).isoformat(), current_commands_str))
-                await db.commit()
-                changes = ["Initial bot version"]
-                if current_commands:
-                    changes.append(f"**Commands:** {', '.join(sorted(current_commands))}")
-                return BOT_VERSION, changes
-            else:
-                return stored_version, []
     
     async with aiosqlite.connect(DB_PATH) as db:
         # Get stored version info and previous commands

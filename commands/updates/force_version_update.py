@@ -80,8 +80,11 @@ def setup(bot):
             """, (interaction.guild.id, current_version))
             already_posted = await cur.fetchone()
         
+        # Detect changes automatically by comparing with previous version
+        from bot import GUILD_ID, detect_and_update_version
+        detected_version, detected_changes = await detect_and_update_version(interaction.client)
+        
         # Get current commands for comparison
-        from bot import GUILD_ID
         current_commands = set()
         try:
             if GUILD_ID:
@@ -103,13 +106,21 @@ def setup(bot):
         added_commands = current_commands - previous_commands
         removed_commands = previous_commands - current_commands
         
-        # Build description - prioritize BOT_CHANGELOG as the main summary
+        # Build description - prioritize BOT_CHANGELOG, then detected changes, then command changes
         from bot import BOT_CHANGELOG
         description_parts = []
         
         # Main summary from BOT_CHANGELOG (this is the primary content)
         if BOT_CHANGELOG:
             description_parts.append(BOT_CHANGELOG)
+        
+        # Add detected changes from version detection (if any)
+        if detected_changes:
+            if description_parts:
+                description_parts.append("\n**Auto-detected Changes:**")
+            else:
+                description_parts.append("**Auto-detected Changes:**")
+            description_parts.extend(detected_changes)
         
         # Only show command changes as supplementary info if there are actual changes
         if added_commands or removed_commands:
@@ -123,7 +134,7 @@ def setup(bot):
             if removed_commands:
                 description_parts.append(f"❌ **Removed:** {', '.join(sorted(removed_commands))}")
         
-        # If no changelog and no command changes, show a generic message
+        # If no changelog and no changes, show a generic message
         if not description_parts:
             description_parts.append(f"Bot has been updated to version {current_version}.")
             if added_commands or removed_commands:
