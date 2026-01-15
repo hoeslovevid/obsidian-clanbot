@@ -97,14 +97,18 @@ async def check_and_notify_baro_arrival(bot):
         
         # Send notifications to all guilds that have it enabled
         for guild in bot.guilds:
-            async with aiosqlite.connect(DB_PATH) as db:
-                cur = await db.execute(
-                    "SELECT channel_id, enabled FROM baro_notification_settings WHERE guild_id=?",
-                    (guild.id,)
-                )
-                setting = await cur.fetchone()
-            
-            if not setting or not setting[1]:  # Not enabled or not set
+            try:
+                async with aiosqlite.connect(DB_PATH) as db:
+                    cur = await db.execute(
+                        "SELECT channel_id, enabled FROM baro_notification_settings WHERE guild_id=?",
+                        (guild.id,)
+                    )
+                    setting = await cur.fetchone()
+                
+                if not setting or not setting[1]:  # Not enabled or not set
+                    continue
+            except Exception as e:
+                logger.error(f"Error checking baro notification settings for guild {guild.id}: {e}")
                 continue
             
             channel_id = setting[0]
@@ -589,14 +593,18 @@ def setup_tasks(bot):
                         
                         # Send notifications to all guilds that have it enabled
                         for guild in bot.guilds:
-                            async with aiosqlite.connect(DB_PATH) as db:
-                                cur = await db.execute(
-                                    f"SELECT channel_id, {column} FROM cycle_notification_settings WHERE guild_id=?",
-                                    (guild.id,)
-                                )
-                                setting = await cur.fetchone()
-                            
-                            if not setting or not setting[1]:  # Not enabled
+                            try:
+                                async with aiosqlite.connect(DB_PATH) as db:
+                                    cur = await db.execute(
+                                        f"SELECT channel_id, {column} FROM cycle_notification_settings WHERE guild_id=?",
+                                        (guild.id,)
+                                    )
+                                    setting = await cur.fetchone()
+                                
+                                if not setting or not setting[1]:  # Not enabled
+                                    continue
+                            except Exception as e:
+                                logger.error(f"Error checking cycle notification settings for guild {guild.id}: {e}")
                                 continue
                             
                             channel_id = setting[0]
@@ -667,15 +675,19 @@ def setup_tasks(bot):
             
             # Get all notification settings
             for guild in bot.guilds:
-                async with aiosqlite.connect(DB_PATH) as db:
-                    cur = await db.execute("""
-                        SELECT reward_lower, reward_display, channel_id
-                        FROM invasion_notification_settings
-                        WHERE guild_id=? AND enabled=1
-                    """, (guild.id,))
-                    settings = await cur.fetchall()
-                
-                if not settings:
+                try:
+                    async with aiosqlite.connect(DB_PATH) as db:
+                        cur = await db.execute("""
+                            SELECT reward_lower, reward_display, channel_id
+                            FROM invasion_notification_settings
+                            WHERE guild_id=? AND enabled=1
+                        """, (guild.id,))
+                        settings = await cur.fetchall()
+                    
+                    if not settings:
+                        continue
+                except Exception as e:
+                    logger.error(f"Error checking invasion notification settings for guild {guild.id}: {e}")
                     continue
                 
                 # Check each invasion for matching rewards
@@ -831,14 +843,18 @@ def setup_tasks(bot):
             
             # Send notifications to all guilds that have it enabled
             for guild in bot.guilds:
-                async with aiosqlite.connect(DB_PATH) as db:
-                    cur = await db.execute(
-                        "SELECT channel_id, enabled FROM archon_notification_settings WHERE guild_id=?",
-                        (guild.id,)
-                    )
-                    setting = await cur.fetchone()
-                
-                if not setting or not setting[1]:  # Not enabled or not set
+                try:
+                    async with aiosqlite.connect(DB_PATH) as db:
+                        cur = await db.execute(
+                            "SELECT channel_id, enabled FROM archon_notification_settings WHERE guild_id=?",
+                            (guild.id,)
+                        )
+                        setting = await cur.fetchone()
+                    
+                    if not setting or not setting[1]:  # Not enabled or not set
+                        continue
+                except Exception as e:
+                    logger.error(f"Error checking archon notification settings for guild {guild.id}: {e}")
                     continue
                 
                 channel_id = setting[0]
