@@ -56,7 +56,7 @@ def setup(bot):
         # Get current version and check if it's already posted
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute("""
-                SELECT current_version FROM bot_version_tracking WHERE id = 1
+                SELECT current_version, previous_commands FROM bot_version_tracking WHERE id = 1
             """)
             row = await cur.fetchone()
             if not row:
@@ -71,6 +71,7 @@ def setup(bot):
                 )
             
             current_version = row[0]
+            previous_commands_str = row[1] if len(row) > 1 and row[1] else None
             
             # Check if this version has already been posted
             cur = await db.execute("""
@@ -79,8 +80,51 @@ def setup(bot):
             """, (interaction.guild.id, current_version))
             already_posted = await cur.fetchone()
         
-        # Import the check_and_post_updates function to reuse its logic
-        from bot import check_and_post_updates, BOT_CHANGELOG
+        # Get current commands for comparison
+        from bot import GUILD_ID
+        current_commands = set()
+        try:
+            if GUILD_ID:
+                guild = discord.Object(id=GUILD_ID)
+                current_commands = set(cmd.name for cmd in interaction.client.tree.get_commands(guild=guild))
+            else:
+                current_commands = set(cmd.name for cmd in interaction.client.tree.get_commands(guild=None))
+        except Exception:
+            pass
+        
+        # Compare with previous commands
+        previous_commands = set()
+        if previous_commands_str:
+            try:
+                previous_commands = set(previous_commands_str.split(",")) if previous_commands_str else set()
+            except Exception:
+                pass
+        
+        added_commands = current_commands - previous_commands
+        removed_commands = previous_commands - current_commands
+        
+        # Build description with changes
+        from bot import BOT_CHANGELOG
+        description_parts = []
+        
+        if BOT_CHANGELOG:
+            description_parts.append(BOT_CHANGELOG)
+        
+        if added_commands or removed_commands:
+            if description_parts:
+                description_parts.append("\n**Command Changes:**")
+            else:
+                description_parts.append("**Command Changes:**")
+            
+            if added_commands:
+                description_parts.append(f"✅ **Added:** {', '.join(sorted(added_commands))}")
+            if removed_commands:
+                description_parts.append(f"❌ **Removed:** {', '.join(sorted(removed_commands))}")
+        
+        if not description_parts:
+            description_parts.append(f"Bot has been updated to version {current_version}.")
+        
+        description = "\n".join(description_parts)
         
         # Force post the current version by temporarily removing it from posted versions
         # if it was already posted, so it will be posted again
@@ -91,9 +135,6 @@ def setup(bot):
                     WHERE guild_id = ? AND version = ?
                 """, (interaction.guild.id, current_version))
                 await db.commit()
-        
-        # Build description
-        description = BOT_CHANGELOG if BOT_CHANGELOG else f"Bot has been updated to version {current_version}."
         
         # Create update log embed
         fields = [

@@ -1927,14 +1927,34 @@ async def detect_and_update_version(bot) -> Tuple[str, list]:
     Returns: (version, list of changes)
     """
     current_hash = calculate_feature_hash(bot)
+    
+    # Get current commands list for comparison
+    current_commands = set()
+    try:
+        if GUILD_ID:
+            guild = discord.Object(id=GUILD_ID)
+            current_commands = set(cmd.name for cmd in bot.tree.get_commands(guild=guild))
+        else:
+            current_commands = set(cmd.name for cmd in bot.tree.get_commands(guild=None))
+    except Exception:
+        pass
+    
     if not current_hash:
         # Can't calculate hash, but still check if BOT_VERSION changed
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute("""
-                SELECT current_version FROM bot_version_tracking WHERE id = 1
+                SELECT current_version, feature_hash FROM bot_version_tracking WHERE id = 1
             """)
             row = await cur.fetchone()
             stored_version = row[0] if row else None
+            stored_hash = row[1] if row else ""
+            
+            # Get previous commands if we have a stored hash
+            previous_commands = set()
+            if stored_hash:
+                # Try to get commands from stored data (we'll store command list separately)
+                # For now, we can't get previous commands without hash, so we'll just note the version change
+                pass
             
             # If BOT_VERSION env var is different from stored, use it
             if stored_version and stored_version != BOT_VERSION:
@@ -1944,20 +1964,27 @@ async def detect_and_update_version(bot) -> Tuple[str, list]:
                     VALUES (1, ?, ?, ?)
                 """, (BOT_VERSION, "", datetime.now(timezone.utc).isoformat()))
                 await db.commit()
-                return BOT_VERSION, ["Bot version updated from environment variable"]
+                changes = ["Bot version updated from environment variable"]
+                if current_commands:
+                    changes.append(f"Current commands: {', '.join(sorted(current_commands))}")
+                return BOT_VERSION, changes
             elif not stored_version:
                 # First run
+                current_commands_str = ",".join(sorted(current_commands)) if current_commands else ""
                 await db.execute("""
-                    INSERT OR REPLACE INTO bot_version_tracking (id, current_version, feature_hash, last_updated)
-                    VALUES (1, ?, ?, ?)
-                """, (BOT_VERSION, "", datetime.now(timezone.utc).isoformat()))
+                    INSERT OR REPLACE INTO bot_version_tracking (id, current_version, feature_hash, last_updated, previous_commands)
+                    VALUES (1, ?, ?, ?, ?)
+                """, (BOT_VERSION, "", datetime.now(timezone.utc).isoformat(), current_commands_str))
                 await db.commit()
-                return BOT_VERSION, ["Initial bot version"]
+                changes = ["Initial bot version"]
+                if current_commands:
+                    changes.append(f"**Commands:** {', '.join(sorted(current_commands))}")
+                return BOT_VERSION, changes
             else:
                 return stored_version, []
     
     async with aiosqlite.connect(DB_PATH) as db:
-        # Get stored version info
+        # Get stored version info and previous commands
         cur = await db.execute("""
             SELECT current_version, feature_hash FROM bot_version_tracking WHERE id = 1
         """)
@@ -1970,16 +1997,31 @@ async def detect_and_update_version(bot) -> Tuple[str, list]:
             stored_hash = ""
             new_version = BOT_VERSION
             changes = ["Initial bot version"]
+            if current_commands:
+                changes.append(f"**Commands:** {', '.join(sorted(current_commands))}")
             logger.info(f"[version] First run detected, will post initial version {new_version}")
         else:
             stored_version = row[0]
-            stored_hash = row[1]
+            stored_hash = row[1] if len(row) > 1 else ""
+            previous_commands_str = row[2] if len(row) > 2 and row[2] else None
+            
+            # Get previous commands from stored data
+            # We'll store command list as part of the hash calculation
+            # For now, we'll compare current vs stored hash and infer changes
+            previous_commands = set()
+            if stored_hash:
+                # Try to get previous commands - we'll need to store them separately
+                # For now, we'll detect changes by comparing command sets
+                # We'll store the command list in a separate table or as part of the tracking
+                pass
             
             # Check if BOT_VERSION env var has changed (manual version update)
             if stored_version != BOT_VERSION:
                 logger.info(f"[version] BOT_VERSION env var changed from {stored_version} to {BOT_VERSION}")
                 new_version = BOT_VERSION
                 changes = ["Bot version updated from environment variable"]
+                if current_commands:
+                    changes.append(f"Current commands: {', '.join(sorted(current_commands))}")
                 # Update hash too to reflect current state
                 await db.execute("""
                     INSERT OR REPLACE INTO bot_version_tracking (id, current_version, feature_hash, last_updated)
@@ -1997,15 +2039,28 @@ async def detect_and_update_version(bot) -> Tuple[str, list]:
             logger.info(f"[version] Hash changed from {stored_hash[:8] if stored_hash else 'empty'}... to {current_hash[:8]}...")
             changes = []
             
-            # Get current commands
-            try:
-                if GUILD_ID:
-                    guild = discord.Object(id=GUILD_ID)
-                    current_commands = set(cmd.name for cmd in bot.tree.get_commands(guild=guild))
-                else:
-                    current_commands = set(cmd.name for cmd in bot.tree.get_commands(guild=None))
-            except Exception:
-                current_commands = set()
+            # Get previous commands from database
+            cur = await db.execute("""
+                SELECT previous_commands FROM bot_version_tracking WHERE id = 1
+            """)
+            prev_row = await cur.fetchone()
+            previous_commands = set()
+            if prev_row and prev_row[0]:
+                try:
+                    previous_commands = set(prev_row[0].split(",")) if prev_row[0] else set()
+                except Exception:
+                    previous_commands = set()
+            
+            # Compare commands to detect additions and removals
+            added_commands = current_commands - previous_commands
+            removed_commands = previous_commands - current_commands
+            
+            if added_commands:
+                changes.append(f"**Added commands:** {', '.join(sorted(added_commands))}")
+            if removed_commands:
+                changes.append(f"**Removed commands:** {', '.join(sorted(removed_commands))}")
+            if not added_commands and not removed_commands:
+                changes.append("Commands or features have been modified")
             
             # Commands have changed - increment version
             try:
@@ -2026,14 +2081,13 @@ async def detect_and_update_version(bot) -> Tuple[str, list]:
             except (ValueError, IndexError):
                 # Invalid version format, use timestamp-based version
                 new_version = f"2.{int(datetime.now(timezone.utc).timestamp())}"
-            
-            changes.append("New features or commands detected")
         
-        # Update stored version and hash
+        # Update stored version, hash, and current commands
+        current_commands_str = ",".join(sorted(current_commands)) if current_commands else ""
         await db.execute("""
-            INSERT OR REPLACE INTO bot_version_tracking (id, current_version, feature_hash, last_updated)
-            VALUES (1, ?, ?, ?)
-        """, (new_version, current_hash, datetime.now(timezone.utc).isoformat()))
+            INSERT OR REPLACE INTO bot_version_tracking (id, current_version, feature_hash, last_updated, previous_commands)
+            VALUES (1, ?, ?, ?, ?)
+        """, (new_version, current_hash, datetime.now(timezone.utc).isoformat(), current_commands_str))
         await db.commit()
         
         logger.info(f"[version] Version set to {new_version} (from {stored_version if 'stored_version' in locals() else 'N/A'})")
