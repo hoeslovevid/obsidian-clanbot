@@ -7,7 +7,7 @@ import discord  # type: ignore
 import aiosqlite  # type: ignore
 from typing import Optional
 
-from utils import extract_id, get_mod_role, is_mod, MOD_ROLE_NAME
+from utils import extract_id, get_mod_role, is_mod, MOD_ROLE_NAME, obsidian_embed
 from database import DB_PATH, now_utc
 
 logger = logging.getLogger(__name__)
