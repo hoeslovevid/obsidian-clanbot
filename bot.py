@@ -2044,12 +2044,22 @@ async def detect_and_update_version(bot) -> Tuple[str, list]:
                 VALUES (1, ?, ?, ?, ?)
             """, (new_version, current_hash, datetime.now(timezone.utc).isoformat(), current_commands_str))
             await db.commit()
-            logger.info(f"[version] Version initialized to {new_version}")
+            
+            # Verify the version was stored correctly
+            verify_cur = await db.execute("SELECT current_version FROM bot_version_tracking WHERE id = 1")
+            verify_row = await verify_cur.fetchone()
+            if verify_row and verify_row[0] == new_version:
+                logger.info(f"[version] ✅ Version {new_version} successfully stored and verified in database")
+            else:
+                logger.error(f"[version] ❌ Version storage verification failed! Expected {new_version}, got {verify_row}")
+            
             return new_version, changes
         else:
             stored_version = row[0]
             stored_hash = row[1] if len(row) > 1 else ""
             previous_commands_str = row[2] if len(row) > 2 and row[2] else None
+            
+            logger.info(f"[version] Loaded stored version: {stored_version}, hash: {stored_hash[:8] if stored_hash else 'empty'}...")
             
             # Get previous commands from stored data (these are the commands from the LAST version)
             previous_commands = set()
@@ -2152,6 +2162,14 @@ async def detect_and_update_version(bot) -> Tuple[str, list]:
             """, (new_version, current_hash, datetime.now(timezone.utc).isoformat(), current_commands_str))
             await db.commit()
             
+            # Verify the version was stored correctly
+            verify_cur = await db.execute("SELECT current_version FROM bot_version_tracking WHERE id = 1")
+            verify_row = await verify_cur.fetchone()
+            if verify_row and verify_row[0] == new_version:
+                logger.info(f"[version] ✅ Version {new_version} successfully stored and verified in database (from {stored_version})")
+            else:
+                logger.error(f"[version] ❌ Version storage verification failed! Expected {new_version}, got {verify_row}")
+            
             logger.info(f"[version] Version incremented to {new_version} (from {stored_version}), stored {len(current_commands)} commands as previous_commands")
             return new_version, changes
 
@@ -2194,11 +2212,30 @@ async def check_and_post_updates(bot):
         try:
             guild = bot.get_guild(guild_id)
             if not guild:
+                logger.warning(f"[update_log] Guild {guild_id} not found, skipping")
                 continue
             
             channel = guild.get_channel(channel_id)
-            if not isinstance(channel, discord.TextChannel):
+            if not channel:
+                logger.warning(f"[update_log] Channel {channel_id} not found in guild {guild.name}, skipping")
                 continue
+            
+            if not isinstance(channel, discord.TextChannel):
+                logger.warning(f"[update_log] Channel {channel_id} in {guild.name} is not a text channel, skipping")
+                continue
+            
+            # Verify bot has permission to send messages in this channel
+            bot_member = guild.get_member(bot.user.id) if bot.user else None
+            if not bot_member:
+                logger.warning(f"[update_log] Bot member not found in guild {guild.name}, skipping")
+                continue
+            
+            permissions = channel.permissions_for(bot_member)
+            if not permissions.send_messages or not permissions.embed_links:
+                logger.warning(f"[update_log] Bot lacks permissions (send_messages={permissions.send_messages}, embed_links={permissions.embed_links}) in {guild.name} (#{channel.name}), skipping")
+                continue
+            
+            logger.info(f"[update_log] Verified channel {guild.name} (#{channel.name}) - has permissions, proceeding...")
             
             # Check if this version has already been posted
             async with aiosqlite.connect(DB_PATH) as db:
