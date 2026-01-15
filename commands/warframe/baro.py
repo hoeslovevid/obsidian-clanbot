@@ -13,15 +13,22 @@ def format_baro_time(expiry_time: datetime) -> str:
     """Format time remaining for Baro."""
     time_remaining = expiry_time - datetime.now(timezone.utc)
     total_seconds = int(time_remaining.total_seconds())
+    
+    # Handle negative time (shouldn't happen if Baro is active, but be safe)
+    if total_seconds < 0:
+        return "Expired"
+    
     days = total_seconds // 86400
     hours = (total_seconds % 86400) // 3600
-    minutes = (total_seconds % 3600) // 60
+    minutes = (total_seconds % 86400) // 60
     
     # Format with days if applicable
     if days > 0:
         return f"{days}d {hours}h {minutes}m"
-    else:
+    elif hours > 0:
         return f"{hours}h {minutes}m"
+    else:
+        return f"{minutes}m"
 
 
 def build_baro_embed(baro_data: dict, is_active: bool, client) -> discord.Embed:
