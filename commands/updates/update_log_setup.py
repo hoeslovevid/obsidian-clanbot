@@ -1,10 +1,13 @@
 """Update log setup command for moderators."""
 import discord
 from discord import app_commands
+import logging
 
 from utils import obsidian_embed, is_mod
 from database import DB_PATH
 import aiosqlite  # type: ignore
+
+logger = logging.getLogger(__name__)
 
 
 def setup(bot):
