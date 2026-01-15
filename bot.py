@@ -2022,9 +2022,10 @@ async def detect_and_update_version(bot) -> Tuple[str, list]:
                 await db.commit()
                 return new_version, changes
             
-            # If hash hasn't changed, no update needed
+            # If hash hasn't changed, no update needed - return stored version with no changes
             if stored_hash == current_hash:
-                logger.info(f"[version] No changes detected (hash: {current_hash[:8]}...)")
+                logger.info(f"[version] No changes detected (hash: {current_hash[:8] if current_hash else 'empty'}...), keeping version {stored_version}")
+                # Return stored version with empty changes list - this means no update needed
                 return stored_version, []
             
             # Hash changed - detect what changed
