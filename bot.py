@@ -571,6 +571,14 @@ async def init_db():
             PRIMARY KEY (guild_id, version)
         )""")
 
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS bot_version_tracking (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            current_version TEXT NOT NULL,
+            feature_hash TEXT NOT NULL,
+            last_updated TEXT NOT NULL
+        )""")
+
         await db.commit()
 
 
@@ -1823,19 +1831,26 @@ async def check_and_post_updates(bot):
                 cur = await db.execute("""
                     SELECT 1 FROM update_log_posted_versions 
                     WHERE guild_id = ? AND version = ?
-                """, (guild_id, BOT_VERSION))
+                """, (guild_id, version_to_use))
                 already_posted = await cur.fetchone()
             
             if already_posted:
                 continue  # This version already posted for this guild
             
+            # Build description
+            if changes:
+                description = "\n".join(changes)
+                if BOT_CHANGELOG:
+                    description = f"{BOT_CHANGELOG}\n\n**Auto-detected changes:**\n{description}"
+            else:
+                description = BOT_CHANGELOG if BOT_CHANGELOG else f"Bot has been updated to version {version_to_use}."
+            
             # Post the update
-            title = f"Bot Updated to v{BOT_VERSION}"
-            description = BOT_CHANGELOG if BOT_CHANGELOG else f"Bot has been updated to version {BOT_VERSION}. Check the changelog for details."
+            title = f"Bot Updated to v{version_to_use}"
             
             fields = [
                 ("Update", description, False),
-                ("Version", BOT_VERSION, True),
+                ("Version", version_to_use, True),
                 ("Date", f"<t:{int(datetime.now(timezone.utc).timestamp())}:F>", True),
             ]
             
@@ -1857,10 +1872,10 @@ async def check_and_post_updates(bot):
                     await db.execute("""
                         INSERT OR REPLACE INTO update_log_posted_versions (guild_id, version, posted_at)
                         VALUES (?, ?, ?)
-                    """, (guild_id, BOT_VERSION, datetime.now(timezone.utc).isoformat()))
+                    """, (guild_id, version_to_use, datetime.now(timezone.utc).isoformat()))
                     await db.commit()
                 
-                logger.info(f"[update_log] Posted automatic update v{BOT_VERSION} to {guild.name} (#{channel.name})")
+                logger.info(f"[update_log] Posted automatic update v{version_to_use} to {guild.name} (#{channel.name})")
             except discord.Forbidden:
                 logger.warning(f"[update_log] No permission to post in {guild.name} (#{channel.name})")
             except Exception as e:
