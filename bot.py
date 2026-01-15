@@ -584,8 +584,15 @@ async def init_db():
             id INTEGER PRIMARY KEY CHECK (id = 1),
             current_version TEXT NOT NULL,
             feature_hash TEXT NOT NULL,
-            last_updated TEXT NOT NULL
+            last_updated TEXT NOT NULL,
+            previous_commands TEXT
         )""")
+        
+        # Add previous_commands column if it doesn't exist (for existing databases)
+        try:
+            await db.execute("ALTER TABLE bot_version_tracking ADD COLUMN previous_commands TEXT")
+        except aiosqlite.OperationalError:
+            pass  # Column already exists
 
         await db.execute("""
         CREATE TABLE IF NOT EXISTS trading_posts (
@@ -1986,7 +1993,7 @@ async def detect_and_update_version(bot) -> Tuple[str, list]:
     async with aiosqlite.connect(DB_PATH) as db:
         # Get stored version info and previous commands
         cur = await db.execute("""
-            SELECT current_version, feature_hash FROM bot_version_tracking WHERE id = 1
+            SELECT current_version, feature_hash, previous_commands FROM bot_version_tracking WHERE id = 1
         """)
         row = await cur.fetchone()
         
@@ -2006,27 +2013,36 @@ async def detect_and_update_version(bot) -> Tuple[str, list]:
             previous_commands_str = row[2] if len(row) > 2 and row[2] else None
             
             # Get previous commands from stored data
-            # We'll store command list as part of the hash calculation
-            # For now, we'll compare current vs stored hash and infer changes
             previous_commands = set()
-            if stored_hash:
-                # Try to get previous commands - we'll need to store them separately
-                # For now, we'll detect changes by comparing command sets
-                # We'll store the command list in a separate table or as part of the tracking
-                pass
+            if previous_commands_str:
+                try:
+                    previous_commands = set(previous_commands_str.split(",")) if previous_commands_str else set()
+                except Exception:
+                    previous_commands = set()
             
             # Check if BOT_VERSION env var has changed (manual version update)
             if stored_version != BOT_VERSION:
                 logger.info(f"[version] BOT_VERSION env var changed from {stored_version} to {BOT_VERSION}")
                 new_version = BOT_VERSION
                 changes = ["Bot version updated from environment variable"]
-                if current_commands:
-                    changes.append(f"Current commands: {', '.join(sorted(current_commands))}")
+                
+                # Compare with previous commands
+                added_commands = current_commands - previous_commands
+                removed_commands = previous_commands - current_commands
+                
+                if added_commands:
+                    changes.append(f"**Added commands:** {', '.join(sorted(added_commands))}")
+                if removed_commands:
+                    changes.append(f"**Removed commands:** {', '.join(sorted(removed_commands))}")
+                if current_commands and not added_commands and not removed_commands:
+                    changes.append(f"**Current commands:** {', '.join(sorted(current_commands))}")
+                
                 # Update hash too to reflect current state
+                current_commands_str = ",".join(sorted(current_commands)) if current_commands else ""
                 await db.execute("""
-                    INSERT OR REPLACE INTO bot_version_tracking (id, current_version, feature_hash, last_updated)
-                    VALUES (1, ?, ?, ?)
-                """, (new_version, current_hash, datetime.now(timezone.utc).isoformat()))
+                    INSERT OR REPLACE INTO bot_version_tracking (id, current_version, feature_hash, last_updated, previous_commands)
+                    VALUES (1, ?, ?, ?, ?)
+                """, (new_version, current_hash, datetime.now(timezone.utc).isoformat(), current_commands_str))
                 await db.commit()
                 return new_version, changes
             
