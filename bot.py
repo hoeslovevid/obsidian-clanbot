@@ -1956,24 +1956,39 @@ async def detect_and_update_version(bot) -> Tuple[str, list]:
             stored_version = row[0] if row else None
             stored_hash = row[1] if row else ""
             
-            # Get previous commands if we have a stored hash
+            # Get previous commands if available
+            cur = await db.execute("""
+                SELECT previous_commands FROM bot_version_tracking WHERE id = 1
+            """)
+            prev_row = await cur.fetchone()
             previous_commands = set()
-            if stored_hash:
-                # Try to get commands from stored data (we'll store command list separately)
-                # For now, we can't get previous commands without hash, so we'll just note the version change
-                pass
+            if prev_row and prev_row[0]:
+                try:
+                    previous_commands = set(prev_row[0].split(",")) if prev_row[0] else set()
+                except Exception:
+                    previous_commands = set()
             
             # If BOT_VERSION env var is different from stored, use it
             if stored_version and stored_version != BOT_VERSION:
                 logger.info(f"[version] BOT_VERSION env var changed from {stored_version} to {BOT_VERSION}")
+                current_commands_str = ",".join(sorted(current_commands)) if current_commands else ""
                 await db.execute("""
-                    INSERT OR REPLACE INTO bot_version_tracking (id, current_version, feature_hash, last_updated)
-                    VALUES (1, ?, ?, ?)
-                """, (BOT_VERSION, "", datetime.now(timezone.utc).isoformat()))
+                    INSERT OR REPLACE INTO bot_version_tracking (id, current_version, feature_hash, last_updated, previous_commands)
+                    VALUES (1, ?, ?, ?, ?)
+                """, (BOT_VERSION, "", datetime.now(timezone.utc).isoformat(), current_commands_str))
                 await db.commit()
                 changes = ["Bot version updated from environment variable"]
-                if current_commands:
-                    changes.append(f"Current commands: {', '.join(sorted(current_commands))}")
+                
+                # Compare with previous commands
+                added_commands = current_commands - previous_commands
+                removed_commands = previous_commands - current_commands
+                
+                if added_commands:
+                    changes.append(f"**Added commands:** {', '.join(sorted(added_commands))}")
+                if removed_commands:
+                    changes.append(f"**Removed commands:** {', '.join(sorted(removed_commands))}")
+                if current_commands and not added_commands and not removed_commands:
+                    changes.append(f"**Current commands:** {', '.join(sorted(current_commands))}")
                 return BOT_VERSION, changes
             elif not stored_version:
                 # First run
