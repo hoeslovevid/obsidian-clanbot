@@ -49,6 +49,10 @@ TIMEZONE = os.getenv("TIMEZONE", "America/New_York")
 
 DB_PATH = os.getenv("DB_PATH", "obsidian_clanbot.db")
 
+# Bot version - update this when making significant changes
+BOT_VERSION = os.getenv("BOT_VERSION", "2.0.0")
+BOT_CHANGELOG = os.getenv("BOT_CHANGELOG", "")  # Optional: changelog text for this version
+
 # Temp VC config
 TEMP_VC_CATEGORY_ID = int(os.getenv("TEMP_VC_CATEGORY_ID", "0") or "0")
 TEMP_VC_CATEGORY_NAME = os.getenv("TEMP_VC_CATEGORY_NAME", "Temp VCs")

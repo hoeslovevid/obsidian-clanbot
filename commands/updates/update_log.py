@@ -87,6 +87,15 @@ def setup(bot):
         
         try:
             await channel.send(embed=embed)
+            
+            # If version is provided, mark it as posted (so automatic updates don't repost it)
+            if version:
+                async with aiosqlite.connect(DB_PATH) as db:
+                    await db.execute("""
+                        INSERT OR REPLACE INTO update_log_posted_versions (guild_id, version, posted_at)
+                        VALUES (?, ?, ?)
+                    """, (interaction.guild.id, version, datetime.now(timezone.utc).isoformat()))
+                    await db.commit()
             await interaction.followup.send(
                 embed=obsidian_embed(
                     "✅ Update Log Posted",
