@@ -2313,7 +2313,39 @@ async def on_ready():
 
 
 async def main():
+    # Initialize database and verify persistence
     await init_db()
+    
+    # Verify database file exists and is accessible
+    import os
+    if os.path.exists(DB_PATH):
+        db_size = os.path.getsize(DB_PATH)
+        logger.info(f"[startup] Database file found: {DB_PATH} ({db_size} bytes)")
+    else:
+        logger.warning(f"[startup] Database file not found: {DB_PATH} (will be created)")
+    
+    # Verify update log tables exist
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Check if update_log_settings table exists
+        cur = await db.execute("""
+            SELECT name FROM sqlite_master 
+            WHERE type='table' AND name='update_log_settings'
+        """)
+        if not await cur.fetchone():
+            logger.error("[startup] CRITICAL: update_log_settings table not found!")
+        else:
+            logger.info("[startup] Update log settings table verified")
+        
+        # Check if bot_version_tracking table exists
+        cur = await db.execute("""
+            SELECT name FROM sqlite_master 
+            WHERE type='table' AND name='bot_version_tracking'
+        """)
+        if not await cur.fetchone():
+            logger.error("[startup] CRITICAL: bot_version_tracking table not found!")
+        else:
+            logger.info("[startup] Bot version tracking table verified")
+    
     try:
         await bot.start(TOKEN)
     except discord.errors.PrivilegedIntentsRequired as e:
