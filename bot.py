@@ -563,6 +563,14 @@ async def init_db():
             channel_id INTEGER
         )""")
 
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS update_log_posted_versions (
+            guild_id INTEGER NOT NULL,
+            version TEXT NOT NULL,
+            posted_at TEXT NOT NULL,
+            PRIMARY KEY (guild_id, version)
+        )""")
+
         await db.commit()
 
 
@@ -1784,6 +1792,83 @@ async def on_interaction(interaction: discord.Interaction):
 # Economy commands are now loaded from commands/economy/ folder via load_all_commands()
 
 
+# --------------------- Update Log Functions ---------------------
+async def check_and_post_updates(bot):
+    """Check if bot version has changed and post update logs automatically."""
+    if not BOT_VERSION:
+        return  # No version set, skip
+    
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Get all guilds with update log channels configured
+        cur = await db.execute("""
+            SELECT guild_id, channel_id FROM update_log_settings WHERE channel_id IS NOT NULL
+        """)
+        guilds_with_logs = await cur.fetchall()
+    
+    if not guilds_with_logs:
+        return  # No update log channels configured
+    
+    for guild_id, channel_id in guilds_with_logs:
+        try:
+            guild = bot.get_guild(guild_id)
+            if not guild:
+                continue
+            
+            channel = guild.get_channel(channel_id)
+            if not isinstance(channel, discord.TextChannel):
+                continue
+            
+            # Check if this version has already been posted
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute("""
+                    SELECT 1 FROM update_log_posted_versions 
+                    WHERE guild_id = ? AND version = ?
+                """, (guild_id, BOT_VERSION))
+                already_posted = await cur.fetchone()
+            
+            if already_posted:
+                continue  # This version already posted for this guild
+            
+            # Post the update
+            title = f"Bot Updated to v{BOT_VERSION}"
+            description = BOT_CHANGELOG if BOT_CHANGELOG else f"Bot has been updated to version {BOT_VERSION}. Check the changelog for details."
+            
+            fields = [
+                ("Update", description, False),
+                ("Version", BOT_VERSION, True),
+                ("Date", f"<t:{int(datetime.now(timezone.utc).timestamp())}:F>", True),
+            ]
+            
+            from utils import obsidian_embed
+            embed = obsidian_embed(
+                f"🔔 Bot Update: {title}",
+                "",
+                color=discord.Color.blue(),
+                fields=fields,
+                client=bot,
+            )
+            embed.timestamp = datetime.now(timezone.utc)
+            
+            try:
+                await channel.send(embed=embed)
+                
+                # Mark this version as posted for this guild
+                async with aiosqlite.connect(DB_PATH) as db:
+                    await db.execute("""
+                        INSERT OR REPLACE INTO update_log_posted_versions (guild_id, version, posted_at)
+                        VALUES (?, ?, ?)
+                    """, (guild_id, BOT_VERSION, datetime.now(timezone.utc).isoformat()))
+                    await db.commit()
+                
+                logger.info(f"[update_log] Posted automatic update v{BOT_VERSION} to {guild.name} (#{channel.name})")
+            except discord.Forbidden:
+                logger.warning(f"[update_log] No permission to post in {guild.name} (#{channel.name})")
+            except Exception as e:
+                logger.error(f"[update_log] Error posting update to {guild.name}: {e}", exc_info=True)
+        except Exception as e:
+            logger.error(f"[update_log] Error processing update for guild {guild_id}: {e}", exc_info=True)
+
+
 # --------------------- Install / startup hooks ---------------------
 @bot.event
 async def on_guild_join(guild: discord.Guild):
@@ -1895,6 +1980,9 @@ async def on_ready():
                     bot.add_view(ApplicationManageView(int(application_id)))
                 except Exception:
                     pass
+    
+    # Check and post automatic update logs
+    await check_and_post_updates(bot)
 
 
 
