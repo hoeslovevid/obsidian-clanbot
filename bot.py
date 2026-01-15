@@ -1918,13 +1918,16 @@ def calculate_feature_hash(bot) -> str:
             commands_list = sorted([cmd.name for cmd in bot.tree.get_commands(guild=guild)])
         else:
             commands_list = sorted([cmd.name for cmd in bot.tree.get_commands(guild=None)])
+        logger.info(f"[version] Calculated hash from {len(commands_list)} commands: {', '.join(commands_list[:10])}{'...' if len(commands_list) > 10 else ''}")
     except Exception as e:
-        logger.error(f"[version] Error getting commands: {e}")
+        logger.error(f"[version] Error getting commands: {e}", exc_info=True)
         return ""
     
     # Create hash from sorted command list
     commands_str = ",".join(commands_list)
-    return hashlib.md5(commands_str.encode()).hexdigest()
+    hash_value = hashlib.md5(commands_str.encode()).hexdigest()
+    logger.info(f"[version] Feature hash: {hash_value[:8]}... (from {len(commands_list)} commands)")
+    return hash_value
 
 
 async def detect_and_update_version(bot) -> Tuple[str, list]:
