@@ -86,10 +86,14 @@ The bot uses the `DB_PATH` environment variable, defaulting to `obsidian_clanbot
 
 ## Quick Setup (Persistent Volume)
 
-1. Railway Dashboard → Your Service → **Volumes** tab
-2. Click **"New Volume"**
+**Note:** Volumes may not be available on Railway's free tier. If you don't see a Volumes option, use Option 2 (PostgreSQL) instead.
+
+1. Railway Dashboard → Your Service → Look for **"Volumes"** (in Settings tab or as a separate tab)
+2. If available, click **"New Volume"** or **"+ Add Volume"**
 3. Mount path: `/data`
 4. Variables tab → Add `DB_PATH=/data/obsidian_clanbot.db`
 5. Redeploy
+
+**If Volumes aren't available:** Use Railway's PostgreSQL addon (Option 2) - it's free and more reliable!
 
 Your database will now persist! 🎉
