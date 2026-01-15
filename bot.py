@@ -579,6 +579,29 @@ async def init_db():
             last_updated TEXT NOT NULL
         )""")
 
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS trading_posts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            listing_type TEXT NOT NULL,
+            item_name TEXT NOT NULL,
+            price INTEGER,
+            quantity INTEGER DEFAULT 1,
+            description TEXT,
+            status TEXT NOT NULL DEFAULT 'ACTIVE',
+            message_id INTEGER,
+            created_at TEXT NOT NULL,
+            updated_at TEXT,
+            platform TEXT NOT NULL DEFAULT 'pc'
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS trading_channel_settings (
+            guild_id INTEGER NOT NULL PRIMARY KEY,
+            channel_id INTEGER
+        )""")
+
         await db.commit()
 
 

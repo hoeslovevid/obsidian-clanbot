@@ -193,6 +193,72 @@ class RSVPView(discord.ui.View):
         await interaction.response.send_message("RSVP recorded.", ephemeral=True)
 
 
+class TradingPostView(discord.ui.View):
+    """View for managing trading posts."""
+    def __init__(self, listing_id: int, owner_id: int):
+        super().__init__(timeout=None)
+        self.listing_id = listing_id
+        self.owner_id = owner_id
+    
+    @discord.ui.button(label="Mark as Sold", style=discord.ButtonStyle.success, emoji="✅", custom_id=None)
+    async def mark_sold_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.owner_id:
+            return await interaction.response.send_message("Only the listing owner can mark it as sold.", ephemeral=True)
+        
+        await interaction.response.defer(ephemeral=True)
+        
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute("""
+                UPDATE trading_posts
+                SET status = 'SOLD', updated_at = ?
+                WHERE id = ?
+            """, (now_utc().isoformat(), self.listing_id))
+            await db.commit()
+        
+        # Update embed
+        embed = interaction.message.embeds[0]
+        embed.color = discord.Color.grey()
+        # Update status
+        for i, field in enumerate(embed.fields):
+            if field.name == "Status":
+                embed.set_field_at(i, name="Status", value="✅ Sold", inline=True)
+                break
+        else:
+            embed.add_field(name="Status", value="✅ Sold", inline=True)
+        
+        # Disable buttons
+        for item in self.children:
+            item.disabled = True
+        
+        await interaction.message.edit(embed=embed, view=self)
+        await interaction.followup.send("Listing marked as sold.", ephemeral=True)
+    
+    @discord.ui.button(label="Delete", style=discord.ButtonStyle.danger, emoji="🗑️", custom_id=None)
+    async def delete_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.owner_id:
+            return await interaction.response.send_message("Only the listing owner can delete it.", ephemeral=True)
+        
+        await interaction.response.defer(ephemeral=True)
+        
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute("""
+                UPDATE trading_posts
+                SET status = 'DELETED', updated_at = ?
+                WHERE id = ?
+            """, (now_utc().isoformat(), self.listing_id))
+            await db.commit()
+        
+        try:
+            await interaction.message.delete()
+            await interaction.followup.send("Listing deleted.", ephemeral=True)
+        except discord.NotFound:
+            await interaction.followup.send("Listing deleted.", ephemeral=True)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Error deleting trade listing message: {e}")
+            await interaction.followup.send("Listing marked as deleted (message could not be removed).", ephemeral=True)
+
+
 class ApplicationManageView(discord.ui.View):
     """View for moderators to manage applications."""
     def __init__(self, application_id: int):
