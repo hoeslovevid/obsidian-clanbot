@@ -84,6 +84,10 @@ def setup(bot):
             desc += "• `/update_log` - Post a bot update log (moderators only)\n"
             desc += "  └ Usage: `/update_log title:<title> description:<description> [version:<version>]`\n"
             desc += "  └ Example: `/update_log title:New Command Added description:Added /application command for clan recruitment`\n"
+            desc += "• `/force_version_update` - Manually trigger a version update and post it (moderators only)\n"
+            desc += "  └ Usage: `/force_version_update description:<what changed> [version:<version>]`\n"
+            desc += "  └ Example: `/force_version_update description:Fixed bug in trading system`\n"
+            desc += "  └ Note: If version is not provided, it will auto-increment from the current version\n"
             desc += "\n"
         
         desc += "**💼 Trading Commands**\n"

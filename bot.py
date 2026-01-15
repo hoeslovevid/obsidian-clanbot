@@ -174,6 +174,7 @@ def load_all_commands():
         # Update log commands
         "commands.updates.update_log",
         "commands.updates.update_log_setup",
+        "commands.updates.force_version_update",
         # Trading commands
         "commands.trading.trade",
         "commands.trading.trade_price",

@@ -1,4 +1,4 @@
-"""Update log command for moderators to post bot updates."""
+"""Force version update command for moderators to manually trigger version updates."""
 import discord
 from discord import app_commands
 from datetime import datetime, timezone
@@ -30,20 +30,18 @@ def calculate_feature_hash(bot) -> str:
 
 
 def setup(bot):
-    """Register the update_log command."""
-    @bot.tree.command(name="update_log", description="Post a bot update log (moderators only).")
+    """Register the force_version_update command."""
+    @bot.tree.command(name="force_version_update", description="Manually trigger a version update and post it (moderators only).")
     @app_commands.describe(
-        title="Title of the update (e.g., 'New Command Added')",
-        description="Description of the update (what was added/changed)",
-        version="Optional version number or date"
+        description="Description of what changed in this update",
+        version="Optional version number (e.g., '2.1.0'). If not provided, will auto-increment."
     )
-    async def update_log(
+    async def force_version_update(
         interaction: discord.Interaction,
-        title: str,
         description: str,
         version: str = None
     ):
-        """Post an update log to the configured channel."""
+        """Manually trigger a version update and post it to the update log channel."""
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
             return await interaction.response.send_message(
                 "Only moderators can use this command.",
@@ -84,19 +82,53 @@ def setup(bot):
                 ephemeral=True
             )
         
+        # Determine version to use
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute("""
+                SELECT current_version FROM bot_version_tracking WHERE id = 1
+            """)
+            row = await cur.fetchone()
+            stored_version = row[0] if row else "2.0.0"
+        
+        if version:
+            new_version = version
+        else:
+            # Auto-increment version
+            try:
+                version_parts = stored_version.split(".")
+                if len(version_parts) >= 2:
+                    major = int(version_parts[0])
+                    minor = int(version_parts[1])
+                    patch = int(version_parts[2]) if len(version_parts) > 2 else 0
+                    
+                    # Increment minor version
+                    minor += 1
+                    patch = 0  # Reset patch
+                    new_version = f"{major}.{minor}.{patch}"
+                else:
+                    new_version = f"{stored_version}.1"
+            except (ValueError, IndexError):
+                new_version = f"2.{int(datetime.now(timezone.utc).timestamp())}"
+        
+        # Update stored version and hash
+        current_hash = calculate_feature_hash(interaction.client)
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute("""
+                INSERT OR REPLACE INTO bot_version_tracking (id, current_version, feature_hash, last_updated)
+                VALUES (1, ?, ?, ?)
+            """, (new_version, current_hash, datetime.now(timezone.utc).isoformat()))
+            await db.commit()
+        
         # Create update log embed
         fields = [
             ("Update", description, False),
+            ("Version", new_version, True),
+            ("Posted By", interaction.user.mention, True),
+            ("Date", f"<t:{int(datetime.now(timezone.utc).timestamp())}:F>", True),
         ]
         
-        if version:
-            fields.append(("Version", version, True))
-        
-        fields.append(("Posted By", interaction.user.mention, True))
-        fields.append(("Date", f"<t:{int(datetime.now(timezone.utc).timestamp())}:F>", True))
-        
         embed = obsidian_embed(
-            f"🔔 Bot Update: {title}",
+            f"🔔 Bot Update: Bot Updated to v{new_version}",
             "",
             color=discord.Color.blue(),
             fields=fields,
@@ -109,27 +141,18 @@ def setup(bot):
         try:
             await channel.send(embed=embed)
             
-            # If version is provided, mark it as posted (so automatic updates don't repost it)
-            # Also update the stored version in bot_version_tracking to match
-            if version:
-                async with aiosqlite.connect(DB_PATH) as db:
-                    # Mark as posted for this guild
-                    await db.execute("""
-                        INSERT OR REPLACE INTO update_log_posted_versions (guild_id, version, posted_at)
-                        VALUES (?, ?, ?)
-                    """, (interaction.guild.id, version, datetime.now(timezone.utc).isoformat()))
-                    
-                    # Update the stored version and hash to match this manual update
-                    current_hash = calculate_feature_hash(interaction.client)
-                    await db.execute("""
-                        INSERT OR REPLACE INTO bot_version_tracking (id, current_version, feature_hash, last_updated)
-                        VALUES (1, ?, ?, ?)
-                    """, (version, current_hash, datetime.now(timezone.utc).isoformat()))
-                    await db.commit()
+            # Mark this version as posted for this guild
+            async with aiosqlite.connect(DB_PATH) as db:
+                await db.execute("""
+                    INSERT OR REPLACE INTO update_log_posted_versions (guild_id, version, posted_at)
+                    VALUES (?, ?, ?)
+                """, (interaction.guild.id, new_version, datetime.now(timezone.utc).isoformat()))
+                await db.commit()
+            
             await interaction.followup.send(
                 embed=obsidian_embed(
-                    "✅ Update Log Posted",
-                    f"Update log has been posted to {channel.mention}.",
+                    "✅ Version Updated and Posted",
+                    f"Version updated to **{new_version}** and posted to {channel.mention}.",
                     color=discord.Color.green(),
                     client=interaction.client,
                 ),
@@ -147,11 +170,11 @@ def setup(bot):
             )
         except Exception as e:
             import logging
-            logging.getLogger(__name__).error(f"Error posting update log: {e}")
+            logging.getLogger(__name__).error(f"Error posting version update: {e}")
             await interaction.followup.send(
                 embed=obsidian_embed(
                     "❌ Error",
-                    f"Failed to post update log: {str(e)}",
+                    f"Failed to post version update: {str(e)}",
                     color=discord.Color.red(),
                     client=interaction.client,
                 ),
