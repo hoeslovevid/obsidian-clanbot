@@ -2083,28 +2083,25 @@ async def detect_and_update_version(bot) -> Tuple[str, list]:
             logger.info(f"[version] Hash changed from {stored_hash[:8] if stored_hash else 'empty'}... to {current_hash[:8]}...")
             changes = []
             
-            # Get previous commands from database
-            cur = await db.execute("""
-                SELECT previous_commands FROM bot_version_tracking WHERE id = 1
-            """)
-            prev_row = await cur.fetchone()
-            previous_commands = set()
-            if prev_row and prev_row[0]:
-                try:
-                    previous_commands = set(prev_row[0].split(",")) if prev_row[0] else set()
-                except Exception:
-                    previous_commands = set()
-            
+            # previous_commands is already loaded from the row above
             # Compare commands to detect additions and removals
+            logger.info(f"[version] Comparing commands: previous={len(previous_commands)}, current={len(current_commands)}")
             added_commands = current_commands - previous_commands
             removed_commands = previous_commands - current_commands
+            
+            logger.info(f"[version] Command changes detected: +{len(added_commands)} added, -{len(removed_commands)} removed")
             
             if added_commands:
                 changes.append(f"**Added commands:** {', '.join(sorted(added_commands))}")
             if removed_commands:
                 changes.append(f"**Removed commands:** {', '.join(sorted(removed_commands))}")
-            if not added_commands and not removed_commands:
+            if not added_commands and not removed_commands and previous_commands:
+                # Commands exist but changed in some way (maybe internal changes)
                 changes.append("Commands or features have been modified")
+            elif not previous_commands:
+                # First time detecting changes, show all current commands
+                if current_commands:
+                    changes.append(f"**Current commands:** {', '.join(sorted(current_commands))}")
             
             # Commands have changed - increment version
             try:
