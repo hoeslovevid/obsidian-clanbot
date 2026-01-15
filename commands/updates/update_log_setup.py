@@ -46,6 +46,15 @@ def setup(bot):
                     VALUES (?, ?)
                 """, (interaction.guild.id, channel.id))
                 await db.commit()
+                # Verify the save worked
+                cur = await db.execute("""
+                    SELECT channel_id FROM update_log_settings WHERE guild_id = ?
+                """, (interaction.guild.id,))
+                verify = await cur.fetchone()
+                if verify and verify[0] == channel.id:
+                    logger.info(f"[update_log_setup] Successfully saved update log channel {channel.id} for guild {interaction.guild.id}")
+                else:
+                    logger.error(f"[update_log_setup] Failed to verify save of update log channel {channel.id} for guild {interaction.guild.id}")
             
             await interaction.followup.send(
                 embed=obsidian_embed(

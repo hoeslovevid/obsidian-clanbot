@@ -2361,9 +2361,10 @@ async def on_ready():
         else:
             logger.info("[ready] No version tracking found (will be created on first update check)")
     
-    # Check and post automatic update logs
+    # Wait a bit for commands to fully sync, then check and post automatic update logs
     try:
-        logger.info("[ready] Checking for automatic updates...")
+        logger.info("[ready] Waiting for commands to sync, then checking for automatic updates...")
+        await asyncio.sleep(2)  # Give commands time to fully register
         await check_and_post_updates(bot)
         logger.info("[ready] Automatic update check completed")
     except Exception as e:
