@@ -2250,14 +2250,15 @@ async def check_and_post_updates(bot):
                 """, (guild_id, version_to_use))
                 already_posted = await cur.fetchone()
             
-            if already_posted and not changes:
-                # Only skip if already posted AND no changes were detected (version didn't just increment)
-                logger.info(f"[update_log] Version {version_to_use} already posted to {guild.name} (#{channel.name}) and no new changes, skipping")
-                continue
-            elif already_posted:
-                # Version was posted before, but changes were just detected - this means version was just incremented
-                # Post it again to notify about the new version
-                logger.info(f"[update_log] Version {version_to_use} was posted before, but new changes detected - will post update")
+            if already_posted:
+                if changes:
+                    # Version was posted before, but changes were just detected - this means version was just incremented
+                    # Post it again to notify about the new version
+                    logger.info(f"[update_log] ⚠️ Version {version_to_use} was posted before, but NEW CHANGES detected - will post update anyway")
+                else:
+                    # Already posted and no new changes - skip
+                    logger.info(f"[update_log] Version {version_to_use} already posted to {guild.name} (#{channel.name}) and no new changes, skipping")
+                    continue
             else:
                 logger.info(f"[update_log] Version {version_to_use} not yet posted to {guild.name} (#{channel.name}), will post now")
             
