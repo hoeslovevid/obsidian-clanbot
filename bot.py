@@ -1964,15 +1964,12 @@ async def detect_and_update_version(bot) -> Tuple[str, list]:
         row = await cur.fetchone()
         
         if not row:
-            # First time - initialize with current version
-            # On first run, we want to post the initial version
-            stored_version = BOT_VERSION
-            stored_hash = ""
-            new_version = BOT_VERSION
+            # First time - initialize with version 1.0.0
+            new_version = "1.0.0"
             changes = ["Initial bot version"]
             if current_commands:
                 changes.append(f"**Commands:** {', '.join(sorted(current_commands))}")
-            logger.info(f"[version] First run detected, will post initial version {new_version}")
+            logger.info(f"[version] First run detected, initializing with version {new_version}")
             # Store current commands as previous_commands for next comparison
             current_commands_str = ",".join(sorted(current_commands)) if current_commands else ""
             await db.execute("""
@@ -1980,7 +1977,7 @@ async def detect_and_update_version(bot) -> Tuple[str, list]:
                 VALUES (1, ?, ?, ?, ?)
             """, (new_version, current_hash, datetime.now(timezone.utc).isoformat(), current_commands_str))
             await db.commit()
-            logger.info(f"[version] Version set to {new_version} (from N/A)")
+            logger.info(f"[version] Version initialized to {new_version}")
             return new_version, changes
         else:
             stored_version = row[0]
