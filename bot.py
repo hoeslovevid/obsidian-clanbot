@@ -2001,6 +2001,8 @@ async def detect_and_update_version(bot) -> Tuple[str, list]:
 
 async def check_and_post_updates(bot):
     """Check if bot version has changed and post update logs automatically."""
+    logger.info("[update_log] Starting automatic update check...")
+    
     # First, detect if version should be auto-updated
     detected_version, changes = await detect_and_update_version(bot)
     
@@ -2008,7 +2010,10 @@ async def check_and_post_updates(bot):
     version_to_use = detected_version if detected_version else BOT_VERSION
     
     if not version_to_use:
+        logger.warning("[update_log] No version set, skipping update check")
         return  # No version set, skip
+    
+    logger.info(f"[update_log] Using version: {version_to_use}, changes detected: {len(changes)}")
     
     async with aiosqlite.connect(DB_PATH) as db:
         # Get all guilds with update log channels configured
@@ -2018,7 +2023,10 @@ async def check_and_post_updates(bot):
         guilds_with_logs = await cur.fetchall()
     
     if not guilds_with_logs:
+        logger.info("[update_log] No update log channels configured, skipping")
         return  # No update log channels configured
+    
+    logger.info(f"[update_log] Found {len(guilds_with_logs)} guild(s) with update log channels configured")
     
     for guild_id, channel_id in guilds_with_logs:
         try:
@@ -2039,10 +2047,10 @@ async def check_and_post_updates(bot):
                 already_posted = await cur.fetchone()
             
             if already_posted:
-                logger.info(f"[update_log] Version {version_to_use} already posted to {guild.name}, skipping")
+                logger.info(f"[update_log] Version {version_to_use} already posted to {guild.name} (#{channel.name}), skipping")
                 continue  # This version already posted for this guild
             
-            logger.info(f"[update_log] Posting version {version_to_use} to {guild.name} (#{channel.name})")
+            logger.info(f"[update_log] Version {version_to_use} not yet posted to {guild.name} (#{channel.name}), posting now...")
             
             # Build description
             if changes:
@@ -2082,11 +2090,13 @@ async def check_and_post_updates(bot):
                     """, (guild_id, version_to_use, datetime.now(timezone.utc).isoformat()))
                     await db.commit()
                 
-                logger.info(f"[update_log] Posted automatic update v{version_to_use} to {guild.name} (#{channel.name})")
+                logger.info(f"[update_log] ✅ Successfully posted automatic update v{version_to_use} to {guild.name} (#{channel.name})")
             except discord.Forbidden:
-                logger.warning(f"[update_log] No permission to post in {guild.name} (#{channel.name})")
+                logger.error(f"[update_log] ❌ No permission to post in {guild.name} (#{channel.name})")
+            except discord.NotFound:
+                logger.error(f"[update_log] ❌ Channel not found in {guild.name} (channel_id: {channel_id})")
             except Exception as e:
-                logger.error(f"[update_log] Error posting update to {guild.name}: {e}", exc_info=True)
+                logger.error(f"[update_log] ❌ Error posting update to {guild.name} (#{channel.name}): {e}", exc_info=True)
         except Exception as e:
             logger.error(f"[update_log] Error processing update for guild {guild_id}: {e}", exc_info=True)
 
