@@ -625,6 +625,36 @@ async def init_db():
             message TEXT,
             enabled INTEGER NOT NULL DEFAULT 1
         )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS giveaways (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            channel_id INTEGER NOT NULL,
+            message_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT,
+            prize TEXT NOT NULL,
+            winner_count INTEGER NOT NULL DEFAULT 1,
+            end_time TEXT NOT NULL,
+            created_by INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            ended INTEGER NOT NULL DEFAULT 0,
+            ended_at TEXT,
+            required_role_id INTEGER,
+            min_level INTEGER,
+            UNIQUE(guild_id, message_id)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS giveaway_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            giveaway_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            entered_at TEXT NOT NULL,
+            UNIQUE(giveaway_id, user_id),
+            FOREIGN KEY (giveaway_id) REFERENCES giveaways(id) ON DELETE CASCADE
+        )""")
         
         # Add previous_commands column if it doesn't exist (for existing databases)
         # Check if column exists first to avoid errors
@@ -1730,6 +1760,41 @@ async def on_interaction(interaction: discord.Interaction):
                             pass
                         return
 
+        # Giveaways: Enter/Leave
+        if cid and cid.startswith("giveaway:"):
+            action = cid.split(":")[-1]
+            if action in ["enter", "leave"]:
+                # Get giveaway ID from message
+                if not interaction.message:
+                    return
+                
+                async with aiosqlite.connect(DB_PATH) as db:
+                    cur = await db.execute("""
+                        SELECT id FROM giveaways WHERE guild_id = ? AND message_id = ? AND ended = 0
+                    """, (interaction.guild.id, interaction.message.id))
+                    row = await cur.fetchone()
+                
+                if not row:
+                    return await interaction.response.send_message(
+                        embed=obsidian_embed(
+                            "❌ Giveaway Not Found",
+                            "This giveaway no longer exists or has ended.",
+                            color=discord.Color.red(),
+                            client=bot,
+                        ),
+                        ephemeral=True
+                    )
+                
+                giveaway_id = row[0]
+                from views import GiveawayView
+                view = GiveawayView(giveaway_id)
+                
+                if action == "enter":
+                    await view.enter_giveaway(interaction, None)
+                elif action == "leave":
+                    await view.leave_giveaway(interaction, None)
+                return
+        
         # Events: RSVP
         if cid.startswith("events:rsvp:"):
             rsvp_action = cid.split(":")[-1]
@@ -2487,6 +2552,20 @@ async def on_ready():
                     bot.add_view(ApplicationManageView(int(application_id)))
                 except Exception:
                     pass
+    
+    # Re-register giveaway views for active giveaways
+    from views import GiveawayView
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("""
+            SELECT id FROM giveaways WHERE ended = 0
+        """)
+        active_giveaways = await cur.fetchall()
+    
+    for (giveaway_id,) in active_giveaways:
+        try:
+            bot.add_view(GiveawayView(giveaway_id))
+        except Exception as e:
+            logger.debug(f"[ready] Error re-registering giveaway view {giveaway_id}: {e}")
     
     # Re-register trading post views for active listings
     from views import TradingPostView

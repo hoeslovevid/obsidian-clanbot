@@ -939,6 +939,21 @@ def setup_tasks(bot):
     async def before_archon_check_loop():
         await bot.wait_until_ready()
 
+    @tasks.loop(minutes=1)  # Check every minute for ended giveaways
+    async def giveaway_check_loop():
+        """Check for ended giveaways and select winners."""
+        try:
+            await check_ended_giveaways(bot)
+        except Exception as e:
+            logger.error(f"[giveaway] Error in giveaway check loop: {e}", exc_info=True)
+    
+    async def before_giveaway_check_loop():
+        await bot.wait_until_ready()
+    
+    giveaway_check_loop.before_loop(before_giveaway_check_loop)
+    giveaway_check_loop.start()
+    logger.info("[tasks] Started giveaway check loop")
+    
     @tasks.loop(minutes=5)  # Update every 5 minutes
     async def member_count_update_loop():
         """Update member count channel names."""
@@ -984,6 +999,21 @@ def setup_tasks(bot):
     @member_count_update_loop.before_loop
     async def before_member_count_update_loop():
         await bot.wait_until_ready()
+
+    @tasks.loop(minutes=1)  # Check every minute for ended giveaways
+    async def giveaway_check_loop():
+        """Check for ended giveaways and select winners."""
+        try:
+            await check_ended_giveaways(bot)
+        except Exception as e:
+            logger.error(f"[giveaway] Error in giveaway check loop: {e}", exc_info=True)
+    
+    async def before_giveaway_check_loop():
+        await bot.wait_until_ready()
+    
+    giveaway_check_loop.before_loop(before_giveaway_check_loop)
+    giveaway_check_loop.start()
+    logger.info("[tasks] Started giveaway check loop")
 
     # Start all tasks with error handling
     tasks_to_start = [
