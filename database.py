@@ -192,7 +192,7 @@ async def get_user_xp(guild_id: int, user_id: int) -> Tuple[int, int, int]:
         return (0, 0, 0)
 
 
-async def add_xp(guild_id: int, user_id: int, amount: int, source: str = "ACTIVITY"):
+async def add_xp(guild_id: int, user_id: int, amount: int, source: str = "ACTIVITY") -> bool:
     """Add XP to a user. Returns True if user leveled up."""
     from utils import XP_LEVEL_MULTIPLIER
     async with aiosqlite.connect(DB_PATH) as db:
