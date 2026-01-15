@@ -2242,6 +2242,7 @@ async def check_and_post_updates(bot):
             logger.info(f"[update_log] Verified channel {guild.name} (#{channel.name}) - has permissions, proceeding...")
             
             # Check if this version has already been posted
+            # BUT: If changes were just detected (meaning version was just incremented), post anyway
             async with aiosqlite.connect(DB_PATH) as db:
                 cur = await db.execute("""
                     SELECT 1 FROM update_log_posted_versions 
@@ -2249,9 +2250,16 @@ async def check_and_post_updates(bot):
                 """, (guild_id, version_to_use))
                 already_posted = await cur.fetchone()
             
-            if already_posted:
-                logger.info(f"[update_log] Version {version_to_use} already posted to {guild.name} (#{channel.name}), skipping")
-                continue  # This version already posted for this guild
+            if already_posted and not changes:
+                # Only skip if already posted AND no changes were detected (version didn't just increment)
+                logger.info(f"[update_log] Version {version_to_use} already posted to {guild.name} (#{channel.name}) and no new changes, skipping")
+                continue
+            elif already_posted:
+                # Version was posted before, but changes were just detected - this means version was just incremented
+                # Post it again to notify about the new version
+                logger.info(f"[update_log] Version {version_to_use} was posted before, but new changes detected - will post update")
+            else:
+                logger.info(f"[update_log] Version {version_to_use} not yet posted to {guild.name} (#{channel.name}), will post now")
             
             logger.info(f"[update_log] Version {version_to_use} not yet posted to {guild.name} (#{channel.name}), posting now...")
             
