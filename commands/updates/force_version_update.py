@@ -106,39 +106,67 @@ def setup(bot):
         added_commands = current_commands - previous_commands
         removed_commands = previous_commands - current_commands
         
-        # Build description - prioritize BOT_CHANGELOG, then detected changes
+        # Build git-style commit summary (same format as automatic updates)
         from bot import BOT_CHANGELOG
-        description_parts = []
         
-        # Main summary from BOT_CHANGELOG (this is the primary content)
+        # Parse changes into categories
+        parsed_added = []
+        parsed_removed = []
+        other_changes = []
+        
+        # Parse detected changes
+        for change in detected_changes:
+            if "✅ **Added" in change or "Added" in change:
+                if "command(s):" in change:
+                    cmd_list = change.split("command(s):")[-1].strip()
+                    parsed_added.extend([cmd.strip() for cmd in cmd_list.split(",")])
+            elif "❌ **Removed" in change or "Removed" in change:
+                if "command(s):" in change:
+                    cmd_list = change.split("command(s):")[-1].strip()
+                    parsed_removed.extend([cmd.strip() for cmd in cmd_list.split(",")])
+            else:
+                other_changes.append(change)
+        
+        # Also use direct command comparison as fallback
+        if not parsed_added and added_commands:
+            parsed_added = sorted(added_commands)
+        if not parsed_removed and removed_commands:
+            parsed_removed = sorted(removed_commands)
+        
+        # Build summary
+        summary_parts = []
+        
+        # Main summary from BOT_CHANGELOG if available
         if BOT_CHANGELOG:
-            description_parts.append(BOT_CHANGELOG)
+            summary_parts.append(f"**Summary:**\n{BOT_CHANGELOG}")
         
-        # Add detected changes from version detection (if any) - filter out generic messages
-        if detected_changes:
-            # Filter to only show meaningful changes (added/removed commands, not full command lists)
-            meaningful_changes = [c for c in detected_changes if any(keyword in c.lower() for keyword in ["added", "removed", "internal", "initial", "first", "✅", "❌", "🔄", "🚀"])]
-            if meaningful_changes:
-                if description_parts:
-                    description_parts.append("\n**Changes:**")
-                else:
-                    description_parts.append("**What's New:**")
-                description_parts.extend(meaningful_changes)
+        # Build changes summary
+        changes_summary = []
         
-        # If no changelog and no meaningful changes, show a generic message
-        if not description_parts:
-            description_parts.append(f"Bot has been updated to version {current_version}.")
-            if added_commands or removed_commands:
-                # Show command changes if detected
-                change_parts = []
-                if added_commands:
-                    change_parts.append(f"✅ **Added {len(added_commands)} command(s):** {', '.join(sorted(added_commands))}")
-                if removed_commands:
-                    change_parts.append(f"❌ **Removed {len(removed_commands)} command(s):** {', '.join(sorted(removed_commands))}")
-                if change_parts:
-                    description_parts.append("\n**Changes:**\n" + "\n".join(change_parts))
+        if parsed_added:
+            changes_summary.append(f"**Added ({len(parsed_added)}):**\n" + "\n".join([f"  + `{cmd}`" for cmd in sorted(parsed_added)]))
         
-        description = "\n".join(description_parts)
+        if parsed_removed:
+            changes_summary.append(f"**Removed ({len(parsed_removed)}):**\n" + "\n".join([f"  - `{cmd}`" for cmd in sorted(parsed_removed)]))
+        
+        if other_changes:
+            for change in other_changes:
+                clean_change = change.replace("**", "").replace("🔄", "").replace("🚀", "").strip()
+                if clean_change:
+                    changes_summary.append(f"**Modified:**\n  {clean_change}")
+        
+        # Combine summary
+        if summary_parts:
+            description = "\n\n".join(summary_parts)
+        else:
+            description = f"**Update Summary:**\nBot updated to version {current_version}"
+        
+        if changes_summary:
+            description += "\n\n" + "\n\n".join(changes_summary)
+        
+        # If no changes detected
+        if not changes_summary and not BOT_CHANGELOG:
+            description = f"Bot has been updated to version {current_version}."
         
         # Force post the current version by temporarily removing it from posted versions
         # if it was already posted, so it will be posted again
@@ -152,7 +180,7 @@ def setup(bot):
         
         # Create update log embed
         fields = [
-            ("Update", description, False),
+            ("Changelog", description, False),
             ("Version", current_version, True),
             ("Posted By", interaction.user.mention, True),
             ("Date", f"<t:{int(datetime.now(timezone.utc).timestamp())}:F>", True),

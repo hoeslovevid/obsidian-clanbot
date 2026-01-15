@@ -2266,21 +2266,59 @@ async def check_and_post_updates(bot):
             
             logger.info(f"[update_log] Version {version_to_use} not yet posted to {guild.name} (#{channel.name}), posting now...")
             
-            # Build description - prioritize BOT_CHANGELOG as the main summary
+            # Build git-style commit summary
+            # Parse changes into categories
+            added_commands = []
+            removed_commands = []
+            other_changes = []
+            
+            for change in changes:
+                if "✅ **Added" in change or "Added" in change:
+                    # Extract command names
+                    if "command(s):" in change:
+                        cmd_list = change.split("command(s):")[-1].strip()
+                        added_commands.extend([cmd.strip() for cmd in cmd_list.split(",")])
+                elif "❌ **Removed" in change or "Removed" in change:
+                    if "command(s):" in change:
+                        cmd_list = change.split("command(s):")[-1].strip()
+                        removed_commands.extend([cmd.strip() for cmd in cmd_list.split(",")])
+                else:
+                    other_changes.append(change)
+            
+            # Build summary (like git commit message)
+            summary_parts = []
+            
+            # Main summary from BOT_CHANGELOG if available
             if BOT_CHANGELOG:
-                # Use BOT_CHANGELOG as primary summary
-                description = BOT_CHANGELOG
-                # Add command changes as supplementary info if available
-                if changes:
-                    # Filter out generic messages, keep only command-specific changes
-                    command_changes = [c for c in changes if "command" in c.lower() or "Added" in c or "Removed" in c]
-                    if command_changes:
-                        description += "\n\n**Command Changes:**\n" + "\n".join(command_changes)
-            elif changes:
-                # No BOT_CHANGELOG, use detected changes
-                description = "\n".join(changes)
+                summary_parts.append(f"**Summary:**\n{BOT_CHANGELOG}")
+            
+            # Build changes summary
+            changes_summary = []
+            
+            if added_commands:
+                changes_summary.append(f"**Added ({len(added_commands)}):**\n" + "\n".join([f"  + `{cmd}`" for cmd in sorted(added_commands)]))
+            
+            if removed_commands:
+                changes_summary.append(f"**Removed ({len(removed_commands)}):**\n" + "\n".join([f"  - `{cmd}`" for cmd in sorted(removed_commands)]))
+            
+            if other_changes:
+                # Clean up other changes (remove markdown formatting for cleaner display)
+                for change in other_changes:
+                    clean_change = change.replace("**", "").replace("🔄", "").replace("🚀", "").strip()
+                    if clean_change:
+                        changes_summary.append(f"**Modified:**\n  {clean_change}")
+            
+            # Combine summary
+            if summary_parts:
+                description = "\n\n".join(summary_parts)
             else:
-                # No changelog and no changes detected
+                description = f"**Update Summary:**\nBot updated to version {version_to_use}"
+            
+            if changes_summary:
+                description += "\n\n" + "\n\n".join(changes_summary)
+            
+            # If no changes detected but we're posting (shouldn't happen, but safety check)
+            if not changes_summary and not BOT_CHANGELOG:
                 description = f"Bot has been updated to version {version_to_use}."
                 logger.warning(f"[update_log] No changelog or changes detected for version {version_to_use}, posting generic message")
             
@@ -2288,7 +2326,7 @@ async def check_and_post_updates(bot):
             title = f"Bot Updated to v{version_to_use}"
             
             fields = [
-                ("Update", description, False),
+                ("Changelog", description, False),
                 ("Version", version_to_use, True),
                 ("Date", f"<t:{int(datetime.now(timezone.utc).timestamp())}:F>", True),
             ]
