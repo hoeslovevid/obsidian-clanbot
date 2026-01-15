@@ -81,6 +81,7 @@ async def get_baro_status() -> Tuple[bool, Optional[Dict[str, Any]]]:
     activation = data.get("activation", "")
     expiry = data.get("expiry", "")
     
+    # If we don't have both activation and expiry, Baro is not active
     if not activation or not expiry:
         return (False, data)
     
@@ -93,7 +94,13 @@ async def get_baro_status() -> Tuple[bool, Optional[Dict[str, Any]]]:
             return (False, data)
         
         now = datetime.now(timezone.utc)
-        is_active = activation_time <= now <= expiry_time
+        
+        # Baro is active only if:
+        # 1. Current time is after activation
+        # 2. Current time is before expiry
+        # 3. Activation is before expiry (to avoid weird API responses)
+        is_active = activation_time <= now < expiry_time and activation_time < expiry_time
+        
         return (is_active, data)
     except Exception as e:
         logger.error(f"Error parsing Baro timestamps: {e}")
