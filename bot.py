@@ -1868,16 +1868,65 @@ async def detect_and_update_version(bot) -> Tuple[str, list]:
         row = await cur.fetchone()
         
         if not row:
-            # First time - initialize with current version
+            # First time - initialize with current version but don't mark as posted yet
             stored_version = BOT_VERSION
             stored_hash = ""
+            # On first run, we want to post the initial version
+            # So we'll return the version but with an empty hash to trigger posting
+            new_version = BOT_VERSION
+            changes = ["Initial bot version"]
         else:
             stored_version = row[0]
             stored_hash = row[1]
+            
+            # If hash hasn't changed, no update needed
+            if stored_hash == current_hash:
+                return stored_version, []
+            
+            # Hash changed - detect what changed
+            changes = []
+            
+            # Get current commands
+            try:
+                if GUILD_ID:
+                    guild = discord.Object(id=GUILD_ID)
+                    current_commands = set(cmd.name for cmd in bot.tree.get_commands(guild=guild))
+                else:
+                    current_commands = set(cmd.name for cmd in bot.tree.get_commands(guild=None))
+            except Exception:
+                current_commands = set()
+            
+            # Commands have changed - increment version
+            try:
+                # Parse version (format: MAJOR.MINOR.PATCH)
+                version_parts = stored_version.split(".")
+                if len(version_parts) >= 2:
+                    major = int(version_parts[0])
+                    minor = int(version_parts[1])
+                    patch = int(version_parts[2]) if len(version_parts) > 2 else 0
+                    
+                    # Increment minor version for new features
+                    minor += 1
+                    patch = 0  # Reset patch
+                    new_version = f"{major}.{minor}.{patch}"
+                else:
+                    # Fallback: just increment
+                    new_version = f"{stored_version}.1"
+            except (ValueError, IndexError):
+                # Invalid version format, use timestamp-based version
+                new_version = f"2.{int(datetime.now(timezone.utc).timestamp())}"
+            
+            changes.append("New features or commands detected")
         
-        # If hash hasn't changed, no update needed
-        if stored_hash == current_hash:
-            return stored_version, []
+        # Update stored version and hash
+        await db.execute("""
+            INSERT OR REPLACE INTO bot_version_tracking (id, current_version, feature_hash, last_updated)
+            VALUES (1, ?, ?, ?)
+        """, (new_version, current_hash, datetime.now(timezone.utc).isoformat()))
+        await db.commit()
+        
+        logger.info(f"[version] Auto-updated version from {stored_version if 'stored_version' in locals() else 'N/A'} to {new_version} (hash changed)")
+        return new_version, changes
         
         # Hash changed - detect what changed
         changes = []
@@ -1971,7 +2020,10 @@ async def check_and_post_updates(bot):
                 already_posted = await cur.fetchone()
             
             if already_posted:
+                logger.info(f"[update_log] Version {version_to_use} already posted to {guild.name}, skipping")
                 continue  # This version already posted for this guild
+            
+            logger.info(f"[update_log] Posting version {version_to_use} to {guild.name} (#{channel.name})")
             
             # Build description
             if changes:
