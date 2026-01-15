@@ -119,8 +119,13 @@ def obsidian_embed(
 
 
 def get_mod_role(guild: discord.Guild) -> Optional[discord.Role]:
-    """Get the moderator role for a guild."""
-    return discord.utils.get(guild.roles, name=MOD_ROLE_NAME)
+    """Get the primary moderator role for a guild (returns first found, prioritizing MOD_ROLE_NAME)."""
+    mod_roles = [MOD_ROLE_NAME, "Shadow Chancellor", "Supreme Chancellor"]
+    for role_name in mod_roles:
+        role = discord.utils.get(guild.roles, name=role_name)
+        if role:
+            return role
+    return None
 
 
 def is_mod(member: discord.Member) -> bool:
