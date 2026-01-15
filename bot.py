@@ -1923,11 +1923,38 @@ def calculate_feature_hash(bot) -> str:
 async def detect_and_update_version(bot) -> Tuple[str, list]:
     """
     Detect if features have changed and auto-increment version.
+    Also checks if BOT_VERSION env var has changed.
     Returns: (version, list of changes)
     """
     current_hash = calculate_feature_hash(bot)
     if not current_hash:
-        return BOT_VERSION, []  # Can't calculate, use env version
+        # Can't calculate hash, but still check if BOT_VERSION changed
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute("""
+                SELECT current_version FROM bot_version_tracking WHERE id = 1
+            """)
+            row = await cur.fetchone()
+            stored_version = row[0] if row else None
+            
+            # If BOT_VERSION env var is different from stored, use it
+            if stored_version and stored_version != BOT_VERSION:
+                logger.info(f"[version] BOT_VERSION env var changed from {stored_version} to {BOT_VERSION}")
+                await db.execute("""
+                    INSERT OR REPLACE INTO bot_version_tracking (id, current_version, feature_hash, last_updated)
+                    VALUES (1, ?, ?, ?)
+                """, (BOT_VERSION, "", datetime.now(timezone.utc).isoformat()))
+                await db.commit()
+                return BOT_VERSION, ["Bot version updated from environment variable"]
+            elif not stored_version:
+                # First run
+                await db.execute("""
+                    INSERT OR REPLACE INTO bot_version_tracking (id, current_version, feature_hash, last_updated)
+                    VALUES (1, ?, ?, ?)
+                """, (BOT_VERSION, "", datetime.now(timezone.utc).isoformat()))
+                await db.commit()
+                return BOT_VERSION, ["Initial bot version"]
+            else:
+                return stored_version, []
     
     async with aiosqlite.connect(DB_PATH) as db:
         # Get stored version info
@@ -1947,6 +1974,19 @@ async def detect_and_update_version(bot) -> Tuple[str, list]:
         else:
             stored_version = row[0]
             stored_hash = row[1]
+            
+            # Check if BOT_VERSION env var has changed (manual version update)
+            if stored_version != BOT_VERSION:
+                logger.info(f"[version] BOT_VERSION env var changed from {stored_version} to {BOT_VERSION}")
+                new_version = BOT_VERSION
+                changes = ["Bot version updated from environment variable"]
+                # Update hash too to reflect current state
+                await db.execute("""
+                    INSERT OR REPLACE INTO bot_version_tracking (id, current_version, feature_hash, last_updated)
+                    VALUES (1, ?, ?, ?)
+                """, (new_version, current_hash, datetime.now(timezone.utc).isoformat()))
+                await db.commit()
+                return new_version, changes
             
             # If hash hasn't changed, no update needed
             if stored_hash == current_hash:
