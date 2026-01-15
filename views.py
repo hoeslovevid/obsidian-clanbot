@@ -199,9 +199,17 @@ class TradingPostView(discord.ui.View):
         super().__init__(timeout=None)
         self.listing_id = listing_id
         self.owner_id = owner_id
+        
+        # Add buttons with custom_id for persistence
+        sold_button = discord.ui.Button(label="Mark as Sold", style=discord.ButtonStyle.success, emoji="✅", custom_id=f"trade:{listing_id}:sold")
+        sold_button.callback = self.mark_sold_button
+        self.add_item(sold_button)
+        
+        delete_button = discord.ui.Button(label="Delete", style=discord.ButtonStyle.danger, emoji="🗑️", custom_id=f"trade:{listing_id}:delete")
+        delete_button.callback = self.delete_button
+        self.add_item(delete_button)
     
-    @discord.ui.button(label="Mark as Sold", style=discord.ButtonStyle.success, emoji="✅", custom_id=None)
-    async def mark_sold_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def mark_sold_button(self, interaction: discord.Interaction):
         if interaction.user.id != self.owner_id:
             return await interaction.response.send_message("Only the listing owner can mark it as sold.", ephemeral=True)
         
@@ -233,8 +241,7 @@ class TradingPostView(discord.ui.View):
         await interaction.message.edit(embed=embed, view=self)
         await interaction.followup.send("Listing marked as sold.", ephemeral=True)
     
-    @discord.ui.button(label="Delete", style=discord.ButtonStyle.danger, emoji="🗑️", custom_id=None)
-    async def delete_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def delete_button(self, interaction: discord.Interaction):
         if interaction.user.id != self.owner_id:
             return await interaction.response.send_message("Only the listing owner can delete it.", ephemeral=True)
         
@@ -264,9 +271,17 @@ class ApplicationManageView(discord.ui.View):
     def __init__(self, application_id: int):
         super().__init__(timeout=None)
         self.application_id = application_id
+        
+        # Add buttons with custom_id for persistence
+        approve_button = discord.ui.Button(label="Approve", style=discord.ButtonStyle.success, emoji="✅", custom_id=f"application:{application_id}:approve")
+        approve_button.callback = self.approve_button
+        self.add_item(approve_button)
+        
+        reject_button = discord.ui.Button(label="Reject", style=discord.ButtonStyle.danger, emoji="❌", custom_id=f"application:{application_id}:reject")
+        reject_button.callback = self.reject_button
+        self.add_item(reject_button)
     
-    @discord.ui.button(label="Approve", style=discord.ButtonStyle.success, emoji="✅", custom_id=None)
-    async def approve_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def approve_button(self, interaction: discord.Interaction):
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
             return await interaction.response.send_message("Only moderators can use this.", ephemeral=True)
         
@@ -319,8 +334,7 @@ class ApplicationManageView(discord.ui.View):
         
         await interaction.followup.send("Application approved.", ephemeral=True)
     
-    @discord.ui.button(label="Reject", style=discord.ButtonStyle.danger, emoji="❌", custom_id=None)
-    async def reject_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def reject_button(self, interaction: discord.Interaction):
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
             return await interaction.response.send_message("Only moderators can use this.", ephemeral=True)
         

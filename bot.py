@@ -1759,6 +1759,73 @@ async def on_interaction(interaction: discord.Interaction):
                     await interaction.response.send_message("Cell dissolved.", ephemeral=True)
                     await delete_temp_vc_and_panel(interaction.guild, vc_id, reason="Disband via panel")
                     return
+        
+        # Trading posts: mark as sold or delete
+        if cid.startswith("trade:"):
+            # trade:{listing_id}:{action}
+            parts = cid.split(":")
+            if len(parts) == 3:
+                _, listing_id_str, action = parts
+                try:
+                    listing_id = int(listing_id_str)
+                except ValueError:
+                    return
+                
+                # Get listing info
+                async with aiosqlite.connect(DB_PATH) as db:
+                    cur = await db.execute("""
+                        SELECT user_id, status FROM trading_posts WHERE id = ?
+                    """, (listing_id,))
+                    row = await cur.fetchone()
+                
+                if not row:
+                    return await interaction.response.send_message("Listing not found.", ephemeral=True)
+                
+                owner_id, status = row[0], row[1]
+                
+                # Check if user is the owner
+                if interaction.user.id != owner_id:
+                    return await interaction.response.send_message("Only the listing owner can manage this listing.", ephemeral=True)
+                
+                # Check if already sold/deleted
+                if status != "ACTIVE":
+                    return await interaction.response.send_message("This listing is no longer active.", ephemeral=True)
+                
+                await interaction.response.defer(ephemeral=True)
+                
+                from views import TradingPostView
+                view = TradingPostView(listing_id, owner_id)
+                
+                if action == "sold":
+                    await view.mark_sold_button(interaction)
+                elif action == "delete":
+                    await view.delete_button(interaction)
+                return
+        
+        # Applications: approve or reject
+        if cid.startswith("application:"):
+            # application:{application_id}:{action}
+            parts = cid.split(":")
+            if len(parts) == 3:
+                _, application_id_str, action = parts
+                try:
+                    application_id = int(application_id_str)
+                except ValueError:
+                    return
+                
+                if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
+                    return await interaction.response.send_message("Only moderators can use this.", ephemeral=True)
+                
+                await interaction.response.defer(ephemeral=True)
+                
+                from views import ApplicationManageView
+                view = ApplicationManageView(application_id)
+                
+                if action == "approve":
+                    await view.approve_button(interaction)
+                elif action == "reject":
+                    await view.reject_button(interaction)
+                return
 
     except Exception as e:
         # Last-resort error handler - only for component/modal interactions
