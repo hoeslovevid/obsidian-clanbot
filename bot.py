@@ -550,6 +550,12 @@ async def init_db():
             FOREIGN KEY (question_id) REFERENCES application_questions(id) ON DELETE CASCADE
         )""")
 
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS update_log_settings (
+            guild_id INTEGER NOT NULL PRIMARY KEY,
+            channel_id INTEGER
+        )""")
+
         await db.commit()
 
 

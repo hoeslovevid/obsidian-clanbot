@@ -77,6 +77,15 @@ def setup(bot):
             desc += "  └ Usage: `/manage_applications [status:<all/in_progress/pending/approved/rejected>] [limit:<number>]`\n"
         desc += "\n"
         
+        if is_user_mod:
+            desc += "**🔔 Update Log Commands**\n"
+            desc += "• `/update_log_setup` - Configure the update log channel (moderators only)\n"
+            desc += "  └ Usage: `/update_log_setup channel:#channel` or `/update_log_setup` (to disable)\n"
+            desc += "• `/update_log` - Post a bot update log (moderators only)\n"
+            desc += "  └ Usage: `/update_log title:<title> description:<description> [version:<version>]`\n"
+            desc += "  └ Example: `/update_log title:New Command Added description:Added /application command for clan recruitment`\n"
+            desc += "\n"
+        
         desc += "**💬 Other Features**\n"
         desc += "• **Join-to-Create Voice Channels** - Join the trigger channel in Temp VCs to create your own squad channel\n"
         desc += "• **Obsidian Docket** - Use the button panel to file complaints (mods will review)\n"
