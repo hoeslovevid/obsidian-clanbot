@@ -164,6 +164,7 @@ def load_all_commands():
         "commands.general.setup_obsidian",
         "commands.general.setup_docket",
         "commands.general.sync_commands",
+        "commands.general.welcome_setup",
         # Event commands
         "commands.events.event_create",
         # Complaint commands
@@ -188,6 +189,7 @@ def load_all_commands():
         "commands.trading.trade_setup",
         # Moderation commands
         "commands.moderation.purge",
+        "commands.moderation.reaction_roles",
         # Economy commands
         "commands.economy.balance",
         "commands.economy.leaderboard",
@@ -594,6 +596,34 @@ async def init_db():
             feature_hash TEXT NOT NULL,
             last_updated TEXT NOT NULL,
             previous_commands TEXT
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS reaction_roles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            message_id INTEGER NOT NULL,
+            channel_id INTEGER NOT NULL,
+            emoji TEXT NOT NULL,
+            role_id INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE(guild_id, message_id, emoji)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS welcome_settings (
+            guild_id INTEGER NOT NULL PRIMARY KEY,
+            channel_id INTEGER,
+            message TEXT,
+            enabled INTEGER NOT NULL DEFAULT 1
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS leave_settings (
+            guild_id INTEGER NOT NULL PRIMARY KEY,
+            channel_id INTEGER,
+            message TEXT,
+            enabled INTEGER NOT NULL DEFAULT 1
         )""")
         
         # Add previous_commands column if it doesn't exist (for existing databases)
@@ -2498,6 +2528,208 @@ async def on_ready():
         logger.info("[ready] Automatic update check completed")
     except Exception as e:
         logger.error(f"[ready] Error during automatic update check: {e}", exc_info=True)
+    
+    # Re-register reaction roles for all messages
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("""
+            SELECT DISTINCT message_id, channel_id FROM reaction_roles
+        """)
+        reaction_messages = await cur.fetchall()
+    
+    for message_id, channel_id in reaction_messages:
+        try:
+            channel = bot.get_channel(channel_id)
+            if channel and isinstance(channel, discord.TextChannel):
+                try:
+                    message = await channel.fetch_message(message_id)
+                    # Get all reactions for this message
+                    async with aiosqlite.connect(DB_PATH) as db2:
+                        cur2 = await db2.execute("""
+                            SELECT emoji FROM reaction_roles
+                            WHERE message_id = ? AND channel_id = ?
+                        """, (message_id, channel_id))
+                        emojis = await cur2.fetchall()
+                    
+                    # Re-add reactions if they're missing
+                    for (emoji_str,) in emojis:
+                        try:
+                            # Check if reaction already exists
+                            if not any(str(r.emoji) == emoji_str for r in message.reactions):
+                                await message.add_reaction(emoji_str)
+                        except Exception as e:
+                            logger.debug(f"[ready] Could not re-add reaction {emoji_str} to message {message_id}: {e}")
+                except discord.NotFound:
+                    logger.debug(f"[ready] Reaction role message {message_id} not found, skipping")
+                except Exception as e:
+                    logger.debug(f"[ready] Error re-registering reaction roles for message {message_id}: {e}")
+        except Exception as e:
+            logger.debug(f"[ready] Error processing reaction role message {message_id}: {e}")
+
+
+@bot.event
+async def on_member_join(member: discord.Member):
+    """Send welcome message when a member joins."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("""
+            SELECT channel_id, message, enabled FROM welcome_settings
+            WHERE guild_id = ? AND enabled = 1
+        """, (member.guild.id,))
+        row = await cur.fetchone()
+    
+    if not row or not row[0]:  # No channel set or disabled
+        return
+    
+    channel_id, message_template, enabled = row
+    if not enabled:
+        return
+    
+    channel = member.guild.get_channel(channel_id)
+    if not isinstance(channel, discord.TextChannel):
+        return
+    
+    # Format message
+    formatted_message = message_template.replace("{user}", member.mention)
+    formatted_message = formatted_message.replace("{server}", member.guild.name)
+    formatted_message = formatted_message.replace("{member_count}", str(member.guild.member_count))
+    
+    try:
+        await channel.send(formatted_message)
+    except Exception as e:
+        logger.error(f"[welcome] Error sending welcome message: {e}")
+
+
+@bot.event
+async def on_member_remove(member: discord.Member):
+    """Send leave message when a member leaves."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("""
+            SELECT channel_id, message, enabled FROM leave_settings
+            WHERE guild_id = ? AND enabled = 1
+        """, (member.guild.id,))
+        row = await cur.fetchone()
+    
+    if not row or not row[0]:  # No channel set or disabled
+        return
+    
+    channel_id, message_template, enabled = row
+    if not enabled:
+        return
+    
+    channel = member.guild.get_channel(channel_id)
+    if not isinstance(channel, discord.TextChannel):
+        return
+    
+    # Format message
+    formatted_message = message_template.replace("{user}", str(member))
+    formatted_message = formatted_message.replace("{server}", member.guild.name)
+    formatted_message = formatted_message.replace("{member_count}", str(member.guild.member_count))
+    
+    try:
+        await channel.send(formatted_message)
+    except Exception as e:
+        logger.error(f"[leave] Error sending leave message: {e}")
+
+
+@bot.event
+async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
+    """Handle reaction role assignment."""
+    # Ignore bot reactions
+    if payload.member and payload.member.bot:
+        return
+    
+    # Check if this is a reaction role message
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("""
+            SELECT role_id FROM reaction_roles
+            WHERE guild_id = ? AND message_id = ? AND emoji = ?
+        """, (payload.guild_id, payload.message_id, str(payload.emoji)))
+        row = await cur.fetchone()
+    
+    if not row:
+        return
+    
+    role_id = row[0]
+    guild = bot.get_guild(payload.guild_id)
+    if not guild:
+        return
+    
+    role = guild.get_role(role_id)
+    if not role:
+        return
+    
+    # Get member (might be None if user left)
+    member = payload.member
+    if not member:
+        try:
+            member = await guild.fetch_member(payload.user_id)
+        except discord.NotFound:
+            return
+    
+    # Check bot permissions
+    if not guild.me.guild_permissions.manage_roles:
+        return
+    
+    # Check if bot's role is high enough
+    if guild.me.top_role <= role:
+        return
+    
+    # Add role
+    try:
+        if role not in member.roles:
+            await member.add_roles(role, reason="Reaction role")
+            logger.info(f"[reaction_role] Added role {role.name} to {member} via reaction {payload.emoji}")
+    except discord.Forbidden:
+        logger.warning(f"[reaction_role] No permission to add role {role.name} to {member}")
+    except Exception as e:
+        logger.error(f"[reaction_role] Error adding role: {e}")
+
+
+@bot.event
+async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
+    """Handle reaction role removal."""
+    # Check if this is a reaction role message
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("""
+            SELECT role_id FROM reaction_roles
+            WHERE guild_id = ? AND message_id = ? AND emoji = ?
+        """, (payload.guild_id, payload.message_id, str(payload.emoji)))
+        row = await cur.fetchone()
+    
+    if not row:
+        return
+    
+    role_id = row[0]
+    guild = bot.get_guild(payload.guild_id)
+    if not guild:
+        return
+    
+    role = guild.get_role(role_id)
+    if not role:
+        return
+    
+    # Get member
+    try:
+        member = await guild.fetch_member(payload.user_id)
+    except discord.NotFound:
+        return
+    
+    # Check bot permissions
+    if not guild.me.guild_permissions.manage_roles:
+        return
+    
+    # Check if bot's role is high enough
+    if guild.me.top_role <= role:
+        return
+    
+    # Remove role
+    try:
+        if role in member.roles:
+            await member.remove_roles(role, reason="Reaction role removed")
+            logger.info(f"[reaction_role] Removed role {role.name} from {member} via reaction removal {payload.emoji}")
+    except discord.Forbidden:
+        logger.warning(f"[reaction_role] No permission to remove role {role.name} from {member}")
+    except Exception as e:
+        logger.error(f"[reaction_role] Error removing role: {e}")
 
 
 
