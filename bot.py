@@ -1955,8 +1955,9 @@ async def on_interaction(interaction: discord.Interaction):
 
 # --------------------- Update Log Functions ---------------------
 def calculate_feature_hash(bot) -> str:
-    """Calculate a hash of all registered commands to detect changes."""
+    """Calculate a hash of all registered commands and key bot files to detect changes."""
     import hashlib
+    import os
     commands_list = []
     
     # Get all commands (both global and guild-specific)
@@ -1973,8 +1974,27 @@ def calculate_feature_hash(bot) -> str:
     
     # Create hash from sorted command list
     commands_str = ",".join(commands_list)
-    hash_value = hashlib.md5(commands_str.encode()).hexdigest()
-    logger.info(f"[version] Feature hash: {hash_value[:8]}... (from {len(commands_list)} commands)")
+    
+    # Also include hash of key bot files to detect code changes
+    # This ensures version updates even when code changes without command changes
+    file_hashes = []
+    key_files = ["bot.py", "database.py", "warframe_api.py", "tasks.py"]
+    
+    for filename in key_files:
+        filepath = os.path.join(os.path.dirname(__file__), filename) if os.path.dirname(__file__) else filename
+        if os.path.exists(filepath):
+            try:
+                with open(filepath, 'rb') as f:
+                    file_content = f.read()
+                    file_hash = hashlib.md5(file_content).hexdigest()[:8]  # First 8 chars
+                    file_hashes.append(f"{filename}:{file_hash}")
+            except Exception as e:
+                logger.debug(f"[version] Could not hash {filename}: {e}")
+    
+    # Combine commands and file hashes
+    combined_str = commands_str + "|" + "|".join(file_hashes)
+    hash_value = hashlib.md5(combined_str.encode()).hexdigest()
+    logger.info(f"[version] Feature hash: {hash_value[:8]}... (from {len(commands_list)} commands + {len(file_hashes)} files)")
     return hash_value
 
 
