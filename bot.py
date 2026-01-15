@@ -90,6 +90,7 @@ EVENT_REMINDER_LOOP_MINUTES = int(os.getenv("EVENT_REMINDER_LOOP_MINUTES", "1"))
 
 # Intents
 INTENTS = discord.Intents.default()
+INTENTS.message_content = True  # Required for reading message content (economy/XP system)
 INTENTS.guilds = True
 INTENTS.members = True
 INTENTS.voice_states = True
