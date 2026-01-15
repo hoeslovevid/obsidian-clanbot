@@ -15,7 +15,15 @@ def setup(bot):
     async def activity_leaderboard(interaction: discord.Interaction, period: str = "weekly"):
         """Show activity leaderboard."""
         if not isinstance(interaction.user, discord.Member):
-            return await interaction.response.send_message("This command can only be used in a server.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Invalid Context",
+                    "This command can only be used in a server.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
         
         await interaction.response.defer()
         
