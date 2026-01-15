@@ -2293,7 +2293,9 @@ async def check_and_post_updates(bot):
             embed.timestamp = datetime.now(timezone.utc)
             
             try:
+                logger.info(f"[update_log] Attempting to send embed to {guild.name} (#{channel.name})...")
                 await channel.send(embed=embed)
+                logger.info(f"[update_log] ✅ Embed sent successfully!")
                 
                 # Mark this version as posted for this guild
                 async with aiosqlite.connect(DB_PATH) as db:
@@ -2302,16 +2304,21 @@ async def check_and_post_updates(bot):
                         VALUES (?, ?, ?)
                     """, (guild_id, version_to_use, datetime.now(timezone.utc).isoformat()))
                     await db.commit()
+                    logger.info(f"[update_log] ✅ Marked version {version_to_use} as posted for guild {guild_id}")
                 
-                logger.info(f"[update_log] ✅ Successfully posted automatic update v{version_to_use} to {guild.name} (#{channel.name})")
-            except discord.Forbidden:
-                logger.error(f"[update_log] ❌ No permission to post in {guild.name} (#{channel.name})")
-            except discord.NotFound:
-                logger.error(f"[update_log] ❌ Channel not found in {guild.name} (channel_id: {channel_id})")
+                logger.info(f"[update_log] ✅✅✅ Successfully posted automatic update v{version_to_use} to {guild.name} (#{channel.name})")
+            except discord.Forbidden as e:
+                logger.error(f"[update_log] ❌ No permission to post in {guild.name} (#{channel.name}): {e}")
+            except discord.NotFound as e:
+                logger.error(f"[update_log] ❌ Channel not found in {guild.name} (channel_id: {channel_id}): {e}")
+            except discord.HTTPException as e:
+                logger.error(f"[update_log] ❌ HTTP error posting to {guild.name} (#{channel.name}): {e}")
             except Exception as e:
-                logger.error(f"[update_log] ❌ Error posting update to {guild.name} (#{channel.name}): {e}", exc_info=True)
+                logger.error(f"[update_log] ❌ Unexpected error posting update to {guild.name} (#{channel.name}): {e}", exc_info=True)
         except Exception as e:
-            logger.error(f"[update_log] Error processing update for guild {guild_id}: {e}", exc_info=True)
+            logger.error(f"[update_log] ❌ Error processing update for guild {guild_id}: {e}", exc_info=True)
+    
+    logger.info("[update_log] ========== Automatic update check completed ==========")
 
 
 # --------------------- Install / startup hooks ---------------------
