@@ -2176,10 +2176,13 @@ async def detect_and_update_version(bot) -> Tuple[str, list]:
 
 async def check_and_post_updates(bot):
     """Check if bot version has changed and post update logs automatically."""
-    logger.info("[update_log] Starting automatic update check...")
+    logger.info("[update_log] ========== Starting automatic update check ==========")
     
     # First, detect if version should be auto-updated
     detected_version, changes = await detect_and_update_version(bot)
+    logger.info(f"[update_log] Version detection result: version={detected_version}, changes={len(changes) if changes else 0}")
+    if changes:
+        logger.info(f"[update_log] Changes detected: {changes}")
     
     # If no changes detected, don't post an update (version persists, no need to post)
     if not changes:
@@ -2201,9 +2204,10 @@ async def check_and_post_updates(bot):
             SELECT guild_id, channel_id FROM update_log_settings WHERE channel_id IS NOT NULL
         """)
         guilds_with_logs = await cur.fetchall()
+        logger.info(f"[update_log] Query result: {guilds_with_logs}")
     
     if not guilds_with_logs:
-        logger.info("[update_log] No update log channels configured, skipping")
+        logger.warning("[update_log] ⚠️ No update log channels configured in database! Use /update_log_setup to configure a channel.")
         return  # No update log channels configured
     
     logger.info(f"[update_log] Found {len(guilds_with_logs)} guild(s) with update log channels configured")
