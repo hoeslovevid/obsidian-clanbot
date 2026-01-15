@@ -47,6 +47,10 @@ GUILD_ID = int(os.getenv("GUILD_ID", "0") or "0")
 MOD_ROLE_NAME = os.getenv("MOD_ROLE_NAME", "Obsidian Inheritor")
 TIMEZONE = os.getenv("TIMEZONE", "America/New_York")
 
+# Database path - use consistent location
+# On Railway, use /tmp for ephemeral storage or mount a persistent volume
+# For persistent storage on Railway, set DB_PATH env var to a mounted volume path
+# Example: DB_PATH=/data/obsidian_clanbot.db (if you mount a volume at /data)
 DB_PATH = os.getenv("DB_PATH", "obsidian_clanbot.db")
 
 # Bot version - starts at 1.0.0, auto-increments on changes
@@ -2378,11 +2382,33 @@ async def main():
     
     # Verify database file exists and is accessible
     import os
+    db_dir = os.path.dirname(DB_PATH) if os.path.dirname(DB_PATH) else "."
+    db_filename = os.path.basename(DB_PATH)
+    
+    # Log database location info
+    logger.info(f"[startup] Database path: {DB_PATH}")
+    logger.info(f"[startup] Database directory: {os.path.abspath(db_dir)}")
+    logger.info(f"[startup] Database filename: {db_filename}")
+    
     if os.path.exists(DB_PATH):
         db_size = os.path.getsize(DB_PATH)
         logger.info(f"[startup] Database file found: {DB_PATH} ({db_size} bytes)")
+        
+        # Check if directory is writable
+        if os.access(db_dir, os.W_OK):
+            logger.info(f"[startup] Database directory is writable: {db_dir}")
+        else:
+            logger.warning(f"[startup] Database directory may not be writable: {db_dir}")
     else:
         logger.warning(f"[startup] Database file not found: {DB_PATH} (will be created)")
+        
+        # Check if directory exists and is writable
+        if not os.path.exists(db_dir):
+            logger.warning(f"[startup] Database directory does not exist: {db_dir} (will be created)")
+        elif not os.access(db_dir, os.W_OK):
+            logger.error(f"[startup] Database directory is not writable: {db_dir}")
+        else:
+            logger.info(f"[startup] Database directory is writable: {db_dir}")
     
     # Verify update log tables exist
     async with aiosqlite.connect(DB_PATH) as db:

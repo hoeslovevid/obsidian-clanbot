@@ -99,9 +99,27 @@ See `.env.example` for all available variables.
 - Ensure your bot has proper permissions in the Discord server
 
 ### Database issues
-- The database file is stored in the Railway filesystem
-- Railway deployments are ephemeral - the database will persist between deployments but will be lost if you delete the service
-- For production, consider upgrading to Railway's PostgreSQL addon for persistent storage
+
+**IMPORTANT: Railway uses ephemeral storage by default!**
+
+The database file gets **reset on every deployment** unless you use persistent storage.
+
+**Solutions:**
+1. **Use Railway Persistent Volume (Recommended):**
+   - Add a Volume to your service (mount at `/data`)
+   - Set `DB_PATH=/data/obsidian_clanbot.db` environment variable
+   - See `RAILWAY_DATABASE.md` for detailed instructions
+
+2. **Use Railway PostgreSQL Addon:**
+   - Add PostgreSQL database from Railway dashboard
+   - More reliable for production use
+   - Requires code changes to use PostgreSQL instead of SQLite
+
+3. **Use External Database:**
+   - Supabase, Neon, PlanetScale, etc.
+   - Persists independently of Railway deployments
+
+**Without persistent storage, your database resets on every deployment!**
 
 ## Updating Your Bot
 
