@@ -204,7 +204,7 @@ async def delete_vc_panel_message(guild: discord.Guild, vc_id: int):
                 pass
 
 
-async def delete_temp_vc_and_panel(guild: discord.Guild, vc_id: int, *, reason: str):
+async def delete_temp_vc_and_panel(guild: discord.Guild, vc_id: int, *, reason: str) -> None:
     """Delete a temporary VC and its associated panel message."""
     vc = guild.get_channel(vc_id)
     if isinstance(vc, discord.VoiceChannel):
