@@ -1868,22 +1868,24 @@ async def detect_and_update_version(bot) -> Tuple[str, list]:
         row = await cur.fetchone()
         
         if not row:
-            # First time - initialize with current version but don't mark as posted yet
+            # First time - initialize with current version
+            # On first run, we want to post the initial version
             stored_version = BOT_VERSION
             stored_hash = ""
-            # On first run, we want to post the initial version
-            # So we'll return the version but with an empty hash to trigger posting
             new_version = BOT_VERSION
             changes = ["Initial bot version"]
+            logger.info(f"[version] First run detected, will post initial version {new_version}")
         else:
             stored_version = row[0]
             stored_hash = row[1]
             
             # If hash hasn't changed, no update needed
             if stored_hash == current_hash:
+                logger.info(f"[version] No changes detected (hash: {current_hash[:8]}...)")
                 return stored_version, []
             
             # Hash changed - detect what changed
+            logger.info(f"[version] Hash changed from {stored_hash[:8] if stored_hash else 'empty'}... to {current_hash[:8]}...")
             changes = []
             
             # Get current commands
@@ -1925,7 +1927,7 @@ async def detect_and_update_version(bot) -> Tuple[str, list]:
         """, (new_version, current_hash, datetime.now(timezone.utc).isoformat()))
         await db.commit()
         
-        logger.info(f"[version] Auto-updated version from {stored_version if 'stored_version' in locals() else 'N/A'} to {new_version} (hash changed)")
+        logger.info(f"[version] Version set to {new_version} (from {stored_version if 'stored_version' in locals() else 'N/A'})")
         return new_version, changes
 
 
