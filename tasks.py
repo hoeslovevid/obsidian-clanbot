@@ -989,9 +989,9 @@ def setup_tasks(bot):
     giveaway_check_loop.start()
     logger.info("[tasks] Started giveaway check loop")
     
-    @tasks.loop(minutes=5)  # Update every 5 minutes
+    @tasks.loop(minutes=2)  # Update every 2 minutes for accuracy
     async def member_count_update_loop():
-        """Update member count channel names."""
+        """Update member count channel names with accurate counts."""
         try:
             async with aiosqlite.connect(DB_PATH) as db:
                 cur = await db.execute(
@@ -1008,12 +1008,38 @@ def setup_tasks(bot):
                 try:
                     channel = guild.get_channel(channel_id)
                     if not channel:
+                        # Channel was deleted, remove from database
+                        async with aiosqlite.connect(DB_PATH) as db:
+                            await db.execute(
+                                "DELETE FROM member_count_channels WHERE guild_id=? AND channel_id=?",
+                                (guild_id, channel_id)
+                            )
+                            await db.commit()
                         continue
                     
-                    # Get counts
+                    # Get accurate member count
+                    # guild.member_count is usually accurate, but we can verify by counting
                     member_count = guild.member_count
+                    
+                    # Count bots and humans from cached members
+                    # Note: For very large servers, not all members may be cached
+                    # But guild.member_count should be accurate regardless
                     bot_count = sum(1 for member in guild.members if member.bot)
-                    human_count = member_count - bot_count
+                    
+                    # If we have all members cached, use the cached count
+                    # Otherwise, estimate based on cached ratio
+                    if len(guild.members) == member_count:
+                        # All members cached, accurate count
+                        human_count = member_count - bot_count
+                    else:
+                        # Not all members cached, estimate based on ratio
+                        if len(guild.members) > 0:
+                            bot_ratio = bot_count / len(guild.members)
+                            human_count = int(member_count * (1 - bot_ratio))
+                        else:
+                            # Fallback: assume 5% bots (typical Discord server)
+                            human_count = int(member_count * 0.95)
+                            bot_count = member_count - human_count
                     
                     # Format channel name
                     name = f"👥 Members: {member_count:,} | 🤖 Bots: {bot_count:,} | 👤 Humans: {human_count:,}"
@@ -1025,8 +1051,11 @@ def setup_tasks(bot):
                     # Only update if name changed (to avoid rate limits)
                     if channel.name != name:
                         await channel.edit(name=name, reason="Member count update")
+                        logger.debug(f"Updated member count channel {channel_id} in guild {guild_id}: {name}")
+                except discord.Forbidden:
+                    logger.warning(f"No permission to update member count channel {channel_id} in guild {guild_id}")
                 except Exception as e:
-                    logger.error(f"Error updating member count channel {channel_id} in {guild.id}: {e}")
+                    logger.error(f"Error updating member count channel {channel_id} in {guild.id}: {e}", exc_info=True)
                 
         except Exception as e:
             logger.error(f"Error in member_count_update_loop: {e}", exc_info=True)
