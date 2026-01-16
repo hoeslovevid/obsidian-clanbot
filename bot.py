@@ -190,6 +190,8 @@ def load_all_commands():
         # Moderation commands
         "commands.moderation.purge",
         "commands.moderation.reaction_roles",
+        "commands.moderation.automod_setup",
+        "commands.moderation.automod_status",
         # Economy commands
         "commands.economy.balance",
         "commands.economy.leaderboard",
@@ -655,6 +657,46 @@ async def init_db():
             UNIQUE(giveaway_id, user_id),
             FOREIGN KEY (giveaway_id) REFERENCES giveaways(id) ON DELETE CASCADE
         )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS auto_mod_settings (
+            guild_id INTEGER NOT NULL PRIMARY KEY,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            spam_enabled INTEGER NOT NULL DEFAULT 1,
+            spam_threshold INTEGER NOT NULL DEFAULT 5,
+            spam_interval INTEGER NOT NULL DEFAULT 10,
+            caps_enabled INTEGER NOT NULL DEFAULT 1,
+            caps_threshold INTEGER NOT NULL DEFAULT 70,
+            caps_min_length INTEGER NOT NULL DEFAULT 10,
+            links_enabled INTEGER NOT NULL DEFAULT 0,
+            links_whitelist TEXT,
+            mention_enabled INTEGER NOT NULL DEFAULT 1,
+            mention_limit INTEGER NOT NULL DEFAULT 5,
+            punishment_action TEXT NOT NULL DEFAULT 'delete',
+            punishment_duration INTEGER,
+            log_channel_id INTEGER
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS auto_mod_violations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            violation_type TEXT NOT NULL,
+            message_content TEXT,
+            action_taken TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS auto_mod_spam_tracking (
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            message_count INTEGER NOT NULL DEFAULT 1,
+            first_message_time TEXT NOT NULL,
+            last_message_time TEXT NOT NULL,
+            PRIMARY KEY (guild_id, user_id)
+        )""")
         
         # Add previous_commands column if it doesn't exist (for existing databases)
         # Check if column exists first to avoid errors
@@ -839,13 +881,190 @@ async def post_vc_panel(guild: discord.Guild, vc: discord.VoiceChannel, owner: d
 # Commands are now loaded from commands/ folder via load_all_commands()
 
 
+# --------------------- Auto-Moderation Event Handlers ---------------------
+async def check_auto_mod(message: discord.Message) -> bool:
+    """Check message for auto-moderation violations. Returns True if message should be deleted/punished."""
+    from database import (
+        get_auto_mod_settings, get_spam_tracking, update_spam_tracking,
+        reset_spam_tracking, log_auto_mod_violation
+    )
+    from utils import is_mod
+    
+    if not message.guild or message.author.bot:
+        return False
+    
+    # Ignore moderators
+    if isinstance(message.author, discord.Member) and is_mod(message.author):
+        return False
+    
+    settings = await get_auto_mod_settings(message.guild.id)
+    if not settings or not settings["enabled"]:
+        return False
+    
+    violation_type = None
+    action_taken = "none"
+    
+    # Check for spam
+    if settings["spam_enabled"]:
+        now_iso = now_utc().isoformat()
+        tracking = await get_spam_tracking(message.guild.id, message.author.id)
+        
+        if tracking:
+            # Parse timestamps
+            first_msg_time = datetime.fromisoformat(tracking["first_message_time"])
+            last_msg_time = datetime.fromisoformat(tracking["last_message_time"])
+            time_diff = (now_utc() - first_msg_time).total_seconds()
+            
+            # Check if we're still within the interval window
+            if time_diff <= settings["spam_interval"]:
+                # Increment count
+                new_count = tracking["message_count"] + 1
+                await update_spam_tracking(
+                    message.guild.id,
+                    message.author.id,
+                    new_count,
+                    tracking["first_message_time"],
+                    now_iso
+                )
+                
+                # Check if threshold exceeded
+                if new_count >= settings["spam_threshold"]:
+                    violation_type = "spam"
+                    await reset_spam_tracking(message.guild.id, message.author.id)
+            else:
+                # Window expired, reset
+                await update_spam_tracking(
+                    message.guild.id,
+                    message.author.id,
+                    1,
+                    now_iso,
+                    now_iso
+                )
+        else:
+            # First message
+            await update_spam_tracking(
+                message.guild.id,
+                message.author.id,
+                1,
+                now_iso,
+                now_iso
+            )
+    
+    # Check for caps lock
+    if not violation_type and settings["caps_enabled"] and len(message.content) >= settings["caps_min_length"]:
+        caps_count = sum(1 for c in message.content if c.isupper())
+        caps_percent = (caps_count / len(message.content)) * 100 if message.content else 0
+        
+        if caps_percent >= settings["caps_threshold"]:
+            violation_type = "caps"
+    
+    # Check for links
+    if not violation_type and settings["links_enabled"]:
+        # Check for URLs (basic regex)
+        url_pattern = r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
+        if re.search(url_pattern, message.content):
+            # Check whitelist if exists
+            whitelist = settings["links_whitelist"].split(",") if settings["links_whitelist"] else []
+            if whitelist:
+                # Check if any whitelisted domain is in the message
+                allowed = any(domain.strip() in message.content.lower() for domain in whitelist if domain.strip())
+                if not allowed:
+                    violation_type = "links"
+            else:
+                # No whitelist, all links blocked
+                violation_type = "links"
+    
+    # Check for mention spam
+    if not violation_type and settings["mention_enabled"]:
+        mention_count = len(message.mentions) + len(message.role_mentions) + len(message.channel_mentions)
+        if mention_count > settings["mention_limit"]:
+            violation_type = "mention"
+    
+    # If violation detected, apply punishment
+    if violation_type:
+        action = settings["punishment_action"]
+        duration = settings["punishment_duration"]
+        
+        try:
+            # Delete message
+            await message.delete()
+            action_taken = "delete"
+            
+            # Apply additional punishment
+            if action == "warn":
+                action_taken = "delete + warn"
+                # Could send a DM warning here
+                
+            elif action == "timeout" and isinstance(message.author, discord.Member):
+                if duration:
+                    timeout_until = now_utc() + timedelta(minutes=duration)
+                    await message.author.timeout(timeout_until, reason=f"Auto-mod: {violation_type}")
+                    action_taken = f"delete + timeout ({duration}m)"
+                else:
+                    action_taken = "delete + timeout (no duration set)"
+                    
+            elif action == "kick" and isinstance(message.author, discord.Member):
+                try:
+                    await message.author.kick(reason=f"Auto-mod: {violation_type}")
+                    action_taken = "delete + kick"
+                except discord.Forbidden:
+                    action_taken = "delete (kick failed - no permission)"
+            
+            # Log violation
+            await log_auto_mod_violation(
+                message.guild.id,
+                message.author.id,
+                violation_type,
+                message.content[:500],
+                action_taken
+            )
+            
+            # Send log message if channel is set
+            if settings["log_channel_id"]:
+                log_channel = message.guild.get_channel(settings["log_channel_id"])
+                if isinstance(log_channel, discord.TextChannel):
+                    embed = obsidian_embed(
+                        f"🛡️ Auto-Moderation Action: {violation_type.upper()}",
+                        f"**User:** {message.author.mention} ({message.author.id})\n"
+                        f"**Channel:** {message.channel.mention}\n"
+                        f"**Action:** {action_taken}\n"
+                        f"**Message:** {message.content[:200]}",
+                        color=discord.Color.red(),
+                        client=bot,
+                    )
+                    try:
+                        await log_channel.send(embed=embed)
+                    except Exception:
+                        pass  # Log channel might be deleted or no permission
+            
+            return True  # Message was handled
+            
+        except discord.NotFound:
+            # Message already deleted
+            return True
+        except discord.Forbidden:
+            # No permission to delete/punish
+            logger.warning(f"[automod] No permission to punish {message.author.id} in {message.guild.id}")
+            return False
+        except Exception as e:
+            logger.error(f"[automod] Error handling violation: {e}", exc_info=True)
+            return False
+    
+    return False  # No violation or message not deleted
+
+
 # --------------------- Economy Event Handlers ---------------------
 @bot.event
 async def on_message(message: discord.Message):
-    """Award coins for text messages (with cooldown)."""
+    """Check for auto-moderation violations and award coins for text messages."""
     # Ignore bot messages and DMs
     if message.author.bot or not message.guild:
         return
+    
+    # Check auto-moderation first (this may delete the message)
+    violation_handled = await check_auto_mod(message)
+    if violation_handled:
+        return  # Message was deleted/punished, don't process economy
     
     # Check if economy is enabled
     if not ECONOMY_ENABLED:

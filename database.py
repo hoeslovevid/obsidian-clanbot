@@ -374,3 +374,164 @@ async def reset_monthly_scores():
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("UPDATE activity_stats SET monthly_score = 0")
         await db.commit()
+
+
+# --------------------- Auto-Moderation Functions ---------------------
+async def get_auto_mod_settings(guild_id: int) -> Optional[dict]:
+    """Get auto-moderation settings for a guild."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("""
+            SELECT enabled, spam_enabled, spam_threshold, spam_interval,
+                   caps_enabled, caps_threshold, caps_min_length,
+                   links_enabled, links_whitelist,
+                   mention_enabled, mention_limit,
+                   punishment_action, punishment_duration, log_channel_id
+            FROM auto_mod_settings WHERE guild_id = ?
+        """, (guild_id,))
+        row = await cur.fetchone()
+        
+        if not row:
+            return None
+        
+        return {
+            "enabled": bool(row[0]),
+            "spam_enabled": bool(row[1]),
+            "spam_threshold": row[2],
+            "spam_interval": row[3],
+            "caps_enabled": bool(row[4]),
+            "caps_threshold": row[5],
+            "caps_min_length": row[6],
+            "links_enabled": bool(row[7]),
+            "links_whitelist": row[8] or "",
+            "mention_enabled": bool(row[9]),
+            "mention_limit": row[10],
+            "punishment_action": row[11],
+            "punishment_duration": row[12],
+            "log_channel_id": row[13]
+        }
+
+
+async def update_auto_mod_settings(guild_id: int, **kwargs):
+    """Update auto-moderation settings. Only updates provided fields."""
+    # Get existing settings
+    existing = await get_auto_mod_settings(guild_id)
+    
+    # Merge with new values
+    if existing:
+        existing.update(kwargs)
+        settings = existing
+    else:
+        # Default settings
+        defaults = {
+            "enabled": True,
+            "spam_enabled": True,
+            "spam_threshold": 5,
+            "spam_interval": 10,
+            "caps_enabled": True,
+            "caps_threshold": 70,
+            "caps_min_length": 10,
+            "links_enabled": False,
+            "links_whitelist": "",
+            "mention_enabled": True,
+            "mention_limit": 5,
+            "punishment_action": "delete",
+            "punishment_duration": None,
+            "log_channel_id": None
+        }
+        defaults.update(kwargs)
+        settings = defaults
+    
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            INSERT INTO auto_mod_settings (
+                guild_id, enabled, spam_enabled, spam_threshold, spam_interval,
+                caps_enabled, caps_threshold, caps_min_length,
+                links_enabled, links_whitelist,
+                mention_enabled, mention_limit,
+                punishment_action, punishment_duration, log_channel_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(guild_id) DO UPDATE SET
+                enabled = excluded.enabled,
+                spam_enabled = excluded.spam_enabled,
+                spam_threshold = excluded.spam_threshold,
+                spam_interval = excluded.spam_interval,
+                caps_enabled = excluded.caps_enabled,
+                caps_threshold = excluded.caps_threshold,
+                caps_min_length = excluded.caps_min_length,
+                links_enabled = excluded.links_enabled,
+                links_whitelist = excluded.links_whitelist,
+                mention_enabled = excluded.mention_enabled,
+                mention_limit = excluded.mention_limit,
+                punishment_action = excluded.punishment_action,
+                punishment_duration = excluded.punishment_duration,
+                log_channel_id = excluded.log_channel_id
+        """, (
+            guild_id,
+            int(settings["enabled"]),
+            int(settings["spam_enabled"]),
+            settings["spam_threshold"],
+            settings["spam_interval"],
+            int(settings["caps_enabled"]),
+            settings["caps_threshold"],
+            settings["caps_min_length"],
+            int(settings["links_enabled"]),
+            settings["links_whitelist"],
+            int(settings["mention_enabled"]),
+            settings["mention_limit"],
+            settings["punishment_action"],
+            settings["punishment_duration"],
+            settings["log_channel_id"]
+        ))
+        await db.commit()
+
+
+async def log_auto_mod_violation(guild_id: int, user_id: int, violation_type: str, message_content: str, action_taken: str):
+    """Log an auto-moderation violation."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            INSERT INTO auto_mod_violations (guild_id, user_id, violation_type, message_content, action_taken, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (guild_id, user_id, violation_type, message_content[:500], action_taken, now_utc().isoformat()))
+        await db.commit()
+
+
+async def get_spam_tracking(guild_id: int, user_id: int) -> Optional[dict]:
+    """Get spam tracking data for a user."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("""
+            SELECT message_count, first_message_time, last_message_time
+            FROM auto_mod_spam_tracking WHERE guild_id = ? AND user_id = ?
+        """, (guild_id, user_id))
+        row = await cur.fetchone()
+        
+        if not row:
+            return None
+        
+        return {
+            "message_count": row[0],
+            "first_message_time": row[1],
+            "last_message_time": row[2]
+        }
+
+
+async def update_spam_tracking(guild_id: int, user_id: int, message_count: int, first_message_time: str, last_message_time: str):
+    """Update spam tracking for a user."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            INSERT INTO auto_mod_spam_tracking (guild_id, user_id, message_count, first_message_time, last_message_time)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(guild_id, user_id) DO UPDATE SET
+                message_count = excluded.message_count,
+                first_message_time = excluded.first_message_time,
+                last_message_time = excluded.last_message_time
+        """, (guild_id, user_id, message_count, first_message_time, last_message_time))
+        await db.commit()
+
+
+async def reset_spam_tracking(guild_id: int, user_id: int):
+    """Reset spam tracking for a user."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            DELETE FROM auto_mod_spam_tracking WHERE guild_id = ? AND user_id = ?
+        """, (guild_id, user_id))
+        await db.commit()
