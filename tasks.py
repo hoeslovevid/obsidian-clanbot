@@ -646,10 +646,25 @@ def setup_tasks(bot):
                             if already_notified:
                                 continue
                             
+                            # Calculate when the new cycle will end
+                            # Cycles alternate, so we need to calculate the next expiry
+                            # Cetus: Day/Night cycles are ~150 minutes each
+                            # Fortuna: Warm/Cold cycles are ~26 minutes each  
+                            # Deimos: Fass/Vome cycles are ~100 minutes each
+                            cycle_durations = {
+                                'cetus': 150 * 60,  # 150 minutes in seconds
+                                'vallis': 26 * 60,  # 26 minutes in seconds
+                                'cambion': 100 * 60,  # 100 minutes in seconds
+                            }
+                            
+                            duration_seconds = cycle_durations.get(cycle_type, 0)
+                            next_expiry_time = expiry_time + timedelta(seconds=duration_seconds)
+                            
                             # Send notification
                             desc = f"**{display_name}** cycle is changing!\n\n"
                             desc += f"**New State:** {cycle_display}\n"
-                            desc += f"**Time:** <t:{int(expiry_time.timestamp())}:F>"
+                            desc += f"**Changes At:** <t:{int(expiry_time.timestamp())}:F>\n"
+                            desc += f"**Ends At:** <t:{int(next_expiry_time.timestamp())}:F> _(<t:{int(next_expiry_time.timestamp())}:R>)_"
                             
                             embed = obsidian_embed(
                                 f"🌍 Cycle Change: {display_name}",

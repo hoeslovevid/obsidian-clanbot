@@ -62,7 +62,7 @@ def setup(bot):
                 expiry_time = dateparser.parse(expiry, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
                 if expiry_time:
                     time_str = format_time_remaining(expiry_time)
-                    value = f"{state}\n⏱️ {time_str}\n<t:{int(expiry_time.timestamp())}:R>"
+                    value = f"{state}\n⏱️ {time_str}\n🕐 Ends: <t:{int(expiry_time.timestamp())}:F>\n<t:{int(expiry_time.timestamp())}:R>"
                 else:
                     value = state
             except Exception:
@@ -81,7 +81,7 @@ def setup(bot):
                 expiry_time = dateparser.parse(expiry, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
                 if expiry_time:
                     time_str = format_time_remaining(expiry_time)
-                    value = f"{state}\n⏱️ {time_str}\n<t:{int(expiry_time.timestamp())}:R>"
+                    value = f"{state}\n⏱️ {time_str}\n🕐 Ends: <t:{int(expiry_time.timestamp())}:F>\n<t:{int(expiry_time.timestamp())}:R>"
                 else:
                     value = state
             except Exception:
@@ -101,7 +101,7 @@ def setup(bot):
                 expiry_time = dateparser.parse(expiry, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
                 if expiry_time:
                     time_str = format_time_remaining(expiry_time)
-                    value = f"{state_display}\n⏱️ {time_str}\n<t:{int(expiry_time.timestamp())}:R>"
+                    value = f"{state_display}\n⏱️ {time_str}\n🕐 Ends: <t:{int(expiry_time.timestamp())}:F>\n<t:{int(expiry_time.timestamp())}:R>"
                 else:
                     value = state_display
             except Exception:
