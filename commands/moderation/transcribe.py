@@ -23,29 +23,50 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 
 class TranscriptionSink(discord.sinks.PCMSink):
-    """Custom sink that accumulates audio data for transcription."""
+    """Custom sink that accumulates audio data for transcription with speaker tracking."""
     def __init__(self, transcription_id: int, requested_by: int, channel: discord.VoiceChannel):
         super().__init__()
         self.transcription_id = transcription_id
         self.requested_by = requested_by
         self.channel = channel
-        self.audio_data = []
+        self.audio_data = []  # List of (timestamp, user_id, pcm_data)
         self.started_at = now_utc()
+        self.sample_rate = 48000
+        self.channels = 2
+        self.sample_size = 2  # 16-bit = 2 bytes
     
     def write(self, user: discord.Member, pcm: bytes):
-        """Write audio data from a user."""
-        self.audio_data.append((user.id, pcm))
+        """Write audio data from a user with timestamp tracking."""
+        current_time = now_utc()
+        self.audio_data.append((current_time, user.id, pcm))
     
     async def cleanup(self):
         """Called when transcription is stopped - process the audio."""
         # Process audio and transcribe
         try:
-            # Combine all audio data
-            combined_audio = {user_id: [] for user_id in set(uid for uid, _ in self.audio_data)}
-            for user_id, pcm in self.audio_data:
-                combined_audio[user_id].append(pcm)
+            # Organize audio by user with timing information
+            user_audio_timeline = {}
+            for timestamp, user_id, pcm in self.audio_data:
+                if user_id not in user_audio_timeline:
+                    user_audio_timeline[user_id] = []
+                
+                # Calculate approximate duration of this chunk
+                # PCM data length / (channels * sample_size * sample_rate)
+                chunk_duration = len(pcm) / (self.channels * self.sample_size * self.sample_rate)
+                
+                user_audio_timeline[user_id].append({
+                    'timestamp': timestamp,
+                    'pcm': pcm,
+                    'duration': chunk_duration
+                })
             
-            await process_transcription(self.transcription_id, self.requested_by, self.channel, combined_audio, self.started_at)
+            await process_transcription(
+                self.transcription_id, 
+                self.requested_by, 
+                self.channel, 
+                user_audio_timeline, 
+                self.started_at
+            )
         except Exception as e:
             import logging
             logging.getLogger(__name__).error(f"Error processing transcription: {e}", exc_info=True)
@@ -55,7 +76,7 @@ async def process_transcription(
     transcription_id: int,
     requested_by: int,
     channel: discord.VoiceChannel,
-    audio_data: dict,
+    user_audio_timeline: dict,
     started_at: datetime
 ):
     """Process recorded audio and transcribe it."""
@@ -84,7 +105,7 @@ async def process_transcription(
             pass
         return
     
-    if not audio_data:
+    if not user_audio_timeline:
         # No audio recorded
         async with aiosqlite.connect(DB_PATH) as db:
             await db.execute("""
@@ -108,61 +129,121 @@ async def process_transcription(
             pass
         return
     
-        # Combine all audio into one file
-        try:
-            from openai import OpenAI
-            client = OpenAI(api_key=OPENAI_API_KEY)
+    # Process audio with speaker identification
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        
+        # Get user names for labeling
+        user_names = {}
+        for user_id in user_audio_timeline.keys():
+            user = channel.guild.get_member(user_id)
+            if user:
+                user_names[user_id] = user.display_name
+            else:
+                user_names[user_id] = f"User {user_id}"
+        
+        # Build timeline of who was speaking when
+        # Create a timeline mapping: time_offset -> user_id
+        timeline = []  # List of (time_offset, user_id, duration)
+        total_duration = 0.0
+        
+        # Process each user's audio chunks in chronological order
+        for user_id, chunks in user_audio_timeline.items():
+            for chunk in chunks:
+                # Calculate time offset from start
+                time_since_start = (chunk['timestamp'] - started_at).total_seconds()
+                timeline.append((time_since_start, user_id, chunk['duration']))
+        
+        # Sort timeline by time offset
+        timeline.sort(key=lambda x: x[0])
+        
+        # Combine all audio chronologically for transcription
+        combined_audio_chunks = []
+        for time_offset, user_id, chunk_data in timeline:
+            # Find the actual PCM data for this chunk
+            for chunk in user_audio_timeline[user_id]:
+                if abs((chunk['timestamp'] - started_at).total_seconds() - time_offset) < 0.1:
+                    combined_audio_chunks.append(chunk['pcm'])
+                    break
+        
+        if not combined_audio_chunks:
+            transcript = "No audio was captured."
+        else:
+            # Create combined audio file
+            combined_audio = b''.join(combined_audio_chunks)
             
-            # Create a temporary audio file from the accumulated data
-            audio_bytes = b''.join(b''.join(audio_list) for audio_list in audio_data.values())
-            
-            # Convert to format suitable for Whisper (WAV format)
-            # Discord sends PCM audio at 48000 Hz, 2 channels, 16-bit
             with io.BytesIO() as wav_buffer:
                 with wave.open(wav_buffer, 'wb') as wav_file:
                     wav_file.setnchannels(2)  # Stereo
                     wav_file.setsampwidth(2)  # 16-bit
                     wav_file.setframerate(48000)  # 48 kHz
-                    wav_file.writeframes(audio_bytes)
-            
-            wav_buffer.seek(0)
-            
-            # Transcribe using Whisper API with timestamps for accuracy
-            # Using verbose_json to get detailed segments with timestamps
-            transcript_response = client.audio.transcriptions.create(
-                model="whisper-1",
-                file=("audio.wav", wav_buffer.read(), "audio/wav"),
-                language="en",
-                response_format="verbose_json",
-                timestamp_granularities=["segment", "word"]
-            )
-            
-            # Format transcript with timestamps
-            transcript_segments = []
-            full_text = transcript_response.text
-            
-            # If we have segments with timestamps, format them nicely
-            if hasattr(transcript_response, 'segments') and transcript_response.segments:
-                for segment in transcript_response.segments:
-                    start_time = segment.get('start', 0)
-                    end_time = segment.get('end', 0)
-                    text = segment.get('text', '').strip()
-                    
-                    if text:
-                        # Format timestamp as [MM:SS]
-                        minutes = int(start_time // 60)
-                        seconds = int(start_time % 60)
-                        timestamp = f"[{minutes:02d}:{seconds:02d}]"
-                        transcript_segments.append(f"{timestamp} {text}")
+                    wav_file.writeframes(combined_audio)
                 
-                # If segments exist, use them; otherwise fall back to full text
-                if transcript_segments:
-                    transcript = "\n".join(transcript_segments)
+                wav_buffer.seek(0)
+                
+                # Transcribe combined audio with timestamps
+                transcript_response = client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=("audio.wav", wav_buffer.read(), "audio/wav"),
+                    language="en",
+                    response_format="verbose_json",
+                    timestamp_granularities=["segment"]
+                )
+                
+                # Match transcript segments to speakers using timeline
+                transcript_segments = []
+                
+                if hasattr(transcript_response, 'segments') and transcript_response.segments:
+                    for segment in transcript_response.segments:
+                        segment_start = segment.get('start', 0)
+                        text = segment.get('text', '').strip()
+                        
+                        if text:
+                            # Find which user was speaking at this time
+                            speaker_id = None
+                            for time_offset, user_id, duration in timeline:
+                                if time_offset <= segment_start < time_offset + duration:
+                                    speaker_id = user_id
+                                    break
+                            
+                            # If no exact match, find closest speaker
+                            if speaker_id is None:
+                                min_distance = float('inf')
+                                for time_offset, user_id, duration in timeline:
+                                    # Check if segment is within or close to this chunk
+                                    chunk_end = time_offset + duration
+                                    if segment_start >= time_offset - 2 and segment_start <= chunk_end + 2:
+                                        distance = abs(segment_start - time_offset)
+                                        if distance < min_distance:
+                                            min_distance = distance
+                                            speaker_id = user_id
+                            
+                            # If still no match, try finding by overall timeline position
+                            if speaker_id is None and timeline:
+                                # Find the user whose chunks cover this time range
+                                cumulative_time = 0.0
+                                for time_offset, user_id, duration in timeline:
+                                    chunk_start = cumulative_time
+                                    chunk_end = cumulative_time + duration
+                                    if chunk_start <= segment_start < chunk_end:
+                                        speaker_id = user_id
+                                        break
+                                    cumulative_time += duration
+                            
+                            speaker_name = user_names.get(speaker_id, "Unknown Speaker") if speaker_id else "Unknown Speaker"
+                            
+                            # Format timestamp
+                            minutes = int(segment_start // 60)
+                            seconds = int(segment_start % 60)
+                            timestamp = f"[{minutes:02d}:{seconds:02d}]"
+                            
+                            transcript_segments.append(f"{timestamp} **{speaker_name}:** {text}")
+                    
+                    transcript = "\n".join(transcript_segments) if transcript_segments else transcript_response.text
                 else:
-                    transcript = full_text
-            else:
-                # Fallback to plain text if no segments
-                transcript = full_text
+                    # Fallback to plain text
+                    transcript = transcript_response.text
         
         # Update database
         async with aiosqlite.connect(DB_PATH) as db:
