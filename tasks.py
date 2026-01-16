@@ -1041,12 +1041,9 @@ def setup_tasks(bot):
                             human_count = int(member_count * 0.95)
                             bot_count = member_count - human_count
                     
-                    # Format channel name
-                    name = f"👥 Members: {member_count:,} | 🤖 Bots: {bot_count:,} | 👤 Humans: {human_count:,}"
-                    if len(name) > 100:
-                        name = f"👥 {member_count:,} | 🤖 {bot_count:,} | 👤 {human_count:,}"
-                        if len(name) > 100:
-                            name = f"👥 Members: {member_count:,}"[:100]
+                    # Format channel name using the same refined format
+                    from commands.general.member_count import format_member_count_name
+                    name = format_member_count_name(member_count, bot_count, human_count)
                     
                     # Only update if name changed (to avoid rate limits)
                     if channel.name != name:

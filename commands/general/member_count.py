@@ -8,20 +8,26 @@ import aiosqlite  # type: ignore
 
 
 def format_member_count_name(member_count: int, bot_count: int, human_count: int) -> str:
-    """Format the channel name with member counts."""
+    """Format the channel name with member counts in a refined, elegant way."""
     # Discord channel names have a 100 character limit
-    # Format: "👥 Members: 1,234 | 🤖 Bots: 56 | 👤 Humans: 1,178"
-    name = f"👥 Members: {member_count:,} | 🤖 Bots: {bot_count:,} | 👤 Humans: {human_count:,}"
+    # Refined format with better spacing and visual hierarchy
+    
+    # Primary format: Clean and elegant
+    name = f"👥 {member_count:,} Members • 🤖 {bot_count:,} Bots • 👤 {human_count:,} Humans"
     
     # Truncate if too long (shouldn't happen with reasonable numbers, but safety check)
     if len(name) > 100:
-        # Fallback to simpler format
-        name = f"👥 {member_count:,} | 🤖 {bot_count:,} | 👤 {human_count:,}"
+        # Compact format: Remove "Members", "Bots", "Humans" labels
+        name = f"👥 {member_count:,} • 🤖 {bot_count:,} • 👤 {human_count:,}"
         if len(name) > 100:
-            # Last resort: just total
-            name = f"👥 Members: {member_count:,}"
+            # Even more compact: Just numbers with emojis
+            name = f"👥 {member_count:,} 🤖 {bot_count:,} 👤 {human_count:,}"
             if len(name) > 100:
-                name = f"Members: {member_count:,}"[:100]
+                # Minimal format: Just total members
+                name = f"👥 {member_count:,} Members"
+                if len(name) > 100:
+                    # Last resort: Just number
+                    name = f"Members: {member_count:,}"[:100]
     
     return name
 
