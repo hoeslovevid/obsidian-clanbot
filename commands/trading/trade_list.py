@@ -12,6 +12,17 @@ def setup(bot):
     @bot.tree.command(name="trade_list", description="View your active trading listings.")
     async def trade_list(interaction: discord.Interaction):
         """List user's active trading posts."""
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Invalid Context",
+                    "This command can only be used in a server.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
+        
         await interaction.response.defer(ephemeral=True)
         
         async with aiosqlite.connect(DB_PATH) as db:

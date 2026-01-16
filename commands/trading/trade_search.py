@@ -36,6 +36,17 @@ def setup(bot):
         limit: int = 10
     ):
         """Search trading listings."""
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Invalid Context",
+                    "This command can only be used in a server.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
+        
         await interaction.response.defer(ephemeral=True)
         
         if limit < 1 or limit > 25:

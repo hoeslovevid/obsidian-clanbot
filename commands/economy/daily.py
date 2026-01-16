@@ -15,7 +15,26 @@ def setup(bot):
         import aiosqlite
         
         if not ECONOMY_ENABLED:
-            return await interaction.response.send_message("Economy system is disabled.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Economy Disabled",
+                    "The economy system is currently disabled.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
+        
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Invalid Context",
+                    "This command can only be used in a server.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
         
         # Get current date in UTC
         today = datetime.now(timezone.utc).date().isoformat()

@@ -16,7 +16,26 @@ def setup(bot):
         import aiosqlite
         
         if not XP_ENABLED:
-            return await interaction.response.send_message("XP system is disabled.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ XP System Disabled",
+                    "The XP system is currently disabled.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
+        
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Invalid Context",
+                    "This command can only be used in a server.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
         
         if limit < 1 or limit > 25:
             limit = 10
@@ -32,7 +51,15 @@ def setup(bot):
             rows = await cur.fetchall()
         
         if not rows:
-            return await interaction.response.send_message("No users have earned XP yet!", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "⭐ Leaderboard Empty",
+                    "No users have earned XP yet! Start using commands and chatting to earn XP.",
+                    color=discord.Color.orange(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
         
         # Build leaderboard entries
         leaderboard_text = ""

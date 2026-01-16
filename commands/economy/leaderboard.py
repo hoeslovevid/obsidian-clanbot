@@ -16,7 +16,26 @@ def setup(bot):
         import aiosqlite
         
         if not ECONOMY_ENABLED:
-            return await interaction.response.send_message("Economy system is disabled.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Economy Disabled",
+                    "The economy system is currently disabled.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
+        
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Invalid Context",
+                    "This command can only be used in a server.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
         
         if limit < 1 or limit > 25:
             limit = 10
@@ -42,12 +61,22 @@ def setup(bot):
             
             if total_count == 0:
                 return await interaction.response.send_message(
-                    "No users have earned coins yet! Start chatting or use `/daily` to earn coins.",
+                    embed=obsidian_embed(
+                        "📊 Leaderboard Empty",
+                        "No users have earned coins yet! Start chatting or use `/daily` to earn coins.",
+                        color=discord.Color.orange(),
+                        client=interaction.client,
+                    ),
                     ephemeral=True
                 )
             else:
                 return await interaction.response.send_message(
-                    "No users currently have coins! Users need a balance greater than 0 to appear on the leaderboard.",
+                    embed=obsidian_embed(
+                        "📊 Leaderboard Empty",
+                        "No users currently have coins! Users need a balance greater than 0 to appear on the leaderboard.",
+                        color=discord.Color.orange(),
+                        client=interaction.client,
+                    ),
                     ephemeral=True
                 )
         

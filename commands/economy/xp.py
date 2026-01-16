@@ -15,7 +15,26 @@ def setup(bot):
         from bot import get_user_xp
         
         if not XP_ENABLED:
-            return await interaction.response.send_message("XP system is disabled.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ XP System Disabled",
+                    "The XP system is currently disabled.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
+        
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Invalid Context",
+                    "This command can only be used in a server.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
         
         target_user = user or interaction.user
         xp, level, total_xp = await get_user_xp(interaction.guild.id, target_user.id)

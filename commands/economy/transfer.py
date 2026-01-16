@@ -18,16 +18,59 @@ def setup(bot):
         from bot import transfer_coins, get_user_balance
         
         if not ECONOMY_ENABLED:
-            return await interaction.response.send_message("Economy system is disabled.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Economy Disabled",
+                    "The economy system is currently disabled.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
+        
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Invalid Context",
+                    "This command can only be used in a server.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
         
         if amount <= 0:
-            return await interaction.response.send_message("Amount must be greater than 0.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Invalid Amount",
+                    "Amount must be greater than 0.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
         
         if user.bot:
-            return await interaction.response.send_message("You cannot transfer coins to bots.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Invalid Recipient",
+                    "You cannot transfer coins to bots.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
         
         if user.id == interaction.user.id:
-            return await interaction.response.send_message("You cannot transfer coins to yourself.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Invalid Recipient",
+                    "You cannot transfer coins to yourself.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
         
         success = await transfer_coins(interaction.guild.id, interaction.user.id, user.id, amount)
         
@@ -54,6 +97,11 @@ def setup(bot):
         else:
             balance = await get_user_balance(interaction.guild.id, interaction.user.id)
             await interaction.response.send_message(
-                f"Insufficient balance. You have {balance:,} coins.",
+                embed=obsidian_embed(
+                    "❌ Insufficient Balance",
+                    f"You have **{balance:,}** coins, but tried to transfer **{amount:,}** coins.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
                 ephemeral=True,
             )
