@@ -359,9 +359,19 @@ class ApplicationResponseModal(discord.ui.Modal, title="Application Question"): 
         self.application_id = application_id
         self.question_id = question_id
         
+        # Ensure label is between 1 and 45 characters
+        # Discord requires labels to be 1-45 characters
+        if not question_text or len(question_text.strip()) == 0:
+            label = "Your Answer"
+        elif len(question_text) <= 45:
+            label = question_text
+        else:
+            # Truncate to 42 characters and add "..." (total 45)
+            label = question_text[:42] + "..."
+        
         # Create a text input for the response
         self.response = discord.ui.TextInput(
-            label=question_text[:45] + "..." if len(question_text) > 45 else question_text,
+            label=label,
             style=discord.TextStyle.paragraph,
             placeholder="Type your answer here...",
             max_length=1000,
