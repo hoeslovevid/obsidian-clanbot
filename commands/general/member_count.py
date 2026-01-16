@@ -246,7 +246,7 @@ def setup(bot):
         
         embed = obsidian_embed(
             "✅ Member Count Channel Ready",
-            f"Member count channel **{channel_type_display}** has been {'created' if was_created else 'updated'}.\n\nThe channel name will be updated automatically every 5 minutes.",
+            f"Member count channel **{channel_type_display}** has been {'created' if was_created else 'updated'}.\n\nThe channel name will be updated automatically every 2 minutes with accurate member counts.",
             color=discord.Color.green(),
             fields=fields,
             client=interaction.client,
