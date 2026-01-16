@@ -108,33 +108,61 @@ async def process_transcription(
             pass
         return
     
-    # Combine all audio into one file
-    try:
-        from openai import OpenAI
-        client = OpenAI(api_key=OPENAI_API_KEY)
-        
-        # Create a temporary audio file from the accumulated data
-        audio_bytes = b''.join(b''.join(audio_list) for audio_list in audio_data.values())
-        
-        # Convert to format suitable for Whisper (WAV format)
-        # Discord sends PCM audio at 48000 Hz, 2 channels, 16-bit
-        with io.BytesIO() as wav_buffer:
-            with wave.open(wav_buffer, 'wb') as wav_file:
-                wav_file.setnchannels(2)  # Stereo
-                wav_file.setsampwidth(2)  # 16-bit
-                wav_file.setframerate(48000)  # 48 kHz
-                wav_file.writeframes(audio_bytes)
+        # Combine all audio into one file
+        try:
+            from openai import OpenAI
+            client = OpenAI(api_key=OPENAI_API_KEY)
+            
+            # Create a temporary audio file from the accumulated data
+            audio_bytes = b''.join(b''.join(audio_list) for audio_list in audio_data.values())
+            
+            # Convert to format suitable for Whisper (WAV format)
+            # Discord sends PCM audio at 48000 Hz, 2 channels, 16-bit
+            with io.BytesIO() as wav_buffer:
+                with wave.open(wav_buffer, 'wb') as wav_file:
+                    wav_file.setnchannels(2)  # Stereo
+                    wav_file.setsampwidth(2)  # 16-bit
+                    wav_file.setframerate(48000)  # 48 kHz
+                    wav_file.writeframes(audio_bytes)
             
             wav_buffer.seek(0)
             
-            # Transcribe using Whisper API
+            # Transcribe using Whisper API with timestamps for accuracy
+            # Using verbose_json to get detailed segments with timestamps
             transcript_response = client.audio.transcriptions.create(
                 model="whisper-1",
                 file=("audio.wav", wav_buffer.read(), "audio/wav"),
-                language="en"
+                language="en",
+                response_format="verbose_json",
+                timestamp_granularities=["segment", "word"]
             )
             
-            transcript = transcript_response.text
+            # Format transcript with timestamps
+            transcript_segments = []
+            full_text = transcript_response.text
+            
+            # If we have segments with timestamps, format them nicely
+            if hasattr(transcript_response, 'segments') and transcript_response.segments:
+                for segment in transcript_response.segments:
+                    start_time = segment.get('start', 0)
+                    end_time = segment.get('end', 0)
+                    text = segment.get('text', '').strip()
+                    
+                    if text:
+                        # Format timestamp as [MM:SS]
+                        minutes = int(start_time // 60)
+                        seconds = int(start_time % 60)
+                        timestamp = f"[{minutes:02d}:{seconds:02d}]"
+                        transcript_segments.append(f"{timestamp} {text}")
+                
+                # If segments exist, use them; otherwise fall back to full text
+                if transcript_segments:
+                    transcript = "\n".join(transcript_segments)
+                else:
+                    transcript = full_text
+            else:
+                # Fallback to plain text if no segments
+                transcript = full_text
         
         # Update database
         async with aiosqlite.connect(DB_PATH) as db:
@@ -155,27 +183,50 @@ async def process_transcription(
         try:
             user = channel.guild.get_member(requested_by)
             if user:
-                embed = obsidian_embed(
-                    "📝 Voice Transcription Complete",
-                    f"**Channel:** {channel.name}\n"
-                    f"**Duration:** {minutes}m {seconds}s\n"
-                    f"**Date:** <t:{int(started_at.timestamp())}:F>\n\n"
-                    f"**Transcript:**\n{transcript[:3900]}",  # Discord embed limit is 4096 chars
-                    color=discord.Color.green(),
-                    client=channel.guild.me.client if hasattr(channel.guild.me, 'client') else None,
-                )
+                # Format start timestamp
+                start_timestamp = f"<t:{int(started_at.timestamp())}:F>"
                 
-                # If transcript is too long, send the rest in a follow-up message
-                if len(transcript) > 3900:
+                # Build transcript with header
+                transcript_header = f"**Channel:** {channel.name}\n"
+                transcript_header += f"**Recording Started:** {start_timestamp}\n"
+                transcript_header += f"**Duration:** {minutes}m {seconds}s\n\n"
+                transcript_header += "**Transcript (with timestamps):**\n\n"
+                
+                # Calculate available space for transcript (embed limit is 4096 chars)
+                # Reserve space for header and formatting
+                header_length = len(transcript_header) + 100  # Extra buffer for formatting
+                available_space = 4000 - header_length
+                
+                # Prepare full transcript with header
+                full_transcript_with_header = transcript_header + transcript
+                
+                # If transcript fits in embed, send it all
+                if len(full_transcript_with_header) <= 4000:
+                    embed = obsidian_embed(
+                        "📝 Voice Transcription Complete",
+                        full_transcript_with_header,
+                        color=discord.Color.green(),
+                        client=channel.guild.me.client if hasattr(channel.guild.me, 'client') else None,
+                    )
                     await user.send(embed=embed)
-                    # Send remaining text in chunks
-                    remaining = transcript[3900:]
-                    while remaining:
-                        chunk = remaining[:2000]
-                        remaining = remaining[2000:]
-                        await user.send(f"**Transcript (continued):**\n```\n{chunk}\n```")
                 else:
+                    # Send header in embed
+                    embed = obsidian_embed(
+                        "📝 Voice Transcription Complete",
+                        transcript_header + transcript[:available_space] + "...",
+                        color=discord.Color.green(),
+                        client=channel.guild.me.client if hasattr(channel.guild.me, 'client') else None,
+                    )
                     await user.send(embed=embed)
+                    
+                    # Send remaining transcript in code blocks
+                    remaining = transcript[available_space:]
+                    chunk_num = 1
+                    while remaining:
+                        chunk = remaining[:1900]  # Leave room for code block formatting
+                        remaining = remaining[1900:]
+                        await user.send(f"**Transcript (continued, part {chunk_num}):**\n```\n{chunk}\n```")
+                        chunk_num += 1
         except discord.Forbidden:
             # User has DMs disabled
             import logging
