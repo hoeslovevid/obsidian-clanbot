@@ -6,7 +6,7 @@ import logging
 from typing import Optional, Dict, Any, Tuple, List
 import aiohttp  # type: ignore
 import dateparser  # type: ignore
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -237,6 +237,114 @@ async def fetch_alerts() -> Optional[List[Dict[str, Any]]]:
                     return None
     except Exception as e:
         logger.error(f"Error fetching alerts data: {e}")
+        return None
+
+
+async def fetch_twitch_stream_status(channel_name: str = "playwarframe") -> Optional[Dict[str, Any]]:
+    """
+    Check if a Twitch channel is live using Twitch API.
+    This checks if Warframe's official channel is streaming.
+    
+    Args:
+        channel_name: Twitch channel name (default: "playwarframe")
+    
+    Returns:
+        Stream data dict if live, None if offline or error
+    """
+    try:
+        # Get app access token (no user auth needed for public stream status)
+        async with aiohttp.ClientSession() as session:
+            # First get an app access token
+            # Note: For production, you'd want to cache this token and refresh it
+            # For now, we'll use a simpler approach - checking via unofficial API or scraping
+            # Actually, let's use the public Helix API endpoint that doesn't require auth for basic checks
+            # But we still need client-id - let's make it optional via env var
+            import os
+            twitch_client_id = os.getenv("TWITCH_CLIENT_ID", "")
+            
+            if not twitch_client_id:
+                # Fallback: Try to check via alternative method or return None
+                # For now, we'll skip Twitch API and use pattern-based detection instead
+                return None
+            
+            # Get app access token
+            token_url = "https://id.twitch.tv/oauth2/token"
+            async with session.post(token_url, params={
+                "client_id": twitch_client_id,
+                "client_secret": os.getenv("TWITCH_CLIENT_SECRET", ""),
+                "grant_type": "client_credentials"
+            }) as token_resp:
+                if token_resp.status != 200:
+                    return None
+                token_data = await token_resp.json()
+                access_token = token_data.get("access_token")
+            
+            if not access_token:
+                return None
+            
+            # Get stream status
+            url = f"https://api.twitch.tv/helix/streams?user_login={channel_name}"
+            headers = {
+                "Client-ID": twitch_client_id,
+                "Authorization": f"Bearer {access_token}"
+            }
+            
+            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    streams = data.get("data", [])
+                    if streams and len(streams) > 0:
+                        return streams[0]  # Return first stream
+                    return None
+                else:
+                    logger.warning(f"Twitch API returned status {response.status}")
+                    return None
+    except Exception as e:
+        logger.error(f"Error fetching Twitch stream status: {e}")
+        return None
+
+
+async def calculate_next_devstream_date() -> Optional[datetime]:
+    """
+    Calculate the next likely devstream date.
+    Warframe devstreams are typically every other Friday at 2pm ET/EDT.
+    This is a fallback if Twitch API is not available.
+    """
+    try:
+        now = datetime.now(timezone.utc)
+        
+        # Convert to ET/EDT (rough approximation - this is UTC-5/UTC-4)
+        # For simplicity, we'll use UTC-5 (EST) and calculate next Friday
+        # Devstreams are typically at 2pm ET = 7pm UTC (EST) or 6pm UTC (EDT)
+        # But we'll just use the pattern: every other Friday
+        
+        # Find next Friday
+        days_until_friday = (4 - now.weekday()) % 7
+        if days_until_friday == 0:
+            # Today is Friday, check if it's past 2pm ET (7pm UTC)
+            et_hour = (now.hour - 5) % 24  # Rough EST conversion
+            if et_hour < 14:  # Before 2pm ET
+                next_friday = now
+            else:
+                next_friday = now + timedelta(days=14)  # Next devstream cycle (2 weeks)
+        else:
+            next_friday = now + timedelta(days=days_until_friday)
+        
+        # Check if this is a devstream week (every other week)
+        # Simple heuristic: if week number is even, it's a devstream week
+        week_number = next_friday.isocalendar()[1]
+        if week_number % 2 == 0:
+            # This is a devstream week
+            # Set time to 2pm ET (7pm UTC EST, 6pm UTC EDT)
+            # For simplicity, use 7pm UTC
+            next_devstream = next_friday.replace(hour=19, minute=0, second=0, microsecond=0)
+        else:
+            # Next week is devstream week (add 1 week)
+            next_devstream = (next_friday + timedelta(days=7)).replace(hour=19, minute=0, second=0, microsecond=0)
+        
+        return next_devstream
+    except Exception as e:
+        logger.error(f"Error calculating next devstream date: {e}")
         return None
 
 

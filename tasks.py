@@ -1217,7 +1217,7 @@ def setup_tasks(bot):
 
     @tasks.loop(hours=1)  # Check every hour for upcoming devstreams
     async def devstream_check_loop():
-        """Check for upcoming devstreams and send notifications."""
+        """Check for upcoming devstreams and send notifications. Also auto-detect and set devstream dates."""
         try:
             if not bot.is_ready():
                 return
@@ -1226,83 +1226,102 @@ def setup_tasks(bot):
             for guild in bot.guilds:
                 try:
                     # Check if devstream notifications are enabled (using guild_settings table)
-                    from database import get_guild_setting
+                    from database import get_guild_setting, set_guild_setting
                     channel_id_str = await get_guild_setting(guild.id, "devstream_channel_id")
                     next_devstream_date_str = await get_guild_setting(guild.id, "next_devstream_date")
                     
-                    if not channel_id_str or not channel_id_str.isdigit() or not next_devstream_date_str:
+                    if not channel_id_str or not channel_id_str.isdigit():
                         continue  # Not configured or disabled
                     
                     channel_id = int(channel_id_str)
-                    
                     channel = guild.get_channel(channel_id)
                     if not isinstance(channel, discord.TextChannel):
                         continue
                     
-                    # Parse devstream date
-                    try:
-                        devstream_date = dateparser.parse(next_devstream_date_str, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
-                        if not devstream_date:
-                            continue
-                    except Exception:
-                        continue
-                    
+                    # Auto-detect next devstream date if not set or if current date is in the past
                     now = now_utc()
+                    devstream_date = None
+                    
+                    if next_devstream_date_str:
+                        try:
+                            devstream_date = dateparser.parse(next_devstream_date_str, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
+                            if devstream_date and devstream_date < now:
+                                # Devstream date is in the past, calculate next one
+                                devstream_date = None
+                        except Exception:
+                            devstream_date = None
+                    
+                    # If no valid devstream date, auto-calculate the next one
+                    if not devstream_date:
+                        from warframe_api import calculate_next_devstream_date
+                        devstream_date = await calculate_next_devstream_date()
+                        
+                        if devstream_date:
+                            # Store the auto-detected date
+                            await set_guild_setting(guild.id, "next_devstream_date", devstream_date.isoformat())
+                            next_devstream_date_str = devstream_date.isoformat()
+                            logger.info(f"[devstream] Auto-detected next devstream for guild {guild.id}: {devstream_date.isoformat()}")
+                        else:
+                            # Couldn't calculate, skip this guild
+                            continue
+                    
                     time_until = (devstream_date - now).total_seconds()
                     
                     # Check if devstream is within 24 hours and we haven't sent a 24h notification
                     if timedelta(hours=23) < timedelta(seconds=time_until) <= timedelta(hours=25):
-                        # Check if 24h notification was sent
-                        cur = await db.execute("""
-                            SELECT 1 FROM devstream_notifications_sent 
-                            WHERE guild_id=? AND devstream_date=? AND notification_type='24h'
-                        """, (guild.id, next_devstream_date_str))
-                        if not await cur.fetchone():
-                            # Send 24h notification
-                            embed = obsidian_embed(
-                                "📺 Devstream Reminder",
-                                f"**Warframe Devstream** starts in **24 hours**!\n\n"
-                                f"**Date:** <t:{int(devstream_date.timestamp())}:F>",
-                                color=discord.Color.blue(),
-                                client=bot,
-                            )
-                            try:
-                                await channel.send(embed=embed)
-                                await db.execute("""
-                                    INSERT INTO devstream_notifications_sent 
-                                    (guild_id, devstream_date, notification_type, notified_at)
-                                    VALUES (?, ?, '24h', ?)
-                                """, (guild.id, next_devstream_date_str, now.isoformat()))
-                                await db.commit()
-                            except Exception as e:
-                                logger.error(f"Error sending devstream 24h notification to guild {guild.id}: {e}")
+                        async with aiosqlite.connect(DB_PATH) as db:
+                            # Check if 24h notification was sent
+                            cur = await db.execute("""
+                                SELECT 1 FROM devstream_notifications_sent 
+                                WHERE guild_id=? AND devstream_date=? AND notification_type='24h'
+                            """, (guild.id, next_devstream_date_str))
+                            if not await cur.fetchone():
+                                # Send 24h notification
+                                embed = obsidian_embed(
+                                    "📺 Devstream Reminder",
+                                    f"**Warframe Devstream** starts in **24 hours**!\n\n"
+                                    f"**Date:** <t:{int(devstream_date.timestamp())}:F>",
+                                    color=discord.Color.blue(),
+                                    client=bot,
+                                )
+                                try:
+                                    await channel.send(embed=embed)
+                                    await db.execute("""
+                                        INSERT INTO devstream_notifications_sent 
+                                        (guild_id, devstream_date, notification_type, notified_at)
+                                        VALUES (?, ?, '24h', ?)
+                                    """, (guild.id, next_devstream_date_str, now.isoformat()))
+                                    await db.commit()
+                                except Exception as e:
+                                    logger.error(f"Error sending devstream 24h notification to guild {guild.id}: {e}")
                     
                     # Check if devstream is within 1 hour and we haven't sent a 1h notification
                     elif timedelta(minutes=55) < timedelta(seconds=time_until) <= timedelta(hours=1, minutes=5):
-                        # Check if 1h notification was sent
-                        cur = await db.execute("""
-                            SELECT 1 FROM devstream_notifications_sent 
-                            WHERE guild_id=? AND devstream_date=? AND notification_type='1h'
-                        """, (guild.id, next_devstream_date_str))
-                        if not await cur.fetchone():
-                            # Send 1h notification
-                            embed = obsidian_embed(
-                                "📺 Devstream Starting Soon!",
-                                f"**Warframe Devstream** starts in **1 hour**!\n\n"
-                                f"**Date:** <t:{int(devstream_date.timestamp())}:F>",
-                                color=discord.Color.green(),
-                                client=bot,
-                            )
-                            try:
-                                await channel.send(embed=embed)
-                                await db.execute("""
-                                    INSERT INTO devstream_notifications_sent 
-                                    (guild_id, devstream_date, notification_type, notified_at)
-                                    VALUES (?, ?, '1h', ?)
-                                """, (guild.id, next_devstream_date_str, now.isoformat()))
-                                await db.commit()
-                            except Exception as e:
-                                logger.error(f"Error sending devstream 1h notification to guild {guild.id}: {e}")
+                        async with aiosqlite.connect(DB_PATH) as db:
+                            # Check if 1h notification was sent
+                            cur = await db.execute("""
+                                SELECT 1 FROM devstream_notifications_sent 
+                                WHERE guild_id=? AND devstream_date=? AND notification_type='1h'
+                            """, (guild.id, next_devstream_date_str))
+                            if not await cur.fetchone():
+                                # Send 1h notification
+                                embed = obsidian_embed(
+                                    "📺 Devstream Starting Soon!",
+                                    f"**Warframe Devstream** starts in **1 hour**!\n\n"
+                                    f"**Date:** <t:{int(devstream_date.timestamp())}:F>",
+                                    color=discord.Color.green(),
+                                    client=bot,
+                                )
+                                try:
+                                    await channel.send(embed=embed)
+                                    await db.execute("""
+                                        INSERT INTO devstream_notifications_sent 
+                                        (guild_id, devstream_date, notification_type, notified_at)
+                                        VALUES (?, ?, '1h', ?)
+                                    """, (guild.id, next_devstream_date_str, now.isoformat()))
+                                    await db.commit()
+                                except Exception as e:
+                                    logger.error(f"Error sending devstream 1h notification to guild {guild.id}: {e}")
                 
                 except Exception as e:
                     logger.error(f"Error in devstream_check_loop for guild {guild.id}: {e}", exc_info=True)
