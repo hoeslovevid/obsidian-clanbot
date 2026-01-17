@@ -1165,44 +1165,45 @@ def setup_tasks(bot):
                         if not alert_id:
                             continue
                         
-                        # Check if we've already notified about this alert
-                        cur = await db.execute("""
-                            SELECT 1 FROM alert_notifications_sent 
-                            WHERE guild_id=? AND alert_id=?
-                        """, (guild.id, str(alert_id)))
-                        if await cur.fetchone():
-                            continue  # Already notified
-                        
-                        # Send notification
-                        mission_type = alert.get("mission", {}).get("type", "Unknown")
-                        mission_node = alert.get("mission", {}).get("node", "Unknown")
-                        expiry = alert.get("expiry", "")
-                        rewards = alert.get("mission", {}).get("reward", {})
-                        reward_items = rewards.get("items", [])
-                        
-                        desc = f"**Type:** {mission_type}\n"
-                        desc += f"**Node:** {mission_node}\n"
-                        desc += f"**Expires:** {expiry}\n"
-                        if reward_items:
-                            desc += f"**Rewards:** {', '.join(reward_items)}"
-                        
-                        embed = obsidian_embed(
-                            "🚨 New Warframe Alert",
-                            desc,
-                            color=discord.Color.gold(),
-                            client=bot,
-                        )
-                        
-                        try:
-                            await channel.send(embed=embed)
-                            # Mark as notified
-                            await db.execute("""
-                                INSERT INTO alert_notifications_sent (guild_id, alert_id, notified_at)
-                                VALUES (?, ?, ?)
-                            """, (guild.id, str(alert_id), now_utc().isoformat()))
-                            await db.commit()
-                        except Exception as e:
-                            logger.error(f"Error sending alert notification to guild {guild.id}: {e}")
+                        async with aiosqlite.connect(DB_PATH) as db:
+                            # Check if we've already notified about this alert
+                            cur = await db.execute("""
+                                SELECT 1 FROM alert_notifications_sent 
+                                WHERE guild_id=? AND alert_id=?
+                            """, (guild.id, str(alert_id)))
+                            if await cur.fetchone():
+                                continue  # Already notified
+                            
+                            # Send notification
+                            mission_type = alert.get("mission", {}).get("type", "Unknown")
+                            mission_node = alert.get("mission", {}).get("node", "Unknown")
+                            expiry = alert.get("expiry", "")
+                            rewards = alert.get("mission", {}).get("reward", {})
+                            reward_items = rewards.get("items", [])
+                            
+                            desc = f"**Type:** {mission_type}\n"
+                            desc += f"**Node:** {mission_node}\n"
+                            desc += f"**Expires:** {expiry}\n"
+                            if reward_items:
+                                desc += f"**Rewards:** {', '.join(reward_items)}"
+                            
+                            embed = obsidian_embed(
+                                "🚨 New Warframe Alert",
+                                desc,
+                                color=discord.Color.gold(),
+                                client=bot,
+                            )
+                            
+                            try:
+                                await channel.send(embed=embed)
+                                # Mark as notified
+                                await db.execute("""
+                                    INSERT INTO alert_notifications_sent (guild_id, alert_id, notified_at)
+                                    VALUES (?, ?, ?)
+                                """, (guild.id, str(alert_id), now_utc().isoformat()))
+                                await db.commit()
+                            except Exception as e:
+                                logger.error(f"Error sending alert notification to guild {guild.id}: {e}")
                 
                 except Exception as e:
                     logger.error(f"Error in alert_check_loop for guild {guild.id}: {e}", exc_info=True)
