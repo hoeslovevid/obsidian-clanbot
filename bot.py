@@ -99,8 +99,6 @@ INTENTS.guilds = True
 INTENTS.members = True
 INTENTS.voice_states = True
 
-# Transcription API key (optional - only needed if transcription is enabled)
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 
 # Import utilities and modules
@@ -195,7 +193,6 @@ def load_all_commands():
         "commands.moderation.reaction_roles",
         "commands.moderation.automod_setup",
         "commands.moderation.automod_status",
-        "commands.moderation.transcribe",
         "commands.moderation.roles",
         "commands.moderation.level_roles",
         # Economy commands
@@ -707,18 +704,6 @@ async def init_db():
             PRIMARY KEY (guild_id, user_id)
         )""")
 
-        await db.execute("""
-        CREATE TABLE IF NOT EXISTS voice_transcriptions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            guild_id INTEGER NOT NULL,
-            channel_id INTEGER NOT NULL,
-            requested_by INTEGER NOT NULL,
-            started_at TEXT NOT NULL,
-            stopped_at TEXT,
-            transcript TEXT,
-            status TEXT NOT NULL DEFAULT 'recording',
-            voice_client_id INTEGER
-        )""")
 
         await db.execute("""
         CREATE TABLE IF NOT EXISTS self_assignable_roles (
