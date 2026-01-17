@@ -2357,8 +2357,9 @@ async def on_interaction(interaction: discord.Interaction):
         # Last-resort error handler - only for component/modal interactions
         # Do NOT handle errors for application commands - let discord.py handle them
         if interaction.type == discord.InteractionType.application_command:
-            # Re-raise to let discord.py handle it
-            raise
+            # Already handled (command usage tracking), just return silently
+            # discord.py will handle any actual command errors
+            return
         
         # Also skip if this is a modal submission - it has its own error handler
         if interaction.type == discord.InteractionType.modal_submit:
