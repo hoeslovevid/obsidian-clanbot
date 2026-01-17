@@ -2694,7 +2694,7 @@ def calculate_feature_hash(bot) -> str:
     # Also include hash of key bot files to detect code changes
     # This ensures version updates even when code changes without command changes
     file_hashes = []
-    key_files = ["bot.py", "database.py"]
+    key_files = ["bot.py", "database.py", "warframe_api.py", "tasks.py", "utils.py", "views.py"]
     
     # Get the directory where bot.py is located
     bot_dir = os.path.dirname(os.path.abspath(__file__))
