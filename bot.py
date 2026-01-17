@@ -1568,11 +1568,25 @@ async def on_interaction(interaction: discord.Interaction):
                     if not exists:
                         break  # Unique case_id found
                     
-                    # If we've exhausted retries, use a more unique approach
+                    # If we've exhausted retries, use a more unique approach and verify it
                     if attempt == max_retries - 1:
                         # Fallback: use full timestamp with nanoseconds simulation
                         import time
-                        case_id = f"OBS-{int(time.time() * 1000000)}-{interaction.user.id}-{random.randint(10000, 99999)}"
+                        fallback_id = f"OBS-{int(time.time() * 1000000)}-{interaction.user.id}-{random.randint(10000, 99999)}"
+                        
+                        # Verify fallback ID is unique before using it
+                        async with aiosqlite.connect(DB_PATH) as db:
+                            cur = await db.execute(
+                                "SELECT 1 FROM complaints WHERE guild_id=? AND case_id=?",
+                                (guild.id, fallback_id)
+                            )
+                            fallback_exists = await cur.fetchone()
+                        
+                        if not fallback_exists:
+                            case_id = fallback_id
+                        else:
+                            # Last resort: use timestamp + user_id + very large random number
+                            case_id = f"OBS-{int(time.time() * 1000000)}-{interaction.user.id}-{random.randint(100000, 999999)}"
                 
                 created_iso = created.isoformat()
                 
@@ -1855,8 +1869,23 @@ async def on_interaction(interaction: discord.Interaction):
                             break
                         
                         if attempt == max_retries - 1:
+                            # Fallback: use full timestamp with nanoseconds simulation
                             import time
-                            case_id = f"OBS-{int(time.time() * 1000000)}-{interaction.user.id}-{random.randint(10000, 99999)}"
+                            fallback_id = f"OBS-{int(time.time() * 1000000)}-{interaction.user.id}-{random.randint(10000, 99999)}"
+                            
+                            # Verify fallback ID is unique before using it
+                            async with aiosqlite.connect(DB_PATH) as db:
+                                cur = await db.execute(
+                                    "SELECT 1 FROM complaints WHERE guild_id=? AND case_id=?",
+                                    (guild.id, fallback_id)
+                                )
+                                fallback_exists = await cur.fetchone()
+                            
+                            if not fallback_exists:
+                                case_id = fallback_id
+                            else:
+                                # Last resort: use timestamp + user_id + very large random number
+                                case_id = f"OBS-{int(time.time() * 1000000)}-{interaction.user.id}-{random.randint(100000, 999999)}"
                     
                     created_iso = created.isoformat()
 
