@@ -1432,7 +1432,7 @@ async def on_interaction(interaction: discord.Interaction):
 
                 # Set status, DM user
                 view = ComplaintModView(case_id)
-                await view.set_status(interaction, "NEEDS INFO", bot, dm_override=False)
+                await view.set_status(interaction, "NEEDS INFO", bot=bot, dm_override=False)
 
                 user = interaction.guild.get_member(user_id) or await bot.fetch_user(user_id)
                 if user:
