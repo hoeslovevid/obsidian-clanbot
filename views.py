@@ -134,7 +134,7 @@ class ComplaintModView(discord.ui.View):
         except discord.Forbidden:
             pass
 
-    async def set_status(self, interaction: discord.Interaction, status: str, bot, *, dm_override: bool = True) -> Optional[int]:
+    async def set_status(self, interaction: discord.Interaction, status: str, *, bot, dm_override: bool = True) -> Optional[int]:
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute(
                 "SELECT user_id FROM complaints WHERE guild_id=? AND case_id=?",

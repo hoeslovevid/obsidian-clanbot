@@ -2048,7 +2048,7 @@ async def on_interaction(interaction: discord.Interaction):
                         logger.warning(f"[button] complaints:ack - interaction expired/already handled: {e}")
                         return
                     # Use followup for set_status and message (don't call response methods after defer)
-                    await view.set_status(interaction, "ACKNOWLEDGED", bot)
+                    await view.set_status(interaction, "ACKNOWLEDGED", bot=bot)
                     await interaction.followup.send(f"`{case_id}` marked reviewed.", ephemeral=True)
                     return
 
@@ -2060,7 +2060,7 @@ async def on_interaction(interaction: discord.Interaction):
                         # Interaction expired or already handled - can't process it
                         logger.warning(f"[button] complaints:resolve - interaction expired/already handled: {e}")
                         return
-                    await view.set_status(interaction, "RESOLVED", bot)
+                    await view.set_status(interaction, "RESOLVED", bot=bot)
                     await interaction.followup.send(f"`{case_id}` closed.", ephemeral=True)
                     return
 
@@ -2072,7 +2072,7 @@ async def on_interaction(interaction: discord.Interaction):
                         # Interaction expired or already handled - can't process it
                         logger.warning(f"[button] complaints:reject - interaction expired/already handled: {e}")
                         return
-                    await view.set_status(interaction, "REJECTED", bot)
+                    await view.set_status(interaction, "REJECTED", bot=bot)
                     await interaction.followup.send(f"`{case_id}` dismissed.", ephemeral=True)
                     return
 
