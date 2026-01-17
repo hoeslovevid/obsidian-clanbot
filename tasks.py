@@ -12,7 +12,7 @@ from discord.ext import tasks  # type: ignore
 
 from database import DB_PATH, now_utc, get_guild_setting, add_coins, add_xp, get_user_xp
 from channels import resolve_channel_id, delete_temp_vc_and_panel
-from warframe_api import get_baro_status, get_all_cycles, fetch_invasions, fetch_archon_hunt_data, fetch_events_data
+from warframe_api import get_baro_status, get_all_cycles, fetch_invasions, fetch_archon_hunt_data, fetch_events_data, fetch_alerts, fetch_duviri_circuit
 from utils import obsidian_embed, ECONOMY_ENABLED, COINS_PER_MINUTE_VOICE, MIN_VOICE_MINUTES_FOR_REWARD, XP_ENABLED, XP_PER_MINUTE_VOICE
 
 # Import Baro embed builder (lazy import to avoid circular dependency)
@@ -1161,6 +1161,8 @@ def setup_tasks(bot):
         ('archon_check_loop', archon_check_loop),
         ('member_count_update_loop', member_count_update_loop),
         ('server_stats_update_loop', server_stats_update_loop),
+        ('alert_check_loop', alert_check_loop),
+        ('devstream_check_loop', devstream_check_loop),
     ]
     
     started_tasks = {}

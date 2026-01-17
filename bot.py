@@ -217,6 +217,10 @@ def load_all_commands():
         "commands.warframe.archon_notify",
         "commands.warframe.warframe_event_notify",
         "commands.warframe.resource",
+        "commands.warframe.duviri",
+        "commands.warframe.alerts",
+        "commands.warframe.alerts_notify",
+        "commands.warframe.devstream_notify",
         # Activity commands
         "commands.activity.activity",
         "commands.activity.activity_leaderboard",
@@ -742,6 +746,25 @@ async def init_db():
             channel_id INTEGER NOT NULL,
             stats_type TEXT NOT NULL DEFAULT 'members',
             enabled INTEGER NOT NULL DEFAULT 1
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS alert_notifications_sent (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            alert_id TEXT NOT NULL,
+            notified_at TEXT NOT NULL,
+            UNIQUE(guild_id, alert_id)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS devstream_notifications_sent (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            devstream_date TEXT NOT NULL,
+            notification_type TEXT NOT NULL,
+            notified_at TEXT NOT NULL,
+            UNIQUE(guild_id, devstream_date, notification_type)
         )""")
         
         # Add previous_commands column if it doesn't exist (for existing databases)

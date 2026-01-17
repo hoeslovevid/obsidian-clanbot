@@ -206,6 +206,40 @@ async def search_warframe_market_item(item_name: str, platform: str = "pc") -> O
         return None
 
 
+async def fetch_duviri_circuit() -> Optional[Dict[str, Any]]:
+    """Fetch Duviri Circuit data from Warframe World State API."""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get("https://api.warframestat.us/pc/duviriCycle", timeout=aiohttp.ClientTimeout(total=10)) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data
+                else:
+                    logger.warning(f"Warframe API returned status {response.status} for duviri circuit")
+                    return None
+    except Exception as e:
+        logger.error(f"Error fetching Duviri Circuit data: {e}")
+        return None
+
+
+async def fetch_alerts() -> Optional[List[Dict[str, Any]]]:
+    """Fetch active alerts from Warframe World State API."""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get("https://api.warframestat.us/pc/alerts", timeout=aiohttp.ClientTimeout(total=10)) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    # Filter for active alerts only
+                    active_alerts = [alert for alert in data if alert.get("expired", False) == False]
+                    return active_alerts
+                else:
+                    logger.warning(f"Warframe API returned status {response.status} for alerts")
+                    return None
+    except Exception as e:
+        logger.error(f"Error fetching alerts data: {e}")
+        return None
+
+
 async def get_warframe_market_price(item_url_name: str, platform: str = "pc") -> Optional[Dict[str, Any]]:
     """
     Get price statistics for an item from Warframe Market.
