@@ -154,7 +154,7 @@ class ComplaintModView(discord.ui.View):
         if dm_override:
             await self.dm_user(interaction.guild, user_id, status, bot)
 
-        await log_complaint_action(interaction.guild.id, self.case_id, interaction.user.id, f"STATUS:{status}")
+        await log_complaint_action(interaction.guild.id, self.case_id, interaction.user.id, f"STATUS:{status}", guild=interaction.guild, bot=bot)
         return user_id
 
 
