@@ -53,8 +53,8 @@ TIMEZONE = os.getenv("TIMEZONE", "America/New_York")
 # Example: DB_PATH=/data/obsidian_clanbot.db (if you mount a volume at /data)
 DB_PATH = os.getenv("DB_PATH", "obsidian_clanbot.db")
 
-# Bot version - starts at 1.0.0, auto-increments on changes
-BOT_VERSION = os.getenv("BOT_VERSION", "1.0.0")
+# Bot version - starts at 1.2.0, auto-increments on changes
+BOT_VERSION = os.getenv("BOT_VERSION", "1.2.0")
 BOT_CHANGELOG = os.getenv("BOT_CHANGELOG", "")  # Optional: changelog text for this version
 
 # Temp VC config
@@ -2472,8 +2472,8 @@ async def detect_and_update_version(bot) -> Tuple[str, list]:
         row = await cur.fetchone()
         
         if not row:
-            # First time - initialize with version 1.0.0
-            new_version = "1.0.0"
+            # First time - initialize with version 1.2.0
+            new_version = "1.2.0"
             changes = ["Initial bot version"]
             if current_commands:
                 changes.append(f"**Commands:** {', '.join(sorted(current_commands))}")
@@ -2499,6 +2499,33 @@ async def detect_and_update_version(bot) -> Tuple[str, list]:
             stored_version = row[0]
             stored_hash = row[1] if len(row) > 1 else ""
             previous_commands_str = row[2] if len(row) > 2 and row[2] else None
+            
+            # Reset version to 1.2.0 if stored version is less than 1.2.0
+            try:
+                version_parts = stored_version.split(".")
+                if len(version_parts) >= 2:
+                    major = int(version_parts[0])
+                    minor = int(version_parts[1])
+                    if major < 1 or (major == 1 and minor < 2):
+                        logger.info(f"[version] Resetting version from {stored_version} to 1.2.0")
+                        stored_version = "1.2.0"
+                        # Update stored version
+                        await db.execute("""
+                            UPDATE bot_version_tracking 
+                            SET current_version = ? 
+                            WHERE id = 1
+                        """, (stored_version,))
+                        await db.commit()
+            except (ValueError, IndexError):
+                # Invalid version format, reset to 1.2.0
+                logger.info(f"[version] Invalid version format {stored_version}, resetting to 1.2.0")
+                stored_version = "1.2.0"
+                await db.execute("""
+                    UPDATE bot_version_tracking 
+                    SET current_version = ? 
+                    WHERE id = 1
+                """, (stored_version,))
+                await db.commit()
             
             logger.info(f"[version] Loaded stored version: {stored_version}, hash: {stored_hash[:8] if stored_hash else 'empty'}...")
             
@@ -2547,7 +2574,7 @@ async def detect_and_update_version(bot) -> Tuple[str, list]:
                 # First time detecting changes - don't show all commands, just note it's the first change
                 changes.append("🚀 **First feature update:** Bot features have been updated")
             
-            # Commands have changed - increment version
+            # Commands have changed - increment version based on change type
             try:
                 # Parse version (format: MAJOR.MINOR.PATCH)
                 version_parts = stored_version.split(".")
@@ -2556,16 +2583,26 @@ async def detect_and_update_version(bot) -> Tuple[str, list]:
                     minor = int(version_parts[1])
                     patch = int(version_parts[2]) if len(version_parts) > 2 else 0
                     
-                    # Increment minor version for new features
-                    minor += 1
-                    patch = 0  # Reset patch
+                    # Determine if this is a "big" change (commands added/removed) or "small" change (internal updates only)
+                    is_big_change = bool(added_commands or removed_commands)
+                    
+                    if is_big_change:
+                        # Big change: increment minor version (1.7.0 → 1.8.0)
+                        minor += 1
+                        patch = 0  # Reset patch
+                        logger.info(f"[version] Big change detected (commands added/removed), incrementing minor version")
+                    else:
+                        # Small change: increment patch version (1.7.0 → 1.7.1)
+                        patch += 1
+                        logger.info(f"[version] Small change detected (internal updates only), incrementing patch version")
+                    
                     new_version = f"{major}.{minor}.{patch}"
                 else:
-                    # Fallback: start at 1.0.0
-                    new_version = "1.0.0"
+                    # Fallback: start at 1.2.0
+                    new_version = "1.2.0"
             except (ValueError, IndexError):
-                # Invalid version format, start at 1.0.0
-                new_version = "1.0.0"
+                # Invalid version format, start at 1.2.0
+                new_version = "1.2.0"
             
             # Update stored version, hash, and store CURRENT commands as previous_commands for next comparison
             current_commands_str = ",".join(sorted(current_commands)) if current_commands else ""
