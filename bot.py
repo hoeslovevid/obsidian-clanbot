@@ -196,6 +196,8 @@ def load_all_commands():
         "commands.moderation.automod_setup",
         "commands.moderation.automod_status",
         "commands.moderation.transcribe",
+        "commands.moderation.roles",
+        "commands.moderation.level_roles",
         # Economy commands
         "commands.economy.balance",
         "commands.economy.leaderboard",
@@ -221,6 +223,9 @@ def load_all_commands():
         # Activity commands
         "commands.activity.activity",
         "commands.activity.activity_leaderboard",
+        # General commands
+        "commands.general.afk",
+        "commands.general.server_stats",
     ]
     
     loaded_count = 0
@@ -714,6 +719,45 @@ async def init_db():
             status TEXT NOT NULL DEFAULT 'recording',
             voice_client_id INTEGER
         )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS self_assignable_roles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            role_id INTEGER NOT NULL,
+            category TEXT,
+            description TEXT,
+            max_roles INTEGER,
+            created_at TEXT NOT NULL,
+            UNIQUE(guild_id, role_id)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS level_roles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            level INTEGER NOT NULL,
+            role_id INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE(guild_id, level)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS afk_users (
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            reason TEXT,
+            set_at TEXT NOT NULL,
+            PRIMARY KEY (guild_id, user_id)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS server_stats_channels (
+            guild_id INTEGER NOT NULL PRIMARY KEY,
+            channel_id INTEGER NOT NULL,
+            stats_type TEXT NOT NULL DEFAULT 'members',
+            enabled INTEGER NOT NULL DEFAULT 1
+        )""")
         
         # Add previous_commands column if it doesn't exist (for existing databases)
         # Check if column exists first to avoid errors
@@ -1132,9 +1176,63 @@ async def on_message(message: discord.Message):
             "MESSAGE",
         )
         if leveled_up:
-            # User leveled up! Could send a notification here if desired
+            # User leveled up! Assign level roles
             xp, level, total_xp = await get_user_xp(message.guild.id, message.author.id)
             logger.info(f"User {message.author.id} leveled up to level {level} in guild {message.guild.id}")
+            
+            # Assign level roles
+            from database import get_all_level_roles_up_to
+            level_roles = await get_all_level_roles_up_to(message.guild.id, level)
+            if level_roles:
+                roles_to_add = []
+                for lr in level_roles:
+                    role = message.guild.get_role(lr["role_id"])
+                    if role and role not in message.author.roles:
+                        roles_to_add.append(role)
+                
+                if roles_to_add:
+                    try:
+                        await message.author.add_roles(*roles_to_add, reason=f"Leveled up to level {level}")
+                        logger.info(f"Assigned level roles to {message.author.id}: {[r.id for r in roles_to_add]}")
+                    except Exception as e:
+                        logger.error(f"Error assigning level roles: {e}")
+    
+    # Handle AFK system
+    from database import get_afk_status, remove_afk
+    # Check if message author is mentioned and they're AFK
+    if message.mentions:
+        for mentioned_user in message.mentions:
+            if mentioned_user.id != message.author.id and not mentioned_user.bot:
+                afk_status = await get_afk_status(message.guild.id, mentioned_user.id)
+                if afk_status:
+                    reason_text = f" - {afk_status['reason']}" if afk_status['reason'] else ""
+                    try:
+                        await message.channel.send(
+                            embed=obsidian_embed(
+                                "💤 User is AFK",
+                                f"{mentioned_user.mention} is currently AFK{reason_text}",
+                                color=discord.Color.orange(),
+                                client=message._state._get_client(),
+                            )
+                        )
+                    except:
+                        pass  # Can't send message, that's okay
+    
+    # Check if message author is AFK and remove it
+    if not message.author.bot:
+        afk_status = await get_afk_status(message.guild.id, message.author.id)
+        if afk_status:
+            await remove_afk(message.guild.id, message.author.id)
+            # Remove [AFK] from nickname
+            if isinstance(message.author, discord.Member):
+                try:
+                    if message.author.display_name.startswith("[AFK]"):
+                        new_nick = message.author.display_name.replace("[AFK] ", "").replace("[AFK]", "").strip()
+                        if not new_nick:
+                            new_nick = None
+                        await message.author.edit(nick=new_nick)
+                except:
+                    pass  # Can't edit nickname, that's okay
 
 
 @bot.event

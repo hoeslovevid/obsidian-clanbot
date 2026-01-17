@@ -1060,6 +1060,78 @@ def setup_tasks(bot):
     @member_count_update_loop.before_loop
     async def before_member_count_update_loop():
         await bot.wait_until_ready()
+    
+    @tasks.loop(minutes=5)  # Update every 5 minutes
+    async def server_stats_update_loop():
+        """Update server stats channel names."""
+        from database import get_server_stats_channel
+        
+        try:
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute("""
+                    SELECT guild_id FROM server_stats_channels WHERE enabled = 1
+                """)
+                guilds = await cur.fetchall()
+            
+            for (guild_id,) in guilds:
+                guild = bot.get_guild(guild_id)
+                if not guild:
+                    continue
+                
+                settings = await get_server_stats_channel(guild_id)
+                if not settings or not settings["enabled"]:
+                    continue
+                
+                channel = guild.get_channel(settings["channel_id"])
+                if not channel:
+                    # Channel was deleted, disable stats
+                    from database import remove_server_stats_channel
+                    await remove_server_stats_channel(guild_id)
+                    continue
+                
+                try:
+                    stats_type = settings["stats_type"]
+                    new_name = None
+                    
+                    if stats_type == "members":
+                        member_count = guild.member_count
+                        bot_count = sum(1 for m in guild.members if m.bot)
+                        human_count = member_count - bot_count
+                        new_name = f"👥 {member_count:,} Members • 🤖 {bot_count:,} Bots • 👤 {human_count:,} Humans"
+                    
+                    elif stats_type == "boosts":
+                        boost_count = guild.premium_subscription_count or 0
+                        boost_level = guild.premium_tier
+                        new_name = f"🚀 {boost_count} Boosts • Level {boost_level}"
+                    
+                    elif stats_type == "channels":
+                        text_channels = len([c for c in guild.channels if isinstance(c, discord.TextChannel)])
+                        voice_channels = len([c for c in guild.channels if isinstance(c, discord.VoiceChannel)])
+                        total_channels = len(guild.channels)
+                        new_name = f"💬 {text_channels} Text • 🔊 {voice_channels} Voice • 📊 {total_channels} Total"
+                    
+                    elif stats_type == "roles":
+                        role_count = len(guild.roles)
+                        new_name = f"🎭 {role_count} Roles"
+                    
+                    if new_name and channel.name != new_name:
+                        # Discord channel name limit is 100 characters
+                        if len(new_name) > 100:
+                            new_name = new_name[:97] + "..."
+                        await channel.edit(name=new_name)
+                        logger.info(f"Updated server stats for guild {guild_id}: {new_name}")
+                
+                except discord.Forbidden:
+                    logger.warning(f"No permission to edit stats channel in guild {guild_id}")
+                except Exception as e:
+                    logger.error(f"Error updating server stats for guild {guild_id}: {e}", exc_info=True)
+        
+        except Exception as e:
+            logger.error(f"Error in server_stats_update_loop: {e}", exc_info=True)
+    
+    @server_stats_update_loop.before_loop
+    async def before_server_stats_update_loop():
+        await bot.wait_until_ready()
 
     @tasks.loop(minutes=1)  # Check every minute for ended giveaways
     async def giveaway_check_loop():
@@ -1088,6 +1160,7 @@ def setup_tasks(bot):
         ('invasion_check_loop', invasion_check_loop),
         ('archon_check_loop', archon_check_loop),
         ('member_count_update_loop', member_count_update_loop),
+        ('server_stats_update_loop', server_stats_update_loop),
     ]
     
     started_tasks = {}

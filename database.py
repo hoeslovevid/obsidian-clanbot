@@ -535,3 +535,189 @@ async def reset_spam_tracking(guild_id: int, user_id: int):
             DELETE FROM auto_mod_spam_tracking WHERE guild_id = ? AND user_id = ?
         """, (guild_id, user_id))
         await db.commit()
+
+
+# --------------------- Self-Assignable Roles Functions ---------------------
+async def add_self_assignable_role(guild_id: int, role_id: int, category: Optional[str] = None, description: Optional[str] = None, max_roles: Optional[int] = None):
+    """Add a self-assignable role."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            INSERT INTO self_assignable_roles (guild_id, role_id, category, description, max_roles, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(guild_id, role_id) DO UPDATE SET
+                category = excluded.category,
+                description = excluded.description,
+                max_roles = excluded.max_roles
+        """, (guild_id, role_id, category, description, max_roles, now_utc().isoformat()))
+        await db.commit()
+
+
+async def remove_self_assignable_role(guild_id: int, role_id: int):
+    """Remove a self-assignable role."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            DELETE FROM self_assignable_roles WHERE guild_id = ? AND role_id = ?
+        """, (guild_id, role_id))
+        await db.commit()
+
+
+async def get_self_assignable_roles(guild_id: int, category: Optional[str] = None) -> list:
+    """Get all self-assignable roles for a guild, optionally filtered by category."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        if category:
+            cur = await db.execute("""
+                SELECT role_id, category, description, max_roles
+                FROM self_assignable_roles
+                WHERE guild_id = ? AND category = ?
+                ORDER BY role_id
+            """, (guild_id, category))
+        else:
+            cur = await db.execute("""
+                SELECT role_id, category, description, max_roles
+                FROM self_assignable_roles
+                WHERE guild_id = ?
+                ORDER BY category, role_id
+            """, (guild_id,))
+        rows = await cur.fetchall()
+        return [{"role_id": row[0], "category": row[1], "description": row[2], "max_roles": row[3]} for row in rows]
+
+
+async def get_self_assignable_categories(guild_id: int) -> list:
+    """Get all categories for self-assignable roles."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("""
+            SELECT DISTINCT category FROM self_assignable_roles
+            WHERE guild_id = ? AND category IS NOT NULL
+            ORDER BY category
+        """, (guild_id,))
+        rows = await cur.fetchall()
+        return [row[0] for row in rows if row[0]]
+
+
+# --------------------- Level Roles Functions ---------------------
+async def add_level_role(guild_id: int, level: int, role_id: int):
+    """Add a level role (role assigned at a specific level)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            INSERT INTO level_roles (guild_id, level, role_id, created_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(guild_id, level) DO UPDATE SET role_id = excluded.role_id
+        """, (guild_id, level, role_id, now_utc().isoformat()))
+        await db.commit()
+
+
+async def remove_level_role(guild_id: int, level: int):
+    """Remove a level role."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            DELETE FROM level_roles WHERE guild_id = ? AND level = ?
+        """, (guild_id, level))
+        await db.commit()
+
+
+async def get_level_roles(guild_id: int) -> list:
+    """Get all level roles for a guild."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("""
+            SELECT level, role_id FROM level_roles
+            WHERE guild_id = ?
+            ORDER BY level ASC
+        """, (guild_id,))
+        rows = await cur.fetchall()
+        return [{"level": row[0], "role_id": row[1]} for row in rows]
+
+
+async def get_level_role_for_level(guild_id: int, level: int) -> Optional[int]:
+    """Get the role ID for a specific level."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("""
+            SELECT role_id FROM level_roles
+            WHERE guild_id = ? AND level = ?
+        """, (guild_id, level))
+        row = await cur.fetchone()
+        return row[0] if row else None
+
+
+async def get_all_level_roles_up_to(guild_id: int, level: int) -> list:
+    """Get all level roles up to and including a specific level."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("""
+            SELECT level, role_id FROM level_roles
+            WHERE guild_id = ? AND level <= ?
+            ORDER BY level ASC
+        """, (guild_id, level))
+        rows = await cur.fetchall()
+        return [{"level": row[0], "role_id": row[1]} for row in rows]
+
+
+# --------------------- AFK Functions ---------------------
+async def set_afk(guild_id: int, user_id: int, reason: Optional[str] = None):
+    """Set a user as AFK."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            INSERT INTO afk_users (guild_id, user_id, reason, set_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(guild_id, user_id) DO UPDATE SET
+                reason = excluded.reason,
+                set_at = excluded.set_at
+        """, (guild_id, user_id, reason, now_utc().isoformat()))
+        await db.commit()
+
+
+async def remove_afk(guild_id: int, user_id: int):
+    """Remove a user's AFK status."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            DELETE FROM afk_users WHERE guild_id = ? AND user_id = ?
+        """, (guild_id, user_id))
+        await db.commit()
+
+
+async def get_afk_status(guild_id: int, user_id: int) -> Optional[dict]:
+    """Get a user's AFK status."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("""
+            SELECT reason, set_at FROM afk_users
+            WHERE guild_id = ? AND user_id = ?
+        """, (guild_id, user_id))
+        row = await cur.fetchone()
+        if row:
+            return {"reason": row[0], "set_at": row[1]}
+        return None
+
+
+# --------------------- Server Stats Functions ---------------------
+async def set_server_stats_channel(guild_id: int, channel_id: int, stats_type: str = "members"):
+    """Set the server stats channel."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            INSERT INTO server_stats_channels (guild_id, channel_id, stats_type, enabled)
+            VALUES (?, ?, ?, 1)
+            ON CONFLICT(guild_id) DO UPDATE SET
+                channel_id = excluded.channel_id,
+                stats_type = excluded.stats_type,
+                enabled = 1
+        """, (guild_id, channel_id, stats_type))
+        await db.commit()
+
+
+async def remove_server_stats_channel(guild_id: int):
+    """Remove the server stats channel."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            UPDATE server_stats_channels SET enabled = 0 WHERE guild_id = ?
+        """, (guild_id,))
+        await db.commit()
+
+
+async def get_server_stats_channel(guild_id: int) -> Optional[dict]:
+    """Get the server stats channel settings."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("""
+            SELECT channel_id, stats_type, enabled FROM server_stats_channels
+            WHERE guild_id = ?
+        """, (guild_id,))
+        row = await cur.fetchone()
+        if row and row[2]:  # enabled
+            return {"channel_id": row[0], "stats_type": row[1], "enabled": bool(row[2])}
+        return None
