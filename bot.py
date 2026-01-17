@@ -1255,10 +1255,19 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
         if after.channel and isinstance(after.channel, discord.VoiceChannel):
             if not (after.self_mute or after.self_deaf):
                 async with aiosqlite.connect(DB_PATH) as db:
+                    # First, get existing total_minutes if any
+                    cur = await db.execute("""
+                        SELECT total_minutes FROM voice_activity
+                        WHERE guild_id=? AND user_id=? AND channel_id=?
+                    """, (member.guild.id, member.id, after.channel.id))
+                    row = await cur.fetchone()
+                    existing_minutes = row[0] if row else 0
+                    
+                    # Now insert or replace with preserved total_minutes
                     await db.execute("""
                         INSERT OR REPLACE INTO voice_activity (guild_id, user_id, channel_id, joined_at, last_reward_at, total_minutes)
-                        VALUES (?, ?, ?, ?, ?, COALESCE((SELECT total_minutes FROM voice_activity WHERE guild_id=? AND user_id=? AND channel_id=?), 0))
-                    """, (member.guild.id, member.id, after.channel.id, now.isoformat(), None, member.guild.id, member.id, after.channel.id))
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    """, (member.guild.id, member.id, after.channel.id, now.isoformat(), None, existing_minutes))
                     await db.commit()
     
     # Original join-to-create logic
@@ -1493,10 +1502,6 @@ async def on_interaction(interaction: discord.Interaction):
             else:
                 logger.info(f"[modal] Interaction already done (deferred by on_submit), proceeding with processing")
             
-            # Mark as processing immediately
-            _processed_modal_submissions.add(interaction_key)
-            logger.info(f"[modal] Processing complaint submission: {interaction_key}")
-            
             try:
                 
                 # Extract values from interaction data
@@ -1521,6 +1526,24 @@ async def on_interaction(interaction: discord.Interaction):
                 guild = interaction.guild
                 if not guild:
                     return await interaction.followup.send("This command can only be used in a server.", ephemeral=True)
+                
+                # Check for duplicate BEFORE marking as processed (fixes race condition)
+                async with aiosqlite.connect(DB_PATH) as db:
+                    # Check if this exact submission already exists (same user, same content, within last 5 seconds)
+                    check_cur = await db.execute(
+                        "SELECT case_id FROM complaints WHERE guild_id=? AND user_id=? AND category=? AND details=? AND created_at > datetime('now', '-5 seconds')",
+                        (guild.id, interaction.user.id, category_val, details_val)
+                    )
+                    existing = await check_cur.fetchone()
+                    if existing:
+                        # Duplicate detected - don't process
+                        logger.info(f"[modal] Duplicate submission detected: {interaction_key}")
+                        await interaction.followup.send("This submission was already processed.", ephemeral=True)
+                        return
+                
+                # Mark as processing AFTER duplicate check passes
+                _processed_modal_submissions.add(interaction_key)
+                logger.info(f"[modal] Processing complaint submission: {interaction_key}")
                 
                 # Generate unique case_id with retry logic
                 created = now_utc()
@@ -1552,21 +1575,8 @@ async def on_interaction(interaction: discord.Interaction):
                         case_id = f"OBS-{int(time.time() * 1000000)}-{interaction.user.id}-{random.randint(10000, 99999)}"
                 
                 created_iso = created.isoformat()
-
-                # Check if case already exists before inserting (extra safety check)
+                
                 async with aiosqlite.connect(DB_PATH) as db:
-                    # Check if this exact submission already exists (same user, same content, within last 5 seconds)
-                    check_cur = await db.execute(
-                        "SELECT case_id FROM complaints WHERE guild_id=? AND user_id=? AND category=? AND details=? AND created_at > datetime('now', '-5 seconds')",
-                        (guild.id, interaction.user.id, category_val, details_val)
-                    )
-                    existing = await check_cur.fetchone()
-                    if existing:
-                        # Duplicate detected - clean up and return
-                        _processed_modal_submissions.discard(interaction_key)
-                        await interaction.followup.send("This submission was already processed.", ephemeral=True)
-                        return
-                    
                     await db.execute(
                         "INSERT INTO complaints(guild_id,case_id,user_id,created_at,category,details,evidence,status,staff_thread_id,last_update_at) "
                         "VALUES(?,?,?,?,?,?,?,?,?,?)",
@@ -2036,6 +2046,7 @@ async def on_interaction(interaction: discord.Interaction):
                         # Interaction expired or already handled - can't process it
                         logger.warning(f"[button] complaints:ack - interaction expired/already handled: {e}")
                         return
+                    # Use followup for set_status and message (don't call response methods after defer)
                     await view.set_status(interaction, "ACKNOWLEDGED", bot)
                     await interaction.followup.send(f"`{case_id}` marked reviewed.", ephemeral=True)
                     return
@@ -2630,7 +2641,11 @@ async def check_and_post_updates(bot):
                 continue
             
             # Verify bot has permission to send messages in this channel
-            bot_member = guild.get_member(bot.user.id) if bot.user else None
+            if not bot.user:
+                logger.warning(f"[update_log] bot.user is None, skipping guild {guild.name}")
+                continue
+            
+            bot_member = guild.get_member(bot.user.id)
             if not bot_member:
                 logger.warning(f"[update_log] Bot member not found in guild {guild.name}, skipping")
                 continue
