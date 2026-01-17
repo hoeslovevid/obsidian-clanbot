@@ -1515,8 +1515,10 @@ async def on_interaction(interaction: discord.Interaction):
                 # Check for duplicate BEFORE marking as processed (fixes race condition)
                 async with aiosqlite.connect(DB_PATH) as db:
                     # Check if this exact submission already exists (same user, same content, within last 5 seconds)
+                    # Convert ISO 8601 datetime to SQLite datetime format for proper comparison
+                    # Use datetime(created_at) to convert ISO format to SQLite datetime, then compare
                     check_cur = await db.execute(
-                        "SELECT case_id FROM complaints WHERE guild_id=? AND user_id=? AND category=? AND details=? AND created_at > datetime('now', '-5 seconds')",
+                        "SELECT case_id FROM complaints WHERE guild_id=? AND user_id=? AND category=? AND details=? AND datetime(created_at) > datetime('now', '-5 seconds')",
                         (guild.id, interaction.user.id, category_val, details_val)
                     )
                     existing = await check_cur.fetchone()
@@ -1571,7 +1573,21 @@ async def on_interaction(interaction: discord.Interaction):
                             case_id = fallback_id
                         else:
                             # Last resort: use timestamp + user_id + very large random number
-                            case_id = f"OBS-{int(time.time() * 1000000)}-{interaction.user.id}-{random.randint(100000, 999999)}"
+                            # Verify this last resort ID is unique before using it
+                            last_resort_id = None
+                            for final_attempt in range(5):  # Try up to 5 times for last resort
+                                candidate_id = f"OBS-{int(time.time() * 1000000)}-{interaction.user.id}-{random.randint(100000, 999999)}"
+                                async with aiosqlite.connect(DB_PATH) as db:
+                                    cur = await db.execute(
+                                        "SELECT 1 FROM complaints WHERE guild_id=? AND case_id=?",
+                                        (guild.id, candidate_id)
+                                    )
+                                    exists = await cur.fetchone()
+                                if not exists:
+                                    last_resort_id = candidate_id
+                                    break
+                            # If still no unique ID after 5 attempts, use the candidate anyway (very unlikely collision)
+                            case_id = last_resort_id or f"OBS-{int(time.time() * 1000000)}-{interaction.user.id}-{random.randint(100000, 999999)}"
                 
                 created_iso = created.isoformat()
                 
@@ -1870,14 +1886,29 @@ async def on_interaction(interaction: discord.Interaction):
                                 case_id = fallback_id
                             else:
                                 # Last resort: use timestamp + user_id + very large random number
-                                case_id = f"OBS-{int(time.time() * 1000000)}-{interaction.user.id}-{random.randint(100000, 999999)}"
+                                # Verify this last resort ID is unique before using it
+                                last_resort_id = None
+                                for final_attempt in range(5):  # Try up to 5 times for last resort
+                                    candidate_id = f"OBS-{int(time.time() * 1000000)}-{interaction.user.id}-{random.randint(100000, 999999)}"
+                                    async with aiosqlite.connect(DB_PATH) as db:
+                                        cur = await db.execute(
+                                            "SELECT 1 FROM complaints WHERE guild_id=? AND case_id=?",
+                                            (guild.id, candidate_id)
+                                        )
+                                        exists = await cur.fetchone()
+                                    if not exists:
+                                        last_resort_id = candidate_id
+                                        break
+                                # If still no unique ID after 5 attempts, use the candidate anyway (very unlikely collision)
+                                case_id = last_resort_id or f"OBS-{int(time.time() * 1000000)}-{interaction.user.id}-{random.randint(100000, 999999)}"
                     
                     created_iso = created.isoformat()
 
                     # Check for duplicates
                     async with aiosqlite.connect(DB_PATH) as db:
+                        # Convert ISO 8601 datetime to SQLite datetime format for proper comparison
                         check_cur = await db.execute(
-                            "SELECT case_id FROM complaints WHERE guild_id=? AND user_id=? AND category=? AND details=? AND created_at > datetime('now', '-5 seconds')",
+                            "SELECT case_id FROM complaints WHERE guild_id=? AND user_id=? AND category=? AND details=? AND datetime(created_at) > datetime('now', '-5 seconds')",
                             (guild.id, interaction.user.id, category_val, details_val)
                         )
                         existing = await check_cur.fetchone()
