@@ -1212,7 +1212,7 @@ async def on_message(message: discord.Message):
                                 "💤 User is AFK",
                                 f"{mentioned_user.mention} is currently AFK{reason_text}",
                                 color=discord.Color.orange(),
-                                client=message._state._get_client(),
+                                client=bot,
                             )
                         )
                     except:
