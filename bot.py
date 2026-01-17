@@ -2599,7 +2599,12 @@ async def detect_and_update_version(bot) -> Tuple[str, list]:
                     patch = int(version_parts[2]) if len(version_parts) > 2 else 0
                     
                     # Determine if this is a "big" change (commands added/removed) or "small" change (internal updates only)
-                    is_big_change = bool(added_commands or removed_commands)
+                    # Check if sets are non-empty (len() > 0) rather than using bool() on sets
+                    has_added = len(added_commands) > 0
+                    has_removed = len(removed_commands) > 0
+                    is_big_change = has_added or has_removed
+                    
+                    logger.info(f"[version] Change detection: added={has_added} ({len(added_commands)}), removed={has_removed} ({len(removed_commands)}), is_big={is_big_change}")
                     
                     if is_big_change:
                         # Big change: increment minor version (1.7.0 → 1.8.0)
