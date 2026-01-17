@@ -66,7 +66,8 @@ def setup(bot):
                 embed=obsidian_embed(
                     "✅ Devstream Notifications Configured",
                     f"Devstream notifications will be sent to {channel.mention}.\n\n"
-                    "Note: Devstream dates are manually tracked. Use `/devstream_set` to set the next devstream date.",
+                    "Devstream dates are automatically detected. The bot will calculate the next devstream based on the typical schedule (every other Friday at 2pm ET).\n\n"
+                    "You can manually override the date using `/devstream_set` if needed.",
                     color=discord.Color.green(),
                     client=interaction.client,
                 ),
