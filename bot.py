@@ -3287,7 +3287,8 @@ async def on_ready():
     # Wait a bit for commands to fully sync, then check and post automatic update logs
     try:
         logger.info("[ready] Waiting for commands to sync, then checking for automatic updates...")
-        await asyncio.sleep(2)  # Give commands time to fully register
+        await asyncio.sleep(5)  # Give commands more time to fully register and sync with Discord
+        logger.info("[ready] Starting update check...")
         await check_and_post_updates(bot)
         logger.info("[ready] Automatic update check completed")
     except Exception as e:
