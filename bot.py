@@ -1951,6 +1951,7 @@ async def on_interaction(interaction: discord.Interaction):
                             "Docket Sealed",
                             f"Your docket entry has been sealed as **`{case_id}`**.\nYou'll receive DM docket updates as it progresses.",
                             color=discord.Color.green(),
+                            client=bot,
                         ),
                         ephemeral=True,
                     )
