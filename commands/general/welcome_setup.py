@@ -24,7 +24,7 @@ def setup(bot):
         enabled: Optional[bool] = None
     ):
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
-            return await interaction.response.send_message("Obsidian Inheritors only.", ephemeral=True)
+            return await interaction.response.send_message("Sorry, but you are not an Administrator in this server.", ephemeral=True)
         
         async with aiosqlite.connect(DB_PATH) as db:
             # Get current settings
@@ -85,7 +85,7 @@ def setup(bot):
             return await interaction.response.send_message(
                 embed=obsidian_embed(
                     "❌ Permission Denied",
-                    "Only Obsidian Inheritors can use this command.",
+                    "Sorry, but you are not an Administrator in this server.",
                     color=discord.Color.red(),
                     client=interaction.client,
                 ),

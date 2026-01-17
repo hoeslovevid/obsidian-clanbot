@@ -129,9 +129,8 @@ def get_mod_role(guild: discord.Guild) -> Optional[discord.Role]:
 
 
 def is_mod(member: discord.Member) -> bool:
-    """Check if a member has a moderator role."""
-    mod_roles = [MOD_ROLE_NAME, "Shadow Chancellor", "Supreme Chancellor"]
-    return any(r.name in mod_roles for r in member.roles)
+    """Check if a member has Administrator permission."""
+    return member.guild_permissions.administrator
 
 
 def parse_time_natural(text: str) -> Optional[datetime]:

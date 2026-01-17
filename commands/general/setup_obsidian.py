@@ -17,7 +17,7 @@ def setup(bot):
         from bot import CREATE_VC_NAME, TEMP_VC_CATEGORY_NAME, VOICE_PANEL_CHANNEL_NAME
         
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
-            return await interaction.response.send_message("Obsidian Inheritors only.", ephemeral=True)
+            return await interaction.response.send_message("Sorry, but you are not an Administrator in this server.", ephemeral=True)
 
         # Prevent duplicate execution
         interaction_key = f"{interaction.guild.id}:{interaction.channel.id}:{interaction.user.id}"

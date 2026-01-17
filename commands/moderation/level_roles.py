@@ -27,7 +27,7 @@ def setup(bot):
             return await interaction.response.send_message(
                 embed=obsidian_embed(
                     "❌ Permission Denied",
-                    "Only moderators can configure level roles.",
+                    "Sorry, but you are not an Administrator in this server.",
                     color=discord.Color.red(),
                     client=interaction.client,
                 ),

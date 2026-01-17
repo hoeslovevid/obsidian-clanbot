@@ -15,7 +15,7 @@ def setup(bot):
     async def purge(interaction: discord.Interaction, amount: str):
         # Check if user is a mod
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
-            return await interaction.response.send_message("Obsidian Inheritors only.", ephemeral=True)
+            return await interaction.response.send_message("Sorry, but you are not an Administrator in this server.", ephemeral=True)
 
         # Check if channel is a text channel
         if not isinstance(interaction.channel, discord.TextChannel):

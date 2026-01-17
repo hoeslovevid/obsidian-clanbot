@@ -87,7 +87,7 @@ def setup(bot):
                 return await interaction.followup.send(
                     embed=obsidian_embed(
                         "❌ Permission Denied",
-                        "Only moderators can add self-assignable roles.",
+                        "Sorry, but you are not an Administrator in this server.",
                         color=discord.Color.red(),
                         client=interaction.client,
                     ),
@@ -123,7 +123,7 @@ def setup(bot):
                 return await interaction.followup.send(
                     embed=obsidian_embed(
                         "❌ Permission Denied",
-                        "Only moderators can remove self-assignable roles.",
+                        "Sorry, but you are not an Administrator in this server.",
                         color=discord.Color.red(),
                         client=interaction.client,
                     ),

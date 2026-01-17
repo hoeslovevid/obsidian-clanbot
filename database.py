@@ -755,3 +755,113 @@ async def get_server_stats_channel(guild_id: int) -> Optional[dict]:
         if row and row[2]:  # enabled
             return {"channel_id": row[0], "stats_type": row[1], "enabled": bool(row[2])}
         return None
+
+
+# --------------------- Milestone Functions ---------------------
+async def check_and_record_milestone(guild_id: int, user_id: int, milestone_type: str, milestone_value: int) -> bool:
+    """Check if milestone should be recorded and record it. Returns True if milestone was newly achieved."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Check if already recorded
+        cur = await db.execute("""
+            SELECT 1 FROM member_milestones
+            WHERE guild_id=? AND user_id=? AND milestone_type=? AND milestone_value=?
+        """, (guild_id, user_id, milestone_type, milestone_value))
+        if await cur.fetchone():
+            return False  # Already recorded
+        
+        # Record milestone
+        await db.execute("""
+            INSERT INTO member_milestones (guild_id, user_id, milestone_type, milestone_value, achieved_at, notified)
+            VALUES (?, ?, ?, ?, ?, 0)
+        """, (guild_id, user_id, milestone_type, milestone_value, now_utc().isoformat()))
+        await db.commit()
+        return True  # Newly achieved
+
+
+# --------------------- Achievement Functions ---------------------
+async def check_and_unlock_achievement(guild_id: int, user_id: int, achievement_id: str, bot: Optional[Any] = None) -> bool:
+    """Check if achievement should be unlocked and unlock it. Returns True if achievement was newly unlocked."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Check if already unlocked
+        cur = await db.execute("""
+            SELECT 1 FROM achievements
+            WHERE guild_id=? AND user_id=? AND achievement_id=?
+        """, (guild_id, user_id, achievement_id))
+        if await cur.fetchone():
+            return False  # Already unlocked
+        
+        # Get achievement definition
+        cur = await db.execute("""
+            SELECT reward_coins, reward_xp FROM achievement_definitions
+            WHERE achievement_id=?
+        """, (achievement_id,))
+        row = await cur.fetchone()
+        
+        reward_coins = row[0] if row else 0
+        reward_xp = row[1] if row else 0
+        
+        # Unlock achievement
+        await db.execute("""
+            INSERT INTO achievements (guild_id, user_id, achievement_id, unlocked_at)
+            VALUES (?, ?, ?, ?)
+        """, (guild_id, user_id, achievement_id, now_utc().isoformat()))
+        await db.commit()
+        
+        # Award rewards
+        if reward_coins > 0:
+            await add_coins(guild_id, user_id, reward_coins, "ACHIEVEMENT", f"Achievement: {achievement_id}")
+        if reward_xp > 0:
+            await add_xp(guild_id, user_id, reward_xp, f"ACHIEVEMENT_{achievement_id}")
+        
+        return True  # Newly unlocked
+
+
+async def initialize_achievement_definitions():
+    """Initialize default achievement definitions if they don't exist."""
+    default_achievements = [
+        ("first_message", "First Message", "Send your first message", "social", "Send 1 message", 10, 5),
+        ("hundred_messages", "Century", "Send 100 messages", "social", "Send 100 messages", 100, 50),
+        ("thousand_messages", "Millennium", "Send 1,000 messages", "social", "Send 1,000 messages", 500, 250),
+        ("ten_thousand_messages", "Legend", "Send 10,000 messages", "social", "Send 10,000 messages", 2000, 1000),
+        ("level_10", "Rising Star", "Reach level 10", "leveling", "Reach level 10", 200, 100),
+        ("level_25", "Veteran", "Reach level 25", "leveling", "Reach level 25", 500, 250),
+        ("level_50", "Master", "Reach level 50", "leveling", "Reach level 50", 1000, 500),
+        ("level_100", "Grandmaster", "Reach level 100", "leveling", "Reach level 100", 5000, 2500),
+        ("join_anniversary_1", "One Year", "Celebrate 1 year in the server", "milestone", "1 year anniversary", 500, 250),
+        ("join_anniversary_2", "Two Years", "Celebrate 2 years in the server", "milestone", "2 year anniversary", 1000, 500),
+        ("voice_hour", "Voice Active", "Spend 1 hour in voice", "voice", "1 hour in voice", 50, 25),
+        ("voice_ten_hours", "Voice Veteran", "Spend 10 hours in voice", "voice", "10 hours in voice", 200, 100),
+    ]
+    
+    async with aiosqlite.connect(DB_PATH) as db:
+        for achievement_id, name, description, category, requirement, reward_coins, reward_xp in default_achievements:
+            await db.execute("""
+                INSERT OR IGNORE INTO achievement_definitions 
+                (achievement_id, name, description, category, requirement, reward_coins, reward_xp)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (achievement_id, name, description, category, requirement, reward_coins, reward_xp))
+        await db.commit()
+
+
+# --------------------- Shop Functions ---------------------
+async def initialize_default_shop_items(guild_id: int):
+    """Initialize default shop items for a guild if none exist."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Check if shop already has items
+        cur = await db.execute("""
+            SELECT COUNT(*) FROM shop_items WHERE guild_id=?
+        """, (guild_id,))
+        count = (await cur.fetchone())[0]
+        
+        if count > 0:
+            return  # Shop already has items
+        
+        # Default shop items (these are templates - moderators should customize)
+        # Note: These don't have actual role IDs - moderators need to add real items
+        default_items = [
+            # Example items that won't actually work until moderators configure real role IDs
+            # These are just placeholders to show the shop is working
+        ]
+        
+        # Don't auto-create items - let moderators add them manually
+        # This prevents issues with invalid role IDs

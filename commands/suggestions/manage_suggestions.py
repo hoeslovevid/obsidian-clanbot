@@ -43,7 +43,7 @@ class SuggestionView(discord.ui.View):
         """Handle status change."""
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
             return await interaction.response.send_message(
-                "Only moderators can manage suggestions.",
+                "Sorry, but you are not an Administrator in this server.",
                 ephemeral=True
             )
         
@@ -161,7 +161,7 @@ def setup(bot):
         """View and manage suggestions."""
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
             return await interaction.response.send_message(
-                "Only moderators can use this command.",
+                "Sorry, but you are not an Administrator in this server.",
                 ephemeral=True
             )
         

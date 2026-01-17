@@ -30,7 +30,7 @@ def setup(bot):
         """Configure the application system."""
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
             return await interaction.response.send_message(
-                "Only moderators can use this command.",
+                "Sorry, but you are not an Administrator in this server.",
                 ephemeral=True
             )
         
@@ -222,7 +222,7 @@ class RemoveQuestionView(discord.ui.View):
     @discord.ui.select(custom_id="remove_question_select")
     async def remove_question_select(self, interaction: discord.Interaction, select: discord.ui.Select):
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
-            return await interaction.response.send_message("Only moderators can use this.", ephemeral=True)
+            return await interaction.response.send_message("Sorry, but you are not an Administrator in this server.", ephemeral=True)
         
         question_id = int(select.values[0])
         

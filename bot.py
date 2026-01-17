@@ -166,6 +166,11 @@ def load_all_commands():
         "commands.general.setup_docket",
         "commands.general.sync_commands",
         "commands.general.welcome_setup",
+        "commands.general.milestones",
+        "commands.general.achievements",
+        "commands.general.webhooks",
+        # Music commands
+        "commands.music.music",
         # Event commands
         "commands.events.event_create",
         # Complaint commands
@@ -195,6 +200,8 @@ def load_all_commands():
         "commands.moderation.automod_status",
         "commands.moderation.roles",
         "commands.moderation.level_roles",
+        "commands.moderation.logging",
+        "commands.moderation.snipe",
         # Economy commands
         "commands.economy.balance",
         "commands.economy.leaderboard",
@@ -204,6 +211,9 @@ def load_all_commands():
         "commands.economy.xpleaderboard",
         "commands.economy.add_coins",
         "commands.economy.manage_xp",
+        "commands.economy.invest",
+        "commands.economy.shop",
+        "commands.economy.shop_manage",
         # Warframe commands
         "commands.warframe.baro",
         "commands.warframe.baro_notify",
@@ -766,6 +776,143 @@ async def init_db():
             notified_at TEXT NOT NULL,
             UNIQUE(guild_id, devstream_date, notification_type)
         )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS investments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            amount INTEGER NOT NULL,
+            interest_rate REAL NOT NULL DEFAULT 0.05,
+            invested_at TEXT NOT NULL,
+            maturity_date TEXT NOT NULL,
+            collected INTEGER NOT NULL DEFAULT 0,
+            UNIQUE(guild_id, user_id, invested_at)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS log_channels (
+            guild_id INTEGER NOT NULL,
+            log_type TEXT NOT NULL,
+            channel_id INTEGER NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            PRIMARY KEY (guild_id, log_type)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS deleted_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            channel_id INTEGER NOT NULL,
+            message_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            content TEXT,
+            author_name TEXT,
+            author_avatar TEXT,
+            attachments TEXT,
+            embeds TEXT,
+            deleted_at TEXT NOT NULL,
+            UNIQUE(guild_id, message_id)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS edited_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            channel_id INTEGER NOT NULL,
+            message_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            old_content TEXT,
+            new_content TEXT,
+            author_name TEXT,
+            edited_at TEXT NOT NULL
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS member_milestones (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            milestone_type TEXT NOT NULL,
+            milestone_value INTEGER NOT NULL,
+            achieved_at TEXT NOT NULL,
+            notified INTEGER NOT NULL DEFAULT 0,
+            UNIQUE(guild_id, user_id, milestone_type, milestone_value)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS achievements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            achievement_id TEXT NOT NULL,
+            unlocked_at TEXT NOT NULL,
+            UNIQUE(guild_id, user_id, achievement_id)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS achievement_definitions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            achievement_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT NOT NULL,
+            category TEXT NOT NULL,
+            requirement TEXT,
+            reward_coins INTEGER DEFAULT 0,
+            reward_xp INTEGER DEFAULT 0,
+            UNIQUE(achievement_id)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS music_queues (
+            guild_id INTEGER NOT NULL PRIMARY KEY,
+            channel_id INTEGER NOT NULL,
+            voice_channel_id INTEGER NOT NULL,
+            current_track TEXT,
+            queue_json TEXT,
+            is_playing INTEGER NOT NULL DEFAULT 0,
+            volume INTEGER NOT NULL DEFAULT 50,
+            updated_at TEXT NOT NULL
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS webhook_endpoints (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            endpoint_name TEXT NOT NULL,
+            webhook_url TEXT NOT NULL,
+            event_types TEXT NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            UNIQUE(guild_id, endpoint_name)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS shop_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            item_name TEXT NOT NULL,
+            description TEXT NOT NULL,
+            price INTEGER NOT NULL,
+            item_type TEXT NOT NULL,
+            item_value TEXT,
+            stock INTEGER DEFAULT -1,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            UNIQUE(guild_id, item_name)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS user_purchases (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            item_id INTEGER NOT NULL,
+            item_name TEXT NOT NULL,
+            price_paid INTEGER NOT NULL,
+            purchased_at TEXT NOT NULL,
+            FOREIGN KEY (item_id) REFERENCES shop_items(id)
+        )""")
         
         # Add previous_commands column if it doesn't exist (for existing databases)
         # Check if column exists first to avoid errors
@@ -1204,6 +1351,65 @@ async def on_message(message: discord.Message):
                         logger.info(f"Assigned level roles to {message.author.id}: {[r.id for r in roles_to_add]}")
                     except Exception as e:
                         logger.error(f"Error assigning level roles: {e}")
+        
+        # Check for level milestones and achievements
+        xp, level, total_xp = await get_user_xp(message.guild.id, message.author.id)
+        from database import check_and_record_milestone, check_and_unlock_achievement, initialize_achievement_definitions
+        
+        # Initialize achievements if needed
+        await initialize_achievement_definitions()
+        
+        # Check level milestones
+        level_milestones = [10, 25, 50, 100]
+        for milestone_level in level_milestones:
+            if level >= milestone_level:
+                milestone_achieved = await check_and_record_milestone(
+                    message.guild.id, message.author.id, "level", milestone_level
+                )
+                if milestone_achieved:
+                    # Unlock corresponding achievement
+                    achievement_id = f"level_{milestone_level}"
+                    await check_and_unlock_achievement(message.guild.id, message.author.id, achievement_id, bot)
+        
+        # Check message count milestones (get from activity_stats)
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute("""
+                SELECT messages_sent FROM activity_stats
+                WHERE guild_id=? AND user_id=?
+            """, (message.guild.id, message.author.id))
+            row = await cur.fetchone()
+            message_count = row[0] if row else 0
+        
+        # Update message count
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute("""
+                INSERT INTO activity_stats (guild_id, user_id, messages_sent, last_activity_date)
+                VALUES (?, ?, 1, ?)
+                ON CONFLICT(guild_id, user_id) DO UPDATE SET
+                    messages_sent = messages_sent + 1,
+                    last_activity_date = excluded.last_activity_date
+            """, (message.guild.id, message.author.id, now_utc().isoformat()))
+            await db.commit()
+        
+        # Check message count milestones
+        message_milestones = [1, 100, 1000, 10000]
+        for milestone_count in message_milestones:
+            if message_count + 1 >= milestone_count:
+                milestone_achieved = await check_and_record_milestone(
+                    message.guild.id, message.author.id, "message_count", milestone_count
+                )
+                if milestone_achieved:
+                    # Unlock corresponding achievement
+                    achievement_map = {
+                        1: "first_message",
+                        100: "hundred_messages",
+                        1000: "thousand_messages",
+                        10000: "ten_thousand_messages"
+                    }
+                    if milestone_count in achievement_map:
+                        await check_and_unlock_achievement(
+                            message.guild.id, message.author.id, achievement_map[milestone_count], bot
+                        )
     
     # Handle AFK system
     from database import get_afk_status, remove_afk
@@ -1423,7 +1629,7 @@ async def on_interaction(interaction: discord.Interaction):
                             question_val = value
                 
                 if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
-                    await interaction.followup.send("Obsidian Inheritors only.", ephemeral=True)
+                    await interaction.followup.send("Sorry, but you are not an Administrator in this server.", ephemeral=True)
                     return
 
                 async with aiosqlite.connect(DB_PATH) as db:
@@ -2098,7 +2304,7 @@ async def on_interaction(interaction: discord.Interaction):
             if len(parts) == 3:
                 _, case_id, action = parts
                 if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
-                    return await interaction.response.send_message("Obsidian Inheritors only.", ephemeral=True)
+                    return await interaction.response.send_message("Sorry, but you are not an Administrator in this server.", ephemeral=True)
 
                 view = ComplaintModView(case_id)
 
@@ -2379,7 +2585,7 @@ async def on_interaction(interaction: discord.Interaction):
                     return
                 
                 if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
-                    return await interaction.response.send_message("Only moderators can use this.", ephemeral=True)
+                    return await interaction.response.send_message("Sorry, but you are not an Administrator in this server.", ephemeral=True)
                 
                 await interaction.response.defer(ephemeral=True)
                 
@@ -3070,6 +3276,14 @@ async def on_ready():
         else:
             logger.info("[ready] No version tracking found (will be created on first update check)")
     
+    # Initialize achievement definitions
+    try:
+        from database import initialize_achievement_definitions
+        await initialize_achievement_definitions()
+        logger.info("[ready] Achievement definitions initialized")
+    except Exception as e:
+        logger.error(f"[ready] Error initializing achievements: {e}", exc_info=True)
+    
     # Wait a bit for commands to fully sync, then check and post automatic update logs
     try:
         logger.info("[ready] Waiting for commands to sync, then checking for automatic updates...")
@@ -3119,6 +3333,23 @@ async def on_ready():
 @bot.event
 async def on_member_join(member: discord.Member):
     """Send welcome message when a member joins."""
+    # Check for join anniversary milestones (check existing join date)
+    from database import check_and_record_milestone, check_and_unlock_achievement, initialize_achievement_definitions
+    await initialize_achievement_definitions()
+    
+    # Get member's join date
+    join_date = member.joined_at or now_utc()
+    years_in_server = (now_utc() - join_date.replace(tzinfo=timezone.utc)).days // 365
+    
+    # Check anniversary milestones
+    if years_in_server >= 1:
+        milestone_achieved = await check_and_record_milestone(
+            member.guild.id, member.id, "join_anniversary", years_in_server
+        )
+        if milestone_achieved and years_in_server <= 2:  # Only for 1-2 year anniversaries
+            achievement_id = f"join_anniversary_{years_in_server}"
+            await check_and_unlock_achievement(member.guild.id, member.id, achievement_id, bot)
+    
     async with aiosqlite.connect(DB_PATH) as db:
         cur = await db.execute("""
             SELECT channel_id, message, enabled FROM welcome_settings
@@ -3150,7 +3381,42 @@ async def on_member_join(member: discord.Member):
 
 @bot.event
 async def on_member_remove(member: discord.Member):
-    """Send leave message when a member leaves."""
+    """Send leave message and log kicks."""
+    # Check if it was a kick (audit log)
+    was_kicked = False
+    try:
+        async for entry in member.guild.audit_logs(limit=5, action=discord.AuditLogAction.kick):
+            if entry.target and entry.target.id == member.id:
+                was_kicked = True
+                # Log kick
+                async with aiosqlite.connect(DB_PATH) as db:
+                    cur = await db.execute("""
+                        SELECT channel_id FROM log_channels
+                        WHERE guild_id=? AND log_type='member_kick' AND enabled=1
+                    """, (member.guild.id,))
+                    row = await cur.fetchone()
+                
+                if row:
+                    log_channel = member.guild.get_channel(row[0])
+                    if isinstance(log_channel, discord.TextChannel):
+                        try:
+                            reason = entry.reason or "No reason provided"
+                            embed = obsidian_embed(
+                                "👢 Member Kicked",
+                                f"**User:** {member.mention} ({member})\n"
+                                f"**User ID:** {member.id}\n"
+                                f"**Reason:** {reason}",
+                                color=discord.Color.orange(),
+                                client=bot,
+                            )
+                            await log_channel.send(embed=embed)
+                        except Exception as e:
+                            logger.error(f"[logging] Error logging member kick: {e}")
+                break
+    except Exception:
+        pass
+    
+    # Original leave message code
     async with aiosqlite.connect(DB_PATH) as db:
         cur = await db.execute("""
             SELECT channel_id, message, enabled FROM leave_settings
@@ -3281,6 +3547,192 @@ async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
     except Exception as e:
         logger.error(f"[reaction_role] Error removing role: {e}")
 
+
+@bot.event
+async def on_message_delete(message: discord.Message):
+    """Log deleted messages."""
+    if not message.guild or message.author.bot:
+        return
+    
+    # Store deleted message
+    attachments_json = None
+    if message.attachments:
+        attachments_json = json.dumps([{"url": att.url, "filename": att.filename} for att in message.attachments])
+    
+    embeds_json = None
+    if message.embeds:
+        embeds_json = json.dumps([embed.to_dict() for embed in message.embeds])
+    
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            INSERT OR REPLACE INTO deleted_messages 
+            (guild_id, channel_id, message_id, user_id, content, author_name, author_avatar, attachments, embeds, deleted_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            message.guild.id,
+            message.channel.id,
+            message.id,
+            message.author.id,
+            message.content[:2000] if message.content else None,
+            str(message.author),
+            str(message.author.display_avatar.url) if message.author.display_avatar else None,
+            attachments_json,
+            embeds_json,
+            now_utc().isoformat()
+        ))
+        await db.commit()
+    
+    # Send to log channel if configured
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("""
+            SELECT channel_id FROM log_channels
+            WHERE guild_id=? AND log_type='message_delete' AND enabled=1
+        """, (message.guild.id,))
+        row = await cur.fetchone()
+    
+    if row:
+        log_channel = message.guild.get_channel(row[0])
+        if isinstance(log_channel, discord.TextChannel):
+            try:
+                embed = obsidian_embed(
+                    "🗑️ Message Deleted",
+                    f"**Channel:** {message.channel.mention}\n"
+                    f"**Author:** {message.author.mention} ({message.author})\n"
+                    f"**Content:** {message.content[:1000] if message.content else '*No content*'}",
+                    color=discord.Color.red(),
+                    client=bot,
+                )
+                if message.attachments:
+                    embed.add_field(name="Attachments", value=f"{len(message.attachments)} attachment(s)", inline=False)
+                await log_channel.send(embed=embed)
+            except Exception as e:
+                logger.error(f"[logging] Error logging message delete: {e}")
+
+
+@bot.event
+async def on_message_edit(before: discord.Message, after: discord.Message):
+    """Log edited messages."""
+    if not after.guild or after.author.bot or before.content == after.content:
+        return
+    
+    # Store edit
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            INSERT INTO edited_messages 
+            (guild_id, channel_id, message_id, user_id, old_content, new_content, author_name, edited_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            after.guild.id,
+            after.channel.id,
+            after.id,
+            after.author.id,
+            before.content[:2000] if before.content else None,
+            after.content[:2000] if after.content else None,
+            str(after.author),
+            now_utc().isoformat()
+        ))
+        await db.commit()
+    
+    # Send to log channel if configured
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("""
+            SELECT channel_id FROM log_channels
+            WHERE guild_id=? AND log_type='message_edit' AND enabled=1
+        """, (after.guild.id,))
+        row = await cur.fetchone()
+    
+    if row:
+        log_channel = after.guild.get_channel(row[0])
+        if isinstance(log_channel, discord.TextChannel):
+            try:
+                embed = obsidian_embed(
+                    "✏️ Message Edited",
+                    f"**Channel:** {after.channel.mention}\n"
+                    f"**Author:** {after.author.mention} ({after.author})\n"
+                    f"**Before:** {before.content[:500] if before.content else '*No content*'}\n"
+                    f"**After:** {after.content[:500] if after.content else '*No content*'}\n"
+                    f"[Jump to Message]({after.jump_url})",
+                    color=discord.Color.orange(),
+                    client=bot,
+                )
+                await log_channel.send(embed=embed)
+            except Exception as e:
+                logger.error(f"[logging] Error logging message edit: {e}")
+
+
+@bot.event
+async def on_member_ban(guild: discord.Guild, user: discord.User):
+    """Log member bans."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("""
+            SELECT channel_id FROM log_channels
+            WHERE guild_id=? AND log_type='member_ban' AND enabled=1
+        """, (guild.id,))
+        row = await cur.fetchone()
+    
+    if row:
+        log_channel = guild.get_channel(row[0])
+        if isinstance(log_channel, discord.TextChannel):
+            try:
+                # Try to get audit log entry for reason
+                reason = "No reason provided"
+                async for entry in guild.audit_logs(limit=1, action=discord.AuditLogAction.ban):
+                    if entry.target and entry.target.id == user.id:
+                        reason = entry.reason or "No reason provided"
+                        break
+                
+                embed = obsidian_embed(
+                    "🔨 Member Banned",
+                    f"**User:** {user.mention} ({user})\n"
+                    f"**User ID:** {user.id}\n"
+                    f"**Reason:** {reason}",
+                    color=discord.Color.red(),
+                    client=bot,
+                )
+                await log_channel.send(embed=embed)
+            except Exception as e:
+                logger.error(f"[logging] Error logging member ban: {e}")
+
+
+@bot.event
+async def on_member_update(before: discord.Member, after: discord.Member):
+    """Log role changes."""
+    if before.roles == after.roles:
+        return
+    
+    # Check what changed
+    added_roles = [r for r in after.roles if r not in before.roles]
+    removed_roles = [r for r in before.roles if r not in after.roles]
+    
+    if not added_roles and not removed_roles:
+        return
+    
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("""
+            SELECT channel_id FROM log_channels
+            WHERE guild_id=? AND log_type='role_change' AND enabled=1
+        """, (after.guild.id,))
+        row = await cur.fetchone()
+    
+    if row:
+        log_channel = after.guild.get_channel(row[0])
+        if isinstance(log_channel, discord.TextChannel):
+            try:
+                desc = f"**User:** {after.mention} ({after})\n"
+                if added_roles:
+                    desc += f"**Added Roles:** {', '.join([r.mention for r in added_roles if r != after.guild.default_role])}\n"
+                if removed_roles:
+                    desc += f"**Removed Roles:** {', '.join([r.mention for r in removed_roles if r != after.guild.default_role])}\n"
+                
+                embed = obsidian_embed(
+                    "🎭 Role Updated",
+                    desc,
+                    color=discord.Color.blue(),
+                    client=bot,
+                )
+                await log_channel.send(embed=embed)
+            except Exception as e:
+                logger.error(f"[logging] Error logging role change: {e}")
 
 
 async def main():

@@ -27,7 +27,7 @@ def setup(bot):
             return await interaction.response.send_message(
                 embed=obsidian_embed(
                     "❌ Permission Denied",
-                    "Only Obsidian Inheritors can use this command.",
+                    "Sorry, but you are not an Administrator in this server.",
                     color=discord.Color.red(),
                     client=interaction.client,
                 ),
@@ -173,7 +173,7 @@ def setup(bot):
             return await interaction.response.send_message(
                 embed=obsidian_embed(
                     "❌ Permission Denied",
-                    "Only Obsidian Inheritors can use this command.",
+                    "Sorry, but you are not an Administrator in this server.",
                     color=discord.Color.red(),
                     client=interaction.client,
                 ),
@@ -239,7 +239,7 @@ def setup(bot):
             return await interaction.response.send_message(
                 embed=obsidian_embed(
                     "❌ Permission Denied",
-                    "Only Obsidian Inheritors can use this command.",
+                    "Sorry, but you are not an Administrator in this server.",
                     color=discord.Color.red(),
                     client=interaction.client,
                 ),

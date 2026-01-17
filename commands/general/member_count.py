@@ -85,7 +85,7 @@ def setup(bot):
         
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
             return await interaction.response.send_message(
-                "Only moderators can use this command.",
+                "Sorry, but you are not an Administrator in this server.",
                 ephemeral=True
             )
         
