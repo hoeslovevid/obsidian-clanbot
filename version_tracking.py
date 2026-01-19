@@ -21,7 +21,8 @@ def calculate_feature_hash(bot) -> str:
     
     # Get all commands (both global and guild-specific)
     try:
-        from bot import GUILD_ID
+        import os
+        GUILD_ID = int(os.getenv("GUILD_ID", "0") or "0")
         if GUILD_ID:
             guild = discord.Object(id=GUILD_ID)
             commands_list = sorted([cmd.name for cmd in bot.tree.get_commands(guild=guild)])
@@ -68,7 +69,8 @@ async def detect_and_update_version(bot) -> Tuple[str, list]:
     Detect if features have changed and auto-increment version.
     Returns: (version, list of changes)
     """
-    from bot import GUILD_ID, BOT_VERSION
+    import os
+    GUILD_ID = int(os.getenv("GUILD_ID", "0") or "0")
     current_hash = calculate_feature_hash(bot)
     
     # Get current commands list for comparison
