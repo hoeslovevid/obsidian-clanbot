@@ -11,10 +11,11 @@ import aiosqlite
 
 class RoleMenuView(View):
     """View for role menu selection."""
-    def __init__(self, menu_id: int, options: List[dict]):
+    def __init__(self, menu_id: int, options: List[dict], bot_instance=None):
         super().__init__(timeout=None)
         self.menu_id = menu_id
         self.options = options
+        self.bot = bot_instance
         
         # Create select menu
         select_options = []
