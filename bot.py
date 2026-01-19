@@ -157,8 +157,22 @@ bot = ClanBot()
 
 # Load commands after bot is created (avoids circular imports)
 def load_all_commands():
-    """Load all command modules."""
+    """Load all command modules and organize them into groups."""
     import importlib
+    from discord import app_commands
+    
+    # Create command groups for better organization
+    economy_group = app_commands.Group(name="economy", description="💰 Economy and coin management")
+    warframe_group = app_commands.Group(name="warframe", description="🎮 Warframe game information")
+    moderation_group = app_commands.Group(name="mod", description="🛡️ Moderation and server management")
+    general_group = app_commands.Group(name="general", description="📋 General bot commands")
+    
+    # Register groups to bot tree
+    bot.tree.add_command(economy_group)
+    bot.tree.add_command(warframe_group)
+    bot.tree.add_command(moderation_group)
+    bot.tree.add_command(general_group)
+    
     command_modules = [
         # General commands
         "commands.general.help",
@@ -253,14 +267,67 @@ def load_all_commands():
         "commands.general.server_stats",
     ]
     
+    # Map command modules to their groups
+    group_mapping = {
+        # Economy commands
+        "commands.economy.balance": economy_group,
+        "commands.economy.leaderboard": economy_group,
+        "commands.economy.transfer": economy_group,
+        "commands.economy.daily": economy_group,
+        "commands.economy.xp": economy_group,
+        "commands.economy.xpleaderboard": economy_group,
+        "commands.economy.add_coins": economy_group,
+        "commands.economy.manage_xp": economy_group,
+        "commands.economy.invest": economy_group,
+        "commands.economy.shop": economy_group,
+        "commands.economy.shop_manage": economy_group,
+        "commands.economy.gambling": economy_group,
+        "commands.economy.pets": economy_group,
+        # Warframe commands
+        "commands.warframe.baro": warframe_group,
+        "commands.warframe.baro_notify": warframe_group,
+        "commands.warframe.lfg": warframe_group,
+        "commands.warframe.lfg_list": warframe_group,
+        "commands.warframe.cycles": warframe_group,
+        "commands.warframe.cycle_notify": warframe_group,
+        "commands.warframe.invasions": warframe_group,
+        "commands.warframe.invasion_notify": warframe_group,
+        "commands.warframe.archon": warframe_group,
+        "commands.warframe.archon_notify": warframe_group,
+        "commands.warframe.warframe_event_notify": warframe_group,
+        "commands.warframe.resource": warframe_group,
+        "commands.warframe.duviri": warframe_group,
+        "commands.warframe.alerts": warframe_group,
+        "commands.warframe.alerts_notify": warframe_group,
+        "commands.warframe.devstream_notify": warframe_group,
+        "commands.warframe.dojo": warframe_group,
+        # Moderation commands
+        "commands.moderation.purge": moderation_group,
+        "commands.moderation.reaction_roles": moderation_group,
+        "commands.moderation.automod_setup": moderation_group,
+        "commands.moderation.automod_status": moderation_group,
+        "commands.moderation.roles": moderation_group,
+        "commands.moderation.level_roles": moderation_group,
+        "commands.moderation.logging": moderation_group,
+        "commands.moderation.snipe": moderation_group,
+        "commands.moderation.warn": moderation_group,
+        "commands.moderation.starboard": moderation_group,
+        "commands.moderation.role_menu": moderation_group,
+    }
+    
     loaded_count = 0
     for module_name in command_modules:
         try:
             module = importlib.import_module(module_name)
             if hasattr(module, "setup"):
-                module.setup(bot)
+                # Pass group if this command should be in a group
+                group = group_mapping.get(module_name)
+                if group:
+                    module.setup(bot, group)
+                else:
+                    module.setup(bot)
                 loaded_count += 1
-                print(f"[commands] Loaded {module_name}")
+                print(f"[commands] Loaded {module_name}" + (f" → {group.name}" if group else ""))
             else:
                 print(f"[commands] WARNING: {module_name} has no setup() function")
         except Exception as e:
