@@ -2926,11 +2926,9 @@ async def on_interaction(interaction: discord.Interaction):
 # Version tracking functions moved to version_tracking.py
 
 # --------------------- Install / startup hooks ---------------------
-    logger.info("[update_log] ========== Starting automatic update check ==========")
-    
-    # First, detect if version should be auto-updated
-    detected_version, changes = await detect_and_update_version(bot)
-    logger.info(f"[update_log] Version detection result: version={detected_version}, changes={len(changes) if changes else 0}")
+@bot.event
+async def on_guild_join(guild: discord.Guild):
+    # Fired when the bot is installed into a server
     if changes:
         logger.info(f"[update_log] Changes detected: {changes}")
     
