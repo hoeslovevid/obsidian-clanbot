@@ -375,14 +375,12 @@ def load_all_commands():
         try:
             module = importlib.import_module(module_name)
             if hasattr(module, "setup"):
-                # Pass group if this command should be in a group
-                group = group_mapping.get(module_name)
-                if group:
-                    module.setup(bot, group)
-                else:
-                    module.setup(bot)
+                # Get group for this command (default to general_group if not specified)
+                group = group_mapping.get(module_name, general_group)
+                # Always pass a group - all commands should be in a group
+                module.setup(bot, group)
                 loaded_count += 1
-                print(f"[commands] Loaded {module_name}" + (f" → {group.name}" if group else ""))
+                print(f"[commands] Loaded {module_name} → {group.name}")
             else:
                 print(f"[commands] WARNING: {module_name} has no setup() function")
         except Exception as e:
