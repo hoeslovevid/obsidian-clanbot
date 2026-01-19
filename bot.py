@@ -392,7 +392,17 @@ def load_all_commands():
     
     # Verify all commands are registered
     all_commands = [cmd.name for cmd in bot.tree.get_commands(guild=None)]
-    print(f"[commands] Registered commands: {', '.join(sorted(all_commands))}")
+    print(f"[commands] Registered top-level commands/groups: {', '.join(sorted(all_commands))}")
+    
+    # Count commands inside groups
+    total_subcommands = 0
+    for cmd in bot.tree.get_commands(guild=None):
+        if isinstance(cmd, app_commands.Group):
+            subcommands = [subcmd.name for subcmd in cmd.commands]
+            total_subcommands += len(subcommands)
+            print(f"[commands] Group '{cmd.name}' has {len(subcommands)} commands: {', '.join(sorted(subcommands))}")
+    
+    print(f"[commands] Total subcommands in groups: {total_subcommands}")
 
 # Load commands BEFORE setup_hook runs
 load_all_commands()
