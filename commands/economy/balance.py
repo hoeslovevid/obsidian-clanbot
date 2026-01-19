@@ -4,9 +4,11 @@ import discord
 from utils import obsidian_embed, ECONOMY_ENABLED, COINS_PER_MESSAGE, MESSAGE_COOLDOWN_SECONDS, COINS_PER_MINUTE_VOICE, COINS_DAILY_REWARD
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the balance command."""
-    @bot.tree.command(name="balance", description="Check your coin balance.")
+    command_decorator = group.command(name="balance", description="Check your coin balance.") if group else bot.tree.command(name="balance", description="Check your coin balance.")
+    
+    @command_decorator
     async def balance(interaction: discord.Interaction):
         """Display the user's current coin balance."""
         # Import bot-specific functions inside to avoid circular imports
