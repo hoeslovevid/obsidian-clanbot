@@ -169,6 +169,11 @@ def load_all_commands():
         "commands.general.milestones",
         "commands.general.achievements",
         "commands.general.webhooks",
+        "commands.general.rules",
+        "commands.general.polls",
+        "commands.general.reminder",
+        "commands.general.reputation",
+        "commands.general.twitch",
         # Music commands
         "commands.music.music",
         # Event commands
