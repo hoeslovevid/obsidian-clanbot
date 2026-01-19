@@ -84,8 +84,6 @@ class RoleMenuView(View):
 
 def setup(bot):
     """Register role menu commands."""
-    global bot_instance
-    bot_instance = bot
     
     @bot.tree.command(name="role_menu", description="Create an interactive role selection menu (moderators only).")
     @app_commands.describe(
