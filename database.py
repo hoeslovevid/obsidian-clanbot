@@ -59,7 +59,7 @@ async def get_user_balance(guild_id: int, user_id: int) -> int:
         return row[0] if row else 0
 
 
-async def add_coins(guild_id: int, user_id: int, amount: int, transaction_type: str, description: Optional[str] = None):
+async def add_coins(guild_id: int, user_id: int, amount: int, transaction_type: str, description: Optional[str] = None) -> None:
     """Add coins to a user's balance."""
     async with aiosqlite.connect(DB_PATH) as db:
         # Insert or update balance

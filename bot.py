@@ -159,7 +159,6 @@ bot = ClanBot()
 def load_all_commands():
     """Load all command modules and organize them into groups."""
     import importlib
-    from discord import app_commands
     
     # Create command groups for better organization
     economy_group = app_commands.Group(name="economy", description="💰 Economy and coin management")
