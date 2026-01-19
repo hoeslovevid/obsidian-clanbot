@@ -134,28 +134,31 @@ def setup(bot):
             client=interaction.client,
         )
         
-        # Store menu in database (without options yet)
+        # Send message first to get message_id (avoid unique constraint violation)
+        view = RoleMenuView(0, [], bot)  # Temporary menu_id, will be updated
+        message = await interaction.channel.send(embed=embed, view=view)
+        
+        # Store menu in database with actual message_id
         async with aiosqlite.connect(DB_PATH) as db:
             await db.execute("""
                 INSERT INTO role_menus (guild_id, channel_id, message_id, title, description, max_roles)
                 VALUES (?, ?, ?, ?, ?, ?)
-            """, (interaction.guild.id, interaction.channel.id, 0, title, description, max_roles))
+            """, (interaction.guild.id, interaction.channel.id, message.id, title, description, max_roles))
             await db.commit()
             
             cur = await db.execute("SELECT last_insert_rowid()")
             menu_id = (await cur.fetchone())[0]
         
-        # Send placeholder message (will be updated when roles are added)
-        view = RoleMenuView(menu_id, [], bot)
-        message = await interaction.channel.send(embed=embed, view=view)
+        # Update view with correct menu_id and custom_id
+        view.menu_id = menu_id
+        # Update select menu custom_id
+        for item in view.children:
+            if isinstance(item, Select):
+                item.custom_id = f"role_menu_{menu_id}"
+                break
         
-        # Update message_id
-        async with aiosqlite.connect(DB_PATH) as db:
-            await db.execute("""
-                UPDATE role_menus SET message_id=? WHERE id=?
-            """, (message.id, menu_id))
-            await db.commit()
-        
+        # Update message with correct view
+        await message.edit(view=view)
         bot.add_view(view)
     
     @bot.tree.command(name="role_menu_add", description="Add a role to a role menu (moderators only).")
