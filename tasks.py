@@ -1428,6 +1428,7 @@ def setup_tasks(bot):
         ('alert_check_loop', alert_check_loop),
         ('devstream_check_loop', devstream_check_loop),
         ('reminder_check_loop', reminder_check_loop),
+        ('twitch_check_loop', twitch_check_loop),
     ]
     
     started_tasks = {}

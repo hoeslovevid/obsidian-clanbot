@@ -206,6 +206,7 @@ def load_all_commands():
         "commands.moderation.snipe",
         "commands.moderation.warn",
         "commands.moderation.starboard",
+        "commands.moderation.role_menu",
         # Economy commands
         "commands.economy.balance",
         "commands.economy.leaderboard",
@@ -219,6 +220,7 @@ def load_all_commands():
         "commands.economy.shop",
         "commands.economy.shop_manage",
         "commands.economy.gambling",
+        "commands.economy.pets",
         # Warframe commands
         "commands.warframe.baro",
         "commands.warframe.baro_notify",
@@ -236,6 +238,7 @@ def load_all_commands():
         "commands.warframe.alerts",
         "commands.warframe.alerts_notify",
         "commands.warframe.devstream_notify",
+        "commands.warframe.dojo",
         # Activity commands
         "commands.activity.activity",
         "commands.activity.activity_leaderboard",
@@ -1121,6 +1124,100 @@ async def init_db():
             points INTEGER NOT NULL,
             reason TEXT,
             created_at TEXT NOT NULL
+        )""")
+
+        # Twitch integration tables
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS twitch_settings (
+            guild_id INTEGER NOT NULL PRIMARY KEY,
+            channel_id INTEGER,
+            enabled INTEGER NOT NULL DEFAULT 0
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS twitch_streamers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            streamer_name TEXT NOT NULL,
+            twitch_user_id TEXT,
+            last_live_status INTEGER NOT NULL DEFAULT 0,
+            last_notified_at TEXT,
+            UNIQUE(guild_id, streamer_name)
+        )""")
+
+        # Role menu tables
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS role_menus (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            channel_id INTEGER NOT NULL,
+            message_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT,
+            max_roles INTEGER,
+            UNIQUE(guild_id, message_id)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS role_menu_options (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            menu_id INTEGER NOT NULL,
+            role_id INTEGER NOT NULL,
+            label TEXT NOT NULL,
+            emoji TEXT,
+            description TEXT,
+            FOREIGN KEY (menu_id) REFERENCES role_menus(id) ON DELETE CASCADE
+        )""")
+
+        # Clan Dojo tracker tables
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS dojo_research (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            research_name TEXT NOT NULL,
+            research_type TEXT NOT NULL,
+            required_resources TEXT,
+            current_resources TEXT,
+            status TEXT NOT NULL DEFAULT 'in_progress',
+            started_at TEXT,
+            completed_at TEXT,
+            UNIQUE(guild_id, research_name)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS dojo_decorations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            decoration_name TEXT NOT NULL,
+            room_location TEXT,
+            quantity INTEGER NOT NULL DEFAULT 1,
+            added_at TEXT NOT NULL
+        )""")
+
+        # Pet system tables
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS pets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            pet_name TEXT NOT NULL,
+            pet_type TEXT NOT NULL,
+            level INTEGER NOT NULL DEFAULT 1,
+            experience INTEGER NOT NULL DEFAULT 0,
+            hunger INTEGER NOT NULL DEFAULT 100,
+            happiness INTEGER NOT NULL DEFAULT 100,
+            last_fed_at TEXT,
+            last_played_at TEXT,
+            created_at TEXT NOT NULL
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS pet_types (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            pet_type TEXT NOT NULL UNIQUE,
+            base_price INTEGER NOT NULL,
+            max_level INTEGER NOT NULL DEFAULT 100,
+            description TEXT
         )""")
 
         await db.commit()
