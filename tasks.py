@@ -1397,6 +1397,94 @@ def setup_tasks(bot):
     async def before_reminder_check_loop():
         await bot.wait_until_ready()
 
+    @tasks.loop(minutes=5)  # Check every 5 minutes for Twitch streams
+    async def twitch_check_loop():
+        """Check for Twitch streamers going live."""
+        try:
+            if not bot.is_ready():
+                return
+            
+            # Get Twitch access token
+            import os
+            from commands.general.twitch import get_twitch_access_token, check_twitch_stream
+            
+            access_token = await get_twitch_access_token()
+            if not access_token:
+                return  # Twitch API not configured
+            
+            # Check all guilds with Twitch enabled
+            for guild in bot.guilds:
+                try:
+                    async with aiosqlite.connect(DB_PATH) as db:
+                        cur = await db.execute("""
+                            SELECT channel_id, enabled FROM twitch_settings WHERE guild_id=?
+                        """, (guild.id,))
+                        settings_row = await cur.fetchone()
+                        
+                        if not settings_row or not settings_row[1]:
+                            continue
+                        
+                        channel_id = settings_row[0]
+                        channel = guild.get_channel(channel_id)
+                        if not isinstance(channel, discord.TextChannel):
+                            continue
+                        
+                        # Get streamers for this guild
+                        cur = await db.execute("""
+                            SELECT streamer_name, last_live_status FROM twitch_streamers
+                            WHERE guild_id=?
+                        """, (guild.id,))
+                        streamers = await cur.fetchall()
+                        
+                        for streamer_name, last_status in streamers:
+                            stream_data = await check_twitch_stream(streamer_name, access_token)
+                            is_live = stream_data is not None
+                            
+                            # Only notify if going from offline to live
+                            if is_live and not last_status:
+                                # Streamer just went live
+                                title = stream_data.get("title", "No title")
+                                game = stream_data.get("game_name", "Unknown game")
+                                viewer_count = stream_data.get("viewer_count", 0)
+                                
+                                embed = obsidian_embed(
+                                    f"🔴 {streamer_name} is now live!",
+                                    f"**Title:** {title}\n**Game:** {game}\n**Viewers:** {viewer_count}\n\n"
+                                    f"https://twitch.tv/{streamer_name}",
+                                    color=discord.Color.purple(),
+                                    client=bot,
+                                )
+                                
+                                try:
+                                    await channel.send(embed=embed)
+                                    
+                                    # Update status
+                                    await db.execute("""
+                                        UPDATE twitch_streamers SET last_live_status=1, last_notified_at=?
+                                        WHERE guild_id=? AND streamer_name=?
+                                    """, (now_utc().isoformat(), guild.id, streamer_name))
+                                    await db.commit()
+                                except Exception as e:
+                                    logger.error(f"Error sending Twitch notification: {e}")
+                            
+                            elif not is_live and last_status:
+                                # Streamer went offline
+                                await db.execute("""
+                                    UPDATE twitch_streamers SET last_live_status=0
+                                    WHERE guild_id=? AND streamer_name=?
+                                """, (guild.id, streamer_name))
+                                await db.commit()
+                
+                except Exception as e:
+                    logger.error(f"Error in twitch_check_loop for guild {guild.id}: {e}", exc_info=True)
+        
+        except Exception as e:
+            logger.error(f"Error in twitch_check_loop: {e}", exc_info=True)
+    
+    @twitch_check_loop.before_loop
+    async def before_twitch_check_loop():
+        await bot.wait_until_ready()
+
     @tasks.loop(minutes=1)  # Check every minute for ended giveaways
     async def giveaway_check_loop():
         """Check for ended giveaways and select winners."""
