@@ -8,10 +8,12 @@ from database import DB_PATH
 import aiosqlite
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the giveaway_list command."""
     
-    @bot.tree.command(name="giveaway_list", description="List all active giveaways.")
+    command_decorator = group.command(name="giveaway_list", description="List all active giveaways.") if group else bot.tree.command(name="giveaway_list", description="List all active giveaways.")
+    
+    @command_decorator
     async def giveaway_list(interaction: discord.Interaction):
         """List all active giveaways in the server."""
         if not interaction.guild:

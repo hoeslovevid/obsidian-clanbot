@@ -16,10 +16,12 @@ def now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register webhook commands."""
     
-    @bot.tree.command(name="webhook", description="Manage webhook endpoints for external integrations (moderators only).")
+    command_decorator = group.command(name="webhook", description="Manage webhook endpoints for external integrations (moderators only).") if group else bot.tree.command(name="webhook", description="Manage webhook endpoints for external integrations (moderators only).")
+    
+    @command_decorator
     @app_commands.describe(
         action="Action to perform",
         endpoint_name="Name for this webhook endpoint",

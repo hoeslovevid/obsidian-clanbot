@@ -8,10 +8,12 @@ from database import DB_PATH, add_coins, add_xp
 import aiosqlite  # type: ignore
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register achievement commands."""
     
-    @bot.tree.command(name="achievements", description="View your unlocked achievements.")
+    command_decorator = group.command(name="achievements", description="View your unlocked achievements.") if group else bot.tree.command(name="achievements", description="View your unlocked achievements.")
+    
+    @command_decorator
     async def achievements(interaction: discord.Interaction, user: Optional[discord.Member] = None):
         """View achievements."""
         if not interaction.guild:
@@ -85,7 +87,9 @@ def setup(bot):
         
         await interaction.followup.send(embed=embed, ephemeral=(user is None))
     
-    @bot.tree.command(name="achievement_list", description="View all available achievements.")
+    command_decorator = group.command(name="achievement_list", description="View all available achievements.") if group else bot.tree.command(name="achievement_list", description="View all available achievements.")
+    
+    @command_decorator
     async def achievement_list(interaction: discord.Interaction):
         """List all achievements."""
         if not interaction.guild:

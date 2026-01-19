@@ -5,9 +5,11 @@ from discord import app_commands
 from utils import obsidian_embed, ECONOMY_ENABLED
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the transfer command."""
-    @bot.tree.command(name="transfer", description="Transfer coins to another user.")
+    command_decorator = group.command(name="transfer", description="Transfer coins to another user.") if group else bot.tree.command(name="transfer", description="Transfer coins to another user.")
+    
+    @command_decorator
     @app_commands.describe(
         user="The user to transfer coins to",
         amount="Amount of coins to transfer"

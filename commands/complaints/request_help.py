@@ -6,9 +6,11 @@ from utils import obsidian_embed, is_mod, display_case_status, now_utc, get_mod_
 from utils import MOD_ROLE_NAME
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the request_help command."""
-    @bot.tree.command(name="request_help", description="Request help or check the status of your help request case.")
+    command_decorator = group.command(name="request_help", description="Request help or check the status of your help request case.") if group else bot.tree.command(name="request_help", description="Request help or check the status of your help request case.")
+    
+    @command_decorator
     @app_commands.describe(
         case_id="Your case id to check status (e.g., OBS-...). Leave empty to create new request.",
         category="Category for new request (e.g., harassment / trade / voice conduct)",

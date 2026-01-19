@@ -8,10 +8,12 @@ from database import DB_PATH
 import aiosqlite
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register welcome/leave setup commands."""
     
-    @bot.tree.command(name="welcome_setup", description="Set up welcome messages (mods only).")
+    command_decorator = group.command(name="welcome_setup", description="Set up welcome messages (mods only).") if group else bot.tree.command(name="welcome_setup", description="Set up welcome messages (mods only).")
+    
+    @command_decorator
     @app_commands.describe(
         channel="The channel to send welcome messages to",
         message="Custom welcome message (use {user} for mention, {server} for server name, {member_count} for member count)",
@@ -69,7 +71,9 @@ def setup(bot):
             ephemeral=True,
         )
     
-    @bot.tree.command(name="leave_setup", description="Set up leave messages (mods only).")
+    command_decorator = group.command(name="leave_setup", description="Set up leave messages (mods only).") if group else bot.tree.command(name="leave_setup", description="Set up leave messages (mods only).")
+    
+    @command_decorator
     @app_commands.describe(
         channel="The channel to send leave messages to",
         message="Custom leave message (use {user} for username, {server} for server name, {member_count} for member count)",

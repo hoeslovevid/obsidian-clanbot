@@ -8,10 +8,12 @@ from database import DB_PATH, now_utc
 import aiosqlite
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register starboard commands."""
     
-    @bot.tree.command(name="starboard_setup", description="Configure starboard (moderators only).")
+    command_decorator = group.command(name="starboard_setup", description="Configure starboard (moderators only).") if group else bot.tree.command(name="starboard_setup", description="Configure starboard (moderators only).")
+    
+    @command_decorator
     @app_commands.describe(channel="Channel to post starred messages", threshold="Number of reactions needed (default: 5)", emoji="Emoji to use for starboard (default: ⭐)")
     async def starboard_setup(interaction: discord.Interaction, channel: discord.TextChannel, threshold: Optional[int] = 5, emoji: Optional[str] = "⭐"):
         """Configure starboard."""
@@ -67,7 +69,9 @@ def setup(bot):
             ephemeral=True
         )
     
-    @bot.tree.command(name="starboard_status", description="View starboard settings.")
+    command_decorator = group.command(name="starboard_status", description="View starboard settings.") if group else bot.tree.command(name="starboard_status", description="View starboard settings.")
+    
+    @command_decorator
     async def starboard_status(interaction: discord.Interaction):
         """View starboard settings."""
         if not interaction.guild:

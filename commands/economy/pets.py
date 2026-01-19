@@ -10,10 +10,12 @@ import aiosqlite
 import dateparser
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register pet commands."""
     
-    @bot.tree.command(name="pet_shop", description="View available pets to buy.")
+    command_decorator = group.command(name="pet_shop", description="View available pets to buy.") if group else bot.tree.command(name="pet_shop", description="View available pets to buy.")
+    
+    @command_decorator
     async def pet_shop(interaction: discord.Interaction):
         """View pet shop."""
         if not interaction.guild:
@@ -72,7 +74,9 @@ def setup(bot):
             )
         )
     
-    @bot.tree.command(name="pet_buy", description="Buy a pet.")
+    command_decorator = group.command(name="pet_buy", description="Buy a pet.") if group else bot.tree.command(name="pet_buy", description="Buy a pet.")
+    
+    @command_decorator
     @app_commands.describe(pet_type="Type of pet to buy", pet_name="Name for your pet")
     async def pet_buy(interaction: discord.Interaction, pet_type: str, pet_name: str):
         """Buy a pet."""
@@ -152,7 +156,9 @@ def setup(bot):
             )
         )
     
-    @bot.tree.command(name="pet", description="View your pet.")
+    command_decorator = group.command(name="pet", description="View your pet.") if group else bot.tree.command(name="pet", description="View your pet.")
+    
+    @command_decorator
     async def pet(interaction: discord.Interaction):
         """View pet."""
         if not interaction.guild:
@@ -213,7 +219,9 @@ def setup(bot):
             )
         )
     
-    @bot.tree.command(name="pet_feed", description="Feed your pet (costs 10 coins).")
+    command_decorator = group.command(name="pet_feed", description="Feed your pet (costs 10 coins).") if group else bot.tree.command(name="pet_feed", description="Feed your pet (costs 10 coins).")
+    
+    @command_decorator
     async def pet_feed(interaction: discord.Interaction):
         """Feed pet."""
         if not interaction.guild:
@@ -275,7 +283,9 @@ def setup(bot):
             )
         )
     
-    @bot.tree.command(name="pet_play", description="Play with your pet (costs 5 coins).")
+    command_decorator = group.command(name="pet_play", description="Play with your pet (costs 5 coins).") if group else bot.tree.command(name="pet_play", description="Play with your pet (costs 5 coins).")
+    
+    @command_decorator
     async def pet_play(interaction: discord.Interaction):
         """Play with pet."""
         if not interaction.guild:

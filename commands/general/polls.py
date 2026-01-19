@@ -11,10 +11,12 @@ import aiosqlite
 import dateparser
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register poll commands."""
     
-    @bot.tree.command(name="poll", description="Create a poll.")
+    command_decorator = group.command(name="poll", description="Create a poll.") if group else bot.tree.command(name="poll", description="Create a poll.")
+    
+    @command_decorator
     @app_commands.describe(question="The poll question", options="Comma-separated options (max 10)", duration="How long the poll should last (e.g., '1 hour', '30 minutes')")
     async def poll(interaction: discord.Interaction, question: str, options: str, duration: Optional[str] = None):
         """Create a poll."""
@@ -104,7 +106,9 @@ def setup(bot):
             ephemeral=True
         )
     
-    @bot.tree.command(name="poll_results", description="View poll results.")
+    command_decorator = group.command(name="poll_results", description="View poll results.") if group else bot.tree.command(name="poll_results", description="View poll results.")
+    
+    @command_decorator
     @app_commands.describe(message_id="The poll message ID")
     async def poll_results(interaction: discord.Interaction, message_id: str):
         """View poll results."""

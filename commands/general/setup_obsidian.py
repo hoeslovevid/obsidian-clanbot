@@ -8,9 +8,11 @@ from utils import obsidian_embed, is_mod
 _setup_in_progress = set()
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the setup_obsidian command."""
-    @bot.tree.command(name="setup_obsidian", description="Create/ensure core channels and post Obsidian panels (mods only).")
+    command_decorator = group.command(name="setup_obsidian", description="Create/ensure core channels and post Obsidian panels (mods only).") if group else bot.tree.command(name="setup_obsidian", description="Create/ensure core channels and post Obsidian panels (mods only).")
+    
+    @command_decorator
     async def setup_obsidian(interaction: discord.Interaction):
         # Import bot-specific functions inside the command to avoid circular imports
         from bot import ensure_join_to_create_channel

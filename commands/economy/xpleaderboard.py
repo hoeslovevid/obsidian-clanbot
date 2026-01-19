@@ -5,9 +5,11 @@ from discord import app_commands
 from utils import obsidian_embed, XP_ENABLED
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the xpleaderboard command."""
-    @bot.tree.command(name="xpleaderboard", description="View the top XP earners.")
+    command_decorator = group.command(name="xpleaderboard", description="View the top XP earners.") if group else bot.tree.command(name="xpleaderboard", description="View the top XP earners.")
+    
+    @command_decorator
     @app_commands.describe(limit="Number of users to show (default: 10, max: 25)")
     async def xpleaderboard(interaction: discord.Interaction, limit: int = 10):
         """Display the top XP earners."""

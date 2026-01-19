@@ -9,9 +9,11 @@ from database import DB_PATH, now_utc
 import aiosqlite
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the application command."""
-    @bot.tree.command(name="application", description="Start a clan application.")
+    command_decorator = group.command(name="application", description="Start a clan application.") if group else bot.tree.command(name="application", description="Start a clan application.")
+    
+    @command_decorator
     async def application(interaction: discord.Interaction):
         """Start a clan application."""
         # Check if application channel is set

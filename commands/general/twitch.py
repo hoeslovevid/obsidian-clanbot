@@ -60,10 +60,12 @@ async def check_twitch_stream(streamer_name: str, access_token: str) -> Optional
         return None
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register Twitch commands."""
     
-    @bot.tree.command(name="twitch_setup", description="Configure Twitch stream notifications (moderators only).")
+    command_decorator = group.command(name="twitch_setup", description="Configure Twitch stream notifications (moderators only).") if group else bot.tree.command(name="twitch_setup", description="Configure Twitch stream notifications (moderators only).")
+    
+    @command_decorator
     @app_commands.describe(
         channel="Channel to send notifications to",
         ping_role="Role to ping when streamers go live (optional)",
@@ -126,7 +128,9 @@ def setup(bot):
             ephemeral=True
         )
     
-    @bot.tree.command(name="twitch_add", description="Add a Twitch streamer to monitor (moderators only).")
+    command_decorator = group.command(name="twitch_add", description="Add a Twitch streamer to monitor (moderators only).") if group else bot.tree.command(name="twitch_add", description="Add a Twitch streamer to monitor (moderators only).")
+    
+    @command_decorator
     @app_commands.describe(streamer_name="Twitch username to monitor")
     async def twitch_add(interaction: discord.Interaction, streamer_name: str):
         """Add a Twitch streamer."""
@@ -186,7 +190,9 @@ def setup(bot):
             ephemeral=True
         )
     
-    @bot.tree.command(name="twitch_remove", description="Remove a Twitch streamer from monitoring (moderators only).")
+    command_decorator = group.command(name="twitch_remove", description="Remove a Twitch streamer from monitoring (moderators only).") if group else bot.tree.command(name="twitch_remove", description="Remove a Twitch streamer from monitoring (moderators only).")
+    
+    @command_decorator
     @app_commands.describe(streamer_name="Twitch username to remove")
     async def twitch_remove(interaction: discord.Interaction, streamer_name: str):
         """Remove a Twitch streamer."""
@@ -241,7 +247,9 @@ def setup(bot):
             ephemeral=True
         )
     
-    @bot.tree.command(name="twitch_list", description="List all monitored Twitch streamers.")
+    command_decorator = group.command(name="twitch_list", description="List all monitored Twitch streamers.") if group else bot.tree.command(name="twitch_list", description="List all monitored Twitch streamers.")
+    
+    @command_decorator
     async def twitch_list(interaction: discord.Interaction):
         """List monitored streamers."""
         if not interaction.guild:

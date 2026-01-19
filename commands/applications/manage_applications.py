@@ -7,9 +7,11 @@ from database import DB_PATH
 import aiosqlite
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the manage_applications command."""
-    @bot.tree.command(name="manage_applications", description="View and manage clan applications (moderators only).")
+    command_decorator = group.command(name="manage_applications", description="View and manage clan applications (moderators only).") if group else bot.tree.command(name="manage_applications", description="View and manage clan applications (moderators only).")
+    
+    @command_decorator
     @app_commands.describe(
         status="Filter by status (default: all)",
         limit="Number of applications to show (default: 10, max: 25)"

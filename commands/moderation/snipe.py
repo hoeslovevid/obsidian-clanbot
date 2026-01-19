@@ -10,10 +10,12 @@ import aiosqlite  # type: ignore
 import json
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the snipe command."""
     
-    @bot.tree.command(name="snipe", description="View recently deleted messages in this channel.")
+    command_decorator = group.command(name="snipe", description="View recently deleted messages in this channel.") if group else bot.tree.command(name="snipe", description="View recently deleted messages in this channel.")
+    
+    @command_decorator
     @app_commands.describe(index="Which deleted message to view (1 = most recent, default: 1)")
     async def snipe(interaction: discord.Interaction, index: int = 1):
         """View deleted messages."""

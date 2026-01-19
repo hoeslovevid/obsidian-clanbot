@@ -6,9 +6,11 @@ from utils import obsidian_embed
 from database import get_auto_mod_settings
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the automod_status command."""
-    @bot.tree.command(name="automod_status", description="View current auto-moderation settings.")
+    command_decorator = group.command(name="automod_status", description="View current auto-moderation settings.") if group else bot.tree.command(name="automod_status", description="View current auto-moderation settings.")
+    
+    @command_decorator
     async def automod_status(interaction: discord.Interaction):
         """Display current auto-moderation settings."""
         if not isinstance(interaction.guild, discord.Guild):

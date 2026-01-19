@@ -6,9 +6,11 @@ from discord import app_commands
 from utils import obsidian_embed, is_mod
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the purge command."""
-    @bot.tree.command(name="purge", description="Clear messages from the current channel (mods only).")
+    command_decorator = group.command(name="purge", description="Clear messages from the current channel (mods only).") if group else bot.tree.command(name="purge", description="Clear messages from the current channel (mods only).")
+    
+    @command_decorator
     @app_commands.describe(
         amount="Number of messages to delete (1-100), or 'all' to delete all messages in channel"
     )

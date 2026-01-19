@@ -10,10 +10,12 @@ from database import get_guild_setting, set_guild_setting, DB_PATH
 import aiosqlite  # type: ignore
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the devstream_notify command."""
     
-    @bot.tree.command(name="devstream_notify", description="Configure devstream notifications (moderators only).")
+    command_decorator = group.command(name="devstream_notify", description="Configure devstream notifications (moderators only).") if group else bot.tree.command(name="devstream_notify", description="Configure devstream notifications (moderators only).")
+    
+    @command_decorator
     @app_commands.describe(
         action="Action to perform",
         channel="Channel to send devstream notifications to"
@@ -152,7 +154,9 @@ def setup(bot):
                 ephemeral=True
             )
     
-    @bot.tree.command(name="devstream_set", description="Set the next devstream date (moderators only).")
+    command_decorator = group.command(name="devstream_set", description="Set the next devstream date (moderators only).") if group else bot.tree.command(name="devstream_set", description="Set the next devstream date (moderators only).")
+    
+    @command_decorator
     @app_commands.describe(
         date="Date and time of the next devstream (e.g., 'Friday 2pm EST' or '2024-01-19 14:00')"
     )

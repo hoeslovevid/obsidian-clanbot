@@ -8,10 +8,12 @@ from database import get_guild_setting, set_guild_setting, DB_PATH
 import aiosqlite  # type: ignore
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the alerts_notify command."""
     
-    @bot.tree.command(name="alerts_notify", description="Configure alert notifications (moderators only).")
+    command_decorator = group.command(name="alerts_notify", description="Configure alert notifications (moderators only).") if group else bot.tree.command(name="alerts_notify", description="Configure alert notifications (moderators only).")
+    
+    @command_decorator
     @app_commands.describe(
         action="Action to perform",
         channel="Channel to send alert notifications to"

@@ -29,9 +29,11 @@ def format_time_remaining(expiry_time: datetime) -> str:
         return f"{seconds}s"
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the cycles command."""
-    @bot.tree.command(name="cycles", description="Check current open world cycle status (Cetus, Fortuna, Deimos).")
+    command_decorator = group.command(name="cycles", description="Check current open world cycle status (Cetus, Fortuna, Deimos).") if group else bot.tree.command(name="cycles", description="Check current open world cycle status (Cetus, Fortuna, Deimos).")
+    
+    @command_decorator
     async def cycles(interaction: discord.Interaction):
         """Display current cycle status for all open worlds."""
         await interaction.response.defer(ephemeral=False)

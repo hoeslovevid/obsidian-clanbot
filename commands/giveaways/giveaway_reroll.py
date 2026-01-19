@@ -8,10 +8,12 @@ from database import DB_PATH
 import aiosqlite
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the giveaway_reroll command."""
     
-    @bot.tree.command(name="giveaway_reroll", description="Reroll winners for an ended giveaway (mods only).")
+    command_decorator = group.command(name="giveaway_reroll", description="Reroll winners for an ended giveaway (mods only).") if group else bot.tree.command(name="giveaway_reroll", description="Reroll winners for an ended giveaway (mods only).")
+    
+    @command_decorator
     @app_commands.describe(
         message="The giveaway message ID or link",
         winner_count="Number of winners to select (default: original winner count)"

@@ -129,9 +129,11 @@ def build_baro_embed(baro_data: dict, is_active: bool, client) -> discord.Embed:
     return embed
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the baro command."""
-    @bot.tree.command(name="baro", description="Check Baro Ki'Teer status and inventory.")
+    command_decorator = group.command(name="baro", description="Check Baro Ki'Teer status and inventory.") if group else bot.tree.command(name="baro", description="Check Baro Ki'Teer status and inventory.")
+    
+    @command_decorator
     async def baro(interaction: discord.Interaction):
         """Display Baro Ki'Teer's current status and inventory."""
         await interaction.response.defer(ephemeral=False)

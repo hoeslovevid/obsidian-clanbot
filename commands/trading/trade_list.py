@@ -7,9 +7,11 @@ from database import DB_PATH
 import aiosqlite  # type: ignore
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the trade_list command."""
-    @bot.tree.command(name="trade_list", description="View your active trading listings.")
+    command_decorator = group.command(name="trade_list", description="View your active trading listings.") if group else bot.tree.command(name="trade_list", description="View your active trading listings.")
+    
+    @command_decorator
     async def trade_list(interaction: discord.Interaction):
         """List user's active trading posts."""
         if not interaction.guild:

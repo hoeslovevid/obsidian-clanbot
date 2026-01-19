@@ -8,9 +8,11 @@ from utils import obsidian_embed, is_mod
 _docket_setup_in_progress = set()
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the setup_docket command."""
-    @bot.tree.command(name="setup_docket", description="Post the Obsidian Docket (complaint/help request) panel (mods only).")
+    command_decorator = group.command(name="setup_docket", description="Post the Obsidian Docket (complaint/help request) panel (mods only).") if group else bot.tree.command(name="setup_docket", description="Post the Obsidian Docket (complaint/help request) panel (mods only).")
+    
+    @command_decorator
     async def setup_docket(interaction: discord.Interaction):
         # Import bot-specific functions inside the command to avoid circular imports
         from bot import resolve_channel_id, ComplaintPanel

@@ -29,9 +29,11 @@ def format_time_remaining(expiry_time: datetime) -> str:
         return f"{minutes}m"
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the archon command."""
-    @bot.tree.command(name="archon", description="View current Archon Hunt details.")
+    command_decorator = group.command(name="archon", description="View current Archon Hunt details.") if group else bot.tree.command(name="archon", description="View current Archon Hunt details.")
+    
+    @command_decorator
     async def archon(interaction: discord.Interaction):
         """Display current Archon Hunt information."""
         await interaction.response.defer(ephemeral=False)

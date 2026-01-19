@@ -7,10 +7,12 @@ from utils import obsidian_embed, is_mod
 from database import get_self_assignable_roles, get_self_assignable_categories, add_self_assignable_role, remove_self_assignable_role
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the roles commands."""
     
-    @bot.tree.command(name="roles", description="View and manage self-assignable roles.")
+    command_decorator = group.command(name="roles", description="View and manage self-assignable roles.") if group else bot.tree.command(name="roles", description="View and manage self-assignable roles.")
+    
+    @command_decorator
     @app_commands.describe(action="Action to perform", role="Role to add/remove", category="Category name")
     async def roles(interaction: discord.Interaction, action: str = "list", role: Optional[discord.Role] = None, category: Optional[str] = None):
         """View or manage self-assignable roles."""
@@ -164,7 +166,9 @@ def setup(bot):
                 ephemeral=True
             )
     
-    @bot.tree.command(name="role", description="Assign or remove a self-assignable role.")
+    command_decorator = group.command(name="role", description="Assign or remove a self-assignable role.") if group else bot.tree.command(name="role", description="Assign or remove a self-assignable role.")
+    
+    @command_decorator
     @app_commands.describe(action="Assign or remove the role", role="The role to assign/remove")
     async def role(interaction: discord.Interaction, action: str, role: discord.Role):
         """Assign or remove a self-assignable role."""

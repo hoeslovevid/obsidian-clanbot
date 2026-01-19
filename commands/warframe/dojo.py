@@ -9,10 +9,12 @@ from database import DB_PATH, now_utc
 import aiosqlite
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register dojo tracker commands."""
     
-    @bot.tree.command(name="dojo_research", description="Track clan dojo research progress.")
+    command_decorator = group.command(name="dojo_research", description="Track clan dojo research progress.") if group else bot.tree.command(name="dojo_research", description="Track clan dojo research progress.")
+    
+    @command_decorator
     @app_commands.describe(
         action="Action to perform",
         research_name="Name of the research",
@@ -230,7 +232,9 @@ def setup(bot):
                     ephemeral=True
                 )
     
-    @bot.tree.command(name="dojo_decoration", description="Track dojo decorations.")
+    command_decorator = group.command(name="dojo_decoration", description="Track dojo decorations.") if group else bot.tree.command(name="dojo_decoration", description="Track dojo decorations.")
+    
+    @command_decorator
     @app_commands.describe(
         action="Action to perform",
         decoration_name="Name of the decoration",

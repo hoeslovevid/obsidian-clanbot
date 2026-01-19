@@ -9,10 +9,12 @@ from database import DB_PATH
 import aiosqlite
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the giveaway command."""
     
-    @bot.tree.command(name="giveaway", description="Create a new giveaway (mods only).")
+    command_decorator = group.command(name="giveaway", description="Create a new giveaway (mods only).") if group else bot.tree.command(name="giveaway", description="Create a new giveaway (mods only).")
+    
+    @command_decorator
     @app_commands.describe(
         prize="What is being given away",
         duration="How long the giveaway lasts (e.g., '1 hour', '2 days', 'tomorrow 8pm')",

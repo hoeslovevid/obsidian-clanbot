@@ -9,10 +9,12 @@ from database import DB_PATH, now_utc
 import aiosqlite
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register warn commands."""
     
-    @bot.tree.command(name="warn", description="Warn a user (moderators only).")
+    command_decorator = group.command(name="warn", description="Warn a user (moderators only).") if group else bot.tree.command(name="warn", description="Warn a user (moderators only).")
+    
+    @command_decorator
     @app_commands.describe(user="User to warn", reason="Reason for the warning")
     async def warn(interaction: discord.Interaction, user: discord.Member, reason: str):
         """Warn a user."""
@@ -133,7 +135,9 @@ def setup(bot):
             )
         )
     
-    @bot.tree.command(name="warnings", description="View a user's warnings.")
+    command_decorator = group.command(name="warnings", description="View a user's warnings.") if group else bot.tree.command(name="warnings", description="View a user's warnings.")
+    
+    @command_decorator
     @app_commands.describe(user="User to check warnings for")
     async def warnings(interaction: discord.Interaction, user: discord.Member):
         """View user warnings."""
@@ -187,7 +191,9 @@ def setup(bot):
         )
         await interaction.followup.send(embed=embed, ephemeral=True)
     
-    @bot.tree.command(name="warn_setup", description="Configure warn system (moderators only).")
+    command_decorator = group.command(name="warn_setup", description="Configure warn system (moderators only).") if group else bot.tree.command(name="warn_setup", description="Configure warn system (moderators only).")
+    
+    @command_decorator
     @app_commands.describe(max_warnings="Maximum warnings before action", action="Action to take after max warnings", mute_duration="Mute duration in minutes (if action is mute)")
     @app_commands.choices(action=[
         app_commands.Choice(name="Mute", value="mute"),

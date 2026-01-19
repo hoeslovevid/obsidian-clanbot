@@ -10,9 +10,11 @@ import aiosqlite  # type: ignore
 logger = logging.getLogger(__name__)
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the update_log_setup command."""
-    @bot.tree.command(name="update_log_setup", description="Configure the update log channel (moderators only).")
+    command_decorator = group.command(name="update_log_setup", description="Configure the update log channel (moderators only).") if group else bot.tree.command(name="update_log_setup", description="Configure the update log channel (moderators only).")
+    
+    @command_decorator
     @app_commands.describe(channel="The channel where update logs will be posted (leave empty to disable)")
     async def update_log_setup(interaction: discord.Interaction, channel: discord.TextChannel = None):
         """Configure the update log channel."""

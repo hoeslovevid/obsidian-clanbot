@@ -5,9 +5,11 @@ from discord import app_commands
 from utils import obsidian_embed, ECONOMY_ENABLED, is_mod
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the manage_coins command."""
-    @bot.tree.command(name="manage_coins", description="Add or remove coins from a user (moderators only).")
+    command_decorator = group.command(name="manage_coins", description="Add or remove coins from a user (moderators only).") if group else bot.tree.command(name="manage_coins", description="Add or remove coins from a user (moderators only).")
+    
+    @command_decorator
     @app_commands.describe(
         action="Whether to add or remove coins",
         user="The user to modify coins for",

@@ -7,9 +7,11 @@ from database import DB_PATH
 import aiosqlite  # type: ignore
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the trade_search command."""
-    @bot.tree.command(name="trade_search", description="Search active trading listings.")
+    command_decorator = group.command(name="trade_search", description="Search active trading listings.") if group else bot.tree.command(name="trade_search", description="Search active trading listings.")
+    
+    @command_decorator
     @app_commands.describe(
         query="Search term (item name, user, etc.)",
         listing_type="Filter by listing type",

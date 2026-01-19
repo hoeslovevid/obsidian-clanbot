@@ -8,10 +8,12 @@ from database import DB_PATH, now_utc
 import aiosqlite
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register reputation commands."""
     
-    @bot.tree.command(name="rep", description="Give reputation to a user.")
+    command_decorator = group.command(name="rep", description="Give reputation to a user.") if group else bot.tree.command(name="rep", description="Give reputation to a user.")
+    
+    @command_decorator
     @app_commands.describe(user="User to give reputation to", reason="Reason for giving reputation")
     async def rep(interaction: discord.Interaction, user: discord.Member, reason: Optional[str] = None):
         """Give reputation to a user."""
@@ -98,7 +100,9 @@ def setup(bot):
             )
         )
     
-    @bot.tree.command(name="reputation", description="View a user's reputation.")
+    command_decorator = group.command(name="reputation", description="View a user's reputation.") if group else bot.tree.command(name="reputation", description="View a user's reputation.")
+    
+    @command_decorator
     @app_commands.describe(user="User to check reputation for")
     async def reputation(interaction: discord.Interaction, user: Optional[discord.Member] = None):
         """View user reputation."""
@@ -162,7 +166,9 @@ def setup(bot):
         )
         await interaction.followup.send(embed=embed, ephemeral=True)
     
-    @bot.tree.command(name="reputation_leaderboard", description="View reputation leaderboard.")
+    command_decorator = group.command(name="reputation_leaderboard", description="View reputation leaderboard.") if group else bot.tree.command(name="reputation_leaderboard", description="View reputation leaderboard.")
+    
+    @command_decorator
     async def reputation_leaderboard(interaction: discord.Interaction):
         """View reputation leaderboard."""
         if not interaction.guild:

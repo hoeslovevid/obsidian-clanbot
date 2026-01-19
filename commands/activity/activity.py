@@ -8,9 +8,11 @@ from database import DB_PATH
 import aiosqlite  # type: ignore
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the activity command."""
-    @bot.tree.command(name="activity", description="View your activity stats in the server.")
+    command_decorator = group.command(name="activity", description="View your activity stats in the server.") if group else bot.tree.command(name="activity", description="View your activity stats in the server.")
+
+    @command_decorator
     async def activity(interaction: discord.Interaction):
         """Show user's activity statistics."""
         if not isinstance(interaction.user, discord.Member):

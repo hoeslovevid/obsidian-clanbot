@@ -8,9 +8,11 @@ from database import DB_PATH
 import aiosqlite
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the application_setup command."""
-    @bot.tree.command(name="application_setup", description="Configure the clan application system (moderators only).")
+    command_decorator = group.command(name="application_setup", description="Configure the clan application system (moderators only).") if group else bot.tree.command(name="application_setup", description="Configure the clan application system (moderators only).")
+    
+    @command_decorator
     @app_commands.describe(
         channel="The channel where users can apply (leave empty to use current channel)",
         action="What to configure"

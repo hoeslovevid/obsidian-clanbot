@@ -83,10 +83,12 @@ class RoleMenuView(View):
                 await interaction.response.send_message("I don't have permission to add this role.", ephemeral=True)
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register role menu commands."""
     
-    @bot.tree.command(name="role_menu", description="Create an interactive role selection menu (moderators only).")
+    command_decorator = group.command(name="role_menu", description="Create an interactive role selection menu (moderators only).") if group else bot.tree.command(name="role_menu", description="Create an interactive role selection menu (moderators only).")
+    
+    @command_decorator
     @app_commands.describe(
         title="Title of the role menu",
         description="Description of the role menu",
@@ -161,7 +163,9 @@ def setup(bot):
         await message.edit(view=view)
         bot.add_view(view)
     
-    @bot.tree.command(name="role_menu_add", description="Add a role to a role menu (moderators only).")
+    command_decorator = group.command(name="role_menu_add", description="Add a role to a role menu (moderators only).") if group else bot.tree.command(name="role_menu_add", description="Add a role to a role menu (moderators only).")
+    
+    @command_decorator
     @app_commands.describe(
         message_id="The role menu message ID",
         role="Role to add",

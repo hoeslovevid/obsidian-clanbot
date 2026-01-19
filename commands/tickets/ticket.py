@@ -54,10 +54,12 @@ async def create_ticket_channel(guild: discord.Guild, user: discord.Member, tick
         return None
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register ticket commands."""
     
-    @bot.tree.command(name="ticket", description="Create a support ticket.")
+    command_decorator = group.command(name="ticket", description="Create a support ticket.") if group else bot.tree.command(name="ticket", description="Create a support ticket.")
+    
+    @command_decorator
     @app_commands.describe(subject="Subject of your ticket")
     async def ticket(interaction: discord.Interaction, subject: str):
         """Create a support ticket."""
@@ -140,7 +142,9 @@ def setup(bot):
             ephemeral=True
         )
     
-    @bot.tree.command(name="ticket_close", description="Close a support ticket (moderators only).")
+    command_decorator = group.command(name="ticket_close", description="Close a support ticket (moderators only).") if group else bot.tree.command(name="ticket_close", description="Close a support ticket (moderators only).")
+    
+    @command_decorator
     @app_commands.describe(reason="Reason for closing the ticket")
     async def ticket_close(interaction: discord.Interaction, reason: Optional[str] = None):
         """Close a support ticket."""

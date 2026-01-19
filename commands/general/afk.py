@@ -7,10 +7,12 @@ from utils import obsidian_embed
 from database import set_afk, remove_afk, get_afk_status
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the afk command."""
     
-    @bot.tree.command(name="afk", description="Set yourself as AFK (Away From Keyboard).")
+    command_decorator = group.command(name="afk", description="Set yourself as AFK (Away From Keyboard).") if group else bot.tree.command(name="afk", description="Set yourself as AFK (Away From Keyboard).")
+    
+    @command_decorator
     @app_commands.describe(reason="Reason for being AFK (optional)")
     async def afk(interaction: discord.Interaction, reason: Optional[str] = None):
         """Set or remove AFK status."""

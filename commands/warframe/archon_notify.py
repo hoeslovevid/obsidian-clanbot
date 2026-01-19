@@ -7,9 +7,11 @@ from database import DB_PATH
 import aiosqlite  # type: ignore
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the archon_notify command."""
-    @bot.tree.command(name="archon_notify", description="Configure Archon Hunt notifications (moderators only).")
+    command_decorator = group.command(name="archon_notify", description="Configure Archon Hunt notifications (moderators only).") if group else bot.tree.command(name="archon_notify", description="Configure Archon Hunt notifications (moderators only).")
+    
+    @command_decorator
     @app_commands.describe(
         enabled="Enable or disable notifications",
         channel="Channel to send notifications to (leave empty to use current channel)"

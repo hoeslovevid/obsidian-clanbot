@@ -5,9 +5,11 @@ from discord import app_commands
 from utils import obsidian_embed, ECONOMY_ENABLED
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the leaderboard command."""
-    @bot.tree.command(name="leaderboard", description="View the top coin earners.")
+    command_decorator = group.command(name="leaderboard", description="View the top coin earners.") if group else bot.tree.command(name="leaderboard", description="View the top coin earners.")
+    
+    @command_decorator
     @app_commands.describe(limit="Number of users to show (default: 10, max: 25)")
     async def leaderboard(interaction: discord.Interaction, limit: int = 10):
         """Display the top coin earners."""

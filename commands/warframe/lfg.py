@@ -238,9 +238,11 @@ class LFGView(discord.ui.View):
         await interaction.followup.send(f"You {action} the group! ({current_count}/{max_players}){thread_mention}", ephemeral=True)
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the lfg command."""
-    @bot.tree.command(name="lfg", description="Create a Looking for Group post for a Warframe mission.")
+    command_decorator = group.command(name="lfg", description="Create a Looking for Group post for a Warframe mission.") if group else bot.tree.command(name="lfg", description="Create a Looking for Group post for a Warframe mission.")
+    
+    @command_decorator
     @app_commands.describe(
         mission_type="Type of mission",
         max_players="Maximum number of players needed (default: 4)",

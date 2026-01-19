@@ -38,10 +38,12 @@ def format_time_remaining(expiry_str: str) -> str:
         return "Unknown"
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the duviri command."""
     
-    @bot.tree.command(name="duviri", description="View current Duviri Circuit rotations and progress.")
+    command_decorator = group.command(name="duviri", description="View current Duviri Circuit rotations and progress.") if group else bot.tree.command(name="duviri", description="View current Duviri Circuit rotations and progress.")
+    
+    @command_decorator
     async def duviri(interaction: discord.Interaction):
         """Display current Duviri Circuit information."""
         await interaction.response.defer()

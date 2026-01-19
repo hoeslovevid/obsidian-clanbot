@@ -63,10 +63,12 @@ class YTDLSource(discord.PCMVolumeTransformer):
         return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register music commands."""
     
-    @bot.tree.command(name="play", description="Play music from a URL or search query.")
+    command_decorator = group.command(name="play", description="Play music from a URL or search query.") if group else bot.tree.command(name="play", description="Play music from a URL or search query.")
+    
+    @command_decorator
     @app_commands.describe(query="YouTube URL or search query")
     async def play(interaction: discord.Interaction, query: str):
         """Play music."""
@@ -150,7 +152,9 @@ def setup(bot):
                 )
             )
     
-    @bot.tree.command(name="stop", description="Stop music playback.")
+    command_decorator = group.command(name="stop", description="Stop music playback.") if group else bot.tree.command(name="stop", description="Stop music playback.")
+    
+    @command_decorator
     async def stop(interaction: discord.Interaction):
         """Stop music."""
         if not interaction.guild:
@@ -194,7 +198,9 @@ def setup(bot):
             )
         )
     
-    @bot.tree.command(name="volume", description="Set music volume (0-100).")
+    command_decorator = group.command(name="volume", description="Set music volume (0-100).") if group else bot.tree.command(name="volume", description="Set music volume (0-100).")
+    
+    @command_decorator
     @app_commands.describe(volume="Volume level (0-100)")
     async def volume(interaction: discord.Interaction, volume: int):
         """Set volume."""

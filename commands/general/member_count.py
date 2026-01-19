@@ -59,9 +59,11 @@ async def update_member_count_channel(guild: discord.Guild, channel_id: int) -> 
         return False
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the member_count command."""
-    @bot.tree.command(name="member_count", description="Create or update a channel that displays server member count (moderators only).")
+    command_decorator = group.command(name="member_count", description="Create or update a channel that displays server member count (moderators only).") if group else bot.tree.command(name="member_count", description="Create or update a channel that displays server member count (moderators only).")
+    
+    @command_decorator
     @app_commands.describe(
         channel_type="Type of channel to create (voice, text, or stage)",
         category="Category to place the channel in (leave empty for top of server)"

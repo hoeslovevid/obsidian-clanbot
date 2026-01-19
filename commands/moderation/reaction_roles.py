@@ -8,10 +8,12 @@ from database import DB_PATH
 import aiosqlite
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register reaction role commands."""
     
-    @bot.tree.command(name="reaction_role_setup", description="Set up reaction roles on a message (mods only).")
+    command_decorator = group.command(name="reaction_role_setup", description="Set up reaction roles on a message (mods only).") if group else bot.tree.command(name="reaction_role_setup", description="Set up reaction roles on a message (mods only).")
+    
+    @command_decorator
     @app_commands.describe(
         message="The message to add reaction roles to (message ID or link)",
         emoji="The emoji to use for this role",
@@ -159,7 +161,9 @@ def setup(bot):
             ephemeral=True,
         )
     
-    @bot.tree.command(name="reaction_role_remove", description="Remove a reaction role from a message (mods only).")
+    command_decorator = group.command(name="reaction_role_remove", description="Remove a reaction role from a message (mods only).") if group else bot.tree.command(name="reaction_role_remove", description="Remove a reaction role from a message (mods only).")
+    
+    @command_decorator
     @app_commands.describe(
         message="The message ID or link",
         emoji="The emoji to remove"
@@ -227,7 +231,9 @@ def setup(bot):
             ephemeral=True,
         )
     
-    @bot.tree.command(name="reaction_role_list", description="List all reaction roles for a message (mods only).")
+    command_decorator = group.command(name="reaction_role_list", description="List all reaction roles for a message (mods only).") if group else bot.tree.command(name="reaction_role_list", description="List all reaction roles for a message (mods only).")
+    
+    @command_decorator
     @app_commands.describe(
         message="The message ID or link (optional - if not provided, lists all in server)"
     )

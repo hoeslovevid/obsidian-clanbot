@@ -8,10 +8,12 @@ from database import DB_PATH
 import aiosqlite  # type: ignore
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the milestones command."""
     
-    @bot.tree.command(name="milestones", description="View your server milestones and achievements.")
+    command_decorator = group.command(name="milestones", description="View your server milestones and achievements.") if group else bot.tree.command(name="milestones", description="View your server milestones and achievements.")
+    
+    @command_decorator
     async def milestones(interaction: discord.Interaction, user: Optional[discord.Member] = None):
         """View milestones."""
         if not interaction.guild:

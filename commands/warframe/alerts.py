@@ -49,10 +49,12 @@ def format_time_remaining(expiry_str: str) -> str:
         return "Unknown"
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the alerts command."""
     
-    @bot.tree.command(name="alerts", description="View active Warframe alerts.")
+    command_decorator = group.command(name="alerts", description="View active Warframe alerts.") if group else bot.tree.command(name="alerts", description="View active Warframe alerts.")
+    
+    @command_decorator
     async def alerts(interaction: discord.Interaction):
         """Display active alerts."""
         await interaction.response.defer()

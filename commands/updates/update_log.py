@@ -29,9 +29,11 @@ def calculate_feature_hash(bot) -> str:
     return hashlib.md5(commands_str.encode()).hexdigest()
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the update_log command."""
-    @bot.tree.command(name="update_log", description="Post a bot update log (moderators only).")
+    command_decorator = group.command(name="update_log", description="Post a bot update log (moderators only).") if group else bot.tree.command(name="update_log", description="Post a bot update log (moderators only).")
+    
+    @command_decorator
     @app_commands.describe(
         title="Title of the update (e.g., 'New Command Added')",
         description="Description of the update (what was added/changed)",

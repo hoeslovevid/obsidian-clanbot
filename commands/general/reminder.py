@@ -10,10 +10,12 @@ from database import DB_PATH, now_utc
 import aiosqlite
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register reminder commands."""
     
-    @bot.tree.command(name="remind", description="Set a reminder.")
+    command_decorator = group.command(name="remind", description="Set a reminder.") if group else bot.tree.command(name="remind", description="Set a reminder.")
+    
+    @command_decorator
     @app_commands.describe(when="When to remind you (e.g., 'in 2 hours', 'tomorrow at 3pm')", reminder="What to remind you about")
     async def remind(interaction: discord.Interaction, when: str, reminder: str):
         """Set a reminder."""

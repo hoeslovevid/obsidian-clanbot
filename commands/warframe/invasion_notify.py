@@ -7,9 +7,11 @@ from utils import obsidian_embed, is_mod
 from database import DB_PATH
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the invasion_notify command."""
-    @bot.tree.command(name="invasion_notify", description="Configure invasion notifications (moderators only).")
+    command_decorator = group.command(name="invasion_notify", description="Configure invasion notifications (moderators only).") if group else bot.tree.command(name="invasion_notify", description="Configure invasion notifications (moderators only).")
+    
+    @command_decorator
     @app_commands.describe(
         reward="Reward to notify for (e.g., Fieldron, Detonite Injector, Mutagen Mass)",
         enabled="Enable or disable notifications",

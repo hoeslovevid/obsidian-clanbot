@@ -7,10 +7,12 @@ from utils import obsidian_embed, is_mod
 from database import set_server_stats_channel, remove_server_stats_channel, get_server_stats_channel
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the server_stats command."""
     
-    @bot.tree.command(name="server_stats", description="Configure the server stats channel (mods only).")
+    command_decorator = group.command(name="server_stats", description="Configure the server stats channel (mods only).") if group else bot.tree.command(name="server_stats", description="Configure the server stats channel (mods only).")
+    
+    @command_decorator
     @app_commands.describe(
         action="Action to perform",
         channel="Channel to display stats in",

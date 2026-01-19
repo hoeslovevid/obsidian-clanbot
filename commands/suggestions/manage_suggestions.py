@@ -139,9 +139,11 @@ class SuggestionView(discord.ui.View):
         )
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the suggestions command."""
-    @bot.tree.command(name="suggestions", description="View and manage suggestions (moderators only).")
+    command_decorator = group.command(name="suggestions", description="View and manage suggestions (moderators only).") if group else bot.tree.command(name="suggestions", description="View and manage suggestions (moderators only).")
+    
+    @command_decorator
     @app_commands.describe(
         status="Filter by status (default: all)",
         limit="Number of suggestions to show (default: 10, max: 25)"

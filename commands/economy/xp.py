@@ -5,9 +5,11 @@ from discord import app_commands
 from utils import obsidian_embed, XP_ENABLED, XP_LEVEL_MULTIPLIER
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the xp command."""
-    @bot.tree.command(name="xp", description="Check your XP and level.")
+    command_decorator = group.command(name="xp", description="Check your XP and level.") if group else bot.tree.command(name="xp", description="Check your XP and level.")
+    
+    @command_decorator
     @app_commands.describe(user="User to check (default: yourself)")
     async def xp(interaction: discord.Interaction, user: discord.Member = None):
         """Display the user's current XP and level."""

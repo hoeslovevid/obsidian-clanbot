@@ -8,9 +8,11 @@ from bot import DB_PATH
 import aiosqlite
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the lfg_list command."""
-    @bot.tree.command(name="lfg_list", description="View active Looking for Group posts.")
+    command_decorator = group.command(name="lfg_list", description="View active Looking for Group posts.") if group else bot.tree.command(name="lfg_list", description="View active Looking for Group posts.")
+    
+    @command_decorator
     @app_commands.describe(mission_type="Filter by mission type (optional)")
     async def lfg_list(interaction: discord.Interaction, mission_type: str = None):
         """Display active LFG posts."""

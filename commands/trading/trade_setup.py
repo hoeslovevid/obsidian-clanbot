@@ -7,9 +7,11 @@ from database import DB_PATH
 import aiosqlite  # type: ignore
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the trade_setup command."""
-    @bot.tree.command(name="trade_setup", description="Configure the trading channel (moderators only).")
+    command_decorator = group.command(name="trade_setup", description="Configure the trading channel (moderators only).") if group else bot.tree.command(name="trade_setup", description="Configure the trading channel (moderators only).")
+    
+    @command_decorator
     @app_commands.describe(channel="The channel where trading posts will be sent (leave empty to use current channel)")
     async def trade_setup(interaction: discord.Interaction, channel: discord.TextChannel = None):
         """Configure the trading channel."""

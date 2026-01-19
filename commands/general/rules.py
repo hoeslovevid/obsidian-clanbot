@@ -8,10 +8,12 @@ from database import DB_PATH, now_utc
 import aiosqlite
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register rules commands."""
     
-    @bot.tree.command(name="rules", description="View server rules.")
+    command_decorator = group.command(name="rules", description="View server rules.") if group else bot.tree.command(name="rules", description="View server rules.")
+    
+    @command_decorator
     async def rules(interaction: discord.Interaction):
         """Display server rules."""
         if not interaction.guild:
@@ -66,7 +68,9 @@ def setup(bot):
         )
         await interaction.followup.send(embed=embed, ephemeral=True)
     
-    @bot.tree.command(name="accept_rules", description="Accept the server rules.")
+    command_decorator = group.command(name="accept_rules", description="Accept the server rules.") if group else bot.tree.command(name="accept_rules", description="Accept the server rules.")
+    
+    @command_decorator
     async def accept_rules(interaction: discord.Interaction):
         """Accept server rules."""
         if not interaction.guild:
@@ -128,7 +132,9 @@ def setup(bot):
             ephemeral=True
         )
     
-    @bot.tree.command(name="rules_setup", description="Set up server rules (moderators only).")
+    command_decorator = group.command(name="rules_setup", description="Set up server rules (moderators only).") if group else bot.tree.command(name="rules_setup", description="Set up server rules (moderators only).")
+    
+    @command_decorator
     @app_commands.describe(action="Action to perform", rule_number="Rule number (for add/edit/remove)", rule_text="Rule text (for add/edit)")
     @app_commands.choices(action=[
         app_commands.Choice(name="add", value="add"),

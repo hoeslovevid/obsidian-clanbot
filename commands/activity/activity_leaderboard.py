@@ -8,9 +8,11 @@ from database import DB_PATH
 import aiosqlite  # type: ignore
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the activity_leaderboard command."""
-    @bot.tree.command(name="activity_leaderboard", description="View the most active members in the server.")
+    command_decorator = group.command(name="activity_leaderboard", description="View the most active members in the server.") if group else bot.tree.command(name="activity_leaderboard", description="View the most active members in the server.")
+    
+    @command_decorator
     @app_commands.describe(period="Time period for leaderboard (weekly, monthly, or all-time)")
     async def activity_leaderboard(interaction: discord.Interaction, period: str = "weekly"):
         """Show activity leaderboard."""

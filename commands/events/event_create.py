@@ -5,9 +5,11 @@ from discord import app_commands
 from utils import obsidian_embed, parse_time_natural, extract_id, now_utc
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the event_create command."""
-    @bot.tree.command(name="event_create", description="Create an Obsidian Ops event with RSVP + reminder.")
+    command_decorator = group.command(name="event_create", description="Create an Obsidian Ops event with RSVP + reminder.") if group else bot.tree.command(name="event_create", description="Create an Obsidian Ops event with RSVP + reminder.")
+    
+    @command_decorator
     @app_commands.describe(
         title="Event title",
         when="Natural time: 'tomorrow 8pm', 'Jan 14 7:30pm', etc.",

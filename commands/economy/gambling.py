@@ -9,10 +9,12 @@ from database import DB_PATH, now_utc, get_user_balance, add_coins, remove_coins
 import aiosqlite
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register gambling commands."""
     
-    @bot.tree.command(name="slots", description="Play slots! (Cost: 50 coins)")
+    command_decorator = group.command(name="slots", description="Play slots! (Cost: 50 coins)") if group else bot.tree.command(name="slots", description="Play slots! (Cost: 50 coins)")
+    
+    @command_decorator
     async def slots(interaction: discord.Interaction):
         """Play a slot machine game."""
         if not interaction.guild:
@@ -91,7 +93,9 @@ def setup(bot):
         )
         await interaction.followup.send(embed=embed)
     
-    @bot.tree.command(name="dice", description="Roll dice! Bet coins and try to roll higher than the bot.")
+    command_decorator = group.command(name="dice", description="Roll dice! Bet coins and try to roll higher than the bot.") if group else bot.tree.command(name="dice", description="Roll dice! Bet coins and try to roll higher than the bot.")
+    
+    @command_decorator
     @app_commands.describe(bet="Amount of coins to bet")
     async def dice(interaction: discord.Interaction, bet: int):
         """Play dice game."""
@@ -177,7 +181,9 @@ def setup(bot):
         )
         await interaction.followup.send(embed=embed)
     
-    @bot.tree.command(name="roulette", description="Play roulette! Bet on red, black, or green.")
+    command_decorator = group.command(name="roulette", description="Play roulette! Bet on red, black, or green.") if group else bot.tree.command(name="roulette", description="Play roulette! Bet on red, black, or green.")
+    
+    @command_decorator
     @app_commands.describe(bet="Amount of coins to bet", color="Color to bet on (red/black/green)")
     @app_commands.choices(color=[
         app_commands.Choice(name="Red", value="red"),

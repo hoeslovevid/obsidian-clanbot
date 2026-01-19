@@ -5,9 +5,11 @@ from datetime import datetime, timezone
 from utils import obsidian_embed, ECONOMY_ENABLED, COINS_DAILY_REWARD
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the daily command."""
-    @bot.tree.command(name="daily", description="Claim your daily coin reward!")
+    command_decorator = group.command(name="daily", description="Claim your daily coin reward!") if group else bot.tree.command(name="daily", description="Claim your daily coin reward!")
+    
+    @command_decorator
     async def daily(interaction: discord.Interaction):
         """Claim daily coins (once per day)."""
         # Import bot-specific functions inside to avoid circular imports

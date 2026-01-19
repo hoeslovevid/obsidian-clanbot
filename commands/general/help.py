@@ -4,10 +4,11 @@ import discord
 from utils import obsidian_embed, is_mod, ECONOMY_ENABLED, COINS_PER_MESSAGE, MESSAGE_COOLDOWN_SECONDS, COINS_PER_MINUTE_VOICE
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the help command."""
+    command_decorator = group.command(name="help", description="Get help and information about all bot commands.") if group else bot.tree.command(name="help", description="Get help and information about all bot commands.")
     
-    @bot.tree.command(name="help", description="Get help and information about all bot commands.")
+    @command_decorator
     async def help_command(interaction: discord.Interaction):
         """Display a help embed with all available commands and their usage."""
         is_user_mod = isinstance(interaction.user, discord.Member) and is_mod(interaction.user)

@@ -6,9 +6,11 @@ from utils import obsidian_embed
 from warframe_api import search_warframe_market_item, get_warframe_market_price
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the trade_price command."""
-    @bot.tree.command(name="trade_price", description="Check current market prices for a Warframe item.")
+    command_decorator = group.command(name="trade_price", description="Check current market prices for a Warframe item.") if group else bot.tree.command(name="trade_price", description="Check current market prices for a Warframe item.")
+    
+    @command_decorator
     @app_commands.describe(
         item="Item name (e.g., 'Mesa Prime Set', 'Primed Continuity')",
         platform="Platform (default: PC)"

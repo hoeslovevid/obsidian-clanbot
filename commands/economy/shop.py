@@ -8,10 +8,12 @@ from database import DB_PATH, remove_coins, add_coins, get_user_balance
 import aiosqlite  # type: ignore
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the shop command."""
     
-    @bot.tree.command(name="shop", description="View available items in the shop.")
+    command_decorator = group.command(name="shop", description="View available items in the shop.") if group else bot.tree.command(name="shop", description="View available items in the shop.")
+    
+    @command_decorator
     async def shop(interaction: discord.Interaction):
         """View shop items."""
         if not ECONOMY_ENABLED:
@@ -83,7 +85,9 @@ def setup(bot):
         
         await interaction.followup.send(embed=embed, ephemeral=True)
     
-    @bot.tree.command(name="buy", description="Purchase an item from the shop.")
+    command_decorator = group.command(name="buy", description="Purchase an item from the shop.") if group else bot.tree.command(name="buy", description="Purchase an item from the shop.")
+    
+    @command_decorator
     @app_commands.describe(item_name="Name of the item to buy")
     async def buy(interaction: discord.Interaction, item_name: str):
         """Buy an item from the shop."""

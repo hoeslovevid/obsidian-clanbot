@@ -7,9 +7,11 @@ from bot import DB_PATH
 import aiosqlite
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the baro_notify command."""
-    @bot.tree.command(name="baro_notify", description="Configure Baro Ki'Teer arrival notifications (moderators only).")
+    command_decorator = group.command(name="baro_notify", description="Configure Baro Ki'Teer arrival notifications (moderators only).") if group else bot.tree.command(name="baro_notify", description="Configure Baro Ki'Teer arrival notifications (moderators only).")
+    
+    @command_decorator
     @app_commands.describe(
         enabled="Enable or disable Baro arrival notifications",
         channel="Channel to send notifications to (leave empty to use current channel)"

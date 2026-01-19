@@ -7,9 +7,11 @@ from database import DB_PATH
 import aiosqlite  # type: ignore
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the warframe_event_notify command."""
-    @bot.tree.command(name="warframe_event_notify", description="Enable/disable automatic Discord event creation for major Warframe updates (moderators only).")
+    command_decorator = group.command(name="warframe_event_notify", description="Enable/disable automatic Discord event creation for major Warframe updates (moderators only).") if group else bot.tree.command(name="warframe_event_notify", description="Enable/disable automatic Discord event creation for major Warframe updates (moderators only).")
+    
+    @command_decorator
     @app_commands.describe(
         enabled="Enable or disable automatic event creation"
     )

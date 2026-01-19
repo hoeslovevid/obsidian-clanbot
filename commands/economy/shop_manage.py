@@ -8,10 +8,12 @@ from database import DB_PATH
 import aiosqlite  # type: ignore
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the shop_manage command."""
     
-    @bot.tree.command(name="shop_manage", description="Manage shop items (moderators only).")
+    command_decorator = group.command(name="shop_manage", description="Manage shop items (moderators only).") if group else bot.tree.command(name="shop_manage", description="Manage shop items (moderators only).")
+    
+    @command_decorator
     @app_commands.describe(
         action="Action to perform",
         item_name="Name of the item",

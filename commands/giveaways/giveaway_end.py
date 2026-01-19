@@ -97,10 +97,12 @@ async def end_giveaway(giveaway_id: int, bot, force: bool = False) -> tuple[bool
     return True, f"Giveaway ended! {len(winners)} winner(s) selected.", winners
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the giveaway_end command."""
     
-    @bot.tree.command(name="giveaway_end", description="End a giveaway early and select winners (mods only).")
+    command_decorator = group.command(name="giveaway_end", description="End a giveaway early and select winners (mods only).") if group else bot.tree.command(name="giveaway_end", description="End a giveaway early and select winners (mods only).")
+    
+    @command_decorator
     @app_commands.describe(
         message="The giveaway message ID or link"
     )

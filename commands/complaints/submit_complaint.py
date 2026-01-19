@@ -5,9 +5,11 @@ from discord import app_commands
 from utils import obsidian_embed
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the submit_complaint command."""
-    @bot.tree.command(name="submit_complaint", description="Submit additional information to an existing complaint/help request case.")
+    command_decorator = group.command(name="submit_complaint", description="Submit additional information to an existing complaint/help request case.") if group else bot.tree.command(name="submit_complaint", description="Submit additional information to an existing complaint/help request case.")
+    
+    @command_decorator
     @app_commands.describe(case_id="Your case id (e.g., OBS-...)", details="Additional details / links / screenshots")
     async def submit_complaint(interaction: discord.Interaction, case_id: str, details: str):
         # Import bot-specific functions inside to avoid circular imports

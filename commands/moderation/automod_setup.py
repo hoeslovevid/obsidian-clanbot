@@ -8,9 +8,11 @@ from database import get_auto_mod_settings, update_auto_mod_settings
 import aiosqlite
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the automod_setup command."""
-    @bot.tree.command(name="automod_setup", description="Configure auto-moderation settings (moderators only).")
+    command_decorator = group.command(name="automod_setup", description="Configure auto-moderation settings (moderators only).") if group else bot.tree.command(name="automod_setup", description="Configure auto-moderation settings (moderators only).")
+    
+    @command_decorator
     @app_commands.describe(
         feature="Which feature to configure",
         enabled="Enable or disable the feature",

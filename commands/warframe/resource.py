@@ -218,9 +218,11 @@ RESOURCE_DATA = {
 }
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the resource command."""
-    @bot.tree.command(name="resource", description="Get farming information for a Warframe resource.")
+    command_decorator = group.command(name="resource", description="Get farming information for a Warframe resource.") if group else bot.tree.command(name="resource", description="Get farming information for a Warframe resource.")
+    
+    @command_decorator
     @app_commands.describe(resource="The resource name (e.g., orokin cell, neural sensor)")
     async def resource(interaction: discord.Interaction, resource: str):
         """Show resource farming guide."""

@@ -7,9 +7,11 @@ from bot import DB_PATH
 import aiosqlite
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the cycle_notify command."""
-    @bot.tree.command(name="cycle_notify", description="Configure open world cycle notifications (moderators only).")
+    command_decorator = group.command(name="cycle_notify", description="Configure open world cycle notifications (moderators only).") if group else bot.tree.command(name="cycle_notify", description="Configure open world cycle notifications (moderators only).")
+    
+    @command_decorator
     @app_commands.describe(
         cycle_type="Which cycle to configure",
         enabled="Enable or disable notifications",

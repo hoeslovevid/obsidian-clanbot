@@ -14,10 +14,12 @@ def now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the invest command."""
     
-    @bot.tree.command(name="invest", description="Invest coins to earn interest over time.")
+    command_decorator = group.command(name="invest", description="Invest coins to earn interest over time.") if group else bot.tree.command(name="invest", description="Invest coins to earn interest over time.")
+    
+    @command_decorator
     @app_commands.describe(
         amount="Amount of coins to invest",
         duration="Investment duration in days (7, 14, 30, or 90)"
@@ -156,7 +158,9 @@ def setup(bot):
             ephemeral=True
         )
     
-    @bot.tree.command(name="invest_status", description="Check your investment status.")
+    command_decorator = group.command(name="invest_status", description="Check your investment status.") if group else bot.tree.command(name="invest_status", description="Check your investment status.")
+    
+    @command_decorator
     async def invest_status(interaction: discord.Interaction):
         """Check investment status."""
         if not ECONOMY_ENABLED:
@@ -242,7 +246,9 @@ def setup(bot):
             ephemeral=True
         )
     
-    @bot.tree.command(name="invest_collect", description="Collect your matured investment returns.")
+    command_decorator = group.command(name="invest_collect", description="Collect your matured investment returns.") if group else bot.tree.command(name="invest_collect", description="Collect your matured investment returns.")
+    
+    @command_decorator
     async def invest_collect(interaction: discord.Interaction):
         """Collect investment returns."""
         if not ECONOMY_ENABLED:

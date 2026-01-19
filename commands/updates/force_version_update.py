@@ -8,9 +8,11 @@ from database import DB_PATH
 import aiosqlite  # type: ignore
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the force_version_update command."""
-    @bot.tree.command(name="force_version_update", description="Force post the most recent bot update to Discord (moderators only).")
+    command_decorator = group.command(name="force_version_update", description="Force post the most recent bot update to Discord (moderators only).") if group else bot.tree.command(name="force_version_update", description="Force post the most recent bot update to Discord (moderators only).")
+    
+    @command_decorator
     async def force_version_update(interaction: discord.Interaction):
         """Force post the most recent detected update to the update log channel."""
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):

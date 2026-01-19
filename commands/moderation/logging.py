@@ -8,10 +8,12 @@ from database import get_guild_setting, set_guild_setting, DB_PATH
 import aiosqlite  # type: ignore
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the logging command."""
     
-    @bot.tree.command(name="logging", description="Configure server logging channels (moderators only).")
+    command_decorator = group.command(name="logging", description="Configure server logging channels (moderators only).") if group else bot.tree.command(name="logging", description="Configure server logging channels (moderators only).")
+    
+    @command_decorator
     @app_commands.describe(
         action="Action to perform",
         log_type="Type of logs to configure",

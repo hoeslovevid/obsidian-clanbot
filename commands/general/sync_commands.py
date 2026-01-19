@@ -5,9 +5,11 @@ from discord import app_commands
 from utils import is_mod
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the sync_commands command."""
-    @bot.tree.command(name="sync_commands", description="Force sync bot commands (mods only, for debugging).")
+    command_decorator = group.command(name="sync_commands", description="Force sync bot commands (mods only, for debugging).") if group else bot.tree.command(name="sync_commands", description="Force sync bot commands (mods only, for debugging).")
+    
+    @command_decorator
     async def sync_commands(interaction: discord.Interaction):
         """Force sync commands to Discord."""
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):

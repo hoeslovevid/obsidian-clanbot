@@ -9,9 +9,11 @@ from warframe_api import search_warframe_market_item, get_warframe_market_price
 import aiosqlite  # type: ignore
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the trade command."""
-    @bot.tree.command(name="trade", description="Post a WTS (Want To Sell) or WTB (Want To Buy) listing.")
+    command_decorator = group.command(name="trade", description="Post a WTS (Want To Sell) or WTB (Want To Buy) listing.") if group else bot.tree.command(name="trade", description="Post a WTS (Want To Sell) or WTB (Want To Buy) listing.")
+    
+    @command_decorator
     @app_commands.describe(
         listing_type="Type of listing",
         item="Item name (e.g., 'Mesa Prime Set', 'Primed Continuity')",

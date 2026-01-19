@@ -8,9 +8,11 @@ from database import DB_PATH, now_utc
 import aiosqlite
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the suggest command."""
-    @bot.tree.command(name="suggest", description="Submit a suggestion for the bot (new commands, features, improvements, etc.)")
+    command_decorator = group.command(name="suggest", description="Submit a suggestion for the bot (new commands, features, improvements, etc.)") if group else bot.tree.command(name="suggest", description="Submit a suggestion for the bot (new commands, features, improvements, etc.)")
+    
+    @command_decorator
     @app_commands.describe(suggestion="Your suggestion for the bot (commands, features, improvements, etc.)")
     async def suggest(interaction: discord.Interaction, suggestion: str):
         """Submit a suggestion for the bot."""

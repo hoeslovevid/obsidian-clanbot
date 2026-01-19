@@ -8,9 +8,11 @@ from warframe_api import fetch_invasions
 import dateparser
 
 
-def setup(bot):
+def setup(bot, group=None):
     """Register the invasions command."""
-    @bot.tree.command(name="invasions", description="View active faction invasions with rewards.")
+    command_decorator = group.command(name="invasions", description="View active faction invasions with rewards.") if group else bot.tree.command(name="invasions", description="View active faction invasions with rewards.")
+    
+    @command_decorator
     async def invasions(interaction: discord.Interaction):
         """Display all active invasions."""
         await interaction.response.defer(ephemeral=False)
