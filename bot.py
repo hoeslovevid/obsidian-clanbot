@@ -1131,7 +1131,8 @@ async def init_db():
         CREATE TABLE IF NOT EXISTS twitch_settings (
             guild_id INTEGER NOT NULL PRIMARY KEY,
             channel_id INTEGER,
-            enabled INTEGER NOT NULL DEFAULT 0
+            enabled INTEGER NOT NULL DEFAULT 0,
+            ping_role_id INTEGER
         )""")
 
         await db.execute("""

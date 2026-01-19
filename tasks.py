@@ -1416,18 +1416,35 @@ def setup_tasks(bot):
             for guild in bot.guilds:
                 try:
                     async with aiosqlite.connect(DB_PATH) as db:
-                        cur = await db.execute("""
-                            SELECT channel_id, enabled FROM twitch_settings WHERE guild_id=?
-                        """, (guild.id,))
+                        # Check if ping_role_id column exists
+                        try:
+                            cur = await db.execute("PRAGMA table_info(twitch_settings)")
+                            columns = await cur.fetchall()
+                            column_names = [col[1] for col in columns]
+                            has_ping_role = "ping_role_id" in column_names
+                        except Exception:
+                            has_ping_role = False
+                        
+                        if has_ping_role:
+                            cur = await db.execute("""
+                                SELECT channel_id, enabled, ping_role_id FROM twitch_settings WHERE guild_id=?
+                            """, (guild.id,))
+                        else:
+                            cur = await db.execute("""
+                                SELECT channel_id, enabled FROM twitch_settings WHERE guild_id=?
+                            """, (guild.id,))
                         settings_row = await cur.fetchone()
                         
                         if not settings_row or not settings_row[1]:
                             continue
                         
                         channel_id = settings_row[0]
+                        ping_role_id = settings_row[2] if has_ping_role and len(settings_row) > 2 else None
                         channel = guild.get_channel(channel_id)
                         if not isinstance(channel, discord.TextChannel):
                             continue
+                        
+                        ping_role = guild.get_role(ping_role_id) if ping_role_id else None
                         
                         # Get streamers for this guild
                         cur = await db.execute("""
@@ -1456,7 +1473,9 @@ def setup_tasks(bot):
                                 )
                                 
                                 try:
-                                    await channel.send(embed=embed)
+                                    # Ping role if configured
+                                    message_content = ping_role.mention if ping_role else None
+                                    await channel.send(content=message_content, embed=embed)
                                     
                                     # Update status
                                     await db.execute("""

@@ -64,8 +64,12 @@ def setup(bot):
     """Register Twitch commands."""
     
     @bot.tree.command(name="twitch_setup", description="Configure Twitch stream notifications (moderators only).")
-    @app_commands.describe(channel="Channel to send notifications to", enabled="Enable or disable notifications")
-    async def twitch_setup(interaction: discord.Interaction, channel: discord.TextChannel, enabled: bool = True):
+    @app_commands.describe(
+        channel="Channel to send notifications to",
+        ping_role="Role to ping when streamers go live (optional)",
+        enabled="Enable or disable notifications"
+    )
+    async def twitch_setup(interaction: discord.Interaction, channel: discord.TextChannel, ping_role: Optional[discord.Role] = None, enabled: bool = True):
         """Configure Twitch notifications."""
         if not interaction.guild:
             return await interaction.response.send_message(
@@ -92,16 +96,29 @@ def setup(bot):
         await interaction.response.defer(ephemeral=True)
         
         async with aiosqlite.connect(DB_PATH) as db:
+            # Check if ping_role_id column exists, if not add it
+            try:
+                cur = await db.execute("PRAGMA table_info(twitch_settings)")
+                columns = await cur.fetchall()
+                column_names = [col[1] for col in columns]
+                if "ping_role_id" not in column_names:
+                    await db.execute("ALTER TABLE twitch_settings ADD COLUMN ping_role_id INTEGER")
+                    await db.commit()
+            except Exception:
+                pass
+            
             await db.execute("""
-                INSERT OR REPLACE INTO twitch_settings (guild_id, channel_id, enabled)
-                VALUES (?, ?, ?)
-            """, (interaction.guild.id, channel.id, 1 if enabled else 0))
+                INSERT OR REPLACE INTO twitch_settings (guild_id, channel_id, enabled, ping_role_id)
+                VALUES (?, ?, ?, ?)
+            """, (interaction.guild.id, channel.id, 1 if enabled else 0, ping_role.id if ping_role else None))
             await db.commit()
+        
+        ping_text = f"**Ping Role:** {ping_role.mention}" if ping_role else "**Ping Role:** None (no role will be pinged)"
         
         await interaction.followup.send(
             embed=obsidian_embed(
                 "✅ Twitch Notifications Configured",
-                f"**Channel:** {channel.mention}\n**Status:** {'Enabled' if enabled else 'Disabled'}\n\n"
+                f"**Channel:** {channel.mention}\n{ping_text}\n**Status:** {'Enabled' if enabled else 'Disabled'}\n\n"
                 "Use `/twitch_add` to add streamers to monitor.",
                 color=discord.Color.green(),
                 client=interaction.client,
