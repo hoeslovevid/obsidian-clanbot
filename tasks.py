@@ -1333,6 +1333,70 @@ def setup_tasks(bot):
     async def before_devstream_check_loop():
         await bot.wait_until_ready()
 
+    @tasks.loop(minutes=1)  # Check every minute for reminders
+    async def reminder_check_loop():
+        """Check for due reminders and send them."""
+        try:
+            if not bot.is_ready():
+                return
+            
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute("""
+                    SELECT id, guild_id, user_id, channel_id, reminder_text, remind_at
+                    FROM reminders
+                    WHERE sent = 0 AND datetime(remind_at) <= datetime('now')
+                """)
+                due_reminders = await cur.fetchall()
+            
+            for reminder_id, guild_id, user_id, channel_id, reminder_text, remind_at in due_reminders:
+                try:
+                    guild = bot.get_guild(guild_id)
+                    if not guild:
+                        continue
+                    
+                    user = guild.get_member(user_id)
+                    if not user:
+                        continue
+                    
+                    channel = guild.get_channel(channel_id) if channel_id else None
+                    if not channel or not isinstance(channel, discord.TextChannel):
+                        # Try to DM user instead
+                        try:
+                            embed = obsidian_embed(
+                                "⏰ Reminder",
+                                f"**{reminder_text}**\n\n*From {guild.name}*",
+                                color=discord.Color.blue(),
+                                client=bot,
+                            )
+                            await user.send(embed=embed)
+                        except:
+                            pass  # User has DMs disabled
+                    else:
+                        # Send in channel
+                        embed = obsidian_embed(
+                            "⏰ Reminder",
+                            f"{user.mention}\n**{reminder_text}**",
+                            color=discord.Color.blue(),
+                            client=bot,
+                        )
+                        await channel.send(embed=embed)
+                    
+                    # Mark as sent
+                    async with aiosqlite.connect(DB_PATH) as db:
+                        await db.execute("""
+                            UPDATE reminders SET sent = 1 WHERE id = ?
+                        """, (reminder_id,))
+                        await db.commit()
+                except Exception as e:
+                    logger.error(f"Error sending reminder {reminder_id}: {e}", exc_info=True)
+        
+        except Exception as e:
+            logger.error(f"Error in reminder_check_loop: {e}", exc_info=True)
+    
+    @reminder_check_loop.before_loop
+    async def before_reminder_check_loop():
+        await bot.wait_until_ready()
+
     @tasks.loop(minutes=1)  # Check every minute for ended giveaways
     async def giveaway_check_loop():
         """Check for ended giveaways and select winners."""
@@ -1363,6 +1427,7 @@ def setup_tasks(bot):
         ('server_stats_update_loop', server_stats_update_loop),
         ('alert_check_loop', alert_check_loop),
         ('devstream_check_loop', devstream_check_loop),
+        ('reminder_check_loop', reminder_check_loop),
     ]
     
     started_tasks = {}

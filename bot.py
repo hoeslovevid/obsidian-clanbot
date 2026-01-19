@@ -176,6 +176,8 @@ def load_all_commands():
         # Complaint commands
         "commands.complaints.submit_complaint",
         "commands.complaints.request_help",
+        # Ticket commands
+        "commands.tickets.ticket",
         # Suggestion commands
         "commands.suggestions.suggest",
         "commands.suggestions.manage_suggestions",
@@ -202,6 +204,8 @@ def load_all_commands():
         "commands.moderation.level_roles",
         "commands.moderation.logging",
         "commands.moderation.snipe",
+        "commands.moderation.warn",
+        "commands.moderation.starboard",
         # Economy commands
         "commands.economy.balance",
         "commands.economy.leaderboard",
@@ -214,6 +218,7 @@ def load_all_commands():
         "commands.economy.invest",
         "commands.economy.shop",
         "commands.economy.shop_manage",
+        "commands.economy.gambling",
         # Warframe commands
         "commands.warframe.baro",
         "commands.warframe.baro_notify",
@@ -972,6 +977,150 @@ async def init_db():
             activity_type TEXT NOT NULL,
             activity_date TEXT NOT NULL,
             points INTEGER NOT NULL DEFAULT 0
+        )""")
+
+        # Ticket system tables
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS tickets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            channel_id INTEGER NOT NULL,
+            ticket_id TEXT NOT NULL,
+            subject TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'open',
+            created_at TEXT NOT NULL,
+            closed_at TEXT,
+            closed_by INTEGER,
+            UNIQUE(guild_id, ticket_id)
+        )""")
+
+        # Gambling tables
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS gambling_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            game_type TEXT NOT NULL,
+            bet_amount INTEGER NOT NULL,
+            win_amount INTEGER NOT NULL,
+            result TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )""")
+
+        # Server rules tables
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS server_rules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            rule_number INTEGER NOT NULL,
+            rule_text TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE(guild_id, rule_number)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS rule_acceptances (
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            accepted_at TEXT NOT NULL,
+            PRIMARY KEY (guild_id, user_id)
+        )""")
+
+        # Poll system tables
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS polls (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            channel_id INTEGER NOT NULL,
+            message_id INTEGER NOT NULL,
+            creator_id INTEGER NOT NULL,
+            question TEXT NOT NULL,
+            options TEXT NOT NULL,
+            ends_at TEXT,
+            created_at TEXT NOT NULL,
+            UNIQUE(guild_id, message_id)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS poll_votes (
+            poll_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            option_index INTEGER NOT NULL,
+            voted_at TEXT NOT NULL,
+            PRIMARY KEY (poll_id, user_id),
+            FOREIGN KEY (poll_id) REFERENCES polls(id)
+        )""")
+
+        # Warn system tables
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS warnings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            moderator_id INTEGER NOT NULL,
+            reason TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS warn_settings (
+            guild_id INTEGER NOT NULL PRIMARY KEY,
+            max_warnings INTEGER NOT NULL DEFAULT 3,
+            action_after_max TEXT NOT NULL DEFAULT 'mute',
+            mute_duration INTEGER,
+            log_channel_id INTEGER
+        )""")
+
+        # Reminder system tables
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS reminders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            channel_id INTEGER,
+            reminder_text TEXT NOT NULL,
+            remind_at TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            sent INTEGER NOT NULL DEFAULT 0
+        )""")
+
+        # Starboard tables
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS starboard_settings (
+            guild_id INTEGER NOT NULL PRIMARY KEY,
+            channel_id INTEGER,
+            threshold INTEGER NOT NULL DEFAULT 5,
+            emoji TEXT NOT NULL DEFAULT '⭐'
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS starboard_messages (
+            guild_id INTEGER NOT NULL,
+            original_message_id INTEGER NOT NULL,
+            starboard_message_id INTEGER NOT NULL,
+            stars INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (guild_id, original_message_id)
+        )""")
+
+        # Reputation system tables
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS reputation (
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            reputation_points INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (guild_id, user_id)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS reputation_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            giver_id INTEGER NOT NULL,
+            points INTEGER NOT NULL,
+            reason TEXT,
+            created_at TEXT NOT NULL
         )""")
 
         await db.commit()
@@ -3449,6 +3598,87 @@ async def on_member_remove(member: discord.Member):
 
 @bot.event
 async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
+    """Handle reaction adds for starboard and other features."""
+    # Starboard handling
+    if payload.guild_id:
+        guild = bot.get_guild(payload.guild_id)
+        if guild:
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute("""
+                    SELECT channel_id, threshold, emoji FROM starboard_settings WHERE guild_id=?
+                """, (guild.id,))
+                row = await cur.fetchone()
+                
+                if row:
+                    starboard_channel_id, threshold, emoji = row
+                    starboard_channel = guild.get_channel(starboard_channel_id)
+                    
+                    if starboard_channel and str(payload.emoji) == emoji:
+                        try:
+                            channel = guild.get_channel(payload.channel_id)
+                            if channel and isinstance(channel, discord.TextChannel):
+                                message = await channel.fetch_message(payload.message_id)
+                                
+                                # Count reactions
+                                reaction = discord.utils.get(message.reactions, emoji=emoji)
+                                if reaction and reaction.count >= threshold:
+                                    # Check if already in starboard
+                                    cur = await db.execute("""
+                                        SELECT starboard_message_id, stars FROM starboard_messages
+                                        WHERE guild_id=? AND original_message_id=?
+                                    """, (guild.id, message.id))
+                                    existing = await cur.fetchone()
+                                    
+                                    if existing:
+                                        # Update existing starboard message
+                                        starboard_msg_id, old_stars = existing
+                                        if reaction.count != old_stars:
+                                            try:
+                                                starboard_msg = await starboard_channel.fetch_message(starboard_msg_id)
+                                                embed = starboard_msg.embeds[0] if starboard_msg.embeds else None
+                                                if embed:
+                                                    embed.set_footer(text=f"{reaction.count} {emoji} | {message.channel.mention}")
+                                                    await starboard_msg.edit(embed=embed)
+                                                
+                                                await db.execute("""
+                                                    UPDATE starboard_messages SET stars=?
+                                                    WHERE guild_id=? AND original_message_id=?
+                                                """, (reaction.count, guild.id, message.id))
+                                                await db.commit()
+                                            except discord.NotFound:
+                                                # Starboard message deleted, remove from DB
+                                                await db.execute("""
+                                                    DELETE FROM starboard_messages
+                                                    WHERE guild_id=? AND original_message_id=?
+                                                """, (guild.id, message.id))
+                                                await db.commit()
+                                    else:
+                                        # Create new starboard message
+                                        embed = obsidian_embed(
+                                            f"{emoji} {message.author.display_name}",
+                                            message.content or "*No content*",
+                                            color=discord.Color.gold(),
+                                            client=bot,
+                                        )
+                                        embed.set_footer(text=f"{reaction.count} {emoji} | {message.channel.mention}")
+                                        embed.timestamp = message.created_at
+                                        
+                                        if message.attachments:
+                                            embed.set_image(url=message.attachments[0].url)
+                                        
+                                        starboard_msg = await starboard_channel.send(embed=embed)
+                                        
+                                        # Store in database
+                                        await db.execute("""
+                                            INSERT INTO starboard_messages (guild_id, original_message_id, starboard_message_id, stars)
+                                            VALUES (?, ?, ?, ?)
+                                        """, (guild.id, message.id, starboard_msg.id, reaction.count))
+                                        await db.commit()
+                        except Exception as e:
+                            logger.error(f"Error handling starboard reaction: {e}", exc_info=True)
+    
+    # Reaction role handling (only if not a bot reaction)
+    if payload.guild_id and not (payload.member and payload.member.bot):
     """Handle reaction role assignment."""
     # Ignore bot reactions
     if payload.member and payload.member.bot:
