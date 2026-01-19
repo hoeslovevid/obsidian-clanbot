@@ -261,7 +261,12 @@ def load_all_commands():
         # Activity commands
         "commands.activity.activity",
         "commands.activity.activity_leaderboard",
-        # General commands
+        # Giveaway commands
+        "commands.giveaways.giveaway",
+        "commands.giveaways.giveaway_end",
+        "commands.giveaways.giveaway_list",
+        "commands.giveaways.giveaway_reroll",
+        # General commands (additional)
         "commands.general.afk",
         "commands.general.server_stats",
     ]
@@ -312,6 +317,57 @@ def load_all_commands():
         "commands.moderation.warn": moderation_group,
         "commands.moderation.starboard": moderation_group,
         "commands.moderation.role_menu": moderation_group,
+        # General commands
+        "commands.general.help": general_group,
+        "commands.general.member_count": general_group,
+        "commands.general.setup_obsidian": general_group,
+        "commands.general.setup_docket": general_group,
+        "commands.general.sync_commands": general_group,
+        "commands.general.welcome_setup": general_group,
+        "commands.general.milestones": general_group,
+        "commands.general.achievements": general_group,
+        "commands.general.webhooks": general_group,
+        "commands.general.rules": general_group,
+        "commands.general.polls": general_group,
+        "commands.general.reminder": general_group,
+        "commands.general.reputation": general_group,
+        "commands.general.twitch": general_group,
+        "commands.general.afk": general_group,
+        "commands.general.server_stats": general_group,
+        # Music commands
+        "commands.music.music": general_group,
+        # Event commands
+        "commands.events.event_create": general_group,
+        # Complaint commands
+        "commands.complaints.submit_complaint": general_group,
+        "commands.complaints.request_help": general_group,
+        # Ticket commands
+        "commands.tickets.ticket": general_group,
+        # Suggestion commands
+        "commands.suggestions.suggest": general_group,
+        "commands.suggestions.manage_suggestions": general_group,
+        # Application commands
+        "commands.applications.application": general_group,
+        "commands.applications.application_setup": general_group,
+        "commands.applications.manage_applications": general_group,
+        # Update log commands
+        "commands.updates.update_log": general_group,
+        "commands.updates.update_log_setup": general_group,
+        "commands.updates.force_version_update": general_group,
+        # Trading commands
+        "commands.trading.trade": general_group,
+        "commands.trading.trade_price": general_group,
+        "commands.trading.trade_search": general_group,
+        "commands.trading.trade_list": general_group,
+        "commands.trading.trade_setup": general_group,
+        # Activity commands
+        "commands.activity.activity": general_group,
+        "commands.activity.activity_leaderboard": general_group,
+        # Giveaway commands
+        "commands.giveaways.giveaway": general_group,
+        "commands.giveaways.giveaway_end": general_group,
+        "commands.giveaways.giveaway_list": general_group,
+        "commands.giveaways.giveaway_reroll": general_group,
     }
     
     loaded_count = 0
