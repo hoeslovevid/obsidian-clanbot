@@ -3679,10 +3679,9 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
     
     # Reaction role handling (only if not a bot reaction)
     if payload.guild_id and not (payload.member and payload.member.bot):
-    """Handle reaction role assignment."""
-    # Ignore bot reactions
-    if payload.member and payload.member.bot:
-        return
+        # Ignore bot reactions
+        if payload.member and payload.member.bot:
+            return
     
     # Check if this is a reaction role message
     async with aiosqlite.connect(DB_PATH) as db:
