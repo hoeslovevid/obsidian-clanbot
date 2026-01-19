@@ -117,6 +117,7 @@ from channels import (
 from modals import RenameVCModal, InviteModal, RemoveAccessModal, TransferOwnerModal, ComplaintModal, RequestInfoModal
 from views import VCPanelView, ComplaintPanel, ComplaintModView, RSVPView, SetLimitView, SetLimitSelect
 from tasks import setup_tasks
+from version_tracking import detect_and_update_version, check_and_post_updates
 
 
 
@@ -2922,7 +2923,8 @@ async def on_interaction(interaction: discord.Interaction):
 
 
 # --------------------- Update Log Functions ---------------------
-def calculate_feature_hash(bot) -> str:
+# Version tracking functions moved to version_tracking.py
+# def calculate_feature_hash(bot) -> str:
     """Calculate a hash of all registered commands and key bot files to detect changes."""
     import hashlib
     import os
@@ -2972,7 +2974,8 @@ def calculate_feature_hash(bot) -> str:
     return hash_value
 
 
-async def detect_and_update_version(bot) -> Tuple[str, list]:
+# Version tracking functions moved to version_tracking.py
+# async def detect_and_update_version(bot) -> Tuple[str, list]:
     """
     Detect if features have changed and auto-increment version.
     Also checks if BOT_VERSION env var has changed.
