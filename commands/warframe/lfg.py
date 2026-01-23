@@ -10,8 +10,8 @@ import aiosqlite
 
 # Common Warframe mission types
 MISSION_TYPES = [
-    "Elite Sanctuary Onslaught (ESO)",
-    "Sanctuary Onslaught (SO)",
+    "Elite SO (ESO)",
+    "Sanctuary SO",
     "Steel Path",
     "Arbitration",
     "Sortie",

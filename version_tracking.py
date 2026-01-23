@@ -9,26 +9,52 @@ from datetime import datetime, timezone
 from typing import Tuple, List, Optional
 import aiosqlite
 import discord
+from discord import app_commands
 
 from database import DB_PATH, now_utc
 
 logger = logging.getLogger(__name__)
 
 
+def get_all_commands_recursive(commands, prefix=""):
+    """
+    Recursively get all commands including subcommands from groups.
+    Returns a list of command identifiers in format "group:subcommand" or just "command".
+    """
+    command_list = []
+    for cmd in commands:
+        if isinstance(cmd, app_commands.Group):
+            # It's a group - add the group name and recursively get subcommands
+            group_name = cmd.name
+            full_name = f"{prefix}{group_name}" if prefix else group_name
+            command_list.append(full_name)  # Add the group itself
+            # Recursively get subcommands
+            subcommands = get_all_commands_recursive(cmd.commands, prefix=f"{full_name}:")
+            command_list.extend(subcommands)
+        else:
+            # It's a regular command
+            full_name = f"{prefix}{cmd.name}" if prefix else cmd.name
+            command_list.append(full_name)
+    return command_list
+
+
 def calculate_feature_hash(bot) -> str:
     """Calculate a hash of all registered commands and key bot files to detect changes."""
     commands_list = []
     
-    # Get all commands (both global and guild-specific)
+    # Get all commands (both global and guild-specific), including subcommands from groups
     try:
         import os
         GUILD_ID = int(os.getenv("GUILD_ID", "0") or "0")
         if GUILD_ID:
             guild = discord.Object(id=GUILD_ID)
-            commands_list = sorted([cmd.name for cmd in bot.tree.get_commands(guild=guild)])
+            top_level_commands = bot.tree.get_commands(guild=guild)
         else:
-            commands_list = sorted([cmd.name for cmd in bot.tree.get_commands(guild=None)])
-        logger.info(f"[version] Calculated hash from {len(commands_list)} commands: {', '.join(commands_list[:10])}{'...' if len(commands_list) > 10 else ''}")
+            top_level_commands = bot.tree.get_commands(guild=None)
+        
+        # Recursively get all commands including subcommands
+        commands_list = sorted(get_all_commands_recursive(top_level_commands))
+        logger.info(f"[version] Calculated hash from {len(commands_list)} commands (including subcommands): {', '.join(commands_list[:10])}{'...' if len(commands_list) > 10 else ''}")
     except Exception as e:
         logger.error(f"[version] Error getting commands: {e}", exc_info=True)
         return ""
@@ -73,14 +99,17 @@ async def detect_and_update_version(bot) -> Tuple[str, list]:
     GUILD_ID = int(os.getenv("GUILD_ID", "0") or "0")
     current_hash = calculate_feature_hash(bot)
     
-    # Get current commands list for comparison
+    # Get current commands list for comparison (including subcommands from groups)
     current_commands = set()
     try:
         if GUILD_ID:
             guild = discord.Object(id=GUILD_ID)
-            current_commands = set(cmd.name for cmd in bot.tree.get_commands(guild=guild))
+            top_level_commands = bot.tree.get_commands(guild=guild)
         else:
-            current_commands = set(cmd.name for cmd in bot.tree.get_commands(guild=None))
+            top_level_commands = bot.tree.get_commands(guild=None)
+        
+        # Recursively get all commands including subcommands
+        current_commands = set(get_all_commands_recursive(top_level_commands))
     except Exception:
         pass
     
