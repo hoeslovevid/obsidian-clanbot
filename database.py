@@ -1174,6 +1174,28 @@ async def init_db() -> None:
             panel_message_id INTEGER,
             panel_description TEXT
         )""")
+        
+        # Add panel columns if they don't exist (for existing databases)
+        try:
+            cur = await db.execute("PRAGMA table_info(application_settings)")
+            columns = await cur.fetchall()
+            column_names = [col[1] for col in columns]
+            
+            if "panel_channel_id" not in column_names:
+                await db.execute("ALTER TABLE application_settings ADD COLUMN panel_channel_id INTEGER")
+                logger.info("[db] Added panel_channel_id column to application_settings table")
+            
+            if "panel_message_id" not in column_names:
+                await db.execute("ALTER TABLE application_settings ADD COLUMN panel_message_id INTEGER")
+                logger.info("[db] Added panel_message_id column to application_settings table")
+            
+            if "panel_description" not in column_names:
+                await db.execute("ALTER TABLE application_settings ADD COLUMN panel_description TEXT")
+                logger.info("[db] Added panel_description column to application_settings table")
+            
+            await db.commit()
+        except Exception as e:
+            logger.warning(f"[db] Error checking/adding panel columns: {e}")
 
         await db.execute("""
         CREATE TABLE IF NOT EXISTS application_questions (
