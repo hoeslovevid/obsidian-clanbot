@@ -220,6 +220,7 @@ def load_all_commands():
     music_group = app_commands.Group(name="music", description="🎵 Music commands")
     updates_group = app_commands.Group(name="updates", description="📝 Update log commands")
     giveaways_group = app_commands.Group(name="giveaways", description="🎁 Giveaway commands")
+    trading_group = app_commands.Group(name="trading", description="💼 Trading commands")
     
     # Register groups to bot tree
     bot.tree.add_command(economy_group)
@@ -230,6 +231,7 @@ def load_all_commands():
     bot.tree.add_command(music_group)
     bot.tree.add_command(updates_group)
     bot.tree.add_command(giveaways_group)
+    bot.tree.add_command(trading_group)
     
     command_modules = [
         # General commands
@@ -405,11 +407,12 @@ def load_all_commands():
         "commands.applications.application": community_group,
         "commands.applications.application_setup": community_group,
         "commands.applications.manage_applications": community_group,
-        "commands.trading.trade": community_group,
-        "commands.trading.trade_price": community_group,
-        "commands.trading.trade_search": community_group,
-        "commands.trading.trade_list": community_group,
-        "commands.trading.trade_setup": community_group,
+        # Trading commands (moved to separate group)
+        "commands.trading.trade": trading_group,
+        "commands.trading.trade_price": trading_group,
+        "commands.trading.trade_search": trading_group,
+        "commands.trading.trade_list": trading_group,
+        "commands.trading.trade_setup": trading_group,
         "commands.activity.activity": community_group,
         "commands.activity.activity_leaderboard": community_group,
         # Giveaway commands (moved to separate group)
