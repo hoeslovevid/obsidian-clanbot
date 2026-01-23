@@ -2808,6 +2808,33 @@ async def on_member_ban(guild: discord.Guild, user: discord.User):
                 logger.error(f"[logging] Error logging member ban: {e}")
 
 
+@bot.tree.error
+async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    """Handle application command errors."""
+    if isinstance(error, app_commands.CommandNotFound):
+        # Command not found - likely due to cached command reference
+        # This happens when Discord still has an old command cached
+        # For example, if sync_commands was moved from top-level to /general sync_commands
+        command_name = str(error).split("'")[1] if "'" in str(error) else "unknown"
+        
+        # Check if it's a known moved command
+        moved_commands = {
+            "sync_commands": "general sync_commands"
+        }
+        
+        if command_name in moved_commands:
+            # Silently ignore - this is expected during cache updates
+            logger.debug(f"[commands] CommandNotFound for '{command_name}' (moved to /{moved_commands[command_name]}) - Discord cache will update")
+            return
+        
+        # For other command not found errors, log but don't respond (to avoid spam)
+        logger.debug(f"[commands] CommandNotFound: {error}")
+        return
+    
+    # For other errors, log them
+    logger.error(f"[commands] Unhandled command error: {error}", exc_info=error)
+
+
 @bot.event
 async def on_member_update(before: discord.Member, after: discord.Member):
     """Log role changes."""
