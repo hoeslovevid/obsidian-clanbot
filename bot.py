@@ -371,6 +371,7 @@ def load_all_commands():
     }
     
     loaded_count = 0
+    failed_modules = []
     for module_name in command_modules:
         try:
             module = importlib.import_module(module_name)
@@ -378,17 +379,37 @@ def load_all_commands():
                 # Get group for this command (default to general_group if not specified)
                 group = group_mapping.get(module_name, general_group)
                 # Always pass a group - all commands should be in a group
+                # Count commands before setup
+                before_count = {}
+                for cmd in bot.tree.get_commands(guild=None):
+                    if isinstance(cmd, app_commands.Group):
+                        before_count[cmd.name] = len(cmd.commands)
+                
                 module.setup(bot, group)
+                
+                # Count commands after setup to verify registration
+                after_count = {}
+                for cmd in bot.tree.get_commands(guild=None):
+                    if isinstance(cmd, app_commands.Group):
+                        after_count[cmd.name] = len(cmd.commands)
+                
+                # Check if commands were added
+                added = after_count.get(group.name, 0) - before_count.get(group.name, 0)
                 loaded_count += 1
-                print(f"[commands] Loaded {module_name} → {group.name}")
+                status = f"({added} command(s) added)" if added > 0 else "(no commands added - check for errors)"
+                print(f"[commands] Loaded {module_name} → {group.name} {status}")
             else:
                 print(f"[commands] WARNING: {module_name} has no setup() function")
+                failed_modules.append(module_name)
         except Exception as e:
             print(f"[commands] ERROR: Failed to load {module_name}: {e}")
             import traceback
             traceback.print_exc()
+            failed_modules.append(module_name)
     
     print(f"[commands] Successfully loaded {loaded_count}/{len(command_modules)} command modules")
+    if failed_modules:
+        print(f"[commands] WARNING: {len(failed_modules)} modules failed to load: {', '.join(failed_modules)}")
     
     # Verify all commands are registered
     all_commands = [cmd.name for cmd in bot.tree.get_commands(guild=None)]
@@ -400,9 +421,18 @@ def load_all_commands():
         if isinstance(cmd, app_commands.Group):
             subcommands = [subcmd.name for subcmd in cmd.commands]
             total_subcommands += len(subcommands)
-            print(f"[commands] Group '{cmd.name}' has {len(subcommands)} commands: {', '.join(sorted(subcommands))}")
+            if len(subcommands) > 0:
+                print(f"[commands] Group '{cmd.name}' has {len(subcommands)} commands: {', '.join(sorted(subcommands))}")
+            else:
+                print(f"[commands] WARNING: Group '{cmd.name}' has NO commands registered!")
     
     print(f"[commands] Total subcommands in groups: {total_subcommands}")
+    
+    # Expected command count based on command_modules list
+    expected_count = len(command_modules)
+    if total_subcommands < expected_count:
+        print(f"[commands] WARNING: Expected at least {expected_count} commands, but only found {total_subcommands} subcommands in groups!")
+        print(f"[commands] Some commands may not have been registered properly.")
 
 # Load commands BEFORE setup_hook runs
 load_all_commands()
