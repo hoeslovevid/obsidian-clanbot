@@ -1630,6 +1630,13 @@ async def init_db() -> None:
             PRIMARY KEY (guild_id, user_id)
         )""")
 
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS rules_channel_settings (
+            guild_id INTEGER NOT NULL PRIMARY KEY,
+            channel_id INTEGER NOT NULL,
+            message_id INTEGER
+        )""")
+
         # Poll system tables
         await db.execute("""
         CREATE TABLE IF NOT EXISTS polls (
