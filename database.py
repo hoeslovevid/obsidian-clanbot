@@ -295,6 +295,8 @@ async def log_complaint_action(guild_id: int, case_id: str, actor_id: int, actio
     # Optional ledger channel notification (if guild and bot are provided)
     if guild and bot:
         try:
+            # Import discord here to ensure it's available
+            import discord as discord_module  # type: ignore
             from channels import resolve_channel_id
             from utils import obsidian_embed
             
@@ -306,12 +308,12 @@ async def log_complaint_action(guild_id: int, case_id: str, actor_id: int, actio
             ledger_id = await resolve_channel_id(guild, "complaints_log_channel_id", COMPLAINTS_LOG_CHANNEL_ID, COMPLAINTS_LOG_CHANNEL_NAME)
             if ledger_id:
                 ch = guild.get_channel(ledger_id)
-                if ch and isinstance(ch, discord.TextChannel):
+                if ch is not None and isinstance(ch, discord_module.TextChannel):
                     actor = guild.get_member(actor_id)
                     desc = f"**Case:** `{case_id}`\n**Action:** {action}\n**By:** {actor.mention if actor else actor_id}"
                     if note:
                         desc += f"\n**Note:** {note}"
-                    await ch.send(embed=obsidian_embed("Docket Ledger", desc, color=discord.Color.dark_grey(), client=bot))
+                    await ch.send(embed=obsidian_embed("Docket Ledger", desc, color=discord_module.Color.dark_grey(), client=bot))
         except Exception as e:
             # Don't fail if ledger channel notification fails - just log the database entry
             import logging
@@ -871,7 +873,7 @@ async def initialize_default_shop_items(guild_id: int):
 
 
 # --------------------- Database Initialization ---------------------
-async def init_db():
+async def init_db() -> None:
     """Initialize all database tables."""
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("""
