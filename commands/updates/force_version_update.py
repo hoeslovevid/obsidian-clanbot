@@ -185,6 +185,25 @@ def setup(bot, group=None):
                 """, (interaction.guild.id, current_version))
                 await db.commit()
         
+        # Truncate description to fit within 1024 character limit per field
+        max_field_length = 1024
+        if len(description) > max_field_length:
+            # Try to truncate intelligently at a newline or sentence boundary
+            truncated = description[:max_field_length]
+            # Find the last newline before the limit
+            last_newline = truncated.rfind('\n')
+            if last_newline > max_field_length - 100:  # If we have a reasonable amount left
+                truncated = truncated[:last_newline]
+            else:
+                # Find last sentence boundary
+                last_period = truncated.rfind('.')
+                if last_period > max_field_length - 50:
+                    truncated = truncated[:last_period + 1]
+                else:
+                    # Just truncate and add ellipsis
+                    truncated = truncated[:max_field_length - 3] + "..."
+            description = truncated
+        
         # Create update log embed
         fields = [
             ("Changelog", description, False),
