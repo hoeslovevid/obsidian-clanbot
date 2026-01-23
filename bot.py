@@ -2870,6 +2870,7 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
     """Handle application command errors."""
     # Check error type by string name to avoid import issues
     error_type_name = type(error).__name__
+    
     if error_type_name == "CommandNotFound":
         # Command not found - likely due to cached command reference
         # This happens when Discord still has an old command cached
@@ -2888,6 +2889,15 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
         
         # For other command not found errors, log but don't respond (to avoid spam)
         logger.debug(f"[commands] CommandNotFound: {error}")
+        return
+    
+    if error_type_name == "CommandSignatureMismatch":
+        # Command signature mismatch - Discord's cache doesn't match current code
+        # This happens when commands are moved between groups or structure changes
+        # The sync process should fix this, but Discord's cache may take time to update
+        command_name = str(error).split("'")[1] if "'" in str(error) else "unknown"
+        logger.debug(f"[commands] CommandSignatureMismatch for '{command_name}' - Discord cache is out of sync. This should resolve after sync completes.")
+        # Don't respond to user - this is a cache issue that will resolve itself
         return
     
     # For other errors, log them
