@@ -1169,7 +1169,10 @@ async def init_db() -> None:
         await db.execute("""
         CREATE TABLE IF NOT EXISTS application_settings (
             guild_id INTEGER NOT NULL PRIMARY KEY,
-            channel_id INTEGER
+            channel_id INTEGER,
+            panel_channel_id INTEGER,
+            panel_message_id INTEGER,
+            panel_description TEXT
         )""")
 
         await db.execute("""

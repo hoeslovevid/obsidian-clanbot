@@ -614,3 +614,26 @@ class ApplicationManageView(discord.ui.View):
         from modals import ApplicationRejectModal
         modal = ApplicationRejectModal(self.application_id)
         await interaction.response.send_modal(modal)
+
+
+class ApplicationPanelView(discord.ui.View):
+    """View with button to start an application."""
+    def __init__(self, guild_id: int):
+        super().__init__(timeout=None)
+        self.guild_id = guild_id
+        
+        # Add button with custom_id for persistence
+        apply_button = discord.ui.Button(
+            label="Start Application",
+            style=discord.ButtonStyle.primary,
+            emoji="📝",
+            custom_id=f"application_panel:{guild_id}:start"
+        )
+        apply_button.callback = self.start_application
+        self.add_item(apply_button)
+    
+    async def start_application(self, interaction: discord.Interaction):
+        """Handle application start from button."""
+        # Import the application start logic
+        from commands.applications.application import start_application_process
+        await start_application_process(interaction)

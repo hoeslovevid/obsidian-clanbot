@@ -15,10 +15,12 @@ def setup(bot, group=None):
     @command_decorator
     @app_commands.describe(
         channel="The channel where users can apply (leave empty to use current channel)",
-        action="What to configure"
+        action="What to configure",
+        description="Brief description of the application (for Post Panel action)"
     )
     @app_commands.choices(action=[
         app_commands.Choice(name="Set Channel", value="set_channel"),
+        app_commands.Choice(name="Post Panel", value="post_panel"),
         app_commands.Choice(name="Add Question", value="add_question"),
         app_commands.Choice(name="Remove Question", value="remove_question"),
         app_commands.Choice(name="View Questions", value="view_questions"),
@@ -27,7 +29,8 @@ def setup(bot, group=None):
     async def application_setup(
         interaction: discord.Interaction,
         action: app_commands.Choice[str],
-        channel: Optional[discord.TextChannel] = None
+        channel: Optional[discord.TextChannel] = None,
+        description: Optional[str] = None
     ):
         """Configure the application system."""
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
@@ -200,6 +203,170 @@ def setup(bot, group=None):
                 ),
                 ephemeral=True
             )
+        
+        elif action_value == "post_panel":
+            # Check if application channel is set
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute("""
+                    SELECT channel_id FROM application_settings WHERE guild_id = ?
+                """, (interaction.guild.id,))
+                row = await cur.fetchone()
+            
+            if not row or not row[0]:
+                return await interaction.followup.send(
+                    embed=obsidian_embed(
+                        "❌ Application Channel Not Set",
+                        "Please set the application channel first using 'Set Channel' action.",
+                        color=discord.Color.red(),
+                        client=interaction.client,
+                    ),
+                    ephemeral=True
+                )
+            
+            # Check if there are questions
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute("""
+                    SELECT COUNT(*) FROM application_questions WHERE guild_id = ?
+                """, (interaction.guild.id,))
+                count = (await cur.fetchone())[0]
+            
+            if count == 0:
+                return await interaction.followup.send(
+                    embed=obsidian_embed(
+                        "❌ No Questions Configured",
+                        "Please add some questions first using 'Add Question' action.",
+                        color=discord.Color.red(),
+                        client=interaction.client,
+                    ),
+                    ephemeral=True
+                )
+            
+            target_channel = channel or interaction.channel
+            if not isinstance(target_channel, discord.TextChannel):
+                return await interaction.followup.send(
+                    embed=obsidian_embed(
+                        "❌ Invalid Channel",
+                        "Please specify a valid text channel.",
+                        color=discord.Color.red(),
+                        client=interaction.client,
+                    ),
+                    ephemeral=True
+                )
+            
+            # Check if bot can send messages
+            if not target_channel.permissions_for(interaction.guild.me).send_messages:
+                return await interaction.followup.send(
+                    embed=obsidian_embed(
+                        "❌ Permission Denied",
+                        f"I don't have permission to send messages in {target_channel.mention}.",
+                        color=discord.Color.red(),
+                        client=interaction.client,
+                    ),
+                    ephemeral=True
+                )
+            
+            # Build description
+            panel_desc = description or "Click the button below to start your clan application. You'll receive questions via DM to complete your application."
+            
+            # Truncate if too long
+            if len(panel_desc) > 4096:
+                panel_desc = panel_desc[:4093] + "..."
+            
+            # Create embed
+            embed = obsidian_embed(
+                "📝 Clan Application",
+                panel_desc,
+                color=discord.Color.blue(),
+                client=interaction.client,
+            )
+            
+            # Create view with button
+            from views import ApplicationPanelView
+            view = ApplicationPanelView(interaction.guild.id)
+            bot.add_view(view)
+            
+            # Check if there's an existing panel to update
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute("""
+                    SELECT panel_channel_id, panel_message_id FROM application_settings WHERE guild_id = ?
+                """, (interaction.guild.id,))
+                row = await cur.fetchone()
+                existing_panel_channel_id = row[0] if row and row[0] else None
+                existing_panel_message_id = row[1] if row and row[1] else None
+            
+            try:
+                if existing_panel_message_id and existing_panel_channel_id == target_channel.id:
+                    # Try to update existing message
+                    try:
+                        existing_message = await target_channel.fetch_message(existing_panel_message_id)
+                        await existing_message.edit(embed=embed, view=view)
+                        
+                        # Update description in database
+                        async with aiosqlite.connect(DB_PATH) as db:
+                            await db.execute("""
+                                UPDATE application_settings 
+                                SET panel_description = ?
+                                WHERE guild_id = ?
+                            """, (description or panel_desc, interaction.guild.id))
+                            await db.commit()
+                        
+                        await interaction.followup.send(
+                            embed=obsidian_embed(
+                                "✅ Application Panel Updated",
+                                f"Application panel has been updated in {target_channel.mention}.",
+                                color=discord.Color.green(),
+                                client=interaction.client,
+                            ),
+                            ephemeral=True
+                        )
+                        return
+                    except discord.NotFound:
+                        # Message was deleted, send a new one
+                        pass
+                
+                # Send new message
+                message = await target_channel.send(embed=embed, view=view)
+                
+                # Save panel info
+                async with aiosqlite.connect(DB_PATH) as db:
+                    await db.execute("""
+                        UPDATE application_settings 
+                        SET panel_channel_id = ?, panel_message_id = ?, panel_description = ?
+                        WHERE guild_id = ?
+                    """, (target_channel.id, message.id, description or panel_desc, interaction.guild.id))
+                    await db.commit()
+                
+                await interaction.followup.send(
+                    embed=obsidian_embed(
+                        "✅ Application Panel Posted",
+                        f"Application panel has been posted to {target_channel.mention}.\n\nUsers can click the button to start an application.",
+                        color=discord.Color.green(),
+                        client=interaction.client,
+                    ),
+                    ephemeral=True
+                )
+            except discord.Forbidden:
+                await interaction.followup.send(
+                    embed=obsidian_embed(
+                        "❌ Permission Denied",
+                        f"I don't have permission to send messages in {target_channel.mention}.",
+                        color=discord.Color.red(),
+                        client=interaction.client,
+                    ),
+                    ephemeral=True
+                )
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(f"Error posting application panel: {e}")
+                await interaction.followup.send(
+                    embed=obsidian_embed(
+                        "❌ Error",
+                        f"Failed to post application panel: {str(e)}",
+                        color=discord.Color.red(),
+                        client=interaction.client,
+                    ),
+                    ephemeral=True
+                )
 
 
 class ApplicationQuestionView(discord.ui.View):

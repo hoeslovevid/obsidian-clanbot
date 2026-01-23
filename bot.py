@@ -2099,6 +2099,23 @@ async def on_interaction(interaction: discord.Interaction):
                     await view.delete_button(interaction)
                 return
         
+        # Application panel: start application
+        if cid.startswith("application_panel:"):
+            # application_panel:{guild_id}:start
+            parts = cid.split(":")
+            if len(parts) == 3:
+                _, guild_id_str, action = parts
+                if action == "start":
+                    try:
+                        guild_id = int(guild_id_str)
+                    except ValueError:
+                        return
+                    
+                    # Use the shared application start function
+                    from commands.applications.application import start_application_process
+                    await start_application_process(interaction)
+                    return
+        
         # Applications: approve or reject
         if cid.startswith("application:"):
             # application:{application_id}:{action}
@@ -2302,7 +2319,7 @@ async def on_ready():
                     pass
     
     # Re-register application views for pending applications
-    from views import ApplicationManageView
+    from views import ApplicationManageView, ApplicationPanelView
     async with aiosqlite.connect(DB_PATH) as db:
         for g in bot.guilds:
             cur = await db.execute(
@@ -2313,6 +2330,18 @@ async def on_ready():
             for (application_id,) in rows:
                 try:
                     bot.add_view(ApplicationManageView(int(application_id)))
+                except Exception:
+                    pass
+            
+            # Re-register application panel views
+            cur = await db.execute(
+                "SELECT panel_message_id FROM application_settings WHERE guild_id=? AND panel_message_id IS NOT NULL",
+                (g.id,),
+            )
+            panel_rows = await cur.fetchall()
+            for (panel_message_id,) in panel_rows:
+                try:
+                    bot.add_view(ApplicationPanelView(g.id))
                 except Exception:
                     pass
     

@@ -9,6 +9,144 @@ from database import DB_PATH, now_utc
 import aiosqlite
 
 
+async def start_application_process(interaction: discord.Interaction):
+    """Start an application process - reusable function for both command and button."""
+    # Check if application channel is set
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("""
+            SELECT channel_id FROM application_settings WHERE guild_id = ?
+        """, (interaction.guild.id,))
+        row = await cur.fetchone()
+    
+    if not row or not row[0]:
+        if interaction.response.is_done():
+            await interaction.followup.send(
+                embed=obsidian_embed(
+                    "❌ Application System Not Configured",
+                    "The application system has not been set up yet. Please contact a moderator.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
+        else:
+            await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Application System Not Configured",
+                    "The application system has not been set up yet. Please contact a moderator.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
+        return
+    
+    app_channel_id = row[0]
+    
+    # Check if user already has an in-progress application
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("""
+            SELECT id FROM applications
+            WHERE guild_id = ? AND user_id = ? AND status = 'IN_PROGRESS'
+        """, (interaction.guild.id, interaction.user.id))
+        existing = await cur.fetchone()
+    
+    if existing:
+        if interaction.response.is_done():
+            await interaction.followup.send(
+                embed=obsidian_embed(
+                    "❌ Application Already In Progress",
+                    "You already have an application in progress. Please complete it or wait for it to be reviewed.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
+        else:
+            await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Application Already In Progress",
+                    "You already have an application in progress. Please complete it or wait for it to be reviewed.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
+        return
+    
+    # Check if there are any questions configured
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("""
+            SELECT COUNT(*) FROM application_questions WHERE guild_id = ?
+        """, (interaction.guild.id,))
+        count = (await cur.fetchone())[0]
+    
+    if count == 0:
+        if interaction.response.is_done():
+            await interaction.followup.send(
+                embed=obsidian_embed(
+                    "❌ No Questions Configured",
+                    "The application system has no questions configured yet. Please contact a moderator.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
+        else:
+            await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ No Questions Configured",
+                    "The application system has no questions configured yet. Please contact a moderator.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
+        return
+    
+    if not interaction.response.is_done():
+        await interaction.response.defer(ephemeral=True)
+    
+    # Create application record
+    created_at = now_utc().isoformat()
+    application_id = None
+    
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            INSERT INTO applications (guild_id, user_id, status, current_question_index, created_at)
+            VALUES (?, ?, 'IN_PROGRESS', 0, ?)
+        """, (interaction.guild.id, interaction.user.id, created_at))
+        await db.commit()
+        
+        cur = await db.execute("SELECT last_insert_rowid()")
+        application_id = (await cur.fetchone())[0]
+    
+    if not application_id:
+        await interaction.followup.send(
+            embed=obsidian_embed(
+                "❌ Error",
+                "Failed to create application. Please try again.",
+                color=discord.Color.red(),
+                client=interaction.client,
+            ),
+            ephemeral=True
+        )
+        return
+    
+    # Send first question via DM
+    await send_next_question(interaction.client, interaction.guild.id, interaction.user.id, application_id)
+    
+    await interaction.followup.send(
+        embed=obsidian_embed(
+            "✅ Application Started",
+            "I've sent you the first question via DM. Please check your DMs and answer the questions to complete your application.",
+            color=discord.Color.green(),
+            client=interaction.client,
+        ),
+        ephemeral=True
+    )
+
+
 def setup(bot, group=None):
     """Register the application command."""
     command_decorator = group.command(name="application", description="Start a clan application.") if group else bot.tree.command(name="application", description="Start a clan application.")
@@ -50,82 +188,8 @@ def setup(bot, group=None):
                 ephemeral=True
             )
         
-        # Check if user already has an in-progress application
-        async with aiosqlite.connect(DB_PATH) as db:
-            cur = await db.execute("""
-                SELECT id FROM applications
-                WHERE guild_id = ? AND user_id = ? AND status = 'IN_PROGRESS'
-            """, (interaction.guild.id, interaction.user.id))
-            existing = await cur.fetchone()
-        
-        if existing:
-            return await interaction.response.send_message(
-                embed=obsidian_embed(
-                    "❌ Application Already In Progress",
-                    "You already have an application in progress. Please complete it or wait for it to be reviewed.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
-            )
-        
-        # Check if there are any questions configured
-        async with aiosqlite.connect(DB_PATH) as db:
-            cur = await db.execute("""
-                SELECT COUNT(*) FROM application_questions WHERE guild_id = ?
-            """, (interaction.guild.id,))
-            count = (await cur.fetchone())[0]
-        
-        if count == 0:
-            return await interaction.response.send_message(
-                embed=obsidian_embed(
-                    "❌ No Questions Configured",
-                    "The application system has no questions configured yet. Please contact a moderator.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
-            )
-        
-        await interaction.response.defer(ephemeral=True)
-        
-        # Create application record
-        created_at = now_utc().isoformat()
-        application_id = None
-        
-        async with aiosqlite.connect(DB_PATH) as db:
-            await db.execute("""
-                INSERT INTO applications (guild_id, user_id, status, current_question_index, created_at)
-                VALUES (?, ?, 'IN_PROGRESS', 0, ?)
-            """, (interaction.guild.id, interaction.user.id, created_at))
-            await db.commit()
-            
-            cur = await db.execute("SELECT last_insert_rowid()")
-            application_id = (await cur.fetchone())[0]
-        
-        if not application_id:
-            return await interaction.followup.send(
-                embed=obsidian_embed(
-                    "❌ Error",
-                    "Failed to create application. Please try again.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
-            )
-        
-        # Send first question via DM
-        await send_next_question(interaction.client, interaction.guild.id, interaction.user.id, application_id)
-        
-        await interaction.followup.send(
-            embed=obsidian_embed(
-                "✅ Application Started",
-                "I've sent you the first question via DM. Please check your DMs and answer the questions to complete your application.",
-                color=discord.Color.green(),
-                client=interaction.client,
-            ),
-            ephemeral=True
-        )
+        # Use the shared function
+        await start_application_process(interaction)
 
 
 async def send_next_question(bot, guild_id: int, user_id: int, application_id: int):
