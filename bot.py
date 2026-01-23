@@ -140,13 +140,37 @@ class ClanBot(commands.Bot):
                 await self.tree.sync(guild=guild)
                 # List all registered commands for verification
                 commands_list = [cmd.name for cmd in self.tree.get_commands(guild=guild)]
-                print(f"[sync] Synced {len(commands_list)} commands to guild {GUILD_ID}")
-                print(f"[sync] Commands: {', '.join(commands_list)}")
+                print(f"[sync] Synced {len(commands_list)} top-level commands/groups to guild {GUILD_ID}")
+                print(f"[sync] Top-level: {', '.join(commands_list)}")
+                
+                # Verify groups and their subcommands
+                total_subcommands = 0
+                for cmd in self.tree.get_commands(guild=guild):
+                    if isinstance(cmd, app_commands.Group):
+                        subcommands = [subcmd.name for subcmd in cmd.commands]
+                        total_subcommands += len(subcommands)
+                        if len(subcommands) > 0:
+                            print(f"[sync] Group '{cmd.name}' has {len(subcommands)} subcommands: {', '.join(sorted(subcommands[:10]))}{'...' if len(subcommands) > 10 else ''}")
+                        else:
+                            print(f"[sync] WARNING: Group '{cmd.name}' has NO subcommands!")
+                print(f"[sync] Total subcommands synced: {total_subcommands}")
             else:
                 await self.tree.sync()
                 commands_list = [cmd.name for cmd in self.tree.get_commands(guild=None)]
-                print(f"[sync] Synced {len(commands_list)} commands globally (may take a while to appear)")
-                print(f"[sync] Commands: {', '.join(commands_list)}")
+                print(f"[sync] Synced {len(commands_list)} top-level commands/groups globally (may take a while to appear)")
+                print(f"[sync] Top-level: {', '.join(commands_list)}")
+                
+                # Verify groups and their subcommands
+                total_subcommands = 0
+                for cmd in self.tree.get_commands(guild=None):
+                    if isinstance(cmd, app_commands.Group):
+                        subcommands = [subcmd.name for subcmd in cmd.commands]
+                        total_subcommands += len(subcommands)
+                        if len(subcommands) > 0:
+                            print(f"[sync] Group '{cmd.name}' has {len(subcommands)} subcommands: {', '.join(sorted(subcommands[:10]))}{'...' if len(subcommands) > 10 else ''}")
+                        else:
+                            print(f"[sync] WARNING: Group '{cmd.name}' has NO subcommands!")
+                print(f"[sync] Total subcommands synced: {total_subcommands}")
         except Exception as e:
             print(f"[sync] Failed to sync commands: {e}")
             import traceback
@@ -417,8 +441,9 @@ def load_all_commands():
     all_commands = [cmd.name for cmd in bot.tree.get_commands(guild=None)]
     print(f"[commands] Registered top-level commands/groups: {', '.join(sorted(all_commands))}")
     
-    # Count commands inside groups
+    # Count commands inside groups and verify they're properly registered
     total_subcommands = 0
+    empty_groups = []
     for cmd in bot.tree.get_commands(guild=None):
         if isinstance(cmd, app_commands.Group):
             subcommands = [subcmd.name for subcmd in cmd.commands]
@@ -427,6 +452,7 @@ def load_all_commands():
                 print(f"[commands] Group '{cmd.name}' has {len(subcommands)} commands: {', '.join(sorted(subcommands))}")
             else:
                 print(f"[commands] WARNING: Group '{cmd.name}' has NO commands registered!")
+                empty_groups.append(cmd.name)
     
     print(f"[commands] Total subcommands in groups: {total_subcommands}")
     
@@ -435,6 +461,11 @@ def load_all_commands():
     if total_subcommands < expected_count:
         print(f"[commands] WARNING: Expected at least {expected_count} commands, but only found {total_subcommands} subcommands in groups!")
         print(f"[commands] Some commands may not have been registered properly.")
+    
+    # Warn about empty groups (Discord won't show them)
+    if empty_groups:
+        print(f"[commands] WARNING: The following groups are empty and won't appear in Discord: {', '.join(empty_groups)}")
+        print(f"[commands] Empty groups should be removed or have commands added to them.")
 
 # Load commands BEFORE setup_hook runs
 load_all_commands()
@@ -2811,7 +2842,9 @@ async def on_member_ban(guild: discord.Guild, user: discord.User):
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
     """Handle application command errors."""
-    if isinstance(error, app_commands.CommandNotFound):
+    # Check error type by string name to avoid import issues
+    error_type_name = type(error).__name__
+    if error_type_name == "CommandNotFound":
         # Command not found - likely due to cached command reference
         # This happens when Discord still has an old command cached
         # For example, if sync_commands was moved from top-level to /general sync_commands
