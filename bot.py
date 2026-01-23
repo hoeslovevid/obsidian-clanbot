@@ -219,6 +219,7 @@ def load_all_commands():
     community_group = app_commands.Group(name="community", description="👥 Community features")
     music_group = app_commands.Group(name="music", description="🎵 Music commands")
     updates_group = app_commands.Group(name="updates", description="📝 Update log commands")
+    giveaways_group = app_commands.Group(name="giveaways", description="🎁 Giveaway commands")
     
     # Register groups to bot tree
     bot.tree.add_command(economy_group)
@@ -228,6 +229,7 @@ def load_all_commands():
     bot.tree.add_command(community_group)
     bot.tree.add_command(music_group)
     bot.tree.add_command(updates_group)
+    bot.tree.add_command(giveaways_group)
     
     command_modules = [
         # General commands
@@ -410,10 +412,11 @@ def load_all_commands():
         "commands.trading.trade_setup": community_group,
         "commands.activity.activity": community_group,
         "commands.activity.activity_leaderboard": community_group,
-        "commands.giveaways.giveaway": community_group,
-        "commands.giveaways.giveaway_end": community_group,
-        "commands.giveaways.giveaway_list": community_group,
-        "commands.giveaways.giveaway_reroll": community_group,
+        # Giveaway commands (moved to separate group)
+        "commands.giveaways.giveaway": giveaways_group,
+        "commands.giveaways.giveaway_end": giveaways_group,
+        "commands.giveaways.giveaway_list": giveaways_group,
+        "commands.giveaways.giveaway_reroll": giveaways_group,
         # Update log commands
         "commands.updates.update_log": updates_group,
         "commands.updates.update_log_setup": updates_group,
