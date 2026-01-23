@@ -109,10 +109,11 @@ def setup(bot, group=None):
             
             await add_self_assignable_role(interaction.guild.id, role.id, category)
             
+            category_text = f' in category "{category}"' if category else ''
             await interaction.followup.send(
                 embed=obsidian_embed(
                     "✅ Role Added",
-                    f"{role.mention} has been added as a self-assignable role{f' in category "{category}"' if category else ''}.",
+                    f"{role.mention} has been added as a self-assignable role{category_text}.",
                     color=discord.Color.green(),
                     client=interaction.client,
                 ),

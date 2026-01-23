@@ -161,16 +161,23 @@ def load_all_commands():
     import importlib
     
     # Create command groups for better organization
+    # Discord limit: 25 commands per group
     economy_group = app_commands.Group(name="economy", description="💰 Economy and coin management")
     warframe_group = app_commands.Group(name="warframe", description="🎮 Warframe game information")
     moderation_group = app_commands.Group(name="mod", description="🛡️ Moderation and server management")
     general_group = app_commands.Group(name="general", description="📋 General bot commands")
+    community_group = app_commands.Group(name="community", description="👥 Community features")
+    music_group = app_commands.Group(name="music", description="🎵 Music commands")
+    updates_group = app_commands.Group(name="updates", description="📝 Update log commands")
     
     # Register groups to bot tree
     bot.tree.add_command(economy_group)
     bot.tree.add_command(warframe_group)
     bot.tree.add_command(moderation_group)
     bot.tree.add_command(general_group)
+    bot.tree.add_command(community_group)
+    bot.tree.add_command(music_group)
+    bot.tree.add_command(updates_group)
     
     command_modules = [
         # General commands
@@ -317,7 +324,7 @@ def load_all_commands():
         "commands.moderation.warn": moderation_group,
         "commands.moderation.starboard": moderation_group,
         "commands.moderation.role_menu": moderation_group,
-        # General commands
+        # General commands (core bot commands - max 25)
         "commands.general.help": general_group,
         "commands.general.member_count": general_group,
         "commands.general.setup_obsidian": general_group,
@@ -335,39 +342,32 @@ def load_all_commands():
         "commands.general.afk": general_group,
         "commands.general.server_stats": general_group,
         # Music commands
-        "commands.music.music": general_group,
-        # Event commands
-        "commands.events.event_create": general_group,
-        # Complaint commands
-        "commands.complaints.submit_complaint": general_group,
-        "commands.complaints.request_help": general_group,
-        # Ticket commands
-        "commands.tickets.ticket": general_group,
-        # Suggestion commands
-        "commands.suggestions.suggest": general_group,
-        "commands.suggestions.manage_suggestions": general_group,
-        # Application commands
-        "commands.applications.application": general_group,
-        "commands.applications.application_setup": general_group,
-        "commands.applications.manage_applications": general_group,
+        "commands.music.music": music_group,
+        # Community commands (events, complaints, tickets, suggestions, applications, giveaways, trading, activity)
+        "commands.events.event_create": community_group,
+        "commands.complaints.submit_complaint": community_group,
+        "commands.complaints.request_help": community_group,
+        "commands.tickets.ticket": community_group,
+        "commands.suggestions.suggest": community_group,
+        "commands.suggestions.manage_suggestions": community_group,
+        "commands.applications.application": community_group,
+        "commands.applications.application_setup": community_group,
+        "commands.applications.manage_applications": community_group,
+        "commands.trading.trade": community_group,
+        "commands.trading.trade_price": community_group,
+        "commands.trading.trade_search": community_group,
+        "commands.trading.trade_list": community_group,
+        "commands.trading.trade_setup": community_group,
+        "commands.activity.activity": community_group,
+        "commands.activity.activity_leaderboard": community_group,
+        "commands.giveaways.giveaway": community_group,
+        "commands.giveaways.giveaway_end": community_group,
+        "commands.giveaways.giveaway_list": community_group,
+        "commands.giveaways.giveaway_reroll": community_group,
         # Update log commands
-        "commands.updates.update_log": general_group,
-        "commands.updates.update_log_setup": general_group,
-        "commands.updates.force_version_update": general_group,
-        # Trading commands
-        "commands.trading.trade": general_group,
-        "commands.trading.trade_price": general_group,
-        "commands.trading.trade_search": general_group,
-        "commands.trading.trade_list": general_group,
-        "commands.trading.trade_setup": general_group,
-        # Activity commands
-        "commands.activity.activity": general_group,
-        "commands.activity.activity_leaderboard": general_group,
-        # Giveaway commands
-        "commands.giveaways.giveaway": general_group,
-        "commands.giveaways.giveaway_end": general_group,
-        "commands.giveaways.giveaway_list": general_group,
-        "commands.giveaways.giveaway_reroll": general_group,
+        "commands.updates.update_log": updates_group,
+        "commands.updates.update_log_setup": updates_group,
+        "commands.updates.force_version_update": updates_group,
     }
     
     loaded_count = 0
@@ -377,27 +377,29 @@ def load_all_commands():
             module = importlib.import_module(module_name)
             if hasattr(module, "setup"):
                 # Get group for this command (default to general_group if not specified)
-                group = group_mapping.get(module_name, general_group)
+                group = group_mapping.get(module_name)
+                if group is None:
+                    # Default to general_group if not mapped
+                    group = general_group
+                    print(f"[commands] WARNING: {module_name} not in group_mapping, defaulting to general_group")
                 # Always pass a group - all commands should be in a group
                 # Count commands before setup
-                before_count = {}
-                for cmd in bot.tree.get_commands(guild=None):
-                    if isinstance(cmd, app_commands.Group):
-                        before_count[cmd.name] = len(cmd.commands)
+                before_count = len(group.commands) if isinstance(group, app_commands.Group) else 0
                 
-                module.setup(bot, group)
-                
-                # Count commands after setup to verify registration
-                after_count = {}
-                for cmd in bot.tree.get_commands(guild=None):
-                    if isinstance(cmd, app_commands.Group):
-                        after_count[cmd.name] = len(cmd.commands)
-                
-                # Check if commands were added
-                added = after_count.get(group.name, 0) - before_count.get(group.name, 0)
-                loaded_count += 1
-                status = f"({added} command(s) added)" if added > 0 else "(no commands added - check for errors)"
-                print(f"[commands] Loaded {module_name} → {group.name} {status}")
+                try:
+                    module.setup(bot, group)
+                    # Count commands after setup to verify registration
+                    after_count = len(group.commands) if isinstance(group, app_commands.Group) else 0
+                    added = after_count - before_count
+                    loaded_count += 1
+                    status = f"({added} command(s) added)" if added > 0 else "(no commands added - check for errors)"
+                    print(f"[commands] Loaded {module_name} → {group.name} {status}")
+                except ValueError as e:
+                    if "maximum number of child commands exceeded" in str(e):
+                        print(f"[commands] ERROR: {module_name} failed - group '{group.name}' has reached the 25 command limit!")
+                        failed_modules.append(module_name)
+                    else:
+                        raise
             else:
                 print(f"[commands] WARNING: {module_name} has no setup() function")
                 failed_modules.append(module_name)
