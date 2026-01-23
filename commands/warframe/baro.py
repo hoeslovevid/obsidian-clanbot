@@ -4,7 +4,8 @@ from discord import app_commands
 from datetime import datetime, timezone
 
 from utils import obsidian_embed
-from bot import get_baro_status, fetch_baro_data, DB_PATH
+from warframe_api import get_baro_status
+from database import DB_PATH
 import aiosqlite
 import dateparser
 
