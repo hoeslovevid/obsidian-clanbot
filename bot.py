@@ -2116,6 +2116,45 @@ async def on_interaction(interaction: discord.Interaction):
                     await start_application_process(interaction)
                     return
         
+        # Application cancel button
+        if cid == "cancel_application_btn":
+            # Defer immediately
+            try:
+                if not interaction.response.is_done():
+                    await interaction.response.defer(ephemeral=True)
+            except (discord.errors.NotFound, discord.errors.InteractionResponded, discord.errors.HTTPException):
+                pass
+            
+            # Get application_id from the view
+            # The view stores application_id, but we need to get it from the message or view
+            # Since we can't easily get it from the button, we'll find the user's active application
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute("""
+                    SELECT id FROM applications
+                    WHERE guild_id = ? AND user_id = ? AND status = 'IN_PROGRESS'
+                """, (interaction.guild.id, interaction.user.id))
+                row = await cur.fetchone()
+            
+            if not row:
+                try:
+                    await interaction.followup.send(
+                        embed=obsidian_embed(
+                            "❌ No Active Application",
+                            "You don't have an application in progress to cancel.",
+                            color=discord.Color.red(),
+                            client=bot,
+                        ),
+                        ephemeral=True
+                    )
+                except Exception:
+                    pass
+                return
+            
+            application_id = row[0]
+            from commands.applications.application import cancel_application
+            await cancel_application(bot, interaction.guild.id, interaction.user.id, application_id, interaction)
+            return
+        
         # Applications: approve or reject
         if cid.startswith("application:"):
             # application:{application_id}:{action}
