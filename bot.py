@@ -2672,21 +2672,19 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
             await member.add_roles(role, reason="Reaction role")
             logger.info(f"[reaction_role] Added role {role.name} to {member} via reaction {payload.emoji}")
             
-            # Send DM confirmation (only user can see)
-            try:
-                await member.send(
-                    embed=obsidian_embed(
-                        "✅ Role Added",
-                        f"You have added {role.mention}!",
-                        color=discord.Color.green(),
-                        client=bot,
+            # Send temporary confirmation message in channel (auto-deletes after 3 seconds)
+            channel = guild.get_channel(payload.channel_id)
+            if isinstance(channel, discord.TextChannel):
+                try:
+                    confirm_msg = await channel.send(
+                        f"{member.mention} You have added {role.mention}!",
+                        delete_after=3.0  # Delete after 3 seconds
                     )
-                )
-            except discord.Forbidden:
-                # User has DMs disabled, that's okay
-                pass
-            except Exception as e:
-                logger.debug(f"[reaction_role] Could not send DM confirmation: {e}")
+                except discord.Forbidden:
+                    # Can't send messages, that's okay
+                    pass
+                except Exception as e:
+                    logger.debug(f"[reaction_role] Could not send confirmation message: {e}")
     except discord.Forbidden:
         logger.warning(f"[reaction_role] No permission to add role {role.name} to {member}")
     except Exception as e:
@@ -2736,21 +2734,19 @@ async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
             await member.remove_roles(role, reason="Reaction role removed")
             logger.info(f"[reaction_role] Removed role {role.name} from {member} via reaction removal {payload.emoji}")
             
-            # Send DM confirmation (only user can see)
-            try:
-                await member.send(
-                    embed=obsidian_embed(
-                        "❌ Role Removed",
-                        f"You have removed {role.mention}!",
-                        color=discord.Color.orange(),
-                        client=bot,
+            # Send temporary confirmation message in channel (auto-deletes after 3 seconds)
+            channel = guild.get_channel(payload.channel_id)
+            if isinstance(channel, discord.TextChannel):
+                try:
+                    confirm_msg = await channel.send(
+                        f"{member.mention} You have removed {role.mention}!",
+                        delete_after=3.0  # Delete after 3 seconds
                     )
-                )
-            except discord.Forbidden:
-                # User has DMs disabled, that's okay
-                pass
-            except Exception as e:
-                logger.debug(f"[reaction_role] Could not send DM confirmation: {e}")
+                except discord.Forbidden:
+                    # Can't send messages, that's okay
+                    pass
+                except Exception as e:
+                    logger.debug(f"[reaction_role] Could not send confirmation message: {e}")
     except discord.Forbidden:
         logger.warning(f"[reaction_role] No permission to remove role {role.name} from {member}")
     except Exception as e:
