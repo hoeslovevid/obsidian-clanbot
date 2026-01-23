@@ -25,10 +25,10 @@ def setup(bot, group=None):
         duration="Investment duration in days (7, 14, 30, or 90)"
     )
     @app_commands.choices(duration=[
-        app_commands.Choice(name="7 days (5% interest)", value=7),
-        app_commands.Choice(name="14 days (10% interest)", value=14),
-        app_commands.Choice(name="30 days (25% interest)", value=30),
-        app_commands.Choice(name="90 days (100% interest)", value=90),
+        app_commands.Choice(name="7 days (5%)", value=7),
+        app_commands.Choice(name="14 days (10%)", value=14),
+        app_commands.Choice(name="30 days (25%)", value=30),
+        app_commands.Choice(name="90 days (100%)", value=90),
     ])
     async def invest(interaction: discord.Interaction, amount: int, duration: app_commands.Choice[int]):
         """Invest coins for returns."""

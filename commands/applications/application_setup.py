@@ -18,11 +18,11 @@ def setup(bot, group=None):
         action="What to configure"
     )
     @app_commands.choices(action=[
-        app_commands.Choice(name="Set Application Channel", value="set_channel"),
+        app_commands.Choice(name="Set Channel", value="set_channel"),
         app_commands.Choice(name="Add Question", value="add_question"),
         app_commands.Choice(name="Remove Question", value="remove_question"),
         app_commands.Choice(name="View Questions", value="view_questions"),
-        app_commands.Choice(name="Clear All Questions", value="clear_questions"),
+        app_commands.Choice(name="Clear Questions", value="clear_questions"),
     ])
     async def application_setup(
         interaction: discord.Interaction,
