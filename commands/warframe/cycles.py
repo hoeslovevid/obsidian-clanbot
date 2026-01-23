@@ -4,7 +4,7 @@ from discord import app_commands
 from datetime import datetime, timezone
 
 from utils import obsidian_embed
-from bot import get_all_cycles
+from warframe_api import get_all_cycles
 import dateparser
 
 

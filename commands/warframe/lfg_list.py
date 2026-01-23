@@ -4,7 +4,7 @@ from discord import app_commands
 from datetime import datetime, timezone
 
 from utils import obsidian_embed
-from bot import DB_PATH
+from database import DB_PATH
 import aiosqlite
 
 
