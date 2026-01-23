@@ -449,7 +449,7 @@ def load_all_commands():
                     added = after_count - before_count
                     loaded_count += 1
                     status = f"({added} command(s) added)" if added > 0 else "(no commands added - check for errors)"
-                    print(f"[commands] Loaded {module_name} → {group.name} {status}")
+                    print(f"[commands] Loaded {module_name} -> {group.name} {status}")
                 except ValueError as e:
                     if "maximum number of child commands exceeded" in str(e):
                         print(f"[commands] ERROR: {module_name} failed - group '{group.name}' has reached the 25 command limit!")
