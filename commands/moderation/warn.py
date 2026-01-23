@@ -138,7 +138,7 @@ def setup(bot, group=None):
     command_decorator = group.command(name="warnings", description="View a user's warnings.") if group else bot.tree.command(name="warnings", description="View a user's warnings.")
     
     @command_decorator
-    @app_commands.describe(user="User to check warnings for")
+    @app_commands.describe(user="User to check")
     async def warnings(interaction: discord.Interaction, user: discord.Member):
         """View user warnings."""
         if not interaction.guild:

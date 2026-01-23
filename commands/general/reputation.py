@@ -14,7 +14,7 @@ def setup(bot, group=None):
     command_decorator = group.command(name="rep", description="Give reputation to a user.") if group else bot.tree.command(name="rep", description="Give reputation to a user.")
     
     @command_decorator
-    @app_commands.describe(user="User to give reputation to", reason="Reason for giving reputation")
+    @app_commands.describe(user="User to give rep to", reason="Reason for giving reputation")
     async def rep(interaction: discord.Interaction, user: discord.Member, reason: Optional[str] = None):
         """Give reputation to a user."""
         if not interaction.guild:

@@ -14,7 +14,7 @@ def setup(bot, group=None):
     
     @command_decorator
     @app_commands.describe(
-        feature="Which feature to configure",
+        feature="Feature to configure",
         enabled="Enable or disable the feature",
         threshold="Threshold value (for spam/caps/mentions)",
         interval="Time interval in seconds (for spam detection)",

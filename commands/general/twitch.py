@@ -131,7 +131,7 @@ def setup(bot, group=None):
     command_decorator = group.command(name="twitch_add", description="Add a Twitch streamer to monitor (moderators only).") if group else bot.tree.command(name="twitch_add", description="Add a Twitch streamer to monitor (moderators only).")
     
     @command_decorator
-    @app_commands.describe(streamer_name="Twitch username to monitor")
+    @app_commands.describe(streamer_name="Twitch username")
     async def twitch_add(interaction: discord.Interaction, streamer_name: str):
         """Add a Twitch streamer."""
         if not interaction.guild:
@@ -193,7 +193,7 @@ def setup(bot, group=None):
     command_decorator = group.command(name="twitch_remove", description="Remove a Twitch streamer from monitoring (moderators only).") if group else bot.tree.command(name="twitch_remove", description="Remove a Twitch streamer from monitoring (moderators only).")
     
     @command_decorator
-    @app_commands.describe(streamer_name="Twitch username to remove")
+    @app_commands.describe(streamer_name="Twitch username")
     async def twitch_remove(interaction: discord.Interaction, streamer_name: str):
         """Remove a Twitch streamer."""
         if not interaction.guild:
