@@ -27,68 +27,37 @@ class HelpSelect(discord.ui.Select):
         self.bot = bot
         self.is_user_mod = is_user_mod
         
-        # Define all groups with their emojis and descriptions
-        options = [
-            discord.SelectOption(
-                label="General",
-                description="General bot commands",
-                emoji="📋",
-                value="general"
-            ),
-            discord.SelectOption(
-                label="Economy",
-                description="Economy and coin management",
-                emoji="💰",
-                value="economy"
-            ),
-            discord.SelectOption(
-                label="Warframe",
-                description="Warframe game information",
-                emoji="🎮",
-                value="warframe"
-            ),
-            discord.SelectOption(
-                label="Community",
-                description="Community features",
-                emoji="👥",
-                value="community"
-            ),
-            discord.SelectOption(
-                label="Trading",
-                description="Trading commands",
-                emoji="💼",
-                value="trading"
-            ),
-            discord.SelectOption(
-                label="Moderation",
-                description="Moderation and server management",
-                emoji="🛡️",
-                value="mod"
-            ),
-            discord.SelectOption(
-                label="Giveaways",
-                description="Giveaway commands",
-                emoji="🎁",
-                value="giveaways"
-            ),
-            discord.SelectOption(
-                label="Updates",
-                description="Update log commands",
-                emoji="📝",
-                value="updates"
-            ),
-        ]
+        # Get available groups from bot
+        available_groups = {}
+        for cmd in bot.tree.get_commands(guild=None):
+            if isinstance(cmd, app_commands.Group):
+                available_groups[cmd.name] = cmd
         
-        # Only show music if user is mod (or if music commands exist)
-        # For now, we'll include it but it might be empty
-        options.append(
-            discord.SelectOption(
-                label="Music",
-                description="Music commands",
-                emoji="🎵",
-                value="music"
-            )
-        )
+        # Define all possible groups with their emojis and descriptions
+        group_definitions = {
+            "general": ("General", "General bot commands", "📋"),
+            "economy": ("Economy", "Economy and coin management", "💰"),
+            "warframe": ("Warframe", "Warframe game information", "🎮"),
+            "community": ("Community", "Community features", "👥"),
+            "trading": ("Trading", "Trading commands", "💼"),
+            "mod": ("Moderation", "Moderation and server management", "🛡️"),
+            "giveaways": ("Giveaways", "Giveaway commands", "🎁"),
+            "updates": ("Updates", "Update log commands", "📝"),
+            "music": ("Music", "Music commands", "🎵"),
+        }
+        
+        # Only add options for groups that actually exist
+        options = []
+        for group_name, (label, description, emoji) in group_definitions.items():
+            if group_name in available_groups:
+                options.append(
+                    discord.SelectOption(
+                        label=label,
+                        description=description,
+                        emoji=emoji,
+                        value=group_name
+                    )
+                )
         
         super().__init__(
             placeholder="Select a command group to view...",
@@ -102,15 +71,24 @@ class HelpSelect(discord.ui.Select):
         selected_group = self.values[0]
         
         # Get the group from bot's command tree
+        # Use guild=None to get all commands (works for both global and guild-specific)
         group = None
-        for cmd in self.bot.tree.get_commands(guild=interaction.guild):
+        for cmd in self.bot.tree.get_commands(guild=None):
             if isinstance(cmd, app_commands.Group) and cmd.name == selected_group:
                 group = cmd
                 break
         
         if not group:
+            # Fallback: try with the interaction's guild if it exists
+            if interaction.guild:
+                for cmd in self.bot.tree.get_commands(guild=interaction.guild):
+                    if isinstance(cmd, app_commands.Group) and cmd.name == selected_group:
+                        group = cmd
+                        break
+        
+        if not group:
             return await interaction.response.send_message(
-                f"Group '{selected_group}' not found.",
+                f"Group '{selected_group}' not found. Please try again.",
                 ephemeral=True
             )
         
@@ -186,8 +164,9 @@ def setup(bot, group=None):
         is_user_mod = isinstance(interaction.user, discord.Member) and is_mod(interaction.user)
         
         # Get all groups
+        # Use guild=None to get all commands (works for both global and guild-specific)
         groups = []
-        for cmd in bot.tree.get_commands(guild=interaction.guild):
+        for cmd in bot.tree.get_commands(guild=None):
             if isinstance(cmd, app_commands.Group):
                 groups.append(cmd)
         
