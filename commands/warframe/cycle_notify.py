@@ -18,9 +18,9 @@ def setup(bot, group=None):
         channel="Channel to send notifications to (leave empty to use current channel)"
     )
     @app_commands.choices(cycle_type=[
-        app_commands.Choice(name="Cetus (Plains of Eidolon)", value="cetus"),
-        app_commands.Choice(name="Fortuna (Orb Vallis)", value="vallis"),
-        app_commands.Choice(name="Deimos (Cambion Drift)", value="cambion"),
+        app_commands.Choice(name="Cetus", value="cetus"),
+        app_commands.Choice(name="Fortuna", value="vallis"),
+        app_commands.Choice(name="Deimos", value="cambion"),
     ])
     @app_commands.choices(enabled=[
         app_commands.Choice(name="Enable", value="enable"),
