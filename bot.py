@@ -386,11 +386,11 @@ def load_all_commands():
         "commands.general.webhooks": general_group,
         "commands.general.rules": general_group,
         "commands.general.polls": general_group,
-        "commands.general.reminder": general_group,
-        "commands.general.reputation": general_group,
-        "commands.general.twitch": general_group,
-        "commands.general.afk": general_group,
-        "commands.general.server_stats": general_group,
+        "commands.general.reminder": community_group,
+        "commands.general.reputation": community_group,
+        "commands.general.twitch": community_group,
+        "commands.general.afk": community_group,
+        "commands.general.server_stats": community_group,
         # Music commands
         "commands.music.music": music_group,
         # Community commands (events, complaints, tickets, suggestions, applications, giveaways, trading, activity)
