@@ -3,9 +3,7 @@ import discord
 from discord import app_commands
 
 from utils import obsidian_embed, is_mod
-from bot import DB_PATH
 from database import get_auto_mod_settings, update_auto_mod_settings
-import aiosqlite
 
 
 def setup(bot, group=None):
