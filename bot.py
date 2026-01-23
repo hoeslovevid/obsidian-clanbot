@@ -171,6 +171,32 @@ class ClanBot(commands.Bot):
                         else:
                             print(f"[sync] WARNING: Group '{cmd.name}' has NO subcommands!")
                 print(f"[sync] Total subcommands synced: {total_subcommands}")
+        except discord.app_commands.errors.CommandSyncFailure as e:
+            print(f"[sync] Failed to sync commands: {e}")
+            # Try to extract which command failed
+            if hasattr(e, 'errors') and e.errors:
+                print(f"[sync] Error details: {e.errors}")
+            # Also check the commands that were being synced
+            if hasattr(e, 'commands'):
+                print(f"[sync] Commands being synced: {len(e.commands) if e.commands else 0}")
+                # Try to find commands with choices that might be too long
+                for cmd in (e.commands or []):
+                    if isinstance(cmd, app_commands.Command):
+                        # Check parameters
+                        for param in cmd.parameters:
+                            if hasattr(param, 'choices') and param.choices:
+                                for choice in param.choices:
+                                    if len(choice.name) >= 25:
+                                        print(f"[sync] ERROR: Command '{cmd.name}' has choice '{choice.name}' with {len(choice.name)} characters!")
+                    elif isinstance(cmd, app_commands.Group):
+                        for subcmd in cmd.commands:
+                            for param in subcmd.parameters:
+                                if hasattr(param, 'choices') and param.choices:
+                                    for choice in param.choices:
+                                        if len(choice.name) >= 25:
+                                            print(f"[sync] ERROR: Group '{cmd.name}' subcommand '{subcmd.name}' has choice '{choice.name}' with {len(choice.name)} characters!")
+            import traceback
+            traceback.print_exc()
         except Exception as e:
             print(f"[sync] Failed to sync commands: {e}")
             import traceback

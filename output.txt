@@ -1,0 +1,255 @@
+Commands with choices:
+
+commands\applications\application_setup.py -> application_setup
+  Choice 1: 'Set Channel' = 11 chars
+
+commands\applications\manage_applications.py -> manage_applications
+  Choice 1: 'All' = 3 chars
+
+commands\economy\add_coins.py -> manage_coins_cmd
+  Choice 1: 'Add Coins' = 9 chars
+
+commands\economy\gambling.py -> roulette
+  Choice 1: 'Red' = 3 chars
+
+commands\economy\manage_xp.py -> manage_xp_cmd
+  Choice 1: 'Add XP' = 6 chars
+
+commands\economy\shop_manage.py -> shop_manage
+  Choice 1: 'Role' = 4 chars
+
+commands\general\member_count.py -> member_count
+  Choice 1: 'Voice Channel' = 13 chars
+
+commands\general\rules.py -> rules_setup
+  Choice 1: 'add' = 3 chars
+
+commands\general\server_stats.py -> server_stats
+  Choice 1: 'Members' = 7 chars
+
+commands\moderation\automod_setup.py -> None
+  Choice 1: 'Enable/Disable All' = 18 chars
+
+commands\moderation\automod_setup.py -> None
+  Choice 1: 'Enable' = 6 chars
+
+commands\moderation\automod_setup.py -> automod_setup
+  Choice 1: 'Delete Message' = 14 chars
+
+commands\moderation\logging.py -> None
+  Choice 1: 'Message Deletes' = 15 chars
+
+commands\moderation\warn.py -> warn_setup
+  Choice 1: 'Mute' = 4 chars
+
+commands\suggestions\manage_suggestions.py -> suggestions
+  Choice 1: 'All' = 3 chars
+
+commands\trading\trade.py -> None
+  Choice 1: 'WTS - Want To Sell' = 18 chars
+
+commands\trading\trade.py -> trade
+  Choice 1: 'PC' = 2 chars
+
+commands\trading\trade_price.py -> trade_price
+  Choice 1: 'PC' = 2 chars
+
+commands\trading\trade_search.py -> None
+  Choice 1: 'All' = 3 chars
+
+commands\trading\trade_search.py -> trade_search
+  Choice 1: 'All' = 3 chars
+
+commands\warframe\archon_notify.py -> archon_notify
+  Choice 1: 'Enable' = 6 chars
+
+commands\warframe\baro_notify.py -> baro_notify
+  Choice 1: 'Enable' = 6 chars
+
+commands\warframe\cycle_notify.py -> cycle_notify
+  Choice 1: 'Cetus' = 5 chars
+
+commands\warframe\cycle_notify.py -> cycle_notify
+  Choice 1: 'Enable' = 6 chars
+
+commands\warframe\dojo.py -> dojo_research
+  Choice 1: 'add' = 3 chars
+
+commands\warframe\dojo.py -> dojo_research
+  Choice 1: 'add' = 3 chars
+
+commands\warframe\invasion_notify.py -> invasion_notify
+  Choice 1: 'Enable' = 6 chars
+
+commands\warframe\warframe_event_notify.py -> warframe_event_notify
+  Choice 1: 'Enable' = 6 chars
+
+
+Commands with 3+ parameters:
+commands\applications\application.py -> send_next_question: 4 params
+  1. bot
+  2. guild_id
+  3. user_id
+  4. application_id
+commands\applications\application.py -> submit_application: 4 params
+  1. bot
+  2. guild_id
+  3. user_id
+  4. application_id
+commands\complaints\request_help.py -> request_help: 4 params
+  1. case_id
+  2. category
+  3. details
+  4. evidence
+commands\economy\add_coins.py -> manage_coins_cmd: 3 params
+  1. action
+  2. user
+  3. amount
+commands\economy\manage_xp.py -> manage_xp_cmd: 3 params
+  1. action
+  2. user
+  3. amount
+commands\economy\shop_manage.py -> shop_manage: 7 params
+  1. action
+  2. item_name
+  3. description
+  4. price
+  5. item_type
+commands\events\event_create.py -> event_create: 4 params
+  1. title
+  2. when
+  3. description
+  4. role_ping
+commands\general\polls.py -> poll: 3 params
+  1. question
+  2. options
+  3. duration
+commands\general\rules.py -> rules_setup: 3 params
+  1. action
+  2. rule_number
+  3. rule_text
+commands\general\server_stats.py -> server_stats: 3 params
+  1. action
+  2. channel
+  3. stats_type
+commands\general\twitch.py -> twitch_setup: 3 params
+  1. channel
+  2. ping_role
+  3. enabled
+commands\general\webhooks.py -> webhook: 4 params
+  1. action
+  2. endpoint_name
+  3. webhook_url
+  4. event_types
+commands\general\welcome_setup.py -> welcome_setup: 3 params
+  1. channel
+  2. message
+  3. enabled
+commands\general\welcome_setup.py -> leave_setup: 3 params
+  1. channel
+  2. message
+  3. enabled
+commands\giveaways\giveaway.py -> giveaway: 7 params
+  1. prize
+  2. duration
+  3. winners
+  4. title
+  5. description
+commands\giveaways\giveaway_end.py -> end_giveaway: 3 params
+  1. giveaway_id
+  2. bot
+  3. force
+commands\moderation\automod_setup.py -> automod_setup: 7 params
+  1. feature
+  2. enabled
+  3. threshold
+  4. interval
+  5. action
+commands\moderation\level_roles.py -> level_roles: 3 params
+  1. action
+  2. level
+  3. role
+commands\moderation\logging.py -> logging: 3 params
+  1. action
+  2. log_type
+  3. channel
+commands\moderation\reaction_roles.py -> reaction_role_setup: 3 params
+  1. message
+  2. emoji
+  3. role
+commands\moderation\roles.py -> roles: 3 params
+  1. action
+  2. role
+  3. category
+commands\moderation\role_menu.py -> role_menu: 3 params
+  1. title
+  2. description
+  3. max_roles
+commands\moderation\role_menu.py -> role_menu_add: 5 params
+  1. message_id
+  2. role
+  3. label
+  4. emoji
+  5. role_description
+commands\moderation\starboard.py -> starboard_setup: 3 params
+  1. channel
+  2. threshold
+  3. emoji
+commands\moderation\warn.py -> warn_setup: 3 params
+  1. max_warnings
+  2. action
+  3. mute_duration
+commands\music\music.py -> from_url: 5 params
+  1. cls
+  2. url
+  3. *
+  4. loop=None
+  5. stream=False
+commands\suggestions\manage_suggestions.py -> _handle_status: 3 params
+  1. self
+  2. status
+  3. status_display
+commands\tickets\ticket.py -> create_ticket_channel: 4 params
+  1. guild
+  2. user
+  3. ticket_id
+  4. subject
+commands\trading\trade.py -> trade: 6 params
+  1. listing_type
+  2. item
+  3. price
+  4. quantity
+  5. description
+commands\trading\trade_search.py -> trade_search: 4 params
+  1. query
+  2. listing_type
+  3. platform
+  4. limit
+commands\updates\update_log.py -> update_log: 3 params
+  1. title
+  2. description
+  3. version
+commands\warframe\cycle_notify.py -> cycle_notify: 3 params
+  1. cycle_type
+  2. enabled
+  3. channel
+commands\warframe\dojo.py -> dojo_research: 5 params
+  1. action
+  2. research_name
+  3. research_type
+  4. required_resources
+  5. current_resources
+commands\warframe\dojo.py -> dojo_decoration: 4 params
+  1. action
+  2. decoration_name
+  3. room_location
+  4. quantity
+commands\warframe\invasion_notify.py -> invasion_notify: 3 params
+  1. reward
+  2. enabled
+  3. channel
+commands\warframe\lfg.py -> lfg: 4 params
+  1. mission_type
+  2. max_players
+  3. description
+  4. duration_hours
