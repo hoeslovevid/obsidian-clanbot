@@ -119,10 +119,10 @@ class HelpSelectView(discord.ui.View):
 class HelpSelect(discord.ui.Select):
     """Select menu for choosing command groups."""
     
-    def __init__(self, bot, is_user_mod: bool, view):
+    def __init__(self, bot, is_user_mod: bool, parent_view):
         self.bot = bot
         self.is_user_mod = is_user_mod
-        self.view = view
+        self.parent_view = parent_view
         
         # Get available groups from bot
         available_groups = {}
@@ -190,8 +190,8 @@ class HelpSelect(discord.ui.Select):
             )
         
         # Store current group and reset page
-        self.view.current_group = group
-        self.view.current_page = 0
+        self.parent_view.current_group = group
+        self.parent_view.current_page = 0
         
         # Build and display the page
         await self.update_embed(interaction, group, 0)
@@ -219,9 +219,9 @@ class HelpSelect(discord.ui.Select):
             total_pages = 1
         else:
             # Calculate pagination
-            total_pages = (len(commands_list) + self.view.commands_per_page - 1) // self.view.commands_per_page
-            start_idx = page * self.view.commands_per_page
-            end_idx = min(start_idx + self.view.commands_per_page, len(commands_list))
+            total_pages = (len(commands_list) + self.parent_view.commands_per_page - 1) // self.parent_view.commands_per_page
+            start_idx = page * self.parent_view.commands_per_page
+            end_idx = min(start_idx + self.parent_view.commands_per_page, len(commands_list))
             
             # Get commands for this page
             page_commands = commands_list[start_idx:end_idx]
@@ -280,18 +280,18 @@ class HelpSelect(discord.ui.Select):
         embed.set_footer(text=footer_text)
         
         # Update pagination buttons
-        self.view.update_pagination_buttons()
+        self.parent_view.update_pagination_buttons()
         
         # Update the message
         if interaction.response.is_done():
             # Use followup to edit if response is already done
             try:
-                await interaction.followup.edit_message(interaction.message.id, embed=embed, view=self.view)
+                await interaction.followup.edit_message(interaction.message.id, embed=embed, view=self.parent_view)
             except:
                 # Fallback: try editing the original message
-                await interaction.message.edit(embed=embed, view=self.view)
+                await interaction.message.edit(embed=embed, view=self.parent_view)
         else:
-            await interaction.response.edit_message(embed=embed, view=self.view)
+            await interaction.response.edit_message(embed=embed, view=self.parent_view)
 
 
 def setup(bot, group=None):
