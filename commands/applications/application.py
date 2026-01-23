@@ -11,6 +11,20 @@ import aiosqlite
 
 async def start_application_process(interaction: discord.Interaction):
     """Start an application process - reusable function for both command and button."""
+    # Helper function to send error messages (handles both response and followup)
+    async def send_error(embed):
+        try:
+            if interaction.response.is_done():
+                await interaction.followup.send(embed=embed, ephemeral=True)
+            else:
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+        except (discord.errors.NotFound, discord.errors.InteractionResponded, discord.errors.HTTPException):
+            # Interaction expired or already handled, try followup as last resort
+            try:
+                await interaction.followup.send(embed=embed, ephemeral=True)
+            except Exception:
+                pass  # Can't send, that's okay
+    
     # Check if application channel is set
     async with aiosqlite.connect(DB_PATH) as db:
         cur = await db.execute("""
@@ -19,26 +33,12 @@ async def start_application_process(interaction: discord.Interaction):
         row = await cur.fetchone()
     
     if not row or not row[0]:
-        if interaction.response.is_done():
-            await interaction.followup.send(
-                embed=obsidian_embed(
-                    "❌ Application System Not Configured",
-                    "The application system has not been set up yet. Please contact a moderator.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
-            )
-        else:
-            await interaction.response.send_message(
-                embed=obsidian_embed(
-                    "❌ Application System Not Configured",
-                    "The application system has not been set up yet. Please contact a moderator.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
-            )
+        await send_error(obsidian_embed(
+            "❌ Application System Not Configured",
+            "The application system has not been set up yet. Please contact a moderator.",
+            color=discord.Color.red(),
+            client=interaction.client,
+        ))
         return
     
     app_channel_id = row[0]
@@ -52,26 +52,12 @@ async def start_application_process(interaction: discord.Interaction):
         existing = await cur.fetchone()
     
     if existing:
-        if interaction.response.is_done():
-            await interaction.followup.send(
-                embed=obsidian_embed(
-                    "❌ Application Already In Progress",
-                    "You already have an application in progress. Please complete it or wait for it to be reviewed.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
-            )
-        else:
-            await interaction.response.send_message(
-                embed=obsidian_embed(
-                    "❌ Application Already In Progress",
-                    "You already have an application in progress. Please complete it or wait for it to be reviewed.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
-            )
+        await send_error(obsidian_embed(
+            "❌ Application Already In Progress",
+            "You already have an application in progress. Please complete it or wait for it to be reviewed.",
+            color=discord.Color.red(),
+            client=interaction.client,
+        ))
         return
     
     # Check if there are any questions configured
@@ -82,30 +68,21 @@ async def start_application_process(interaction: discord.Interaction):
         count = (await cur.fetchone())[0]
     
     if count == 0:
-        if interaction.response.is_done():
-            await interaction.followup.send(
-                embed=obsidian_embed(
-                    "❌ No Questions Configured",
-                    "The application system has no questions configured yet. Please contact a moderator.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
-            )
-        else:
-            await interaction.response.send_message(
-                embed=obsidian_embed(
-                    "❌ No Questions Configured",
-                    "The application system has no questions configured yet. Please contact a moderator.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
-            )
+        await send_error(obsidian_embed(
+            "❌ No Questions Configured",
+            "The application system has no questions configured yet. Please contact a moderator.",
+            color=discord.Color.red(),
+            client=interaction.client,
+        ))
         return
     
+    # Defer if not already done (for command interactions)
     if not interaction.response.is_done():
-        await interaction.response.defer(ephemeral=True)
+        try:
+            await interaction.response.defer(ephemeral=True)
+        except (discord.errors.NotFound, discord.errors.InteractionResponded, discord.errors.HTTPException):
+            # Already handled, continue with followup
+            pass
     
     # Create application record
     created_at = now_utc().isoformat()
@@ -122,29 +99,31 @@ async def start_application_process(interaction: discord.Interaction):
         application_id = (await cur.fetchone())[0]
     
     if not application_id:
-        await interaction.followup.send(
-            embed=obsidian_embed(
-                "❌ Error",
-                "Failed to create application. Please try again.",
-                color=discord.Color.red(),
-                client=interaction.client,
-            ),
-            ephemeral=True
-        )
+        await send_error(obsidian_embed(
+            "❌ Error",
+            "Failed to create application. Please try again.",
+            color=discord.Color.red(),
+            client=interaction.client,
+        ))
         return
     
     # Send first question via DM
     await send_next_question(interaction.client, interaction.guild.id, interaction.user.id, application_id)
     
-    await interaction.followup.send(
-        embed=obsidian_embed(
-            "✅ Application Started",
-            "I've sent you the first question via DM. Please check your DMs and answer the questions to complete your application.",
-            color=discord.Color.green(),
-            client=interaction.client,
-        ),
-        ephemeral=True
-    )
+    # Send success message (always use followup since we've deferred by this point)
+    try:
+        await interaction.followup.send(
+            embed=obsidian_embed(
+                "✅ Application Started",
+                "I've sent you the first question via DM. Please check your DMs and answer the questions to complete your application.",
+                color=discord.Color.green(),
+                client=interaction.client,
+            ),
+            ephemeral=True
+        )
+    except (discord.errors.NotFound, discord.errors.InteractionResponded, discord.errors.HTTPException):
+        # Interaction expired, that's okay
+        pass
 
 
 def setup(bot, group=None):

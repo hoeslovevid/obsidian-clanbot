@@ -634,6 +634,15 @@ class ApplicationPanelView(discord.ui.View):
     
     async def start_application(self, interaction: discord.Interaction):
         """Handle application start from button."""
+        # Defer immediately to acknowledge the button click
+        # This must be done before any async operations to avoid timeout
+        try:
+            if not interaction.response.is_done():
+                await interaction.response.defer(ephemeral=True)
+        except (discord.errors.NotFound, discord.errors.InteractionResponded, discord.errors.HTTPException):
+            # Already handled or expired, will use followup
+            pass
+        
         # Import the application start logic
         from commands.applications.application import start_application_process
         await start_application_process(interaction)
