@@ -2107,29 +2107,10 @@ async def on_interaction(interaction: discord.Interaction):
         # So we skip handling it here to avoid double-defer errors
         
         # Applications: approve or reject
-        if cid.startswith("application:"):
-            # application:{application_id}:{action}
-            parts = cid.split(":")
-            if len(parts) == 3:
-                _, application_id_str, action = parts
-                try:
-                    application_id = int(application_id_str)
-                except ValueError:
-                    return
-                
-                if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
-                    return await interaction.response.send_message("Sorry, but you are not an Administrator in this server.", ephemeral=True)
-                
-                # The view callbacks defer themselves, so we don't need to defer here
-                # Just call the view callback directly
-                from views import ApplicationManageView
-                view = ApplicationManageView(application_id)
-                
-                if action == "approve":
-                    await view.approve_button(interaction)
-                elif action == "reject":
-                    await view.reject_button(interaction)
-                return
+        # Note: This is handled by ApplicationManageView callbacks (approve_button, reject_button)
+        # The views are registered with bot.add_view() in on_ready, so discord.py will automatically
+        # call the view callbacks when buttons are clicked. We don't need to handle it here.
+        # The view callbacks handle their own interaction acknowledgment (defer for approve, send_modal for reject).
 
     except Exception as e:
         # Last-resort error handler - only for component/modal interactions
