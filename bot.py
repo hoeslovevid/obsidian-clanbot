@@ -2100,25 +2100,9 @@ async def on_interaction(interaction: discord.Interaction):
                 return
         
         # Application panel: start application
-        if cid.startswith("application_panel:"):
-            # application_panel:{guild_id}:start
-            parts = cid.split(":")
-            if len(parts) == 3:
-                _, guild_id_str, action = parts
-                if action == "start":
-                    try:
-                        guild_id = int(guild_id_str)
-                    except ValueError:
-                        return
-                    
-                    # Use the shared application start function
-                    from commands.applications.application import start_application_process
-                    await start_application_process(interaction)
-                    return
-        
-        # Application cancel button
-        # Note: This is handled by ApplicationQuestionView.cancel_button callback
-        # We don't need to handle it here since the view callback will be called first
+        # Note: This is handled by ApplicationPanelView.start_application callback
+        # The view callback is called automatically by discord.py when the button is clicked
+        # We don't need to handle it here to avoid duplicate processing
         # If the view callback doesn't exist (e.g., after bot restart), the button won't work anyway
         # So we skip handling it here to avoid double-defer errors
         
