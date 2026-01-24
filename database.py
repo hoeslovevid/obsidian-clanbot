@@ -2000,5 +2000,33 @@ async def init_db() -> None:
             PRIMARY KEY (guild_id, period_type, user_id)
         )""")
 
+        # Create indexes for common queries to improve performance
+        logger.info("[db] Creating indexes for performance optimization...")
+        
+        # Indexes for frequently queried columns
+        try:
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_user_balances_guild_user ON user_balances(guild_id, user_id)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_user_xp_guild_user ON user_xp(guild_id, user_id)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_activity_stats_guild_user ON activity_stats(guild_id, user_id)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_economy_transactions_guild_user ON economy_transactions(guild_id, user_id)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_economy_transactions_created ON economy_transactions(created_at)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_voice_sessions_guild_user ON voice_sessions(guild_id, user_id)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_voice_sessions_end_time ON voice_sessions(end_time)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_recent_joins_guild_time ON recent_joins(guild_id, joined_at)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_scheduled_announcements_next_run ON scheduled_announcements(next_run_at)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_polls_guild_message ON polls(guild_id, message_id)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_applications_guild_status ON applications(guild_id, status)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_complaints_guild_status ON complaints(guild_id, status)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_giveaways_ended ON giveaways(ended)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_trading_posts_guild_status ON trading_posts(guild_id, status)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_log_channels_guild_type ON log_channels(guild_id, log_type)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_auto_mod_settings_guild ON auto_mod_settings(guild_id)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_auto_mod_spam_tracking_guild_user ON auto_mod_spam_tracking(guild_id, user_id)")
+            
+            await db.commit()
+            logger.info("[db] Indexes created successfully")
+        except Exception as e:
+            logger.warning(f"[db] Error creating indexes (may already exist): {e}")
+        
         await db.commit()
         logger.info("[db] Database tables initialized successfully")

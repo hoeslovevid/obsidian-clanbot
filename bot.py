@@ -897,36 +897,28 @@ async def on_message(message: discord.Message):
                     except Exception as e:
                         logger.error(f"Error assigning level roles: {e}")
         
-        # Check for level milestones and achievements
+        # Check for level milestones and achievements (optimized - single query for activity stats)
         xp, level, total_xp = await get_user_xp(message.guild.id, message.author.id)
-        from database import check_and_record_milestone, check_and_unlock_achievement, initialize_achievement_definitions
+        from database import check_and_record_milestone, check_and_unlock_achievement
         
-        # Initialize achievements if needed
-        await initialize_achievement_definitions()
+        # Initialize achievements if needed (cached)
+        global _achievement_definitions_initialized
+        if not _achievement_definitions_initialized:
+            from database import initialize_achievement_definitions
+            await initialize_achievement_definitions()
+            _achievement_definitions_initialized = True
         
-        # Check level milestones
-        level_milestones = [10, 25, 50, 100]
-        for milestone_level in level_milestones:
-            if level >= milestone_level:
-                milestone_achieved = await check_and_record_milestone(
-                    message.guild.id, message.author.id, "level", milestone_level
-                )
-                if milestone_achieved:
-                    # Unlock corresponding achievement
-                    achievement_id = f"level_{milestone_level}"
-                    await check_and_unlock_achievement(message.guild.id, message.author.id, achievement_id, bot)
-        
-        # Check message count milestones (get from activity_stats)
+        # Batch database operations - get message count and update in one transaction
         async with aiosqlite.connect(DB_PATH) as db:
+            # Get current message count
             cur = await db.execute("""
                 SELECT messages_sent FROM activity_stats
                 WHERE guild_id=? AND user_id=?
             """, (message.guild.id, message.author.id))
             row = await cur.fetchone()
             message_count = row[0] if row else 0
-        
-        # Update message count
-        async with aiosqlite.connect(DB_PATH) as db:
+            
+            # Update message count
             await db.execute("""
                 INSERT INTO activity_stats (guild_id, user_id, messages_sent, last_activity_date)
                 VALUES (?, ?, 1, ?)
@@ -936,15 +928,27 @@ async def on_message(message: discord.Message):
             """, (message.guild.id, message.author.id, now_utc().isoformat()))
             await db.commit()
         
+        new_message_count = message_count + 1
+        
+        # Check level milestones
+        level_milestones = [10, 25, 50, 100]
+        for milestone_level in level_milestones:
+            if level >= milestone_level:
+                milestone_achieved = await check_and_record_milestone(
+                    message.guild.id, message.author.id, "level", milestone_level
+                )
+                if milestone_achieved:
+                    achievement_id = f"level_{milestone_level}"
+                    await check_and_unlock_achievement(message.guild.id, message.author.id, achievement_id, bot)
+        
         # Check message count milestones
         message_milestones = [1, 100, 1000, 10000]
         for milestone_count in message_milestones:
-            if message_count + 1 >= milestone_count:
+            if new_message_count >= milestone_count:
                 milestone_achieved = await check_and_record_milestone(
                     message.guild.id, message.author.id, "message_count", milestone_count
                 )
                 if milestone_achieved:
-                    # Unlock corresponding achievement
                     achievement_map = {
                         1: "first_message",
                         100: "hundred_messages",
@@ -2229,229 +2233,262 @@ async def on_ready():
     await bot.change_presence(activity=activity, status=discord.Status.online)
     print(f"[ready] Status set: Watching Over The Land of The Obsidian Oath Legion")
 
-    # Ensure channels + join-to-create exist on startup (covers restarts)
-    for g in bot.guilds:
-        try:
-            await ensure_core_channels(g)
-            await ensure_join_to_create_channel(g)
-        except Exception as e:
-            print(f"[startup] Ensure failed in {g.name}: {e}")
-
-    # Setup background tasks
-    try:
-        tasks_dict = setup_tasks(bot)
-        print(f"[ready] Background tasks initialized: {len(tasks_dict)} tasks")
-    except Exception as e:
-        print(f"[ready] ERROR: Failed to setup background tasks: {e}")
-        import traceback
-        traceback.print_exc()
-    
-    # Re-register persistent views
-    bot.add_view(ComplaintPanel())
-    bot.add_view(RSVPView())
-
-    # Re-register VC panel views for existing temp VCs (so their buttons keep working after restart)
-    async with aiosqlite.connect(DB_PATH) as db:
+    # Parallelize startup tasks for faster initialization
+    async def setup_guild_channels():
+        """Setup channels for all guilds in parallel."""
+        tasks = []
         for g in bot.guilds:
-            cur = await db.execute(
-                "SELECT channel_id FROM temp_vcs WHERE guild_id=?",
-                (g.id,),
-            )
-            rows = await cur.fetchall()
-            for (channel_id,) in rows:
-                try:
-                    bot.add_view(VCPanelView(int(channel_id)))
-                except Exception:
-                    pass
-
-    # Re-register LFG views for active posts
-    async with aiosqlite.connect(DB_PATH) as db:
-        for g in bot.guilds:
-            cur = await db.execute(
-                "SELECT id FROM lfg_posts WHERE guild_id=? AND status='OPEN'",
-                (g.id,),
-            )
-            rows = await cur.fetchall()
-            for (lfg_id,) in rows:
-                try:
-                    from commands.warframe.lfg import LFGView
-                    bot.add_view(LFGView(int(lfg_id)))
-                except Exception:
-                    pass
-
-    # Re-register complaint views for open-ish cases
-    async with aiosqlite.connect(DB_PATH) as db:
-        for g in bot.guilds:
-            cur = await db.execute(
-                "SELECT case_id FROM complaints WHERE guild_id=? AND status IN ('OPEN','ACKNOWLEDGED','NEEDS INFO')",
-                (g.id,),
-            )
-            rows = await cur.fetchall()
-            for (case_id,) in rows:
-                try:
-                    bot.add_view(ComplaintModView(str(case_id)))
-                except Exception:
-                    pass
-
-    # Re-register suggestion views for pending suggestions
-    async with aiosqlite.connect(DB_PATH) as db:
-        for g in bot.guilds:
-            cur = await db.execute(
-                "SELECT id FROM suggestions WHERE guild_id=? AND status='PENDING'",
-                (g.id,),
-            )
-            rows = await cur.fetchall()
-            for (suggestion_id,) in rows:
-                try:
-                    from commands.suggestions.manage_suggestions import SuggestionView
-                    bot.add_view(SuggestionView(int(suggestion_id)))
-                except Exception:
-                    pass
-    
-    # Re-register application views for pending applications
-    from views import ApplicationManageView, ApplicationPanelView
-    async with aiosqlite.connect(DB_PATH) as db:
-        for g in bot.guilds:
-            cur = await db.execute(
-                "SELECT id FROM applications WHERE guild_id=? AND status='PENDING'",
-                (g.id,),
-            )
-            rows = await cur.fetchall()
-            for (application_id,) in rows:
-                try:
-                    bot.add_view(ApplicationManageView(int(application_id)))
-                except Exception:
-                    pass
-            
-            # Re-register application panel views
-            cur = await db.execute(
-                "SELECT panel_message_id FROM application_settings WHERE guild_id=? AND panel_message_id IS NOT NULL",
-                (g.id,),
-            )
-            panel_rows = await cur.fetchall()
-            for (panel_message_id,) in panel_rows:
-                try:
-                    bot.add_view(ApplicationPanelView(g.id))
-                except Exception:
-                    pass
-    
-    # Re-register giveaway views for active giveaways
-    from views import GiveawayView
-    async with aiosqlite.connect(DB_PATH) as db:
-        cur = await db.execute("""
-            SELECT id FROM giveaways WHERE ended = 0
-        """)
-        active_giveaways = await cur.fetchall()
-    
-    for (giveaway_id,) in active_giveaways:
-        try:
-            bot.add_view(GiveawayView(giveaway_id))
-        except Exception as e:
-            logger.debug(f"[ready] Error re-registering giveaway view {giveaway_id}: {e}")
-    
-    # Re-register trading post views for active listings
-    from views import TradingPostView
-    async with aiosqlite.connect(DB_PATH) as db:
-        for g in bot.guilds:
-            cur = await db.execute(
-                "SELECT id, user_id FROM trading_posts WHERE guild_id=? AND status='ACTIVE'",
-                (g.id,),
-            )
-            rows = await cur.fetchall()
-            for (listing_id, user_id) in rows:
-                try:
-                    bot.add_view(TradingPostView(int(listing_id), int(user_id)))
-                except Exception:
-                    pass
-    
-    # Verify update log settings persistence
-    async with aiosqlite.connect(DB_PATH) as db:
-        cur = await db.execute("""
-            SELECT guild_id, channel_id FROM update_log_settings WHERE channel_id IS NOT NULL
-        """)
-        settings = await cur.fetchall()
-        if settings:
-            logger.info(f"[ready] Loaded {len(settings)} update log channel setting(s) from database")
-            for guild_id, channel_id in settings:
-                guild = bot.get_guild(guild_id)
-                if guild:
-                    channel = guild.get_channel(channel_id)
-                    if channel:
-                        logger.info(f"[ready] Update log channel configured: {guild.name} -> #{channel.name}")
-                    else:
-                        logger.warning(f"[ready] Update log channel not found: guild {guild.name}, channel_id {channel_id}")
-        else:
-            logger.info("[ready] No update log channels configured")
+            tasks.append(ensure_core_channels(g))
+            tasks.append(ensure_join_to_create_channel(g))
         
-        # Verify version tracking exists
-        cur = await db.execute("SELECT current_version FROM bot_version_tracking WHERE id = 1")
-        version_row = await cur.fetchone()
-        if version_row:
-            logger.info(f"[ready] Bot version tracking loaded: {version_row[0]}")
-        else:
-            logger.info("[ready] No version tracking found (will be created on first update check)")
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                guild_idx = i // 2
+                if guild_idx < len(bot.guilds):
+                    print(f"[startup] Ensure failed in {bot.guilds[guild_idx].name}: {result}")
     
-    # Initialize achievement definitions
-    try:
-        from database import initialize_achievement_definitions
-        await initialize_achievement_definitions()
-        logger.info("[ready] Achievement definitions initialized")
-    except Exception as e:
-        logger.error(f"[ready] Error initializing achievements: {e}", exc_info=True)
-    
-    # Wait a bit for commands to fully sync, then check and post automatic update logs
-    try:
-        logger.info("[ready] Waiting for commands to sync, then checking for automatic updates...")
-        await asyncio.sleep(5)  # Give commands more time to fully register and sync with Discord
-        logger.info("[ready] Starting update check...")
-        await check_and_post_updates(bot)
-        logger.info("[ready] Automatic update check completed")
-    except Exception as e:
-        logger.error(f"[ready] Error during automatic update check: {e}", exc_info=True)
-    
-    # Re-register reaction roles for all messages
-    async with aiosqlite.connect(DB_PATH) as db:
-        cur = await db.execute("""
-            SELECT DISTINCT message_id, channel_id FROM reaction_roles
-        """)
-        reaction_messages = await cur.fetchall()
-    
-    for message_id, channel_id in reaction_messages:
+    async def setup_background_tasks():
+        """Setup background tasks."""
         try:
-            channel = bot.get_channel(channel_id)
-            if channel and isinstance(channel, discord.TextChannel):
-                try:
-                    message = await channel.fetch_message(message_id)
-                    # Get all reactions for this message
-                    async with aiosqlite.connect(DB_PATH) as db2:
-                        cur2 = await db2.execute("""
-                            SELECT emoji FROM reaction_roles
-                            WHERE message_id = ? AND channel_id = ?
-                        """, (message_id, channel_id))
-                        emojis = await cur2.fetchall()
-                    
-                    # Re-add reactions if they're missing
-                    for (emoji_str,) in emojis:
-                        try:
-                            # Check if reaction already exists
-                            if not any(str(r.emoji) == emoji_str for r in message.reactions):
-                                await message.add_reaction(emoji_str)
-                        except Exception as e:
-                            logger.debug(f"[ready] Could not re-add reaction {emoji_str} to message {message_id}: {e}")
-                except discord.NotFound:
-                    logger.debug(f"[ready] Reaction role message {message_id} not found, skipping")
-                except Exception as e:
-                    logger.debug(f"[ready] Error re-registering reaction roles for message {message_id}: {e}")
+            tasks_dict = setup_tasks(bot)
+            print(f"[ready] Background tasks initialized: {len(tasks_dict)} tasks")
         except Exception as e:
-            logger.debug(f"[ready] Error processing reaction role message {message_id}: {e}")
+            print(f"[ready] ERROR: Failed to setup background tasks: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    async def register_persistent_views():
+        """Register all persistent views in parallel."""
+        # Basic views
+        bot.add_view(ComplaintPanel())
+        bot.add_view(RSVPView())
+        
+        # Collect all view data in parallel
+        async def get_all_view_data():
+            """Fetch all view data in a single query batch."""
+            async with aiosqlite.connect(DB_PATH) as db:
+                # Fetch all data in parallel queries
+                vc_cur = await db.execute("SELECT guild_id, channel_id FROM temp_vcs")
+                vc_data = await vc_cur.fetchall()
+                
+                lfg_cur = await db.execute("SELECT id FROM lfg_posts WHERE status='OPEN'")
+                lfg_data = await lfg_cur.fetchall()
+                
+                complaint_cur = await db.execute("SELECT case_id FROM complaints WHERE status IN ('OPEN','ACKNOWLEDGED','NEEDS INFO')")
+                complaint_data = await complaint_cur.fetchall()
+                
+                suggestion_cur = await db.execute("SELECT id FROM suggestions WHERE status='PENDING'")
+                suggestion_data = await suggestion_cur.fetchall()
+                
+                app_cur = await db.execute("SELECT id FROM applications WHERE status='PENDING'")
+                app_data = await app_cur.fetchall()
+                
+                panel_cur = await db.execute("SELECT guild_id, panel_message_id FROM application_settings WHERE panel_message_id IS NOT NULL")
+                panel_data = await panel_cur.fetchall()
+                
+                giveaway_cur = await db.execute("SELECT id FROM giveaways WHERE ended = 0")
+                giveaway_data = await giveaway_cur.fetchall()
+                
+                trading_cur = await db.execute("SELECT id, user_id FROM trading_posts WHERE status='ACTIVE'")
+                trading_data = await trading_cur.fetchall()
+                
+                return {
+                    'vc': vc_data,
+                    'lfg': lfg_data,
+                    'complaints': complaint_data,
+                    'suggestions': suggestion_data,
+                    'applications': app_data,
+                    'panels': panel_data,
+                    'giveaways': giveaway_data,
+                    'trading': trading_data
+                }
+        
+        view_data = await get_all_view_data()
+        
+        # Register views (non-blocking)
+        for (guild_id, channel_id) in view_data['vc']:
+            try:
+                bot.add_view(VCPanelView(int(channel_id)))
+            except Exception:
+                pass
+        
+        for (lfg_id,) in view_data['lfg']:
+            try:
+                from commands.warframe.lfg import LFGView
+                bot.add_view(LFGView(int(lfg_id)))
+            except Exception:
+                pass
+        
+        for (case_id,) in view_data['complaints']:
+            try:
+                bot.add_view(ComplaintModView(str(case_id)))
+            except Exception:
+                pass
+        
+        for (suggestion_id,) in view_data['suggestions']:
+            try:
+                from commands.suggestions.manage_suggestions import SuggestionView
+                bot.add_view(SuggestionView(int(suggestion_id)))
+            except Exception:
+                pass
+        
+        for (application_id,) in view_data['applications']:
+            try:
+                from views import ApplicationManageView
+                bot.add_view(ApplicationManageView(int(application_id)))
+            except Exception:
+                pass
+        
+        for (guild_id, panel_message_id) in view_data['panels']:
+            try:
+                from views import ApplicationPanelView
+                bot.add_view(ApplicationPanelView(guild_id))
+            except Exception:
+                pass
+        
+        for (giveaway_id,) in view_data['giveaways']:
+            try:
+                from views import GiveawayView
+                bot.add_view(GiveawayView(giveaway_id))
+            except Exception as e:
+                logger.debug(f"[ready] Error re-registering giveaway view {giveaway_id}: {e}")
+        
+        for (listing_id, user_id) in view_data['trading']:
+            try:
+                from views import TradingPostView
+                bot.add_view(TradingPostView(int(listing_id), int(user_id)))
+            except Exception:
+                pass
+    
+    # Run setup tasks in parallel
+    await asyncio.gather(
+        setup_guild_channels(),
+        setup_background_tasks(),
+        register_persistent_views(),
+        return_exceptions=True
+    )
 
+    
+    # Verify update log settings and version tracking (parallel)
+    async def verify_settings():
+        """Verify update log settings and version tracking."""
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute("""
+                SELECT guild_id, channel_id FROM update_log_settings WHERE channel_id IS NOT NULL
+            """)
+            settings = await cur.fetchall()
+            if settings:
+                logger.info(f"[ready] Loaded {len(settings)} update log channel setting(s) from database")
+                for guild_id, channel_id in settings:
+                    guild = bot.get_guild(guild_id)
+                    if guild:
+                        channel = guild.get_channel(channel_id)
+                        if channel:
+                            logger.info(f"[ready] Update log channel configured: {guild.name} -> #{channel.name}")
+                        else:
+                            logger.warning(f"[ready] Update log channel not found: guild {guild.name}, channel_id {channel_id}")
+            else:
+                logger.info("[ready] No update log channels configured")
+            
+            # Verify version tracking exists
+            cur = await db.execute("SELECT current_version FROM bot_version_tracking WHERE id = 1")
+            version_row = await cur.fetchone()
+            if version_row:
+                logger.info(f"[ready] Bot version tracking loaded: {version_row[0]}")
+            else:
+                logger.info("[ready] No version tracking found (will be created on first update check)")
+    
+    async def init_achievements():
+        """Initialize achievement definitions (cached)."""
+        global _achievement_definitions_initialized
+        try:
+            from database import initialize_achievement_definitions
+            await initialize_achievement_definitions()
+            _achievement_definitions_initialized = True
+            logger.info("[ready] Achievement definitions initialized")
+        except Exception as e:
+            logger.error(f"[ready] Error initializing achievements: {e}", exc_info=True)
+    
+    # Run verification tasks in parallel
+    await asyncio.gather(
+        verify_settings(),
+        init_achievements(),
+        return_exceptions=True
+    )
+    
+    # Wait a bit for commands to fully sync, then check and post automatic update logs (non-blocking)
+    async def check_updates():
+        """Check for updates in background."""
+        try:
+            logger.info("[ready] Waiting for commands to sync, then checking for automatic updates...")
+            await asyncio.sleep(5)  # Give commands more time to fully register and sync with Discord
+            logger.info("[ready] Starting update check...")
+            await check_and_post_updates(bot)
+            logger.info("[ready] Automatic update check completed")
+        except Exception as e:
+            logger.error(f"[ready] Error during automatic update check: {e}", exc_info=True)
+    
+    # Run update check in background (non-blocking)
+    asyncio.create_task(check_updates())
+    
+    # Re-register reaction roles for all messages (optimized - batch fetch reactions)
+    async def restore_reaction_roles():
+        """Restore reaction roles in background (non-blocking)."""
+        try:
+            async with aiosqlite.connect(DB_PATH) as db:
+                # Get all reaction role messages with their emojis in one query
+                cur = await db.execute("""
+                    SELECT DISTINCT message_id, channel_id, 
+                           GROUP_CONCAT(emoji, ',') as emojis
+                    FROM reaction_roles
+                    GROUP BY message_id, channel_id
+                """)
+                reaction_messages = await cur.fetchall()
+            
+            # Process in batches to avoid rate limits
+            for message_id, channel_id, emojis_str in reaction_messages:
+                try:
+                    channel = bot.get_channel(channel_id)
+                    if channel and isinstance(channel, discord.TextChannel):
+                        try:
+                            message = await channel.fetch_message(message_id)
+                            emojis = emojis_str.split(',') if emojis_str else []
+                            
+                            # Re-add reactions if they're missing (batch)
+                            for emoji_str in emojis:
+                                try:
+                                    if not any(str(r.emoji) == emoji_str for r in message.reactions):
+                                        await message.add_reaction(emoji_str)
+                                except Exception:
+                                    pass
+                        except (discord.NotFound, discord.Forbidden):
+                            pass
+                        except Exception as e:
+                            logger.debug(f"[ready] Error restoring reaction roles for message {message_id}: {e}")
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.debug(f"[ready] Error in reaction role restoration: {e}")
+    
+    # Run reaction role restoration in background (non-blocking)
+    asyncio.create_task(restore_reaction_roles())
+
+
+# Cache for achievement definitions (avoid repeated initialization)
+_achievement_definitions_initialized = False
 
 @bot.event
 async def on_member_join(member: discord.Member):
     """Send welcome message when a member joins."""
     # Check for join anniversary milestones (check existing join date)
+    global _achievement_definitions_initialized
     from database import check_and_record_milestone, check_and_unlock_achievement, initialize_achievement_definitions
-    await initialize_achievement_definitions()
+    
+    # Only initialize once (cached)
+    if not _achievement_definitions_initialized:
+        await initialize_achievement_definitions()
+        _achievement_definitions_initialized = True
     
     # Get member's join date
     join_date = member.joined_at or now_utc()
@@ -2803,7 +2840,7 @@ async def on_message_delete(message: discord.Message):
     if not message.guild or message.author.bot:
         return
     
-    # Store deleted message
+    # Store deleted message and check log channel in single transaction
     attachments_json = None
     if message.attachments:
         attachments_json = json.dumps([{"url": att.url, "filename": att.filename} for att in message.attachments])
@@ -2813,6 +2850,7 @@ async def on_message_delete(message: discord.Message):
         embeds_json = json.dumps([embed.to_dict() for embed in message.embeds])
     
     async with aiosqlite.connect(DB_PATH) as db:
+        # Store deleted message
         await db.execute("""
             INSERT OR REPLACE INTO deleted_messages 
             (guild_id, channel_id, message_id, user_id, content, author_name, author_avatar, attachments, embeds, deleted_at)
@@ -2829,15 +2867,14 @@ async def on_message_delete(message: discord.Message):
             embeds_json,
             now_utc().isoformat()
         ))
-        await db.commit()
-    
-    # Send to log channel if configured
-    async with aiosqlite.connect(DB_PATH) as db:
+        
+        # Check log channel in same transaction
         cur = await db.execute("""
             SELECT channel_id FROM log_channels
             WHERE guild_id=? AND log_type='message_delete' AND enabled=1
         """, (message.guild.id,))
         row = await cur.fetchone()
+        await db.commit()
     
     if row:
         log_channel = message.guild.get_channel(row[0])
@@ -2864,8 +2901,9 @@ async def on_message_edit(before: discord.Message, after: discord.Message):
     if not after.guild or after.author.bot or before.content == after.content:
         return
     
-    # Store edit
+    # Store edit and check log channel in single transaction
     async with aiosqlite.connect(DB_PATH) as db:
+        # Store edit
         await db.execute("""
             INSERT INTO edited_messages 
             (guild_id, channel_id, message_id, user_id, old_content, new_content, author_name, edited_at)
@@ -2880,15 +2918,14 @@ async def on_message_edit(before: discord.Message, after: discord.Message):
             str(after.author),
             now_utc().isoformat()
         ))
-        await db.commit()
-    
-    # Send to log channel if configured
-    async with aiosqlite.connect(DB_PATH) as db:
+        
+        # Check log channel in same transaction
         cur = await db.execute("""
             SELECT channel_id FROM log_channels
             WHERE guild_id=? AND log_type='message_edit' AND enabled=1
         """, (after.guild.id,))
         row = await cur.fetchone()
+        await db.commit()
     
     if row:
         log_channel = after.guild.get_channel(row[0])
