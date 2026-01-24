@@ -2117,43 +2117,10 @@ async def on_interaction(interaction: discord.Interaction):
                     return
         
         # Application cancel button
-        if cid == "cancel_application_btn":
-            # Defer immediately
-            try:
-                if not interaction.response.is_done():
-                    await interaction.response.defer(ephemeral=True)
-            except (discord.errors.NotFound, discord.errors.InteractionResponded, discord.errors.HTTPException):
-                pass
-            
-            # Get application_id from the view
-            # The view stores application_id, but we need to get it from the message or view
-            # Since we can't easily get it from the button, we'll find the user's active application
-            async with aiosqlite.connect(DB_PATH) as db:
-                cur = await db.execute("""
-                    SELECT id FROM applications
-                    WHERE guild_id = ? AND user_id = ? AND status = 'IN_PROGRESS'
-                """, (interaction.guild.id, interaction.user.id))
-                row = await cur.fetchone()
-            
-            if not row:
-                try:
-                    await interaction.followup.send(
-                        embed=obsidian_embed(
-                            "❌ No Active Application",
-                            "You don't have an application in progress to cancel.",
-                            color=discord.Color.red(),
-                            client=bot,
-                        ),
-                        ephemeral=True
-                    )
-                except Exception:
-                    pass
-                return
-            
-            application_id = row[0]
-            from commands.applications.application import cancel_application
-            await cancel_application(bot, interaction.guild.id, interaction.user.id, application_id, interaction)
-            return
+        # Note: This is handled by ApplicationQuestionView.cancel_button callback
+        # We don't need to handle it here since the view callback will be called first
+        # If the view callback doesn't exist (e.g., after bot restart), the button won't work anyway
+        # So we skip handling it here to avoid double-defer errors
         
         # Applications: approve or reject
         if cid.startswith("application:"):
@@ -2169,8 +2136,8 @@ async def on_interaction(interaction: discord.Interaction):
                 if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
                     return await interaction.response.send_message("Sorry, but you are not an Administrator in this server.", ephemeral=True)
                 
-                await interaction.response.defer(ephemeral=True)
-                
+                # The view callbacks defer themselves, so we don't need to defer here
+                # Just call the view callback directly
                 from views import ApplicationManageView
                 view = ApplicationManageView(application_id)
                 
