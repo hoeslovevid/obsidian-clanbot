@@ -588,15 +588,46 @@ class ApplicationManageView(discord.ui.View):
         
         await interaction.message.edit(embed=embed, view=self)
         
-        # Notify user
+        # Notify user and assign role
+        role_assigned = False
         if user_id:
             user = interaction.guild.get_member(user_id)
             if user:
+                # Assign Oathtaker role
+                oathtaker_role = discord.utils.get(interaction.guild.roles, name="Oathtaker")
+                if oathtaker_role:
+                    try:
+                        # Check if bot has permission to manage roles
+                        if interaction.guild.me.guild_permissions.manage_roles:
+                            # Check if bot's role is high enough
+                            if interaction.guild.me.top_role > oathtaker_role:
+                                if oathtaker_role not in user.roles:
+                                    await user.add_roles(oathtaker_role, reason="Application approved")
+                                    role_assigned = True
+                                    logger.info(f"[application] Assigned Oathtaker role to {user} after application approval")
+                                else:
+                                    role_assigned = True  # Already has the role
+                            else:
+                                logger.warning(f"[application] Bot's role is not high enough to assign Oathtaker role to {user}")
+                        else:
+                            logger.warning(f"[application] Bot does not have permission to manage roles")
+                    except discord.Forbidden:
+                        logger.warning(f"[application] No permission to assign Oathtaker role to {user}")
+                    except Exception as e:
+                        logger.error(f"[application] Error assigning Oathtaker role: {e}")
+                else:
+                    logger.warning(f"[application] Oathtaker role not found in guild {interaction.guild.id}")
+                
+                # Send DM notification
                 try:
+                    message_text = f"Congratulations! Your application to join {interaction.guild.name} has been approved."
+                    if role_assigned:
+                        message_text += "\n\nYou have been assigned the **Oathtaker** role!"
+                    
                     await user.send(
                         embed=obsidian_embed(
                             "✅ Application Approved",
-                            f"Congratulations! Your application to join {interaction.guild.name} has been approved.",
+                            message_text,
                             color=discord.Color.green(),
                             client=interaction.client,
                         )
