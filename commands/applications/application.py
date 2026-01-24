@@ -129,74 +129,97 @@ async def start_application_process(interaction: discord.Interaction):
 
 async def cancel_application(bot, guild_id: int, user_id: int, application_id: int, interaction: Optional[discord.Interaction] = None):
     """Cancel an in-progress application."""
-    # Check if application exists and belongs to user
-    async with aiosqlite.connect(DB_PATH) as db:
-        cur = await db.execute("""
-            SELECT status, user_id FROM applications WHERE id = ? AND guild_id = ?
-        """, (application_id, guild_id))
-        row = await cur.fetchone()
+    import asyncio
     
-    if not row:
-        if interaction:
-            try:
-                if interaction.response.is_done():
-                    await interaction.followup.send("Application not found.", ephemeral=True)
-                else:
-                    await interaction.response.send_message("Application not found.", ephemeral=True)
-            except Exception:
-                pass
-        return False
+    # Retry logic for database locking issues
+    max_retries = 3
+    retry_delay = 0.1  # Start with 100ms
     
-    status, app_user_id = row[0], row[1]
-    
-    # Check if it belongs to the user
-    if app_user_id != user_id:
-        if interaction:
-            try:
-                if interaction.response.is_done():
-                    await interaction.followup.send("This application does not belong to you.", ephemeral=True)
-                else:
-                    await interaction.response.send_message("This application does not belong to you.", ephemeral=True)
-            except Exception:
-                pass
-        return False
-    
-    # Check if it's in progress
-    if status != 'IN_PROGRESS':
-        if interaction:
-            try:
-                if interaction.response.is_done():
-                    await interaction.followup.send(
-                        embed=obsidian_embed(
-                            "❌ Cannot Cancel",
-                            f"This application is already {status.lower()} and cannot be cancelled.",
-                            color=discord.Color.red(),
-                            client=bot,
-                        ),
-                        ephemeral=True
-                    )
-                else:
-                    await interaction.response.send_message(
-                        embed=obsidian_embed(
-                            "❌ Cannot Cancel",
-                            f"This application is already {status.lower()} and cannot be cancelled.",
-                            color=discord.Color.red(),
-                            client=bot,
-                        ),
-                        ephemeral=True
-                    )
-            except Exception:
-                pass
-        return False
-    
-    # Cancel the application
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("""
-            UPDATE applications
-            SET status = 'CANCELLED'
-            WHERE id = ?
-        """, (application_id,))
-        await db.commit()
+    for attempt in range(max_retries):
+        try:
+            # Use a single connection for all operations
+            async with aiosqlite.connect(DB_PATH, timeout=10.0) as db:
+                # Check if application exists and belongs to user
+                cur = await db.execute("""
+                    SELECT status, user_id FROM applications WHERE id = ? AND guild_id = ?
+                """, (application_id, guild_id))
+                row = await cur.fetchone()
+            
+                if not row:
+                    if interaction:
+                        try:
+                            if interaction.response.is_done():
+                                await interaction.followup.send("Application not found.", ephemeral=True)
+                            else:
+                                await interaction.response.send_message("Application not found.", ephemeral=True)
+                        except Exception:
+                            pass
+                    return False
+                
+                status, app_user_id = row[0], row[1]
+                
+                # Check if it belongs to the user
+                if app_user_id != user_id:
+                    if interaction:
+                        try:
+                            if interaction.response.is_done():
+                                await interaction.followup.send("This application does not belong to you.", ephemeral=True)
+                            else:
+                                await interaction.response.send_message("This application does not belong to you.", ephemeral=True)
+                        except Exception:
+                            pass
+                    return False
+                
+                # Check if it's in progress
+                if status != 'IN_PROGRESS':
+                    if interaction:
+                        try:
+                            if interaction.response.is_done():
+                                await interaction.followup.send(
+                                    embed=obsidian_embed(
+                                        "❌ Cannot Cancel",
+                                        f"This application is already {status.lower()} and cannot be cancelled.",
+                                        color=discord.Color.red(),
+                                        client=bot,
+                                    ),
+                                    ephemeral=True
+                                )
+                            else:
+                                await interaction.response.send_message(
+                                    embed=obsidian_embed(
+                                        "❌ Cannot Cancel",
+                                        f"This application is already {status.lower()} and cannot be cancelled.",
+                                        color=discord.Color.red(),
+                                        client=bot,
+                                    ),
+                                    ephemeral=True
+                                )
+                        except Exception:
+                            pass
+                    return False
+                
+                # Cancel the application (all in the same connection)
+                await db.execute("""
+                    UPDATE applications
+                    SET status = 'CANCELLED'
+                    WHERE id = ?
+                """, (application_id,))
+                await db.commit()
+                break  # Success, exit retry loop
+                
+        except aiosqlite.OperationalError as e:
+            if "database is locked" in str(e).lower() and attempt < max_retries - 1:
+                # Wait before retrying with exponential backoff
+                await asyncio.sleep(retry_delay * (2 ** attempt))
+                continue
+            else:
+                # Re-raise if it's not a locking issue or we've exhausted retries
+                raise
+        except Exception as e:
+            # For other errors, log and re-raise
+            import logging
+            logging.getLogger(__name__).error(f"Error cancelling application: {e}")
+            raise
     
     # Notify user
     guild = bot.get_guild(guild_id)
@@ -297,27 +320,102 @@ def setup(bot, group=None):
         """Cancel an in-progress application."""
         await interaction.response.defer(ephemeral=True)
         
-        # Find user's in-progress application
-        async with aiosqlite.connect(DB_PATH) as db:
-            cur = await db.execute("""
-                SELECT id FROM applications
-                WHERE guild_id = ? AND user_id = ? AND status = 'IN_PROGRESS'
-            """, (interaction.guild.id, interaction.user.id))
-            row = await cur.fetchone()
+        # Find user's in-progress application and cancel in a single operation
+        # This avoids opening multiple database connections
+        import asyncio
         
-        if not row:
-            return await interaction.followup.send(
-                embed=obsidian_embed(
-                    "❌ No Active Application",
-                    "You don't have an application in progress to cancel.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
-            )
+        max_retries = 3
+        retry_delay = 0.1
         
-        application_id = row[0]
-        await cancel_application(interaction.client, interaction.guild.id, interaction.user.id, application_id, interaction)
+        for attempt in range(max_retries):
+            try:
+                async with aiosqlite.connect(DB_PATH, timeout=10.0) as db:
+                    # Find user's in-progress application
+                    cur = await db.execute("""
+                        SELECT id FROM applications
+                        WHERE guild_id = ? AND user_id = ? AND status = 'IN_PROGRESS'
+                    """, (interaction.guild.id, interaction.user.id))
+                    row = await cur.fetchone()
+                
+                    if not row:
+                        return await interaction.followup.send(
+                            embed=obsidian_embed(
+                                "❌ No Active Application",
+                                "You don't have an application in progress to cancel.",
+                                color=discord.Color.red(),
+                                client=interaction.client,
+                            ),
+                            ephemeral=True
+                        )
+                    
+                    application_id = row[0]
+                    
+                    # Cancel the application in the same connection
+                    await db.execute("""
+                        UPDATE applications
+                        SET status = 'CANCELLED'
+                        WHERE id = ? AND guild_id = ? AND user_id = ? AND status = 'IN_PROGRESS'
+                    """, (application_id, interaction.guild.id, interaction.user.id))
+                    await db.commit()
+                    
+                    # Notify user
+                    guild = interaction.guild
+                    user = guild.get_member(interaction.user.id)
+                    if user:
+                        try:
+                            await user.send(
+                                embed=obsidian_embed(
+                                    "❌ Application Cancelled",
+                                    "Your application has been cancelled. You can start a new application anytime.",
+                                    color=discord.Color.orange(),
+                                    client=interaction.client,
+                                )
+                            )
+                        except discord.Forbidden:
+                            pass
+                    
+                    # Send confirmation
+                    await interaction.followup.send(
+                        embed=obsidian_embed(
+                            "✅ Application Cancelled",
+                            "Your application has been cancelled successfully.",
+                            color=discord.Color.orange(),
+                            client=interaction.client,
+                        ),
+                        ephemeral=True
+                    )
+                    break  # Success, exit retry loop
+                    
+            except aiosqlite.OperationalError as e:
+                if "database is locked" in str(e).lower() and attempt < max_retries - 1:
+                    # Wait before retrying with exponential backoff
+                    await asyncio.sleep(retry_delay * (2 ** attempt))
+                    continue
+                else:
+                    # Re-raise if it's not a locking issue or we've exhausted retries
+                    await interaction.followup.send(
+                        embed=obsidian_embed(
+                            "❌ Error",
+                            "Failed to cancel application. Please try again in a moment.",
+                            color=discord.Color.red(),
+                            client=interaction.client,
+                        ),
+                        ephemeral=True
+                    )
+                    raise
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(f"Error in application_cancel: {e}")
+                await interaction.followup.send(
+                    embed=obsidian_embed(
+                        "❌ Error",
+                        "An error occurred while cancelling your application. Please try again.",
+                        color=discord.Color.red(),
+                        client=interaction.client,
+                    ),
+                    ephemeral=True
+                )
+                raise
 
 
 async def send_next_question(bot, guild_id: int, user_id: int, application_id: int):
