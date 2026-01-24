@@ -1853,5 +1853,152 @@ async def init_db() -> None:
             description TEXT
         )""")
 
+        # Prestige system tables
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS user_prestige (
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            prestige_level INTEGER NOT NULL DEFAULT 0,
+            total_prestige_xp INTEGER NOT NULL DEFAULT 0,
+            last_prestige_at TEXT,
+            PRIMARY KEY (guild_id, user_id)
+        )""")
+
+        # Badge/Title system tables
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS user_badges (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            badge_id TEXT NOT NULL,
+            unlocked_at TEXT NOT NULL,
+            is_equipped INTEGER NOT NULL DEFAULT 0,
+            UNIQUE(guild_id, user_id, badge_id)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS badge_definitions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            badge_id TEXT NOT NULL UNIQUE,
+            name TEXT NOT NULL,
+            description TEXT NOT NULL,
+            icon_emoji TEXT,
+            rarity TEXT NOT NULL DEFAULT 'common',
+            requirement TEXT,
+            reward_coins INTEGER DEFAULT 0,
+            reward_xp INTEGER DEFAULT 0
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS user_titles (
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            title TEXT,
+            PRIMARY KEY (guild_id, user_id)
+        )""")
+
+        # Scheduled announcements tables
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS scheduled_announcements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            channel_id INTEGER NOT NULL,
+            message_text TEXT NOT NULL,
+            embed_json TEXT,
+            schedule_type TEXT NOT NULL,
+            schedule_value TEXT NOT NULL,
+            next_run_at TEXT NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            created_by INTEGER NOT NULL,
+            created_at TEXT NOT NULL
+        )""")
+
+        # Server milestones tables
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS server_milestones (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            milestone_type TEXT NOT NULL,
+            milestone_value INTEGER NOT NULL,
+            achieved_at TEXT NOT NULL,
+            announced INTEGER NOT NULL DEFAULT 0,
+            UNIQUE(guild_id, milestone_type, milestone_value)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS server_milestone_settings (
+            guild_id INTEGER NOT NULL PRIMARY KEY,
+            member_count_enabled INTEGER NOT NULL DEFAULT 1,
+            anniversary_enabled INTEGER NOT NULL DEFAULT 1,
+            announcement_channel_id INTEGER
+        )""")
+
+        # Raid protection tables
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS raid_protection_settings (
+            guild_id INTEGER NOT NULL PRIMARY KEY,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            join_threshold INTEGER NOT NULL DEFAULT 10,
+            time_window_seconds INTEGER NOT NULL DEFAULT 60,
+            action TEXT NOT NULL DEFAULT 'lockdown',
+            lockdown_duration_minutes INTEGER NOT NULL DEFAULT 30,
+            alert_channel_id INTEGER,
+            alert_role_id INTEGER
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS recent_joins (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            account_age_days INTEGER,
+            joined_at TEXT NOT NULL
+        )""")
+
+        # Cross-server communication tables
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS server_alliances (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            allied_guild_id INTEGER NOT NULL,
+            alliance_name TEXT,
+            created_at TEXT NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            UNIQUE(guild_id, allied_guild_id)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS cross_server_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            from_guild_id INTEGER NOT NULL,
+            to_guild_id INTEGER NOT NULL,
+            from_user_id INTEGER NOT NULL,
+            message_content TEXT NOT NULL,
+            sent_at TEXT NOT NULL,
+            read INTEGER NOT NULL DEFAULT 0
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS cross_server_channels (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            channel_id INTEGER NOT NULL,
+            alliance_id INTEGER NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            FOREIGN KEY (alliance_id) REFERENCES server_alliances(id) ON DELETE CASCADE
+        )""")
+
+        # Voice activity leaderboard tables (enhancement)
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS voice_leaderboard_cache (
+            guild_id INTEGER NOT NULL,
+            period_type TEXT NOT NULL,
+            user_id INTEGER NOT NULL,
+            voice_minutes INTEGER NOT NULL DEFAULT 0,
+            rank INTEGER,
+            last_updated TEXT NOT NULL,
+            PRIMARY KEY (guild_id, period_type, user_id)
+        )""")
+
         await db.commit()
         logger.info("[db] Database tables initialized successfully")

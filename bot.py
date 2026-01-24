@@ -290,6 +290,7 @@ def load_all_commands():
         "commands.moderation.role_menu",
         "commands.moderation.backup",
         "commands.moderation.data_retention",
+        "commands.moderation.raid_protection",
         # Economy commands
         "commands.economy.balance",
         "commands.economy.leaderboard",
@@ -304,6 +305,7 @@ def load_all_commands():
         "commands.economy.shop_manage",
         "commands.economy.gambling",
         "commands.economy.pets",
+        "commands.economy.prestige",
         # Warframe commands
         "commands.warframe.baro",
         "commands.warframe.baro_notify",
@@ -335,6 +337,7 @@ def load_all_commands():
         "commands.general.server_stats",
         "commands.general.profile",
         "commands.general.bot_status",
+        "commands.general.badges",
     ]
     
     # Map command modules to their groups
@@ -353,6 +356,7 @@ def load_all_commands():
         "commands.economy.shop_manage": economy_group,
         "commands.economy.gambling": economy_group,
         "commands.economy.pets": economy_group,
+        "commands.economy.prestige": economy_group,
         # Warframe commands
         "commands.warframe.baro": warframe_group,
         "commands.warframe.baro_notify": warframe_group,
@@ -385,6 +389,7 @@ def load_all_commands():
         "commands.moderation.role_menu": moderation_group,
         "commands.moderation.backup": moderation_group,
         "commands.moderation.data_retention": moderation_group,
+        "commands.moderation.raid_protection": moderation_group,
         # General commands (core bot commands - max 25)
         "commands.general.help": general_group,
         "commands.general.member_count": general_group,
@@ -404,6 +409,11 @@ def load_all_commands():
         "commands.general.server_stats": community_group,
         "commands.general.profile": general_group,
         "commands.general.bot_status": general_group,
+        "commands.general.badges": general_group,
+        "commands.general.announcements": general_group,
+        "commands.general.milestones": general_group,
+        "commands.general.cross_server": general_group,
+        "commands.general.voice_leaderboard": general_group,
         # Music commands
         "commands.music.music": music_group,
         # Community commands (events, complaints, tickets, suggestions, applications, giveaways, trading, activity)
@@ -2455,6 +2465,31 @@ async def on_member_join(member: discord.Member):
         if milestone_achieved and years_in_server <= 2:  # Only for 1-2 year anniversaries
             achievement_id = f"join_anniversary_{years_in_server}"
             await check_and_unlock_achievement(member.guild.id, member.id, achievement_id, bot)
+    
+    # Raid protection - record join
+    try:
+        from commands.moderation.raid_protection import record_join, check_raid_condition, trigger_raid_protection
+        account_age = None
+        if member.created_at:
+            account_age = (now_utc() - member.created_at.replace(tzinfo=timezone.utc)).days
+        await record_join(member.guild.id, member.id, account_age)
+        
+        # Check if raid conditions are met
+        is_raid, join_count = await check_raid_condition(member.guild)
+        if is_raid:
+            await trigger_raid_protection(member.guild, join_count)
+    except Exception as e:
+        logger.error(f"[raid_protection] Error in raid protection: {e}")
+    
+    # Server milestones - check member count milestones
+    try:
+        from commands.general.milestones import check_and_celebrate_milestone
+        member_count = member.guild.member_count
+        # Check for round number milestones (100, 500, 1000, etc.)
+        if member_count % 100 == 0 or member_count in [50, 250, 500, 1000, 2500, 5000, 10000]:
+            await check_and_celebrate_milestone(member.guild, "member_count", member_count)
+    except Exception as e:
+        logger.error(f"[milestones] Error checking member count milestone: {e}")
     
     async with aiosqlite.connect(DB_PATH) as db:
         cur = await db.execute("""

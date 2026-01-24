@@ -186,10 +186,18 @@ def setup(bot, group=None):
                         total_votes += count
                         results.append((option, count))
                 
-                # Build results text
-                results_text = "\n".join([f"**{opt}:** {count} votes" for opt, count in results])
+                # Build results text with percentages
+                results_text = ""
+                for opt, count in results:
+                    percentage = (count / total_votes * 100) if total_votes > 0 else 0
+                    bar_length = int(percentage / 5)  # 20 chars max
+                    bar = "█" * bar_length + "░" * (20 - bar_length)
+                    results_text += f"**{opt}**\n{bar} {count} votes ({percentage:.1f}%)\n\n"
+                
                 if total_votes > 0:
-                    results_text += f"\n\n**Total Votes:** {total_votes}"
+                    results_text += f"**Total Votes:** {total_votes}"
+                else:
+                    results_text += "**No votes yet.**"
                 
                 embed = obsidian_embed(
                     f"📊 Poll Results: {question}",
