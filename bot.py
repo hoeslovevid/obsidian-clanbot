@@ -129,6 +129,7 @@ _processed_modal_submissions = set()
 class ClanBot(commands.Bot):
     def __init__(self):
         super().__init__(command_prefix="!", intents=INTENTS)
+        self.start_time = now_utc()
 
     async def setup_hook(self):
         # Sync commands: to a single guild for speed if GUILD_ID set, else global.
@@ -287,6 +288,8 @@ def load_all_commands():
         "commands.moderation.warn",
         "commands.moderation.starboard",
         "commands.moderation.role_menu",
+        "commands.moderation.backup",
+        "commands.moderation.data_retention",
         # Economy commands
         "commands.economy.balance",
         "commands.economy.leaderboard",
@@ -330,6 +333,8 @@ def load_all_commands():
         # General commands (additional)
         "commands.general.afk",
         "commands.general.server_stats",
+        "commands.general.profile",
+        "commands.general.bot_status",
     ]
     
     # Map command modules to their groups
@@ -378,6 +383,8 @@ def load_all_commands():
         "commands.moderation.warn": moderation_group,
         "commands.moderation.starboard": moderation_group,
         "commands.moderation.role_menu": moderation_group,
+        "commands.moderation.backup": moderation_group,
+        "commands.moderation.data_retention": moderation_group,
         # General commands (core bot commands - max 25)
         "commands.general.help": general_group,
         "commands.general.member_count": general_group,
@@ -395,6 +402,8 @@ def load_all_commands():
         "commands.general.twitch": community_group,
         "commands.general.afk": community_group,
         "commands.general.server_stats": community_group,
+        "commands.general.profile": general_group,
+        "commands.general.bot_status": general_group,
         # Music commands
         "commands.music.music": music_group,
         # Community commands (events, complaints, tickets, suggestions, applications, giveaways, trading, activity)

@@ -1,6 +1,7 @@
 """Help command with interactive group selection."""
 import discord
 from discord import app_commands
+from typing import Optional
 
 from utils import obsidian_embed, is_mod, ECONOMY_ENABLED, COINS_PER_MESSAGE, MESSAGE_COOLDOWN_SECONDS, COINS_PER_MINUTE_VOICE
 
@@ -299,9 +300,84 @@ def setup(bot, group=None):
     command_decorator = group.command(name="help", description="Get help and information about all bot commands.") if group else bot.tree.command(name="help", description="Get help and information about all bot commands.")
     
     @command_decorator
-    async def help_command(interaction: discord.Interaction):
-        """Display an interactive help embed with command groups."""
+    @app_commands.describe(command="Get help for a specific command (e.g., 'economy balance' or 'warframe baro')")
+    async def help_command(interaction: discord.Interaction, command: Optional[str] = None):
+        """Display an interactive help embed with command groups, or help for a specific command."""
         is_user_mod = isinstance(interaction.user, discord.Member) and is_mod(interaction.user)
+        
+        # If a specific command was requested, show help for that command
+        if command:
+            await interaction.response.defer(ephemeral=True)
+            
+            # Parse command (e.g., "economy balance" or "warframe baro")
+            parts = command.lower().strip().split()
+            
+            # Find the command
+            found_command = None
+            if len(parts) == 1:
+                # Top-level command or group
+                for cmd in bot.tree.get_commands(guild=interaction.guild):
+                    if cmd.name == parts[0]:
+                        found_command = cmd
+                        break
+            elif len(parts) == 2:
+                # Group command (e.g., "economy balance")
+                for cmd in bot.tree.get_commands(guild=interaction.guild):
+                    if isinstance(cmd, app_commands.Group) and cmd.name == parts[0]:
+                        for subcmd in cmd.commands:
+                            if subcmd.name == parts[1]:
+                                found_command = subcmd
+                                break
+                        if found_command:
+                            break
+            
+            if found_command:
+                # Build help for specific command
+                if isinstance(found_command, app_commands.Command):
+                    desc = found_command.description or "No description available."
+                    
+                    # Add parameter info
+                    params_text = ""
+                    if found_command.parameters:
+                        params_text = "\n\n**Parameters:**\n"
+                        for param in found_command.parameters:
+                            param_desc = param.description or "No description"
+                            required = "Required" if param.required else "Optional"
+                            params_text += f"• `{param.name}` ({required}) - {param_desc}\n"
+                    
+                    # Add usage example
+                    if isinstance(found_command.parent, app_commands.Group):
+                        usage = f"/{found_command.parent.name} {found_command.name}"
+                    else:
+                        usage = f"/{found_command.name}"
+                    
+                    embed = obsidian_embed(
+                        f"📖 Help: `{usage}`",
+                        desc + params_text + f"\n**Usage:** `{usage}`",
+                        color=discord.Color.blurple(),
+                        client=interaction.client,
+                    )
+                else:
+                    # It's a group
+                    embed = obsidian_embed(
+                        f"📖 Help: `/{found_command.name}`",
+                        found_command.description or "No description available.",
+                        color=discord.Color.blurple(),
+                        client=interaction.client,
+                    )
+                
+                await interaction.followup.send(embed=embed, ephemeral=True)
+            else:
+                await interaction.followup.send(
+                    embed=obsidian_embed(
+                        "❌ Command Not Found",
+                        f"Could not find command: `{command}`\n\nUse `/help` without arguments to browse all commands.",
+                        color=discord.Color.red(),
+                        client=interaction.client,
+                    ),
+                    ephemeral=True
+                )
+            return
         
         # Get all groups
         # Use guild=None to get all commands (works for both global and guild-specific)
@@ -335,10 +411,17 @@ def setup(bot, group=None):
         desc += "\n**💬 Features:**\n"
         desc += "• Join-to-Create Voice Channels\n"
         desc += "• Obsidian Docket (complaint system)\n"
-        desc += "• Voice Channel Controls"
+        desc += "• Voice Channel Controls\n"
+        desc += "• Application System\n"
+        desc += "• Event RSVP System\n"
+        desc += "• Trading Post\n"
+        desc += "• Giveaways\n"
+        desc += "• Achievements & Milestones"
         if ECONOMY_ENABLED:
             desc += f"\n• Economy: {COINS_PER_MESSAGE} coins/msg ({MESSAGE_COOLDOWN_SECONDS}s cooldown)"
             desc += f"\n• Voice: {COINS_PER_MINUTE_VOICE} coins/minute"
+        
+        desc += "\n\n**💡 Tip:** Use the dropdown below to browse commands by category, or use `/help <command>` for specific help!"
         
         embed = obsidian_embed(
             "Obsidian Clan Bot • Command Reference",
