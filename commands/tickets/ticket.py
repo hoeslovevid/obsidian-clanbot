@@ -6,15 +6,34 @@ from datetime import datetime, timezone
 import random
 import string
 import asyncio
+import re
 
 from utils import obsidian_embed, is_mod
 from database import DB_PATH, now_utc
 import aiosqlite
 
 
-def generate_ticket_id() -> str:
-    """Generate a unique ticket ID."""
-    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+def generate_ticket_id(username: str, subject: str) -> str:
+    """Generate a ticket ID based on username and subject."""
+    # Clean username: remove special characters, spaces, make lowercase
+    clean_username = re.sub(r'[^a-zA-Z0-9]', '', username.lower())[:15]  # Max 15 chars
+    
+    # Clean subject: remove special characters except hyphens, spaces become hyphens, make lowercase
+    clean_subject = re.sub(r'[^a-zA-Z0-9\s-]', '', subject.lower())
+    clean_subject = re.sub(r'\s+', '-', clean_subject)  # Replace spaces with hyphens
+    clean_subject = clean_subject[:30]  # Max 30 chars
+    
+    # Format: username-subject
+    ticket_id = f"{clean_username}-{clean_subject}"
+    
+    # Ensure it's not too long (Discord channel names have limits)
+    if len(ticket_id) > 50:
+        # Truncate subject if needed
+        max_subject_len = 50 - len(clean_username) - 1  # -1 for hyphen
+        clean_subject = clean_subject[:max_subject_len]
+        ticket_id = f"{clean_username}-{clean_subject}"
+    
+    return ticket_id
 
 
 async def create_ticket_channel(guild: discord.Guild, user: discord.Member, ticket_id: str, subject: str) -> Optional[discord.TextChannel]:
@@ -29,8 +48,11 @@ async def create_ticket_channel(guild: discord.Guild, user: discord.Member, tick
         except discord.Forbidden:
             return None
     
-    # Create channel
-    channel_name = f"ticket-{ticket_id.lower()}"
+    # Create channel - use ticket_id directly (already formatted)
+    channel_name = ticket_id.lower()
+    
+    # Ensure channel name meets Discord requirements (lowercase, no spaces, max 100 chars)
+    channel_name = channel_name.replace(' ', '-').lower()[:100]
     try:
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
@@ -76,17 +98,6 @@ def setup(bot, group=None):
         
         await interaction.response.defer(ephemeral=True)
         
-        # Generate ticket ID
-        ticket_id = generate_ticket_id()
-        
-        # Check if ticket ID already exists
-        async with aiosqlite.connect(DB_PATH) as db:
-            cur = await db.execute("SELECT 1 FROM tickets WHERE guild_id=? AND ticket_id=?", (interaction.guild.id, ticket_id))
-            while await cur.fetchone():
-                ticket_id = generate_ticket_id()
-                cur = await db.execute("SELECT 1 FROM tickets WHERE guild_id=? AND ticket_id=?", (interaction.guild.id, ticket_id))
-        
-        # Create ticket channel
         if not isinstance(interaction.user, discord.Member):
             return await interaction.followup.send(
                 embed=obsidian_embed(
@@ -98,6 +109,27 @@ def setup(bot, group=None):
                 ephemeral=True
             )
         
+        # Generate ticket ID based on username and subject
+        username = interaction.user.display_name or interaction.user.name
+        ticket_id = generate_ticket_id(username, subject)
+        
+        # Check if ticket ID already exists, append number if needed
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute("SELECT 1 FROM tickets WHERE guild_id=? AND ticket_id=?", (interaction.guild.id, ticket_id))
+            counter = 1
+            original_ticket_id = ticket_id
+            while await cur.fetchone():
+                # Append counter to make it unique
+                ticket_id = f"{original_ticket_id}-{counter}"
+                # Ensure it doesn't exceed Discord's channel name limit (100 chars)
+                if len(ticket_id) > 50:
+                    # Truncate original and add counter
+                    max_base_len = 50 - len(str(counter)) - 1  # -1 for hyphen
+                    ticket_id = f"{original_ticket_id[:max_base_len]}-{counter}"
+                cur = await db.execute("SELECT 1 FROM tickets WHERE guild_id=? AND ticket_id=?", (interaction.guild.id, ticket_id))
+                counter += 1
+        
+        # Create ticket channel
         channel = await create_ticket_channel(interaction.guild, interaction.user, ticket_id, subject)
         
         if not channel:
