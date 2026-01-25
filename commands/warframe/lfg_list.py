@@ -35,6 +35,18 @@ def setup(bot, group=None):
                 """, (interaction.guild.id, interaction.channel.id))
             
             posts = await cur.fetchall()
+
+            # Fetch RSVP counts for all posts in one query
+            counts_by_id = {}
+            if posts:
+                ids = [p[0] for p in posts]
+                placeholders = ",".join(["?"] * len(ids))
+                cur = await db.execute(
+                    f"SELECT lfg_id, COUNT(*) FROM lfg_rsvps WHERE response='JOIN' AND lfg_id IN ({placeholders}) GROUP BY lfg_id",
+                    tuple(ids),
+                )
+                for lfg_id, cnt in await cur.fetchall():
+                    counts_by_id[int(lfg_id)] = int(cnt)
         
         if not posts:
             return await interaction.response.send_message(
@@ -50,13 +62,7 @@ def setup(bot, group=None):
         # Build fields for each LFG post
         fields = []
         for lfg_id, creator_id, mission_type_val, max_players, description, expires_at, created_at in posts:
-            # Get RSVP count
-            async with aiosqlite.connect(DB_PATH) as db:
-                cur = await db.execute(
-                    "SELECT COUNT(*) FROM lfg_rsvps WHERE lfg_id=? AND response='JOIN'",
-                    (lfg_id,)
-                )
-                rsvp_count = (await cur.fetchone())[0]
+            rsvp_count = counts_by_id.get(int(lfg_id), 0)
             
             creator = interaction.guild.get_member(creator_id)
             creator_name = creator.display_name if creator else f"User {creator_id}"

@@ -36,6 +36,8 @@ async def get_user_profile_data(guild_id: int, user_id: int) -> dict:
         "suggestions": {"total": 0, "accepted": 0},
         "tickets": {"total": 0, "open": 0},
         "complaints": {"total": 0, "open": 0},
+        "title": None,
+        "equipped_badge": None,  # tuple (emoji, name)
     }
     
     async with aiosqlite.connect(DB_PATH) as db:
@@ -107,11 +109,32 @@ async def get_user_profile_data(guild_id: int, user_id: int) -> dict:
         
         # Reputation
         cur = await db.execute("""
-            SELECT reputation FROM reputation
+            SELECT reputation_points FROM reputation
             WHERE guild_id=? AND user_id=?
         """, (guild_id, user_id))
         row = await cur.fetchone()
         data["reputation"] = row[0] if row else 0
+
+        # Title (optional)
+        cur = await db.execute("""
+            SELECT title FROM user_titles
+            WHERE guild_id=? AND user_id=?
+        """, (guild_id, user_id))
+        row = await cur.fetchone()
+        data["title"] = row[0] if row and row[0] else None
+
+        # Equipped badge (optional)
+        cur = await db.execute("""
+            SELECT bd.icon_emoji, bd.name
+            FROM user_badges ub
+            LEFT JOIN badge_definitions bd ON ub.badge_id = bd.badge_id
+            WHERE ub.guild_id=? AND ub.user_id=? AND ub.is_equipped=1
+            ORDER BY ub.unlocked_at DESC
+            LIMIT 1
+        """, (guild_id, user_id))
+        row = await cur.fetchone()
+        if row:
+            data["equipped_badge"] = (row[0], row[1])
         
         # Daily streak
         cur = await db.execute("""
@@ -295,6 +318,13 @@ def setup(bot, group=None):
         
         # Build description
         desc = f"Comprehensive profile for {target_user.mention}\n"
+        if profile_data.get("title"):
+            desc += f"\n**Title:** {profile_data['title']}"
+        if profile_data.get("equipped_badge"):
+            emoji, name = profile_data["equipped_badge"]
+            badge_emoji = emoji or "🏆"
+            badge_name = name or "Badge"
+            desc += f"\n**Equipped Badge:** {badge_emoji} {badge_name}"
         if target_user.id == interaction.user.id:
             desc += "\n*This is your profile!*"
         

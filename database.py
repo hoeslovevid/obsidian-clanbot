@@ -935,13 +935,36 @@ async def init_db() -> None:
             creator_id INTEGER NOT NULL,
             title TEXT NOT NULL,
             start_ts INTEGER NOT NULL,
+            end_ts INTEGER,
             description TEXT NOT NULL,
             role_id INTEGER,
             created_at TEXT NOT NULL,
             reminder_sent INTEGER NOT NULL DEFAULT 0,
+            ended INTEGER NOT NULL DEFAULT 0,
+            recap_posted INTEGER NOT NULL DEFAULT 0,
+            recap_message_id INTEGER,
             thread_id INTEGER,
             PRIMARY KEY (guild_id, message_id)
         )""")
+
+        # Event automation (columns on existing table)
+        try:
+            cur = await db.execute("PRAGMA table_info(events)")
+            columns = await cur.fetchall()
+            column_names = [col[1] for col in columns]
+
+            if "end_ts" not in column_names:
+                await db.execute("ALTER TABLE events ADD COLUMN end_ts INTEGER")
+            if "ended" not in column_names:
+                await db.execute("ALTER TABLE events ADD COLUMN ended INTEGER NOT NULL DEFAULT 0")
+            if "recap_posted" not in column_names:
+                await db.execute("ALTER TABLE events ADD COLUMN recap_posted INTEGER NOT NULL DEFAULT 0")
+            if "recap_message_id" not in column_names:
+                await db.execute("ALTER TABLE events ADD COLUMN recap_message_id INTEGER")
+
+            await db.commit()
+        except Exception as e:
+            logger.warning(f"[db] Error checking/adding event automation columns: {e}")
 
         await db.execute("""
         CREATE TABLE IF NOT EXISTS event_rsvps (
@@ -1057,6 +1080,23 @@ async def init_db() -> None:
             status TEXT NOT NULL DEFAULT 'OPEN',
             thread_id INTEGER
         )""")
+
+        # LFG enhancements (optional ping role + close metadata)
+        try:
+            cur = await db.execute("PRAGMA table_info(lfg_posts)")
+            columns = await cur.fetchall()
+            column_names = [col[1] for col in columns]
+
+            if "ping_role_id" not in column_names:
+                await db.execute("ALTER TABLE lfg_posts ADD COLUMN ping_role_id INTEGER")
+            if "closed_at" not in column_names:
+                await db.execute("ALTER TABLE lfg_posts ADD COLUMN closed_at TEXT")
+            if "closed_by" not in column_names:
+                await db.execute("ALTER TABLE lfg_posts ADD COLUMN closed_by INTEGER")
+
+            await db.commit()
+        except Exception as e:
+            logger.warning(f"[db] Error checking/adding LFG enhancement columns: {e}")
 
         await db.execute("""
         CREATE TABLE IF NOT EXISTS lfg_rsvps (
@@ -1623,6 +1663,69 @@ async def init_db() -> None:
             UNIQUE(guild_id, ticket_id)
         )""")
 
+        # Ticket enhancements (columns on existing table)
+        # - assigned_to: who claimed/owns the ticket (mod id)
+        # - claimed_at: when it was claimed
+        # - first_response_at: first staff response time
+        # - last_activity_at: last message time (user or staff)
+        # - sla_minutes: per-ticket SLA target (minutes)
+        # - control_message_id: message id of the ticket control panel in the ticket channel
+        # - satisfaction_rating/feedback: post-close feedback
+        # - transcript_channel_id/transcript_message_id: where transcript was posted
+        try:
+            cur = await db.execute("PRAGMA table_info(tickets)")
+            columns = await cur.fetchall()
+            column_names = [col[1] for col in columns]
+
+            if "assigned_to" not in column_names:
+                await db.execute("ALTER TABLE tickets ADD COLUMN assigned_to INTEGER")
+            if "claimed_at" not in column_names:
+                await db.execute("ALTER TABLE tickets ADD COLUMN claimed_at TEXT")
+            if "first_response_at" not in column_names:
+                await db.execute("ALTER TABLE tickets ADD COLUMN first_response_at TEXT")
+            if "last_activity_at" not in column_names:
+                await db.execute("ALTER TABLE tickets ADD COLUMN last_activity_at TEXT")
+            if "sla_minutes" not in column_names:
+                await db.execute("ALTER TABLE tickets ADD COLUMN sla_minutes INTEGER DEFAULT 60")
+            if "control_message_id" not in column_names:
+                await db.execute("ALTER TABLE tickets ADD COLUMN control_message_id INTEGER")
+            if "satisfaction_rating" not in column_names:
+                await db.execute("ALTER TABLE tickets ADD COLUMN satisfaction_rating INTEGER")
+            if "satisfaction_feedback" not in column_names:
+                await db.execute("ALTER TABLE tickets ADD COLUMN satisfaction_feedback TEXT")
+            if "transcript_channel_id" not in column_names:
+                await db.execute("ALTER TABLE tickets ADD COLUMN transcript_channel_id INTEGER")
+            if "transcript_message_id" not in column_names:
+                await db.execute("ALTER TABLE tickets ADD COLUMN transcript_message_id INTEGER")
+
+            await db.commit()
+        except Exception as e:
+            logger.warning(f"[db] Error checking/adding ticket enhancement columns: {e}")
+
+        # Ticket notes (internal staff notes)
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS ticket_notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            ticket_id INTEGER NOT NULL,
+            author_id INTEGER NOT NULL,
+            note TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (ticket_id) REFERENCES tickets(id) ON DELETE CASCADE
+        )""")
+
+        # Ticket canned responses (quick replies)
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS ticket_canned_responses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            content TEXT NOT NULL,
+            created_by INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE(guild_id, name)
+        )""")
+
         # Gambling tables
         await db.execute("""
         CREATE TABLE IF NOT EXISTS gambling_history (
@@ -2022,6 +2125,21 @@ async def init_db() -> None:
             await db.execute("CREATE INDEX IF NOT EXISTS idx_log_channels_guild_type ON log_channels(guild_id, log_type)")
             await db.execute("CREATE INDEX IF NOT EXISTS idx_auto_mod_settings_guild ON auto_mod_settings(guild_id)")
             await db.execute("CREATE INDEX IF NOT EXISTS idx_auto_mod_spam_tracking_guild_user ON auto_mod_spam_tracking(guild_id, user_id)")
+
+            # Tickets
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_tickets_guild_status ON tickets(guild_id, status)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_tickets_channel_status ON tickets(channel_id, status)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_tickets_guild_user ON tickets(guild_id, user_id)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_ticket_notes_ticket ON ticket_notes(ticket_id)")
+
+            # Events
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_events_guild_start ON events(guild_id, start_ts)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_events_guild_end ON events(guild_id, end_ts)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_event_rsvps_message ON event_rsvps(guild_id, message_id)")
+
+            # LFG
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_lfg_posts_status_expires ON lfg_posts(status, expires_at)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_lfg_rsvps_lfg ON lfg_rsvps(lfg_id)")
             
             await db.commit()
             logger.info("[db] Indexes created successfully")

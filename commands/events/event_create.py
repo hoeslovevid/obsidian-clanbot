@@ -14,9 +14,10 @@ def setup(bot, group=None):
         title="Event title",
         when="Natural time: 'tomorrow 8pm', 'Jan 14 7:30pm', etc.",
         description="What are we running?",
-        role_ping="Optional role @mention or role ID to ping"
+        role_ping="Optional role @mention or role ID to ping",
+        duration_hours="How long the event runs (default: 2)"
     )
-    async def event_create(interaction: discord.Interaction, title: str, when: str, description: str, role_ping: str = ""):
+    async def event_create(interaction: discord.Interaction, title: str, when: str, description: str, role_ping: str = "", duration_hours: int = 2):
         # Import bot-specific functions inside to avoid circular imports
         from bot import ensure_core_channels, resolve_channel_id, RSVPView
         from bot import EVENTS_CHANNEL_ID, EVENTS_CHANNEL_NAME, DB_PATH
@@ -42,6 +43,9 @@ def setup(bot, group=None):
         await interaction.response.defer(ephemeral=True)
 
         ts = int(dt.timestamp())
+        if duration_hours < 1 or duration_hours > 24:
+            duration_hours = 2
+        end_ts = ts + (duration_hours * 3600)
         role_id = extract_id(role_ping) if role_ping else None
         mention = ""
         if role_id:
@@ -52,6 +56,7 @@ def setup(bot, group=None):
         embed = obsidian_embed(
             f"🜂 Ops Order • {title}",
             f"**When:** <t:{ts}:F>  _( <t:{ts}:R> )_\n\n"
+            f"**Ends:** <t:{end_ts}:t>  _( <t:{end_ts}:R> )_\n\n"
             f"**Briefing:**\n{description}",
             color=discord.Color.dark_grey(),
         )
@@ -71,17 +76,21 @@ def setup(bot, group=None):
 
         async with aiosqlite.connect(DB_PATH) as db:
             await db.execute(
-                "INSERT INTO events(guild_id,message_id,creator_id,title,start_ts,description,role_id,created_at,reminder_sent,thread_id) "
-                "VALUES(?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO events(guild_id,message_id,creator_id,title,start_ts,end_ts,description,role_id,created_at,reminder_sent,ended,recap_posted,recap_message_id,thread_id) "
+                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     interaction.guild.id,
                     msg.id,
                     interaction.user.id,
                     title,
                     ts,
+                    end_ts,
                     description,
                     role_id or 0,
                     now_utc().isoformat(),
+                    0,
+                    0,
+                    0,
                     0,
                     thread_id or 0,
                 ),

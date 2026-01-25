@@ -3,8 +3,8 @@ import discord
 from discord import app_commands
 from datetime import datetime, timedelta, timezone
 
-from utils import obsidian_embed, get_mod_role
-from database import DB_PATH
+from utils import obsidian_embed, get_mod_role, extract_id
+from database import DB_PATH, get_guild_setting, set_guild_setting
 import aiosqlite
 
 
@@ -247,7 +247,8 @@ def setup(bot, group=None):
         mission_type="Type of mission",
         max_players="Maximum number of players needed (default: 4)",
         description="Optional description or notes",
-        duration_hours="Auto-expire after this many hours (default: 24, max: 168)"
+        duration_hours="Auto-expire after this many hours (default: 24, max: 168)",
+        role_ping="Optional role to ping (mention or ID). If omitted, uses server default if set."
     )
     @app_commands.choices(mission_type=[
         app_commands.Choice(name=mt, value=mt) for mt in MISSION_TYPES
@@ -257,7 +258,8 @@ def setup(bot, group=None):
         mission_type: app_commands.Choice[str],
         max_players: int = 4,
         description: str = "",
-        duration_hours: int = 24
+        duration_hours: int = 24,
+        role_ping: str = ""
     ):
         """Create an LFG post for a Warframe mission."""
         # Validate max_players
@@ -273,12 +275,41 @@ def setup(bot, group=None):
         
         # Calculate expiry time
         expires_at = datetime.now(timezone.utc) + timedelta(hours=duration_hours)
+
+        # Optional role ping with cooldown
+        ping_role_id = extract_id(role_ping) if role_ping else None
+        if not ping_role_id:
+            try:
+                default_role_id = await get_guild_setting(interaction.guild.id, "lfg_ping_role_id")
+                if default_role_id and default_role_id.isdigit():
+                    ping_role_id = int(default_role_id)
+            except Exception:
+                ping_role_id = None
+
+        mention = ""
+        if ping_role_id:
+            try:
+                cooldown_s = await get_guild_setting(interaction.guild.id, "lfg_ping_cooldown_minutes")
+                cooldown_min = int(cooldown_s) if cooldown_s and cooldown_s.isdigit() else 30
+                last_ping_s = await get_guild_setting(interaction.guild.id, "lfg_last_ping_ts")
+                last_ping_ts = int(last_ping_s) if last_ping_s and last_ping_s.isdigit() else 0
+
+                now_ts = int(datetime.now(timezone.utc).timestamp())
+                if now_ts - last_ping_ts >= max(0, cooldown_min) * 60:
+                    role = interaction.guild.get_role(int(ping_role_id))
+                    if role:
+                        mention = role.mention
+                        await set_guild_setting(interaction.guild.id, "lfg_last_ping_ts", str(now_ts))
+                else:
+                    mention = ""  # cooldown active
+            except Exception:
+                mention = ""
         
         # Create LFG post
         async with aiosqlite.connect(DB_PATH) as db:
             await db.execute("""
-                INSERT INTO lfg_posts (guild_id, channel_id, message_id, creator_id, mission_type, player_count, max_players, description, created_at, expires_at, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN')
+                INSERT INTO lfg_posts (guild_id, channel_id, message_id, creator_id, mission_type, player_count, max_players, description, created_at, expires_at, status, ping_role_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?)
             """, (
                 interaction.guild.id,
                 interaction.channel.id,
@@ -290,6 +321,7 @@ def setup(bot, group=None):
                 description[:500] if description else None,
                 datetime.now(timezone.utc).isoformat(),
                 expires_at.isoformat(),
+                int(ping_role_id or 0),
             ))
             await db.commit()
             
@@ -325,7 +357,7 @@ def setup(bot, group=None):
         view = LFGView(lfg_id)
         
         # Send message
-        await interaction.response.send_message(embed=embed, view=view)
+        await interaction.response.send_message(content=mention if mention else None, embed=embed, view=view)
         
         # Get the message ID from the response
         message = await interaction.original_response()

@@ -28,6 +28,7 @@ def setup(bot, group=None):
         app_commands.Choice(name="Member Leaves", value="member_leave"),
         app_commands.Choice(name="Role Changes", value="role_change"),
         app_commands.Choice(name="Channel Updates", value="channel_update"),
+        app_commands.Choice(name="Ticket Transcripts", value="ticket_transcript"),
     ])
     async def logging(
         interaction: discord.Interaction,

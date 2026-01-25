@@ -282,6 +282,114 @@ def setup_tasks(bot):
     async def before_event_reminder_loop():
         await bot.wait_until_ready()
 
+    @tasks.loop(minutes=5)
+    async def event_end_loop():
+        """Post end-of-event recaps and mark events ended."""
+        try:
+            now_ts = int(now_utc().timestamp())
+            for guild in bot.guilds:
+                events_id = await resolve_channel_id(guild, "events_channel_id", EVENTS_CHANNEL_ID, EVENTS_CHANNEL_NAME)
+                ch = guild.get_channel(events_id) if events_id else None
+                if not isinstance(ch, discord.TextChannel):
+                    continue
+
+                async with aiosqlite.connect(DB_PATH) as db:
+                    cur = await db.execute(
+                        """
+                        SELECT message_id, title, start_ts, end_ts, role_id, thread_id
+                        FROM events
+                        WHERE guild_id=? AND ended=0 AND end_ts IS NOT NULL AND end_ts <= ?
+                        """,
+                        (guild.id, now_ts),
+                    )
+                    events_to_end = await cur.fetchall()
+
+                for message_id, title, start_ts, end_ts, role_id, thread_id in events_to_end:
+                    recap_message_id = 0
+                    try:
+                        # Fetch RSVP counts
+                        async with aiosqlite.connect(DB_PATH) as db:
+                            cur = await db.execute(
+                                "SELECT response, COUNT(*) FROM event_rsvps WHERE guild_id=? AND message_id=? GROUP BY response",
+                                (guild.id, int(message_id)),
+                            )
+                            rows = await cur.fetchall()
+                            counts = {"GOING": 0, "MAYBE": 0, "NO": 0}
+                            for r, c in rows:
+                                counts[str(r)] = int(c)
+
+                            # Get GOING users (limit)
+                            cur = await db.execute(
+                                "SELECT user_id FROM event_rsvps WHERE guild_id=? AND message_id=? AND response='GOING'",
+                                (guild.id, int(message_id)),
+                            )
+                            going_users = [int(x[0]) for x in await cur.fetchall()]
+
+                        mention = ""
+                        if int(role_id or 0):
+                            role = guild.get_role(int(role_id))
+                            if role:
+                                mention = role.mention
+
+                        going_list = ", ".join(f"<@{uid}>" for uid in going_users[:25]) if going_users else "—"
+                        if len(going_users) > 25:
+                            going_list += f" (+{len(going_users) - 25} more)"
+
+                        recap_embed = obsidian_embed(
+                            "✅ Ops Debrief • Event Ended",
+                            f"**{title}**\n"
+                            f"**Started:** <t:{int(start_ts)}:F>\n"
+                            f"**Ended:** <t:{int(end_ts)}:F>\n\n"
+                            f"✅ Going: **{counts['GOING']}**  |  ❔ Maybe: **{counts['MAYBE']}**  |  ❌ Can't: **{counts['NO']}**\n\n"
+                            f"**Attendees (Going):**\n{going_list}",
+                            color=discord.Color.green(),
+                            client=bot,
+                        )
+
+                        # Prefer posting in thread
+                        posted = False
+                        if thread_id:
+                            thread = guild.get_thread(int(thread_id))
+                            if thread:
+                                try:
+                                    msg = await thread.send(content=mention if mention else None, embed=recap_embed)
+                                    recap_message_id = msg.id
+                                    posted = True
+                                except Exception:
+                                    posted = False
+
+                        if not posted:
+                            msg = await ch.send(content=mention if mention else None, embed=recap_embed)
+                            recap_message_id = msg.id
+
+                        # Try to edit original event post to show ended (and remove view)
+                        try:
+                            original = await ch.fetch_message(int(message_id))
+                            if original and original.embeds:
+                                embed = original.embeds[0]
+                                embed.color = discord.Color.light_grey()
+                                embed.set_footer(text="✅ Event Ended")
+                                await original.edit(embed=embed, view=None)
+                        except Exception:
+                            pass
+
+                        # Mark ended in DB
+                        async with aiosqlite.connect(DB_PATH) as db:
+                            await db.execute(
+                                "UPDATE events SET ended=1, recap_posted=1, recap_message_id=? WHERE guild_id=? AND message_id=?",
+                                (int(recap_message_id or 0), guild.id, int(message_id)),
+                            )
+                            await db.commit()
+                    except Exception as e:
+                        logger.error(f"[events] Error ending event {message_id} in {guild.id}: {e}", exc_info=True)
+                        continue
+        except Exception as e:
+            logger.error(f"[events] Error in event_end_loop: {e}", exc_info=True)
+
+    @event_end_loop.before_loop
+    async def before_event_end_loop():
+        await bot.wait_until_ready()
+
     @tasks.loop(minutes=VOICE_REWARD_INTERVAL_MINUTES)
     async def voice_reward_loop():
         """Award coins to users based on voice channel activity."""
@@ -1523,6 +1631,7 @@ def setup_tasks(bot):
     tasks_to_start = [
         ('temp_vc_cleanup', temp_vc_cleanup),
         ('event_reminder_loop', event_reminder_loop),
+        ('event_end_loop', event_end_loop),
         ('voice_reward_loop', voice_reward_loop),
         ('baro_check_loop', baro_check_loop),
         ('baro_live_update_loop', baro_live_update_loop),

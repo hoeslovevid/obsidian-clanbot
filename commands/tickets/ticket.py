@@ -3,10 +3,9 @@ import discord
 from discord import app_commands
 from typing import Optional
 from datetime import datetime, timezone
-import random
-import string
 import asyncio
 import re
+import io
 
 from utils import obsidian_embed, is_mod
 from database import DB_PATH, now_utc
@@ -34,6 +33,379 @@ def generate_ticket_id(username: str, subject: str) -> str:
         ticket_id = f"{clean_username}-{clean_subject}"
     
     return ticket_id
+
+
+async def _get_ticket_row_by_channel(guild_id: int, channel_id: int) -> Optional[aiosqlite.Row]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute(
+            "SELECT * FROM tickets WHERE guild_id=? AND channel_id=?",
+            (guild_id, channel_id),
+        )
+        return await cur.fetchone()
+
+
+async def _get_ticket_row_by_id(ticket_db_id: int) -> Optional[aiosqlite.Row]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute("SELECT * FROM tickets WHERE id=?", (ticket_db_id,))
+        return await cur.fetchone()
+
+
+def _format_dt_iso(iso_str: Optional[str]) -> str:
+    if not iso_str:
+        return "—"
+    try:
+        dt = datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
+        return f"<t:{int(dt.replace(tzinfo=timezone.utc).timestamp())}:R>"
+    except Exception:
+        return iso_str
+
+
+async def _build_transcript(channel: discord.TextChannel, limit: int = 1000) -> bytes:
+    """Build a simple plaintext transcript."""
+    lines: list[str] = []
+    lines.append(f"Transcript for #{channel.name} ({channel.id})")
+    lines.append(f"Generated at: {now_utc().isoformat()}")
+    lines.append("")
+
+    try:
+        async for msg in channel.history(limit=limit, oldest_first=True):
+            ts = int(msg.created_at.replace(tzinfo=timezone.utc).timestamp())
+            author = f"{msg.author} ({msg.author.id})"
+            content = msg.content or ""
+            if msg.attachments:
+                att = " ".join(a.url for a in msg.attachments)
+                content = f"{content}\n[attachments] {att}".strip()
+            if msg.embeds:
+                content = f"{content}\n[embeds] {len(msg.embeds)} embed(s)".strip()
+            lines.append(f"[{ts}] {author}: {content}".rstrip())
+    except Exception as e:
+        lines.append("")
+        lines.append(f"[error] Failed to fetch full history: {e}")
+
+    return ("\n".join(lines)).encode("utf-8", errors="replace")
+
+
+async def _send_transcript_to_log(
+    guild: discord.Guild,
+    ticket_row: aiosqlite.Row,
+    transcript_bytes: bytes,
+    file_name: str,
+) -> tuple[Optional[int], Optional[int]]:
+    """Send transcript file to configured ticket transcript log channel (if any)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            "SELECT channel_id FROM log_channels WHERE guild_id=? AND log_type='ticket_transcript' AND enabled=1",
+            (guild.id,),
+        )
+        row = await cur.fetchone()
+
+    if not row or not row[0]:
+        return None, None
+
+    log_channel = guild.get_channel(int(row[0]))
+    if not isinstance(log_channel, discord.TextChannel):
+        return None, None
+
+    f = discord.File(fp=io.BytesIO(transcript_bytes), filename=file_name)
+    embed = obsidian_embed(
+        "🧾 Ticket Transcript",
+        f"**Ticket:** `{ticket_row['ticket_id']}`\n"
+        f"**Subject:** {ticket_row['subject']}\n"
+        f"**User:** <@{ticket_row['user_id']}>\n"
+        f"**Channel:** <#{ticket_row['channel_id']}>\n"
+        f"**Created:** {_format_dt_iso(ticket_row['created_at'])}\n"
+        f"**Closed:** {_format_dt_iso(ticket_row['closed_at'])}",
+        color=discord.Color.dark_grey(),
+        client=None,
+    )
+    msg = await log_channel.send(embed=embed, file=f)
+    return log_channel.id, msg.id
+
+
+class TicketNoteModal(discord.ui.Modal, title="Add internal ticket note"):
+    note = discord.ui.TextInput(
+        label="Note (internal)",
+        style=discord.TextStyle.paragraph,
+        required=True,
+        max_length=1000,
+    )
+
+    def __init__(self, ticket_db_id: int):
+        super().__init__()
+        self.ticket_db_id = ticket_db_id
+
+    async def on_submit(self, interaction: discord.Interaction):
+        if not interaction.guild or not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
+            return await interaction.response.send_message("Mods only.", ephemeral=True)
+
+        await interaction.response.defer(ephemeral=True)
+
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute(
+                "INSERT INTO ticket_notes (guild_id, ticket_id, author_id, note, created_at) VALUES (?,?,?,?,?)",
+                (interaction.guild.id, self.ticket_db_id, interaction.user.id, str(self.note), now_utc().isoformat()),
+            )
+            await db.commit()
+
+        await interaction.followup.send("Note saved.", ephemeral=True)
+
+
+class TicketCloseModal(discord.ui.Modal, title="Close ticket"):
+    reason = discord.ui.TextInput(
+        label="Reason",
+        style=discord.TextStyle.paragraph,
+        required=False,
+        max_length=1000,
+        placeholder="Optional reason for closing this ticket.",
+    )
+
+    def __init__(self, ticket_db_id: int):
+        super().__init__()
+        self.ticket_db_id = ticket_db_id
+
+    async def on_submit(self, interaction: discord.Interaction):
+        if not interaction.guild or not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
+            return await interaction.response.send_message("Mods only.", ephemeral=True)
+
+        await interaction.response.defer(ephemeral=True)
+        await close_ticket(
+            interaction=interaction,
+            ticket_db_id=self.ticket_db_id,
+            closer_id=interaction.user.id,
+            reason=str(self.reason).strip() or None,
+        )
+
+
+class TicketSatisfactionView(discord.ui.View):
+    def __init__(self, ticket_db_id: int):
+        super().__init__(timeout=60 * 60 * 24 * 3)  # 3 days
+        self.ticket_db_id = ticket_db_id
+
+        for rating in range(1, 6):
+            btn = discord.ui.Button(
+                label=str(rating),
+                style=discord.ButtonStyle.secondary if rating < 4 else discord.ButtonStyle.success,
+                custom_id=f"ticket:rate:{ticket_db_id}:{rating}",
+            )
+            btn.callback = self._rate  # type: ignore
+            self.add_item(btn)
+
+    async def _rate(self, interaction: discord.Interaction):
+        # Works in DMs too
+        cid = interaction.data.get("custom_id") if interaction.data else ""
+        parts = cid.split(":")
+        if len(parts) != 4:
+            return await interaction.response.send_message("Invalid rating.", ephemeral=True)
+
+        ticket_db_id = int(parts[2])
+        rating = int(parts[3])
+
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute(
+                "UPDATE tickets SET satisfaction_rating=? WHERE id=?",
+                (rating, ticket_db_id),
+            )
+            await db.commit()
+
+        for item in self.children:
+            item.disabled = True  # type: ignore
+        try:
+            await interaction.response.edit_message(
+                embed=obsidian_embed("✅ Thanks!", f"Saved rating: **{rating}/5**.", color=discord.Color.green()),
+                view=self,
+            )
+        except Exception:
+            # fallback
+            await interaction.response.send_message("Thanks! Rating saved.", ephemeral=True)
+
+
+class TicketControlView(discord.ui.View):
+    """Persistent control panel for a ticket."""
+
+    def __init__(self, ticket_db_id: int, ticket_id: str):
+        super().__init__(timeout=None)
+        self.ticket_db_id = ticket_db_id
+        self.ticket_id = ticket_id
+
+        claim_btn = discord.ui.Button(
+            label="Claim",
+            style=discord.ButtonStyle.primary,
+            emoji="🫡",
+            custom_id=f"ticket:claim:{ticket_db_id}",
+        )
+        claim_btn.callback = self._claim  # type: ignore
+        self.add_item(claim_btn)
+
+        note_btn = discord.ui.Button(
+            label="Add Note",
+            style=discord.ButtonStyle.secondary,
+            emoji="📝",
+            custom_id=f"ticket:note:{ticket_db_id}",
+        )
+        note_btn.callback = self._note  # type: ignore
+        self.add_item(note_btn)
+
+        transcript_btn = discord.ui.Button(
+            label="Transcript",
+            style=discord.ButtonStyle.secondary,
+            emoji="🧾",
+            custom_id=f"ticket:transcript:{ticket_db_id}",
+        )
+        transcript_btn.callback = self._transcript  # type: ignore
+        self.add_item(transcript_btn)
+
+        close_btn = discord.ui.Button(
+            label="Close",
+            style=discord.ButtonStyle.danger,
+            emoji="🔒",
+            custom_id=f"ticket:close:{ticket_db_id}",
+        )
+        close_btn.callback = self._close  # type: ignore
+        self.add_item(close_btn)
+
+    async def _claim(self, interaction: discord.Interaction):
+        if not interaction.guild or not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
+            return await interaction.response.send_message("Mods only.", ephemeral=True)
+
+        await interaction.response.defer(ephemeral=True)
+
+        async with aiosqlite.connect(DB_PATH) as db:
+            # Set assigned_to and claimed_at; also set first_response_at if missing
+            cur = await db.execute(
+                "SELECT assigned_to, claimed_at, first_response_at FROM tickets WHERE id=?",
+                (self.ticket_db_id,),
+            )
+            row = await cur.fetchone()
+            now_iso = now_utc().isoformat()
+            if row:
+                assigned_to, claimed_at, first_response_at = row
+                if assigned_to and int(assigned_to) != interaction.user.id:
+                    return await interaction.followup.send(
+                        f"This ticket is already claimed by <@{assigned_to}>.",
+                        ephemeral=True,
+                    )
+
+            await db.execute(
+                "UPDATE tickets SET assigned_to=?, claimed_at=COALESCE(claimed_at, ?), first_response_at=COALESCE(first_response_at, ?), last_activity_at=? WHERE id=?",
+                (interaction.user.id, now_iso, now_iso, now_iso, self.ticket_db_id),
+            )
+            await db.commit()
+
+        await interaction.followup.send(f"Claimed by {interaction.user.mention}.", ephemeral=True)
+
+    async def _note(self, interaction: discord.Interaction):
+        if not interaction.guild or not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
+            return await interaction.response.send_message("Mods only.", ephemeral=True)
+        await interaction.response.send_modal(TicketNoteModal(self.ticket_db_id))
+
+    async def _transcript(self, interaction: discord.Interaction):
+        if not interaction.guild or not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
+            return await interaction.response.send_message("Mods only.", ephemeral=True)
+
+        await interaction.response.defer(ephemeral=True)
+
+        ticket_row = await _get_ticket_row_by_id(self.ticket_db_id)
+        if not ticket_row:
+            return await interaction.followup.send("Ticket not found.", ephemeral=True)
+
+        channel = interaction.guild.get_channel(int(ticket_row["channel_id"]))
+        if not isinstance(channel, discord.TextChannel):
+            return await interaction.followup.send("Ticket channel not found.", ephemeral=True)
+
+        data = await _build_transcript(channel)
+        file_name = f"ticket-{ticket_row['ticket_id']}.txt"
+
+        log_channel_id, log_message_id = await _send_transcript_to_log(
+            interaction.guild, ticket_row, data, file_name
+        )
+
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute(
+                "UPDATE tickets SET transcript_channel_id=?, transcript_message_id=? WHERE id=?",
+                (log_channel_id, log_message_id, self.ticket_db_id),
+            )
+            await db.commit()
+
+        await interaction.followup.send("Transcript generated.", ephemeral=True)
+
+    async def _close(self, interaction: discord.Interaction):
+        if not interaction.guild or not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
+            return await interaction.response.send_message("Mods only.", ephemeral=True)
+        await interaction.response.send_modal(TicketCloseModal(self.ticket_db_id))
+
+
+async def close_ticket(
+    interaction: discord.Interaction,
+    ticket_db_id: int,
+    closer_id: int,
+    reason: Optional[str] = None,
+):
+    """Close ticket: update DB, generate transcript, DM satisfaction, delete channel."""
+    if not interaction.guild:
+        return
+
+    ticket_row = await _get_ticket_row_by_id(ticket_db_id)
+    if not ticket_row:
+        return await interaction.followup.send("Ticket not found.", ephemeral=True)
+
+    channel = interaction.guild.get_channel(int(ticket_row["channel_id"]))
+    if not isinstance(channel, discord.TextChannel):
+        return await interaction.followup.send("Ticket channel not found.", ephemeral=True)
+
+    now_iso = now_utc().isoformat()
+
+    # Generate transcript first
+    transcript_bytes = await _build_transcript(channel)
+    file_name = f"ticket-{ticket_row['ticket_id']}.txt"
+    log_channel_id, log_message_id = await _send_transcript_to_log(
+        interaction.guild, ticket_row, transcript_bytes, file_name
+    )
+
+    # Update DB
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE tickets SET status='closed', closed_at=?, closed_by=?, transcript_channel_id=?, transcript_message_id=? WHERE id=?",
+            (now_iso, closer_id, log_channel_id, log_message_id, ticket_db_id),
+        )
+        await db.commit()
+
+    # Notify in channel
+    close_embed = obsidian_embed(
+        f"Ticket `{ticket_row['ticket_id']}` Closed",
+        f"**Closed by:** <@{closer_id}>\n"
+        f"**Reason:** {reason or 'No reason provided'}\n\n"
+        "This channel will be archived in 10 seconds.",
+        color=discord.Color.orange(),
+        client=interaction.client,
+    )
+    try:
+        await channel.send(embed=close_embed)
+    except Exception:
+        pass
+
+    # DM satisfaction request
+    try:
+        user = interaction.guild.get_member(int(ticket_row["user_id"])) or await interaction.client.fetch_user(int(ticket_row["user_id"]))  # type: ignore
+        if user:
+            dm_embed = obsidian_embed(
+                "📝 Ticket feedback",
+                f"How was the help you received for **{ticket_row['subject']}**?\n"
+                "Tap a rating below (1 = poor, 5 = great).",
+                color=discord.Color.blurple(),
+                client=interaction.client,
+            )
+            await user.send(embed=dm_embed, view=TicketSatisfactionView(ticket_db_id))
+    except Exception:
+        pass
+
+    # Delete channel after delay
+    await asyncio.sleep(10)
+    try:
+        await channel.delete(reason=f"Ticket closed by {closer_id}")
+    except discord.Forbidden:
+        pass
 
 
 async def create_ticket_channel(guild: discord.Guild, user: discord.Member, ticket_id: str, subject: str) -> Optional[discord.TextChannel]:
@@ -146,10 +518,13 @@ def setup(bot, group=None):
         # Store ticket in database
         async with aiosqlite.connect(DB_PATH) as db:
             await db.execute("""
-                INSERT INTO tickets (guild_id, user_id, channel_id, ticket_id, subject, status, created_at)
-                VALUES (?, ?, ?, ?, ?, 'open', ?)
-            """, (interaction.guild.id, interaction.user.id, channel.id, ticket_id, subject, now_utc().isoformat()))
+                INSERT INTO tickets (guild_id, user_id, channel_id, ticket_id, subject, status, created_at, last_activity_at)
+                VALUES (?, ?, ?, ?, ?, 'open', ?, ?)
+            """, (interaction.guild.id, interaction.user.id, channel.id, ticket_id, subject, now_utc().isoformat(), now_utc().isoformat()))
             await db.commit()
+
+            cur = await db.execute("SELECT last_insert_rowid()")
+            ticket_db_id = (await cur.fetchone())[0]
         
         # Send welcome message in ticket channel
         embed = obsidian_embed(
@@ -162,6 +537,29 @@ def setup(bot, group=None):
             client=interaction.client,
         )
         await channel.send(embed=embed)
+
+        # Ticket control panel (persistent view)
+        controls = TicketControlView(int(ticket_db_id), ticket_id)
+        ctrl_msg = await channel.send(
+            embed=obsidian_embed(
+                "🎫 Ticket Controls",
+                "Staff controls: claim, add internal note, generate transcript, close.\n"
+                "(*Buttons are for moderators.*)",
+                color=discord.Color.blurple(),
+                client=interaction.client,
+            ),
+            view=controls,
+        )
+        bot.add_view(controls, message_id=ctrl_msg.id)  # persist for this message
+
+        # Store control message id
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute(
+                "UPDATE tickets SET control_message_id=? WHERE id=?",
+                (ctrl_msg.id, ticket_db_id),
+            )
+            await db.commit()
+
         await channel.send(f"{interaction.user.mention}, your ticket has been created!")
         
         await interaction.followup.send(
@@ -218,7 +616,7 @@ def setup(bot, group=None):
         # Find ticket
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute("""
-                SELECT ticket_id, user_id, status FROM tickets
+                SELECT id, ticket_id, user_id, status FROM tickets
                 WHERE guild_id=? AND channel_id=?
             """, (interaction.guild.id, interaction.channel.id))
             row = await cur.fetchone()
@@ -233,7 +631,7 @@ def setup(bot, group=None):
                     )
                 )
             
-            ticket_id, user_id, status = row
+            ticket_db_id, ticket_id, user_id, status = row
             
             if status == 'closed':
                 return await interaction.followup.send(
@@ -245,36 +643,20 @@ def setup(bot, group=None):
                     )
                 )
             
-            # Update ticket status
-            await db.execute("""
-                UPDATE tickets SET status='closed', closed_at=?, closed_by=?
-                WHERE guild_id=? AND channel_id=?
-            """, (now_utc().isoformat(), interaction.user.id, interaction.guild.id, interaction.channel.id))
-            await db.commit()
-        
-        # Send closing message
-        embed = obsidian_embed(
-            f"Ticket #{ticket_id} Closed",
-            f"**Closed by:** {interaction.user.mention}\n"
-            f"**Reason:** {reason or 'No reason provided'}\n\n"
-            f"This ticket will be archived in 10 seconds.",
-            color=discord.Color.orange(),
-            client=interaction.client,
+        # Close flow (transcript + satisfaction DM + channel delete)
+        await close_ticket(
+            interaction=interaction,
+            ticket_db_id=int(ticket_db_id),
+            closer_id=interaction.user.id,
+            reason=reason,
         )
-        await interaction.channel.send(embed=embed)
-        
-        # Archive channel after delay
-        await asyncio.sleep(10)
-        try:
-            await interaction.channel.delete(reason=f"Ticket closed by {interaction.user.display_name}")
-        except discord.Forbidden:
-            pass
-        
+
         await interaction.followup.send(
             embed=obsidian_embed(
                 "✅ Ticket Closed",
-                f"Ticket #{ticket_id} has been closed and archived.",
+                f"Ticket `{ticket_id}` has been closed.",
                 color=discord.Color.green(),
                 client=interaction.client,
-            )
+            ),
+            ephemeral=True,
         )

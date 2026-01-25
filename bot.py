@@ -290,6 +290,8 @@ def load_all_commands():
         "commands.moderation.role_menu",
         "commands.moderation.backup",
         "commands.moderation.data_retention",
+        "commands.moderation.incident_mode",
+        "commands.moderation.kpis",
         "commands.moderation.raid_protection",
         # Economy commands
         "commands.economy.balance",
@@ -389,6 +391,8 @@ def load_all_commands():
         "commands.moderation.role_menu": moderation_group,
         "commands.moderation.backup": moderation_group,
         "commands.moderation.data_retention": moderation_group,
+        "commands.moderation.incident_mode": moderation_group,
+        "commands.moderation.kpis": moderation_group,
         "commands.moderation.raid_protection": moderation_group,
         # General commands (core bot commands - max 25)
         "commands.general.help": general_group,
@@ -520,6 +524,74 @@ def load_all_commands():
 
 # Load commands BEFORE setup_hook runs
 load_all_commands()
+
+# --------------------- Global app command checks ---------------------
+# Incident mode: block non-critical commands for non-mods.
+@bot.tree.check
+async def incident_mode_check(interaction: discord.Interaction) -> bool:
+    try:
+        if not interaction.guild:
+            return True
+
+        # Mods are always allowed
+        if isinstance(interaction.user, discord.Member) and is_mod(interaction.user):
+            return True
+
+        from database import get_guild_setting, set_guild_setting
+
+        enabled = await get_guild_setting(interaction.guild.id, "incident_mode_enabled")
+        if (enabled or "0") != "1":
+            return True
+
+        # Auto-disable if expired
+        until_s = await get_guild_setting(interaction.guild.id, "incident_mode_until_ts")
+        until_ts = int(until_s) if until_s and until_s.isdigit() else 0
+        now_ts = int(now_utc().timestamp())
+        if until_ts and now_ts > until_ts:
+            await set_guild_setting(interaction.guild.id, "incident_mode_enabled", "0")
+            await set_guild_setting(interaction.guild.id, "incident_mode_until_ts", "0")
+            return True
+
+        # Allow-list: keep support + help available
+        qualified = ""
+        try:
+            qualified = interaction.command.qualified_name if interaction.command else ""
+        except Exception:
+            qualified = ""
+
+        allowed = {
+            # Moderation
+            "mod",
+            "mod logging",
+            "mod incident",
+            "mod kpis",
+            # Support / events
+            "community ticket",
+            "community ticket_close",
+            "community event_create",
+            # Help / status
+            "general help",
+            "general bot_status",
+        }
+
+        # Any command under /mod is allowed
+        if qualified == "mod" or qualified.startswith("mod "):
+            return True
+
+        if qualified in allowed:
+            return True
+
+        msg = await get_guild_setting(interaction.guild.id, "incident_mode_message")
+        reason = msg.strip() if msg else "Incident mode is active. Please try again later."
+        if not interaction.response.is_done():
+            await interaction.response.send_message(
+                embed=obsidian_embed("🚨 Incident Mode", reason, color=discord.Color.orange(), client=bot),
+                ephemeral=True,
+            )
+        return False
+    except Exception:
+        # Fail open (never break commands)
+        return True
 
 
 # Database initialization is now in database.py
@@ -821,6 +893,31 @@ async def on_message(message: discord.Message):
     # Ignore bot messages and DMs
     if message.author.bot or not message.guild:
         return
+
+    # Ticket enhancements: track ticket SLA / activity timestamps
+    # Only do DB work if message is inside the Tickets category
+    try:
+        if isinstance(message.channel, discord.TextChannel) and message.channel.category and message.channel.category.name == "Tickets":
+            now_iso = now_utc().isoformat()
+            is_staff = isinstance(message.author, discord.Member) and is_mod(message.author)
+            async with aiosqlite.connect(DB_PATH) as db:
+                # Update last activity; if staff and first_response_at missing, set it
+                await db.execute(
+                    """
+                    UPDATE tickets
+                    SET last_activity_at=?,
+                        first_response_at=CASE
+                            WHEN ?=1 AND (first_response_at IS NULL OR first_response_at='') THEN ?
+                            ELSE first_response_at
+                        END
+                    WHERE guild_id=? AND channel_id=? AND status='open'
+                    """,
+                    (now_iso, 1 if is_staff else 0, now_iso, message.guild.id, message.channel.id),
+                )
+                await db.commit()
+    except Exception:
+        # Never break message handling because of ticket tracking
+        pass
     
     # Check auto-moderation first (this may delete the message)
     violation_handled = await check_auto_mod(message)
@@ -2292,6 +2389,11 @@ async def on_ready():
                 
                 trading_cur = await db.execute("SELECT id, user_id FROM trading_posts WHERE status='ACTIVE'")
                 trading_data = await trading_cur.fetchall()
+
+                ticket_cur = await db.execute(
+                    "SELECT id, ticket_id, control_message_id FROM tickets WHERE status='open' AND control_message_id IS NOT NULL"
+                )
+                ticket_data = await ticket_cur.fetchall()
                 
                 return {
                     'vc': vc_data,
@@ -2301,7 +2403,8 @@ async def on_ready():
                     'applications': app_data,
                     'panels': panel_data,
                     'giveaways': giveaway_data,
-                    'trading': trading_data
+                    'trading': trading_data,
+                    'tickets': ticket_data,
                 }
         
         view_data = await get_all_view_data()
@@ -2358,6 +2461,15 @@ async def on_ready():
             try:
                 from views import TradingPostView
                 bot.add_view(TradingPostView(int(listing_id), int(user_id)))
+            except Exception:
+                pass
+
+        # Ticket control panels (per-ticket persistent views)
+        for (ticket_db_id, ticket_id, control_message_id) in view_data.get('tickets', []):
+            try:
+                from commands.tickets.ticket import TicketControlView
+                if control_message_id:
+                    bot.add_view(TicketControlView(int(ticket_db_id), str(ticket_id)), message_id=int(control_message_id))
             except Exception:
                 pass
     
