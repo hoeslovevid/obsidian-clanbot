@@ -527,7 +527,6 @@ load_all_commands()
 
 # --------------------- Global app command checks ---------------------
 # Incident mode: block non-critical commands for non-mods.
-@bot.tree.check
 async def incident_mode_check(interaction: discord.Interaction) -> bool:
     try:
         if not interaction.guild:
@@ -592,6 +591,37 @@ async def incident_mode_check(interaction: discord.Interaction) -> bool:
     except Exception:
         # Fail open (never break commands)
         return True
+
+def _install_incident_mode_interaction_check():
+    """
+    discord.py 2.6.x does not have CommandTree.check.
+    Use CommandTree.interaction_check to apply a global gate.
+    """
+    prev = getattr(bot.tree, "interaction_check", None)
+
+    async def combined(interaction: discord.Interaction) -> bool:
+        # Preserve any previous interaction_check behavior (if customized)
+        try:
+            if prev:
+                res = prev(interaction)
+                if hasattr(res, "__await__"):
+                    res = await res
+                if res is False:
+                    return False
+        except Exception:
+            # If previous check fails, fail open
+            pass
+
+        return await incident_mode_check(interaction)
+
+    try:
+        bot.tree.interaction_check = combined  # type: ignore[attr-defined]
+    except Exception:
+        # If we can't install for any reason, fail open
+        pass
+
+
+_install_incident_mode_interaction_check()
 
 
 # Database initialization is now in database.py
