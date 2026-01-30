@@ -37,28 +37,26 @@ def setup(bot, group=None):
                 ORDER BY base_price
             """)
             pets = await cur.fetchall()
-        
-        if not pets:
-            # Initialize default pets
-            default_pets = [
-                ("Dog", 100, 50, "A loyal companion"),
-                ("Cat", 150, 60, "An independent friend"),
-                ("Dragon", 500, 100, "A powerful mythical creature"),
-                ("Robot", 300, 80, "A mechanical companion"),
-            ]
             
-            for pet_type, price, max_level, desc in default_pets:
-                await db.execute("""
-                    INSERT OR IGNORE INTO pet_types (pet_type, base_price, max_level, description)
-                    VALUES (?, ?, ?, ?)
-                """, (pet_type, price, max_level, desc))
-            await db.commit()
-            
-            cur = await db.execute("""
-                SELECT pet_type, base_price, max_level, description FROM pet_types
-                ORDER BY base_price
-            """)
-            pets = await cur.fetchall()
+            if not pets:
+                # Initialize default pets (must run inside same connection)
+                default_pets = [
+                    ("Dog", 100, 50, "A loyal companion"),
+                    ("Cat", 150, 60, "An independent friend"),
+                    ("Dragon", 500, 100, "A powerful mythical creature"),
+                    ("Robot", 300, 80, "A mechanical companion"),
+                ]
+                for pet_type, price, max_level, desc in default_pets:
+                    await db.execute("""
+                        INSERT OR IGNORE INTO pet_types (pet_type, base_price, max_level, description)
+                        VALUES (?, ?, ?, ?)
+                    """, (pet_type, price, max_level, desc))
+                await db.commit()
+                cur = await db.execute("""
+                    SELECT pet_type, base_price, max_level, description FROM pet_types
+                    ORDER BY base_price
+                """)
+                pets = await cur.fetchall()
         
         shop_text = "\n".join([
             f"**{pet_type}** - {price} coins\n  {desc} (Max Level: {max_level})"
