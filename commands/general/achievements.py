@@ -105,7 +105,7 @@ def setup(bot, group=None):
         
         await interaction.response.defer(ephemeral=True)
         
-        # Get all achievement definitions
+        # Get all achievement definitions and which ones user has unlocked (same connection)
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute("""
                 SELECT achievement_id, name, description, category, requirement, reward_coins, reward_xp
@@ -113,24 +113,24 @@ def setup(bot, group=None):
                 ORDER BY category, name
             """)
             rows = await cur.fetchall()
-        
-        if not rows:
-            return await interaction.followup.send(
-                embed=obsidian_embed(
-                    "🏆 No Achievements Defined",
-                    "No achievements are available yet.",
-                    color=discord.Color.orange(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
-            )
-        
-        # Check which ones user has unlocked
-        cur = await db.execute("""
-            SELECT achievement_id FROM achievements
-            WHERE guild_id=? AND user_id=?
-        """, (interaction.guild.id, interaction.user.id))
-        unlocked_ids = {row[0] for row in await cur.fetchall()}
+            
+            if not rows:
+                return await interaction.followup.send(
+                    embed=obsidian_embed(
+                        "🏆 No Achievements Defined",
+                        "No achievements are available yet.",
+                        color=discord.Color.orange(),
+                        client=interaction.client,
+                    ),
+                    ephemeral=True
+                )
+            
+            # Check which ones user has unlocked
+            cur = await db.execute("""
+                SELECT achievement_id FROM achievements
+                WHERE guild_id=? AND user_id=?
+            """, (interaction.guild.id, interaction.user.id))
+            unlocked_ids = {row[0] for row in await cur.fetchall()}
         
         # Group by category
         achievements_by_category = {}
