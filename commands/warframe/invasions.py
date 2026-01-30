@@ -43,58 +43,67 @@ def setup(bot, group=None):
         invasions_data.sort(key=lambda x: x.get("completion", 0))
         
         # Build fields for invasions (limit to 5 to avoid embed limits)
+        # API uses attacker.faction, defender.faction and attacker.reward.countedItems[].type
+        now_utc = datetime.now(timezone.utc)
         fields = []
         for inv in invasions_data[:5]:
-            node = inv.get("node", "Unknown Location")
-            attacker = inv.get("attackingFaction", "Unknown")
-            defender = inv.get("defendingFaction", "Unknown")
+            node = inv.get("node") or inv.get("nodeKey", "Unknown Location")
+            att_obj = inv.get("attacker") or {}
+            def_obj = inv.get("defender") or {}
+            attacker = att_obj.get("faction") or att_obj.get("factionKey", "Unknown")
+            defender = def_obj.get("faction") or def_obj.get("factionKey", "Unknown")
             completion = inv.get("completion", 0)
-            eta = inv.get("eta", "")
+            count = inv.get("count", 0)
+            required_runs = inv.get("requiredRuns", 0)
             
-            # Get rewards
-            attacker_reward = inv.get("attackerReward", {})
-            defender_reward = inv.get("defenderReward", {})
+            # Rewards from nested attacker.reward / defender.reward
+            att_reward = att_obj.get("reward") or {}
+            def_reward = def_obj.get("reward") or {}
+            att_counted = att_reward.get("countedItems", [])
+            def_counted = def_reward.get("countedItems", [])
             
             attacker_reward_str = "None"
-            if attacker_reward:
-                count = attacker_reward.get("countedItems", [])
-                if count:
-                    items = [item.get("itemType", "Unknown") for item in count]
-                    attacker_reward_str = ", ".join(items[:2])  # Limit to first 2 items
-                    if len(items) > 2:
-                        attacker_reward_str += f" +{len(items) - 2}"
+            if att_counted:
+                items = [item.get("type") or item.get("key", "?") for item in att_counted]
+                attacker_reward_str = ", ".join(items[:2])
+                if len(items) > 2:
+                    attacker_reward_str += f" +{len(items) - 2}"
             
             defender_reward_str = "None"
-            if defender_reward:
-                count = defender_reward.get("countedItems", [])
-                if count:
-                    items = [item.get("itemType", "Unknown") for item in count]
-                    defender_reward_str = ", ".join(items[:2])  # Limit to first 2 items
-                    if len(items) > 2:
-                        defender_reward_str += f" +{len(items) - 2}"
+            if def_counted:
+                items = [item.get("type") or item.get("key", "?") for item in def_counted]
+                defender_reward_str = ", ".join(items[:2])
+                if len(items) > 2:
+                    defender_reward_str += f" +{len(items) - 2}"
             
-            # Calculate progress bar
-            progress = int(completion / 100 * 8)  # 8 character progress bar
+            # Progress bar (completion can be 0–100 or negative if defender ahead)
+            pct = max(0, min(100, float(completion)))
+            progress = int(pct / 100 * 8)
             progress_bar = "█" * progress + "░" * (8 - progress)
             
-            # Format ETA
-            eta_str = "Unknown"
-            if eta:
+            # Time: show "Time active" from activation (API has no eta/expiry)
+            time_str = "—"
+            activation = inv.get("activation")
+            if activation:
                 try:
-                    eta_time = dateparser.parse(eta, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
-                    if eta_time:
-                        time_remaining = eta_time - datetime.now(timezone.utc)
-                        hours = int(time_remaining.total_seconds() // 3600)
-                        minutes = int((time_remaining.total_seconds() % 3600) // 60)
-                        eta_str = f"{hours}h {minutes}m"
+                    act_time = dateparser.parse(activation, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
+                    if act_time:
+                        act_utc = act_time.replace(tzinfo=timezone.utc) if act_time.tzinfo is None else act_time
+                        elapsed = now_utc - act_utc
+                        total_sec = max(0, int(elapsed.total_seconds()))
+                        hours = total_sec // 3600
+                        minutes = (total_sec % 3600) // 60
+                        time_str = f"{hours}h {minutes}m active"
                 except Exception:
                     pass
             
             # Build invasion field value
-            value = f"`{attacker}` ⚔️ `{defender}`\n"
+            value = f"**{attacker}** ⚔️ **{defender}**\n"
             value += f"`{progress_bar}` **{completion:.1f}%**\n"
-            value += f"⏱️ {eta_str}\n\n"
-            value += f"**{attacker}:** {attacker_reward_str}\n"
+            value += f"⏱️ {time_str}\n"
+            if required_runs:
+                value += f"Runs: {count:,}/{required_runs:,}\n"
+            value += f"\n**{attacker}:** {attacker_reward_str}\n"
             value += f"**{defender}:** {defender_reward_str}"
             
             fields.append((f"📍 {node}", value, False))

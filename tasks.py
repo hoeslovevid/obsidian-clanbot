@@ -846,24 +846,24 @@ def setup_tasks(bot):
                     if not invasion_id:
                         continue
                     
-                    # Get rewards from both sides
-                    attacker_reward = inv.get("attackerReward", {})
-                    defender_reward = inv.get("defenderReward", {})
+                    # Get rewards from both sides (API: attacker.reward, defender.reward)
+                    att_obj = inv.get("attacker") or {}
+                    def_obj = inv.get("defender") or {}
+                    attacker_reward = att_obj.get("reward") or {}
+                    defender_reward = def_obj.get("reward") or {}
                     
                     rewards_found = []
                     
-                    # Check attacker rewards
-                    if attacker_reward:
-                        counted_items = attacker_reward.get("countedItems", [])
-                        for item in counted_items:
-                            item_type = item.get("itemType", "").lower()
+                    # Check attacker rewards (API: countedItems[].type or .key)
+                    for item in (attacker_reward.get("countedItems") or []):
+                        item_type = (item.get("type") or item.get("key") or "").lower()
+                        if item_type:
                             rewards_found.append(item_type)
                     
                     # Check defender rewards
-                    if defender_reward:
-                        counted_items = defender_reward.get("countedItems", [])
-                        for item in counted_items:
-                            item_type = item.get("itemType", "").lower()
+                    for item in (defender_reward.get("countedItems") or []):
+                        item_type = (item.get("type") or item.get("key") or "").lower()
+                        if item_type:
                             rewards_found.append(item_type)
                     
                     # Check if any configured reward matches
@@ -885,46 +885,44 @@ def setup_tasks(bot):
                             if not isinstance(ch, discord.TextChannel):
                                 continue
                             
-                            # Build notification
-                            node = inv.get("node", "Unknown Location")
-                            attacker = inv.get("attackingFaction", "Unknown")
-                            defender = inv.get("defendingFaction", "Unknown")
+                            # Build notification (API: attacker.faction, defender.faction; no eta, use activation)
+                            node = inv.get("node") or inv.get("nodeKey", "Unknown Location")
+                            attacker = att_obj.get("faction") or att_obj.get("factionKey", "Unknown")
+                            defender = def_obj.get("faction") or def_obj.get("factionKey", "Unknown")
                             completion = inv.get("completion", 0)
-                            eta = inv.get("eta", "")
+                            count = inv.get("count", 0)
+                            required_runs = inv.get("requiredRuns", 0)
                             
-                            # Format ETA
-                            eta_str = "Unknown"
-                            if eta:
+                            time_str = "—"
+                            activation = inv.get("activation")
+                            if activation:
                                 try:
-                                    eta_time = dateparser.parse(eta, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
-                                    if eta_time:
-                                        time_remaining = eta_time - datetime.now(timezone.utc)
-                                        hours = int(time_remaining.total_seconds() // 3600)
-                                        minutes = int((time_remaining.total_seconds() % 3600) // 60)
-                                        eta_str = f"{hours}h {minutes}m"
+                                    act_time = dateparser.parse(activation, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
+                                    if act_time:
+                                        act_utc = act_time.replace(tzinfo=timezone.utc) if act_time.tzinfo is None else act_time
+                                        elapsed = datetime.now(timezone.utc) - act_utc
+                                        total_sec = max(0, int(elapsed.total_seconds()))
+                                        time_str = f"{total_sec // 3600}h {(total_sec % 3600) // 60}m active"
                                 except Exception:
                                     pass
+                            if time_str == "—" and required_runs:
+                                time_str = f"Runs: {count:,}/{required_runs:,}"
                             
-                            # Get full reward list
+                            # Get full reward list (API: type or key)
                             reward_list = []
-                            if attacker_reward:
-                                items = attacker_reward.get("countedItems", [])
-                                for item in items:
-                                    item_type = item.get("itemType", "")
-                                    if item_type.lower() == reward_lower:
-                                        reward_list.append(f"**{attacker}:** {item_type}")
-                            
-                            if defender_reward:
-                                items = defender_reward.get("countedItems", [])
-                                for item in items:
-                                    item_type = item.get("itemType", "")
-                                    if item_type.lower() == reward_lower:
-                                        reward_list.append(f"**{defender}:** {item_type}")
+                            for item in (attacker_reward.get("countedItems") or []):
+                                item_type = item.get("type") or item.get("key", "")
+                                if item_type and item_type.lower() == reward_lower:
+                                    reward_list.append(f"**{attacker}:** {item_type}")
+                            for item in (defender_reward.get("countedItems") or []):
+                                item_type = item.get("type") or item.get("key", "")
+                                if item_type and item_type.lower() == reward_lower:
+                                    reward_list.append(f"**{defender}:** {item_type}")
                             
                             desc = f"**Location:** {node}\n"
                             desc += f"**Factions:** {attacker} vs {defender}\n"
                             desc += f"**Progress:** {completion:.1f}%\n"
-                            desc += f"**Time Remaining:** {eta_str}\n\n"
+                            desc += f"**Time:** {time_str}\n\n"
                             desc += "**Reward Found:**\n" + "\n".join(reward_list)
                             
                             embed = obsidian_embed(
