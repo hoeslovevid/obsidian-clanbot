@@ -44,7 +44,7 @@ def setup(bot, group=None):
             )
         
         # Remove coins
-        await remove_coins(interaction.guild.id, interaction.user.id, cost)
+        await remove_coins(interaction.guild.id, interaction.user.id, cost, "GAMBLING", "Slots spin")
         
         # Spin slots
         symbols = ["🍒", "🍋", "🍊", "🍇", "🔔", "⭐", "💎", "7️⃣"]
@@ -136,7 +136,7 @@ def setup(bot, group=None):
             )
         
         # Remove coins
-        await remove_coins(interaction.guild.id, interaction.user.id, bet)
+        await remove_coins(interaction.guild.id, interaction.user.id, bet, "GAMBLING", "Dice roll")
         
         # Roll dice
         user_roll = random.randint(1, 6)
@@ -229,7 +229,7 @@ def setup(bot, group=None):
             )
         
         # Remove coins
-        await remove_coins(interaction.guild.id, interaction.user.id, bet)
+        await remove_coins(interaction.guild.id, interaction.user.id, bet, "GAMBLING", "Roulette bet")
         
         # Spin roulette (0-36, 0 is green)
         number = random.randint(0, 36)

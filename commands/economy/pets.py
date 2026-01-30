@@ -142,7 +142,7 @@ def setup(bot, group=None):
                 )
             
             # Buy pet
-            await remove_coins(interaction.guild.id, interaction.user.id, price)
+            await remove_coins(interaction.guild.id, interaction.user.id, price, "PET", f"Purchased {pet_type} pet")
             
             await db.execute("""
                 INSERT INTO pets (guild_id, user_id, pet_name, pet_type, level, experience, hunger, happiness, created_at)
@@ -272,7 +272,7 @@ def setup(bot, group=None):
             
             hunger = min(100, row[0] + 20)  # Increase hunger by 20, max 100
             
-            await remove_coins(interaction.guild.id, interaction.user.id, cost)
+            await remove_coins(interaction.guild.id, interaction.user.id, cost, "PET", "Pet food")
             await db.execute("""
                 UPDATE pets SET hunger=?, last_fed_at=? WHERE guild_id=? AND user_id=?
             """, (hunger, now_utc().isoformat(), interaction.guild.id, interaction.user.id))
@@ -345,7 +345,7 @@ def setup(bot, group=None):
                 new_level = level + 1
                 exp = 0  # Reset exp on level up
             
-            await remove_coins(interaction.guild.id, interaction.user.id, cost)
+            await remove_coins(interaction.guild.id, interaction.user.id, cost, "PET", "Play with pet")
             await db.execute("""
                 UPDATE pets SET happiness=?, experience=?, level=?, last_played_at=?
                 WHERE guild_id=? AND user_id=?
