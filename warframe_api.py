@@ -200,10 +200,13 @@ async def search_warframe_market_item(item_name: str, platform: str = "pc") -> O
         item_lower = stripped.lower()
 
         async with aiohttp.ClientSession() as session:
+            # Browser-like headers; some CDNs return 404 without Origin/Referer
             headers = {
                 "Language": "en",
                 "Accept": "application/json",
-                "User-Agent": "ObsidianClanBot/1.0 (Discord bot; Warframe Market price lookup)",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Origin": "https://warframe.market",
+                "Referer": "https://warframe.market/",
             }
             timeout = aiohttp.ClientTimeout(total=20)
 
@@ -432,10 +435,17 @@ async def get_warframe_market_price(item_url_name: str, platform: str = "pc") ->
     try:
         async with aiohttp.ClientSession() as session:
             # Get orders
+            wfm_headers = {
+                "Language": "en",
+                "Accept": "application/json",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Origin": "https://warframe.market",
+                "Referer": "https://warframe.market/",
+            }
             async with session.get(
                 f"https://api.warframe.market/v1/items/{item_url_name}/orders",
                 params={"platform": platform, "status": "ingame"},
-                headers={"Language": "en"},
+                headers=wfm_headers,
                 timeout=aiohttp.ClientTimeout(total=10)
             ) as response:
                 if response.status == 200:
@@ -446,7 +456,7 @@ async def get_warframe_market_price(item_url_name: str, platform: str = "pc") ->
                     async with session.get(
                         f"https://api.warframe.market/v1/items/{item_url_name}/statistics",
                         params={"platform": platform},
-                        headers={"Language": "en"},
+                        headers=wfm_headers,
                         timeout=aiohttp.ClientTimeout(total=10)
                     ) as stats_response:
                         stats_data = None
