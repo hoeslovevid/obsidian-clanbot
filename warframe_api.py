@@ -159,48 +159,111 @@ async def fetch_events_data() -> Optional[List[Dict[str, Any]]]:
         return None
 
 
+def _normalize_item_payload(raw: Dict[str, Any], fallback_url_name: str) -> Optional[Dict[str, Any]]:
+    """Extract item_name and url_name from API payload.item (handles different response shapes)."""
+    if not raw:
+        return None
+    # Direct fields (list-style response)
+    item_name = raw.get("item_name")
+    url_name = raw.get("url_name") or fallback_url_name
+    # Nested en (single-item response sometimes has item_name under en)
+    if not item_name and isinstance(raw.get("en"), dict):
+        item_name = raw["en"].get("item_name")
+    # items_in_set: use first entry for display name
+    if not item_name and raw.get("items_in_set"):
+        first = raw["items_in_set"][0] if raw["items_in_set"] else {}
+        item_name = first.get("en", {}).get("item_name") if isinstance(first.get("en"), dict) else first.get("item_name")
+    if not item_name:
+        item_name = url_name.replace("_", " ").title()
+    return {"item_name": item_name, "url_name": url_name, **raw}
+
+
 async def search_warframe_market_item(item_name: str, platform: str = "pc") -> Optional[Dict[str, Any]]:
     """
     Search for an item on Warframe Market and get its URL name.
-    
-    Args:
-        item_name: The item name to search for
-        platform: Platform (pc, xbox, ps4, switch)
-    
-    Returns:
-        Item data with url_name, or None if not found
+    Tries direct lookup by url_name, then fetches full item list and fuzzy-matches.
     """
     try:
-        # Normalize item name for search
-        search_name = item_name.lower().strip().replace(" ", "_")
-        
+        stripped = item_name.strip()
+        if not stripped:
+            return None
+        search_name = stripped.lower().replace(" ", "_")
+        # Variants to try for direct lookup (e.g. "mesa prime" -> mesa_prime, mesa_prime_set)
+        variants = [search_name]
+        if not search_name.endswith("_set"):
+            variants.append(search_name + "_set")
+        if search_name.endswith("_set"):
+            variants.append(search_name[:-4])  # without _set
+        # Remove duplicate order while preserving order
+        seen = set()
+        variants = [v for v in variants if not (v in seen or seen.add(v))]
+
         async with aiohttp.ClientSession() as session:
-            # Search for items
-            async with session.get(
-                f"https://api.warframe.market/v1/items/{search_name}",
-                headers={"Language": "en"},
-                timeout=aiohttp.ClientTimeout(total=10)
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    if data.get("payload", {}).get("item"):
-                        return data["payload"]["item"]
-                elif response.status == 404:
-                    # Try fuzzy search
+            headers = {"Language": "en"}
+            timeout = aiohttp.ClientTimeout(total=15)
+
+            for url_name in variants:
+                try:
                     async with session.get(
-                        f"https://api.warframe.market/v1/items",
-                        headers={"Language": "en"},
-                        timeout=aiohttp.ClientTimeout(total=10)
-                    ) as search_response:
-                        if search_response.status == 200:
-                            search_data = await search_response.json()
-                            items = search_data.get("payload", {}).get("items", [])
-                            # Find closest match
-                            item_lower = item_name.lower()
-                            for item in items:
-                                if item_lower in item.get("item_name", "").lower() or item.get("url_name", "").lower() in item_lower:
-                                    return item
-                return None
+                        f"https://api.warframe.market/v1/items/{url_name}",
+                        headers=headers,
+                        timeout=timeout
+                    ) as response:
+                        if response.status == 200:
+                            data = await response.json()
+                            payload = data.get("payload", {})
+                            item = payload.get("item")
+                            if item:
+                                normalized = _normalize_item_payload(item, url_name)
+                                if normalized:
+                                    return normalized
+                        elif response.status != 404:
+                            await response.read()
+                except Exception:
+                    continue
+
+            # Fallback: fetch full items list and fuzzy search
+            all_items: List[Dict[str, Any]] = []
+            next_url = "https://api.warframe.market/v1/items"
+            while next_url:
+                try:
+                    async with session.get(next_url, headers=headers, timeout=timeout) as list_resp:
+                        if list_resp.status != 200:
+                            break
+                        list_data = await list_resp.json()
+                        payload = list_data.get("payload", {})
+                        all_items.extend(payload.get("items", []))
+                        next_url = payload.get("next_page") or (list_data.get("next_page") if isinstance(list_data.get("next_page"), str) else None)
+                        if not next_url and list_data.get("pagination", {}).get("next_page"):
+                            next_url = list_data["pagination"].get("next_page")
+                except Exception:
+                    break
+
+            item_lower = stripped.lower()
+            # Prefer exact url_name match, then item_name contains search, then url_name contains
+            exact_url = None
+            name_contains = []
+            url_contains = []
+            for item in all_items:
+                iname = (item.get("item_name") or "").lower()
+                uname = (item.get("url_name") or "").lower()
+                if uname == search_name or uname == item_lower.replace(" ", "_"):
+                    exact_url = item
+                    break
+                if item_lower in iname or search_name in iname:
+                    name_contains.append(item)
+                elif search_name in uname or item_lower.replace(" ", "_") in uname:
+                    url_contains.append(item)
+
+            if exact_url:
+                return _normalize_item_payload(exact_url, exact_url.get("url_name", search_name))
+            if name_contains:
+                best = name_contains[0]
+                return _normalize_item_payload(best, best.get("url_name", search_name))
+            if url_contains:
+                best = url_contains[0]
+                return _normalize_item_payload(best, best.get("url_name", search_name))
+            return None
     except Exception as e:
         logger.error(f"Error searching Warframe Market for {item_name}: {e}")
         return None
