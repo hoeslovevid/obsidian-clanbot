@@ -68,7 +68,7 @@ def setup(bot, group=None):
         
         # Add winnings
         if winnings > 0:
-            await add_coins(interaction.guild.id, interaction.user.id, winnings)
+            await add_coins(interaction.guild.id, interaction.user.id, winnings, "GAMBLING", "Slots winnings")
             new_balance = await get_user_balance(interaction.guild.id, interaction.user.id)
             result = f"**🎉 You won {winnings} coins!**\n**New Balance:** {new_balance} coins"
             color = discord.Color.gold()
@@ -145,7 +145,7 @@ def setup(bot, group=None):
         # Calculate winnings
         if user_roll > bot_roll:
             winnings = bet * 2
-            await add_coins(interaction.guild.id, interaction.user.id, winnings)
+            await add_coins(interaction.guild.id, interaction.user.id, winnings, "GAMBLING", "Dice winnings")
             result = f"**🎉 You won!**\n**Your roll:** {user_roll}\n**Bot roll:** {bot_roll}\n**Winnings:** {winnings} coins"
             color = discord.Color.green()
             win_amount = winnings
@@ -157,7 +157,7 @@ def setup(bot, group=None):
             game_result = "loss"
         else:
             # Tie - return bet
-            await add_coins(interaction.guild.id, interaction.user.id, bet)
+            await add_coins(interaction.guild.id, interaction.user.id, bet, "GAMBLING", "Dice tie (bet returned)")
             result = f"**It's a tie!**\n**Your roll:** {user_roll}\n**Bot roll:** {bot_roll}\n**Bet returned:** {bet} coins"
             color = discord.Color.orange()
             win_amount = bet
@@ -248,7 +248,7 @@ def setup(bot, group=None):
                 winnings = bet * 35  # Green pays 35:1
             else:
                 winnings = bet * 2  # Red/Black pays 2:1
-            await add_coins(interaction.guild.id, interaction.user.id, winnings)
+            await add_coins(interaction.guild.id, interaction.user.id, winnings, "GAMBLING", "Roulette winnings")
             result = f"**🎉 You won!**\n**Landed on:** {landed_color.capitalize()} ({number})\n**Winnings:** {winnings} coins"
             color_emoji = discord.Color.green()
             win_amount = winnings

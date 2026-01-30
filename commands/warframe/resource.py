@@ -1,9 +1,77 @@
 """Warframe resource farming guide command."""
 import discord
 from discord import app_commands
-from typing import Optional
+from typing import Optional, List, Tuple
 
 from utils import obsidian_embed
+
+# Discord max 25 fields per embed
+RESOURCES_PER_PAGE = 15
+
+
+class ResourcePageButton(discord.ui.Button):
+    """Prev/Next button for resource pagination."""
+
+    def __init__(self, label: str, action: str, disabled: bool = False):
+        super().__init__(label=label, style=discord.ButtonStyle.secondary, disabled=disabled)
+        self.action = action
+
+    async def callback(self, interaction: discord.Interaction):
+        view: ResourcePaginationView = self.view
+        if self.action == "prev" and view.current_page > 0:
+            view.current_page -= 1
+        elif self.action == "next" and view.current_page < view.total_pages - 1:
+            view.current_page += 1
+        else:
+            return await interaction.response.defer()
+        await view.update_message(interaction)
+
+
+class ResourcePaginationView(discord.ui.View):
+    """Pagination view for all-resources embed."""
+
+    def __init__(self, pages: List[List[Tuple[str, str, bool]]], total_resources: int, client):
+        super().__init__(timeout=300)
+        self.pages = pages
+        self.total_pages = len(pages)
+        self.current_page = 0
+        self.total_resources = total_resources
+        self.client = client
+        self._add_buttons()
+
+    def _add_buttons(self):
+        self.clear_items()
+        if self.total_pages <= 1:
+            return
+        self.add_item(ResourcePageButton("◀️ Previous", "prev", disabled=(self.current_page == 0)))
+        self.add_item(ResourcePageButton("Next ▶️", "next", disabled=(self.current_page >= self.total_pages - 1)))
+
+    def _embed_for_page(self, page: int) -> discord.Embed:
+        base_desc = f"Farming locations and tips for **{self.total_resources}** resources. Use `/resource <name>` for full details."
+        if self.total_pages > 1:
+            base_desc += f"\n\n**Page {page + 1} of {self.total_pages}**"
+        return obsidian_embed(
+            "🔍 Resource Farming Guide (All Resources)",
+            base_desc,
+            color=discord.Color.blue(),
+            fields=self.pages[page],
+            client=self.client,
+        )
+
+    async def update_message(self, interaction: discord.Interaction):
+        self._add_buttons()
+        embed = self._embed_for_page(self.current_page)
+        embed.set_footer(text=f"Page {self.current_page + 1}/{self.total_pages} • {self.total_resources} resources")
+        try:
+            if interaction.response.is_done():
+                await interaction.message.edit(embed=embed, view=self)
+            else:
+                await interaction.response.edit_message(embed=embed, view=self)
+        except Exception:
+            try:
+                await interaction.message.edit(embed=embed, view=self)
+            except Exception:
+                pass
 
 # Resource farming data
 RESOURCE_DATA = {
@@ -317,13 +385,11 @@ def setup(bot, group=None):
         """Show resource farming guide for one resource or all resources."""
         await interaction.response.defer()
         
-        # Show farms for ALL resources when no resource specified or "all"
+        # Show farms for ALL resources when no resource specified or "all" (paginated)
         show_all = not resource or not resource.strip() or resource.strip().lower() == "all"
         if show_all:
-            # One field per resource; Discord max 25 fields per embed
-            MAX_FIELDS = 25
             sorted_keys = sorted(RESOURCE_DATA.keys())
-            all_fields = []
+            all_fields: List[Tuple[str, str, bool]] = []
             for key in sorted_keys:
                 data = RESOURCE_DATA[key]
                 locs = data["best_locations"]
@@ -333,27 +399,14 @@ def setup(bot, group=None):
                 if len(value) > 1020:
                     value = value[:1017] + "…"
                 all_fields.append((f"🔍 {data['name']}", value, False))
-            # Send first embed (up to 25 fields)
-            first_batch = all_fields[:MAX_FIELDS]
-            embed = obsidian_embed(
-                "🔍 Resource Farming Guide (All Resources)",
-                f"Farming locations and tips for **{len(RESOURCE_DATA)}** resources. Use `/resource <name>` for full details on one resource.",
-                color=discord.Color.blue(),
-                fields=first_batch,
-                client=interaction.client,
-            )
-            await interaction.followup.send(embed=embed)
-            # Second embed if more than 25 resources
-            if len(all_fields) > MAX_FIELDS:
-                second_batch = all_fields[MAX_FIELDS:]
-                embed2 = obsidian_embed(
-                    "🔍 Resource Farming Guide (continued)",
-                    f"Resources **{MAX_FIELDS + 1}**–**{len(RESOURCE_DATA)}** of {len(RESOURCE_DATA)}.",
-                    color=discord.Color.blue(),
-                    fields=second_batch,
-                    client=interaction.client,
-                )
-                await interaction.followup.send(embed=embed2)
+            # Split into pages (RESOURCES_PER_PAGE per page, max 25 fields per embed)
+            pages: List[List[Tuple[str, str, bool]]] = []
+            for i in range(0, len(all_fields), RESOURCES_PER_PAGE):
+                pages.append(all_fields[i : i + RESOURCES_PER_PAGE])
+            view = ResourcePaginationView(pages, len(RESOURCE_DATA), interaction.client)
+            embed = view._embed_for_page(0)
+            embed.set_footer(text=f"Page 1/{view.total_pages} • {view.total_resources} resources")
+            await interaction.followup.send(embed=embed, view=view)
             return
         
         resource_lower = resource.lower().strip()

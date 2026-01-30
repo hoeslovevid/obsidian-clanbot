@@ -16,7 +16,8 @@ def setup(bot, group=None):
     @app_commands.describe(
         channel="The channel where users can apply (leave empty to use current channel)",
         action="What to configure",
-        description="Brief description of the application (for Post Panel action)"
+        description="Brief description of the application (for Post Panel action)",
+        image_url="Image URL to display in the application panel embed (optional)"
     )
     @app_commands.choices(action=[
         app_commands.Choice(name="Set Channel", value="set_channel"),
@@ -30,7 +31,8 @@ def setup(bot, group=None):
         interaction: discord.Interaction,
         action: app_commands.Choice[str],
         channel: Optional[discord.TextChannel] = None,
-        description: Optional[str] = None
+        description: Optional[str] = None,
+        image_url: Optional[str] = None
     ):
         """Configure the application system."""
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
@@ -272,27 +274,37 @@ def setup(bot, group=None):
             if len(panel_desc) > 4096:
                 panel_desc = panel_desc[:4093] + "..."
             
+            # Fetch existing panel info (for update check and image persistence)
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute("""
+                    SELECT panel_channel_id, panel_message_id, panel_image_url FROM application_settings WHERE guild_id = ?
+                """, (interaction.guild.id,))
+                row = await cur.fetchone()
+            existing_panel_channel_id = row[0] if row and row[0] else None
+            existing_panel_message_id = row[1] if row and row[1] else None
+            existing_image = row[2] if row and len(row) > 2 and row[2] else None
+            
+            # Resolve image URL (use provided one, or keep existing)
+            panel_image = None
+            if image_url is not None:
+                url = image_url.strip()
+                panel_image = url if url and (url.startswith("http://") or url.startswith("https://")) else None
+            elif existing_image:
+                panel_image = existing_image
+            
             # Create embed
             embed = obsidian_embed(
                 "📝 Clan Application",
                 panel_desc,
                 color=discord.Color.blue(),
                 client=interaction.client,
+                image=panel_image if panel_image else None,
             )
             
             # Create view with button
             from views import ApplicationPanelView
             view = ApplicationPanelView(interaction.guild.id)
             bot.add_view(view)
-            
-            # Check if there's an existing panel to update
-            async with aiosqlite.connect(DB_PATH) as db:
-                cur = await db.execute("""
-                    SELECT panel_channel_id, panel_message_id FROM application_settings WHERE guild_id = ?
-                """, (interaction.guild.id,))
-                row = await cur.fetchone()
-                existing_panel_channel_id = row[0] if row and row[0] else None
-                existing_panel_message_id = row[1] if row and row[1] else None
             
             try:
                 if existing_panel_message_id and existing_panel_channel_id == target_channel.id:
@@ -301,13 +313,13 @@ def setup(bot, group=None):
                         existing_message = await target_channel.fetch_message(existing_panel_message_id)
                         await existing_message.edit(embed=embed, view=view)
                         
-                        # Update description in database
+                        # Update description and image in database
                         async with aiosqlite.connect(DB_PATH) as db:
                             await db.execute("""
                                 UPDATE application_settings 
-                                SET panel_description = ?
+                                SET panel_description = ?, panel_image_url = ?
                                 WHERE guild_id = ?
-                            """, (description or panel_desc, interaction.guild.id))
+                            """, (description or panel_desc, panel_image or None, interaction.guild.id))
                             await db.commit()
                         
                         await interaction.followup.send(
@@ -331,9 +343,9 @@ def setup(bot, group=None):
                 async with aiosqlite.connect(DB_PATH) as db:
                     await db.execute("""
                         UPDATE application_settings 
-                        SET panel_channel_id = ?, panel_message_id = ?, panel_description = ?
+                        SET panel_channel_id = ?, panel_message_id = ?, panel_description = ?, panel_image_url = ?
                         WHERE guild_id = ?
-                    """, (target_channel.id, message.id, description or panel_desc, interaction.guild.id))
+                    """, (target_channel.id, message.id, description or panel_desc, panel_image or None, interaction.guild.id))
                     await db.commit()
                 
                 await interaction.followup.send(
