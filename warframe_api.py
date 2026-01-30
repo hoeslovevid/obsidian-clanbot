@@ -3,8 +3,13 @@ Warframe API functions for fetching game data.
 This module handles all Warframe World State API calls.
 """
 import logging
+import os
 from typing import Optional, Dict, Any, Tuple, List
 import aiohttp  # type: ignore
+
+# Optional proxy for Warframe Market API (e.g. when server IP gets 404)
+def _market_proxy() -> Optional[str]:
+    return os.environ.get("WARFRAME_MARKET_PROXY") or os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY") or None
 import dateparser  # type: ignore
 from datetime import datetime, timezone, timedelta
 
@@ -213,8 +218,9 @@ async def search_warframe_market_item(item_name: str, platform: str = "pc") -> O
             # 1) Fetch full items list first (most reliable endpoint)
             all_items: List[Dict[str, Any]] = []
             list_url = "https://api.warframe.market/v1/items"
+            proxy = _market_proxy()
             try:
-                async with session.get(list_url, headers=headers, timeout=timeout) as resp:
+                async with session.get(list_url, headers=headers, timeout=timeout, proxy=proxy) as resp:
                     if resp.status == 200:
                         data = await resp.json()
                         payload = data.get("payload") or data
@@ -223,11 +229,14 @@ async def search_warframe_market_item(item_name: str, platform: str = "pc") -> O
                         if not all_items and isinstance(data.get("payload", {}).get("items"), list):
                             all_items = data["payload"]["items"]
                     else:
-                        logger.warning(f"Warframe Market items list returned {resp.status} for {list_url}")
+                        logger.warning(
+                            f"Warframe Market items list returned {resp.status} for {list_url}. "
+                            "If the bot runs on a server, the API may block requests; set WARFRAME_MARKET_PROXY (or HTTPS_PROXY) to an HTTP(S) proxy URL to bypass."
+                        )
             except Exception as e:
                 logger.warning(f"Failed to fetch Warframe Market items list: {e}")
             if not all_items:
-                logger.warning("Warframe Market items list is empty; trade_price search may fail")
+                logger.debug("Warframe Market items list is empty; using direct item lookups")
 
             # 2) Search in list: exact url_name, then item_name startswith/contains, then url_name contains
             def score(it: Dict[str, Any]) -> int:
@@ -253,15 +262,34 @@ async def search_warframe_market_item(item_name: str, platform: str = "pc") -> O
                     _, best = scored[0]
                     return _normalize_item_payload(best, best.get("url_name", search_name))
 
-            # 3) Fallback: direct GET by url_name variants
-            for url_name in [search_name, search_name + "_set", search_name.replace("_set", "")]:
+            # 3) Fallback: direct GET by url_name variants (no list needed)
+            def _url_variants() -> List[str]:
+                seen: set = set()
+                out: List[str] = []
+                candidates = [search_name]
+                if not search_name.endswith("_set"):
+                    candidates.append(search_name + "_set")
+                replaced = search_name.replace("_set", "").rstrip("_")
+                if replaced:
+                    candidates.append(replaced)
+                for s in ("_blueprint", "_receiver", "_barrel", "_chassis", "_neuroptics", "_systems"):
+                    if not search_name.endswith(s):
+                        candidates.append(search_name + s)
+                for cand in candidates:
+                    if cand not in seen:
+                        seen.add(cand)
+                        out.append(cand)
+                return out
+
+            for url_name in _url_variants():
                 if not url_name:
                     continue
                 try:
                     async with session.get(
                         f"https://api.warframe.market/v1/items/{url_name}",
                         headers=headers,
-                        timeout=timeout
+                        timeout=timeout,
+                        proxy=proxy
                     ) as response:
                         if response.status == 200:
                             data = await response.json()
@@ -433,6 +461,7 @@ async def get_warframe_market_price(item_url_name: str, platform: str = "pc") ->
         Price statistics dict with orders and stats, or None if error
     """
     try:
+        proxy = _market_proxy()
         async with aiohttp.ClientSession() as session:
             # Get orders
             wfm_headers = {
@@ -446,7 +475,8 @@ async def get_warframe_market_price(item_url_name: str, platform: str = "pc") ->
                 f"https://api.warframe.market/v1/items/{item_url_name}/orders",
                 params={"platform": platform, "status": "ingame"},
                 headers=wfm_headers,
-                timeout=aiohttp.ClientTimeout(total=10)
+                timeout=aiohttp.ClientTimeout(total=10),
+                proxy=proxy
             ) as response:
                 if response.status == 200:
                     data = await response.json()
@@ -457,7 +487,8 @@ async def get_warframe_market_price(item_url_name: str, platform: str = "pc") ->
                         f"https://api.warframe.market/v1/items/{item_url_name}/statistics",
                         params={"platform": platform},
                         headers=wfm_headers,
-                        timeout=aiohttp.ClientTimeout(total=10)
+                        timeout=aiohttp.ClientTimeout(total=10),
+                        proxy=proxy
                     ) as stats_response:
                         stats_data = None
                         if stats_response.status == 200:

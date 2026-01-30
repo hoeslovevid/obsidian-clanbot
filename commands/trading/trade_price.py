@@ -35,10 +35,14 @@ def setup(bot, group=None):
         item_data = await search_warframe_market_item(item, platform_val)
         
         if not item_data:
+            hint = (
+                "\n\nIf the bot runs on a server, the Warframe Market API may block requests. "
+                "Set the **WARFRAME_MARKET_PROXY** (or **HTTPS_PROXY**) environment variable to an HTTP(S) proxy URL to try to bypass this."
+            )
             return await interaction.followup.send(
                 embed=obsidian_embed(
                     "❌ Item Not Found",
-                    f"Could not find '{item}' on Warframe Market. Please check the spelling and try again.",
+                    f"Could not find '{item}' on Warframe Market. Please check the spelling and try again.{hint}",
                     color=discord.Color.red(),
                     client=interaction.client,
                 ),
