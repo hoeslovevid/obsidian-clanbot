@@ -1212,7 +1212,8 @@ async def init_db() -> None:
             channel_id INTEGER,
             panel_channel_id INTEGER,
             panel_message_id INTEGER,
-            panel_description TEXT
+            panel_description TEXT,
+            panel_image_url TEXT
         )""")
         
         # Add panel columns if they don't exist (for existing databases)
@@ -1232,6 +1233,10 @@ async def init_db() -> None:
             if "panel_description" not in column_names:
                 await db.execute("ALTER TABLE application_settings ADD COLUMN panel_description TEXT")
                 logger.info("[db] Added panel_description column to application_settings table")
+            
+            if "panel_image_url" not in column_names:
+                await db.execute("ALTER TABLE application_settings ADD COLUMN panel_image_url TEXT")
+                logger.info("[db] Added panel_image_url column to application_settings table")
             
             await db.commit()
         except Exception as e:
@@ -1955,6 +1960,27 @@ async def init_db() -> None:
             max_level INTEGER NOT NULL DEFAULT 100,
             description TEXT
         )""")
+        # Seed default pets if shop is empty
+        cur = await db.execute("SELECT COUNT(*) FROM pet_types")
+        if (await cur.fetchone())[0] == 0:
+            default_pets = [
+                ("Dog", 100, 50, "A loyal companion"),
+                ("Cat", 150, 60, "An independent friend"),
+                ("Bird", 80, 40, "A cheerful winged friend"),
+                ("Fish", 75, 35, "A calm aquarium buddy"),
+                ("Rabbit", 120, 55, "A soft and speedy pal"),
+                ("Fox", 200, 70, "A clever and curious companion"),
+                ("Robot", 300, 80, "A mechanical companion"),
+                ("Wolf", 350, 85, "A fierce and loyal guardian"),
+                ("Dragon", 500, 100, "A powerful mythical creature"),
+                ("Phoenix", 600, 100, "A legendary fire bird that rises again"),
+            ]
+            for pet_type, base_price, max_level, description in default_pets:
+                await db.execute(
+                    "INSERT OR IGNORE INTO pet_types (pet_type, base_price, max_level, description) VALUES (?, ?, ?, ?)",
+                    (pet_type, base_price, max_level, description),
+                )
+            await db.commit()
 
         # Prestige system tables
         await db.execute("""

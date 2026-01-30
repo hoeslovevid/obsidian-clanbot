@@ -43,8 +43,14 @@ def setup(bot, group=None):
                 default_pets = [
                     ("Dog", 100, 50, "A loyal companion"),
                     ("Cat", 150, 60, "An independent friend"),
-                    ("Dragon", 500, 100, "A powerful mythical creature"),
+                    ("Bird", 80, 40, "A cheerful winged friend"),
+                    ("Fish", 75, 35, "A calm aquarium buddy"),
+                    ("Rabbit", 120, 55, "A soft and speedy pal"),
+                    ("Fox", 200, 70, "A clever and curious companion"),
                     ("Robot", 300, 80, "A mechanical companion"),
+                    ("Wolf", 350, 85, "A fierce and loyal guardian"),
+                    ("Dragon", 500, 100, "A powerful mythical creature"),
+                    ("Phoenix", 600, 100, "A legendary fire bird that rises again"),
                 ]
                 for pet_type, price, max_level, desc in default_pets:
                     await db.execute("""
