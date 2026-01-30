@@ -1,6 +1,7 @@
 """Warframe resource farming guide command."""
 import discord
 from discord import app_commands
+from typing import Optional
 
 from utils import obsidian_embed
 
@@ -215,18 +216,145 @@ RESOURCE_DATA = {
         "tips": "Jupiter has the highest drop rate. Corpus missions are best for farming.",
         "rarity": "Common"
     },
+    "hexenon": {
+        "name": "Hexenon",
+        "best_locations": [
+            "**Jupiter** - Io (Defense) - Best location",
+            "**Jupiter** - Ganymede (Survival) - Good alternative",
+            "**Jupiter** - Cameria (Survival) - High level",
+            "**Jupiter** - Any Corpus mission - Only drops here"
+        ],
+        "tips": "Jupiter only. Io defense is fastest. Use Nekros and break containers.",
+        "rarity": "Uncommon"
+    },
+    "carbides": {
+        "name": "Carbides",
+        "best_locations": [
+            "**Kuva Fortress** - Any mission - Only source",
+            "**Kuva Fortress** - Survival - Best for farming",
+            "**Kuva Fortress** - Exterminate - Quick runs",
+            "**Kuva Siphon/Flood** - While farming Kuva"
+        ],
+        "tips": "Kuva Fortress only. Survival or endless missions for bulk. Nekros helps.",
+        "rarity": "Uncommon"
+    },
+    "cubic diodes": {
+        "name": "Cubic Diodes",
+        "best_locations": [
+            "**Plains of Eidolon** - Bounties and mining",
+            "**Plains of Eidolon** - Free roam containers",
+            "**Cetus** - Bounty rewards - Tier 2–3",
+            "**Plains** - Incursions and caches"
+        ],
+        "tips": "Eidolon only. Bounties and mining are best. Break containers in free roam.",
+        "rarity": "Uncommon"
+    },
+    "void traces": {
+        "name": "Void Traces",
+        "best_locations": [
+            "**Void Fissures** - Any fissure mission - Only source",
+            "**Capture/Exterminate fissures** - Fastest runs",
+            "**Endless fissures** - More traces per run (scaling)",
+            "**Radshare groups** - Farm relics and traces together"
+        ],
+        "tips": "Only from fissure missions. Complete the 10 reactant. Boosters and Smeeta stack.",
+        "rarity": "Special"
+    },
+    "kuva": {
+        "name": "Kuva",
+        "best_locations": [
+            "**Kuva Siphon** - Daily mission - Reliable",
+            "**Kuva Flood** - Highest amount per run",
+            "**Kuva Fortress** - Survival (Kuva Survival) - Endless",
+            "**Steel Path** - Kuva Siphon/Flood - Bonus"
+        ],
+        "tips": "Siphon/Flood are main sources. Use the correct operator amp to destroy braids. Resource booster doubles.",
+        "rarity": "Special"
+    },
+    "synthula": {
+        "name": "Synthula",
+        "best_locations": [
+            "**Index** - High index rounds - Rare drop",
+            "**Nezha Prime** - Farm in Index while farming credits",
+            "**Profit-Taker** - Orb Vallis - Possible drop",
+            "**Simaris** - Some synthesis targets"
+        ],
+        "tips": "Rare. Index is the most reliable. High risk/reward rounds.",
+        "rarity": "Rare"
+    },
+    "entrati lanthorn": {
+        "name": "Entrati Lanthorn",
+        "best_locations": [
+            "**Zariman** - Any mission - Only source",
+            "**Zariman** - Exterminate - Fast runs",
+            "**Zariman** - Void Armageddon - Good rate",
+            "**Zariman** - Break containers and lockers"
+        ],
+        "tips": "Zariman only. Break every container. Thief's Wit helps. Rare drop.",
+        "rarity": "Rare"
+    },
+    "thrax plasm": {
+        "name": "Thrax Plasm",
+        "best_locations": [
+            "**Zariman** - Void Armageddon - Best source",
+            "**Zariman** - Void Flood - Good amount",
+            "**Zariman** - Cascade - Thrax spawn",
+            "**Steel Path Zariman** - Higher drop rate"
+        ],
+        "tips": "Kill Thrax units (ghost form). Armageddon and Flood are best. Operator/amp damage.",
+        "rarity": "Rare"
+    },
 }
 
 
 def setup(bot, group=None):
     """Register the resource command."""
-    command_decorator = group.command(name="resource", description="Get farming information for a Warframe resource.") if group else bot.tree.command(name="resource", description="Get farming information for a Warframe resource.")
+    command_decorator = group.command(name="resource", description="Get farming information for Warframe resources.") if group else bot.tree.command(name="resource", description="Get farming information for Warframe resources.")
     
     @command_decorator
-    @app_commands.describe(resource="The resource name (e.g., orokin cell, neural sensor)")
-    async def resource(interaction: discord.Interaction, resource: str):
-        """Show resource farming guide."""
+    @app_commands.describe(resource="Resource name (e.g. orokin cell). Leave empty to show farms for all resources.")
+    async def resource(interaction: discord.Interaction, resource: Optional[str] = None):
+        """Show resource farming guide for one resource or all resources."""
         await interaction.response.defer()
+        
+        # Show farms for ALL resources when no resource specified or "all"
+        show_all = not resource or not resource.strip() or resource.strip().lower() == "all"
+        if show_all:
+            # One field per resource; Discord max 25 fields per embed
+            MAX_FIELDS = 25
+            sorted_keys = sorted(RESOURCE_DATA.keys())
+            all_fields = []
+            for key in sorted_keys:
+                data = RESOURCE_DATA[key]
+                locs = data["best_locations"]
+                loc_line = "\n".join(locs[:3]) if len(locs) >= 3 else "\n".join(locs)
+                tip_short = data["tips"][:180] + "…" if len(data["tips"]) > 180 else data["tips"]
+                value = f"{loc_line}\n\n💡 {tip_short}\n⭐ {data['rarity']}"
+                if len(value) > 1020:
+                    value = value[:1017] + "…"
+                all_fields.append((f"🔍 {data['name']}", value, False))
+            # Send first embed (up to 25 fields)
+            first_batch = all_fields[:MAX_FIELDS]
+            embed = obsidian_embed(
+                "🔍 Resource Farming Guide (All Resources)",
+                f"Farming locations and tips for **{len(RESOURCE_DATA)}** resources. Use `/resource <name>` for full details on one resource.",
+                color=discord.Color.blue(),
+                fields=first_batch,
+                client=interaction.client,
+            )
+            await interaction.followup.send(embed=embed)
+            # Second embed if more than 25 resources
+            if len(all_fields) > MAX_FIELDS:
+                second_batch = all_fields[MAX_FIELDS:]
+                embed2 = obsidian_embed(
+                    "🔍 Resource Farming Guide (continued)",
+                    f"Resources **{MAX_FIELDS + 1}**–**{len(RESOURCE_DATA)}** of {len(RESOURCE_DATA)}.",
+                    color=discord.Color.blue(),
+                    fields=second_batch,
+                    client=interaction.client,
+                )
+                await interaction.followup.send(embed=embed2)
+            return
         
         resource_lower = resource.lower().strip()
         
@@ -243,7 +371,7 @@ def setup(bot, group=None):
             return await interaction.followup.send(
                 embed=obsidian_embed(
                     "❌ Resource Not Found",
-                    f"Resource '{resource}' not found.\n\n**Available resources:**\n{resource_list}\n\nUse `/resource <name>` to get farming info.",
+                    f"Resource '{resource}' not found.\n\n**Available resources:**\n{resource_list}\n\nUse `/resource` with no argument to see farms for all resources, or `/resource <name>` for full details.",
                     color=discord.Color.red(),
                     client=interaction.client,
                 )
