@@ -1116,8 +1116,18 @@ async def init_db() -> None:
             cetus_enabled INTEGER NOT NULL DEFAULT 0,
             fortuna_enabled INTEGER NOT NULL DEFAULT 0,
             deimos_enabled INTEGER NOT NULL DEFAULT 0,
+            ping_role_id INTEGER,
             PRIMARY KEY (guild_id)
         )""")
+        # Migration: add ping_role_id if missing (existing DBs)
+        try:
+            cur = await db.execute("PRAGMA table_info(cycle_notification_settings)")
+            cols = [row[1] for row in await cur.fetchall()]
+            if "ping_role_id" not in cols:
+                await db.execute("ALTER TABLE cycle_notification_settings ADD COLUMN ping_role_id INTEGER")
+                await db.commit()
+        except Exception as e:
+            logger.warning(f"[db] cycle_notification_settings ping_role_id migration: {e}")
 
         await db.execute("""
         CREATE TABLE IF NOT EXISTS cycle_notifications_sent (

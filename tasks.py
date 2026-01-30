@@ -724,7 +724,7 @@ def setup_tasks(bot):
                             try:
                                 async with aiosqlite.connect(DB_PATH) as db:
                                     cur = await db.execute(
-                                        f"SELECT channel_id, {column} FROM cycle_notification_settings WHERE guild_id=?",
+                                        f"SELECT channel_id, {column}, ping_role_id FROM cycle_notification_settings WHERE guild_id=?",
                                         (guild.id,)
                                     )
                                     setting = await cur.fetchone()
@@ -736,12 +736,19 @@ def setup_tasks(bot):
                                 continue
                             
                             channel_id = setting[0]
+                            ping_role_id = setting[2] if len(setting) > 2 and setting[2] else None
                             if not channel_id:
                                 continue
                             
                             ch = guild.get_channel(channel_id)
                             if not isinstance(ch, discord.TextChannel):
                                 continue
+                            
+                            ping_content = None
+                            if ping_role_id:
+                                role = guild.get_role(int(ping_role_id))
+                                if role:
+                                    ping_content = role.mention
                             
                             # Check if we've already notified for this cycle change
                             async with aiosqlite.connect(DB_PATH) as db:
@@ -782,7 +789,7 @@ def setup_tasks(bot):
                             )
                             
                             try:
-                                await ch.send(embed=embed)
+                                await ch.send(content=ping_content, embed=embed)
                                 
                                 # Record notification
                                 async with aiosqlite.connect(DB_PATH) as db:
