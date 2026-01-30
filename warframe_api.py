@@ -129,7 +129,7 @@ async def fetch_archon_hunt_data() -> Optional[Dict[str, Any]]:
     """Fetch Archon Hunt data from Warframe World State API."""
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get("https://api.warframestat.us/pc/archonHunt", timeout=aiohttp.ClientTimeout(total=10)) as response:
+            async with session.get("https://api.warframestat.us/pc/archonHunt?language=en", timeout=aiohttp.ClientTimeout(total=10)) as response:
                 if response.status == 200:
                     data = await response.json()
                     return data

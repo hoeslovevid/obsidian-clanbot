@@ -391,11 +391,10 @@ def setup(bot, group=None):
             thread_id = thread.id
             
             # Set up thread permissions: only creator, RSVPs, and moderators can see it
-            # First, deny @everyone from viewing
-            await thread.edit(
-                overwrites={
-                    interaction.guild.default_role: discord.PermissionOverwrite(view_channel=False)
-                }
+            # First, deny @everyone from viewing (Thread.edit() does not accept overwrites; use set_permissions)
+            await thread.set_permissions(
+                interaction.guild.default_role,
+                view_channel=False
             )
             
             # Allow creator to view
