@@ -1560,6 +1560,40 @@ def setup_tasks(bot):
     async def before_reminder_check_loop():
         await bot.wait_until_ready()
 
+    @tasks.loop(minutes=1)
+    async def scheduled_messages_loop():
+        """Send scheduled messages when due."""
+        try:
+            if not bot.is_ready():
+                return
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute("""
+                    SELECT id, guild_id, channel_id, message_content
+                    FROM scheduled_messages
+                    WHERE sent = 0 AND datetime(send_at) <= datetime('now')
+                """)
+                due = await cur.fetchall()
+            for row_id, guild_id, channel_id, msg_content in due:
+                try:
+                    guild = bot.get_guild(guild_id)
+                    if not guild:
+                        continue
+                    channel = guild.get_channel(channel_id)
+                    if not isinstance(channel, discord.TextChannel):
+                        continue
+                    await channel.send(msg_content)
+                    async with aiosqlite.connect(DB_PATH) as db:
+                        await db.execute("UPDATE scheduled_messages SET sent = 1 WHERE id = ?", (row_id,))
+                        await db.commit()
+                except Exception as e:
+                    logger.error(f"[schedule] Error sending scheduled message {row_id}: {e}", exc_info=True)
+        except Exception as e:
+            logger.error(f"[schedule] Error in scheduled_messages_loop: {e}", exc_info=True)
+
+    @scheduled_messages_loop.before_loop
+    async def before_scheduled_messages_loop():
+        await bot.wait_until_ready()
+
     @tasks.loop(minutes=5)  # Check every 5 minutes for Twitch streams
     async def twitch_check_loop():
         """Check for Twitch streamers going live."""
@@ -1700,6 +1734,7 @@ def setup_tasks(bot):
         ('alert_check_loop', alert_check_loop),
         ('devstream_check_loop', devstream_check_loop),
         ('reminder_check_loop', reminder_check_loop),
+        ('scheduled_messages_loop', scheduled_messages_loop),
         ('twitch_check_loop', twitch_check_loop),
     ]
     

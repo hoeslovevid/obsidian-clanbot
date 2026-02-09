@@ -1,21 +1,49 @@
 """Submit suggestion command."""
-import discord
-from discord import app_commands
+import discord  # type: ignore
+from discord import app_commands  # type: ignore
 from datetime import datetime, timezone
 
 from utils import obsidian_embed
 from database import DB_PATH, now_utc
-import aiosqlite
+import aiosqlite  # type: ignore
+
+SUGGESTION_CATEGORIES = ["feature", "bug", "improvement", "other"]
+SUGGESTION_TEMPLATES = {
+    "none": None,
+    "bug_report": "**What happened:**\n**Steps to reproduce:**\n**Expected:**\n**Actual:**",
+    "feature_request": "**What:**\n**Why:**\n**Details:**",
+}
 
 
 def setup(bot, group=None):
     """Register the suggest command."""
-    command_decorator = group.command(name="suggest", description="Submit a suggestion for the bot (new commands, features, improvements, etc.)") if group else bot.tree.command(name="suggest", description="Submit a suggestion for the bot (new commands, features, improvements, etc.)")
+    command_decorator = group.command(name="suggest", description="Submit a suggestion (commands, features, improvements).") if group else bot.tree.command(name="suggest", description="Submit a suggestion (commands, features, improvements).")
     
     @command_decorator
-    @app_commands.describe(suggestion="Your suggestion for the bot (commands, features, improvements, etc.)")
-    async def suggest(interaction: discord.Interaction, suggestion: str):
+    @app_commands.choices(category=[app_commands.Choice(name=c.title(), value=c) for c in SUGGESTION_CATEGORIES])
+    @app_commands.choices(template=[
+        app_commands.Choice(name="None", value="none"),
+        app_commands.Choice(name="Bug Report", value="bug_report"),
+        app_commands.Choice(name="Feature Request", value="feature_request"),
+    ])
+    @app_commands.describe(
+        suggestion="Your suggestion text",
+        category="Category of the suggestion",
+        template="Optional format template to guide your suggestion",
+    )
+    async def suggest(
+        interaction: discord.Interaction,
+        suggestion: str,
+        category: app_commands.Choice[str] = None,
+        template: app_commands.Choice[str] = None,
+    ):
         """Submit a suggestion for the bot."""
+        category_val = (category.value if category else "other").lower()
+        template_val = template.value if template else "none"
+        template_hint = SUGGESTION_TEMPLATES.get(template_val)
+        if template_hint and template_val != "none":
+            suggestion = f"{template_hint}\n\n{suggestion}" if suggestion else template_hint
+
         if len(suggestion) < 10:
             return await interaction.response.send_message(
                 embed=obsidian_embed(
@@ -46,9 +74,9 @@ def setup(bot, group=None):
         
         async with aiosqlite.connect(DB_PATH) as db:
             await db.execute("""
-                INSERT INTO suggestions (guild_id, user_id, suggestion_text, status, created_at)
-                VALUES (?, ?, ?, 'PENDING', ?)
-            """, (interaction.guild.id, interaction.user.id, suggestion, created_at))
+                INSERT INTO suggestions (guild_id, user_id, suggestion_text, category, status, created_at)
+                VALUES (?, ?, ?, ?, 'PENDING', ?)
+            """, (interaction.guild.id, interaction.user.id, suggestion, category_val, created_at))
             await db.commit()
             
             # Get the suggestion ID
@@ -90,6 +118,7 @@ def setup(bot, group=None):
             # Create embed for the suggestion
             fields = [
                 ("Suggestion", suggestion, False),
+                ("Category", category_val.title(), True),
                 ("Status", "⏳ Pending Review", True),
                 ("Submitted By", interaction.user.mention, True),
                 ("Suggestion ID", f"#{suggestion_id}", True),
@@ -106,6 +135,8 @@ def setup(bot, group=None):
             
             try:
                 message = await suggestions_channel.send(embed=embed)
+                await message.add_reaction("👍")
+                await message.add_reaction("👎")
                 
                 # Update message_id in database
                 async with aiosqlite.connect(DB_PATH) as db:

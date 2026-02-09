@@ -2784,43 +2784,73 @@ async def on_member_ban(guild: discord.Guild, user: discord.User):
                 logger.error(f"[logging] Error logging member ban: {e}")
 
 
+async def _send_error_reply(interaction: discord.Interaction, message: str, ephemeral: bool = True):
+    """Send an error reply, using followup if response was already sent."""
+    try:
+        if interaction.response.is_done():
+            await interaction.followup.send(message, ephemeral=ephemeral)
+        else:
+            await interaction.response.send_message(message, ephemeral=ephemeral)
+    except Exception:
+        pass  # Silently fail if we can't send (e.g. DMs closed)
+
+
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
-    """Handle application command errors."""
-    # Check error type by string name to avoid import issues
+    """Handle application command errors with user-friendly messages."""
     error_type_name = type(error).__name__
     
     if error_type_name == "CommandNotFound":
-        # Command not found - likely due to cached command reference
-        # This happens when Discord still has an old command cached
-        # For example, if sync_commands was moved from top-level to /general sync_commands
         command_name = str(error).split("'")[1] if "'" in str(error) else "unknown"
-        
-        # Check if it's a known moved command
-        moved_commands = {
-            "sync_commands": "general sync_commands"
-        }
-        
+        moved_commands = {"sync_commands": "general sync_commands"}
         if command_name in moved_commands:
-            # Silently ignore - this is expected during cache updates
-            logger.debug(f"[commands] CommandNotFound for '{command_name}' (moved to /{moved_commands[command_name]}) - Discord cache will update")
+            logger.debug(f"[commands] CommandNotFound for '{command_name}' - Discord cache will update")
             return
-        
-        # For other command not found errors, log but don't respond (to avoid spam)
         logger.debug(f"[commands] CommandNotFound: {error}")
         return
     
     if error_type_name == "CommandSignatureMismatch":
-        # Command signature mismatch - Discord's cache doesn't match current code
-        # This happens when commands are moved between groups or structure changes
-        # The sync process should fix this, but Discord's cache may take time to update
-        command_name = str(error).split("'")[1] if "'" in str(error) else "unknown"
-        logger.debug(f"[commands] CommandSignatureMismatch for '{command_name}' - Discord cache is out of sync. This should resolve after sync completes.")
-        # Don't respond to user - this is a cache issue that will resolve itself
+        logger.debug(f"[commands] CommandSignatureMismatch - Discord cache is out of sync.")
         return
     
-    # For other errors, log them
+    # User-friendly messages for common errors
+    if error_type_name in ("CheckFailure", "MissingRole", "MissingAnyRole"):
+        await _send_error_reply(interaction, "You don't have permission to use this command.")
+        return
+    
+    if error_type_name == "MissingPermissions":
+        await _send_error_reply(interaction, "I don't have the required permissions to run this command.")
+        return
+    
+    if error_type_name in ("Forbidden", "HTTPException"):
+        err_msg = str(error)
+        if "Missing Access" in err_msg or "50013" in err_msg:
+            await _send_error_reply(interaction, "I don't have permission to do that in this channel.")
+        elif "Unknown Channel" in err_msg:
+            await _send_error_reply(interaction, "That channel no longer exists.")
+        else:
+            await _send_error_reply(interaction, "An error occurred. Please try again later.")
+        logger.warning(f"[commands] Discord API error: {error}")
+        return
+
+    # CommandInvokeError wraps the real exception (e.g. Forbidden from channel.send)
+    if error_type_name == "CommandInvokeError" and hasattr(error, "original"):
+        orig = error.original
+        orig_name = type(orig).__name__
+        if orig_name in ("Forbidden", "HTTPException"):
+            err_msg = str(orig)
+            if "Missing Access" in err_msg or "50013" in err_msg:
+                await _send_error_reply(interaction, "I don't have permission to do that in this channel.")
+            elif "Unknown Channel" in err_msg:
+                await _send_error_reply(interaction, "That channel no longer exists.")
+            else:
+                await _send_error_reply(interaction, "An error occurred. Please try again later.")
+            logger.warning(f"[commands] Command invoke error: {orig}")
+            return
+    
+    # Unexpected errors: inform user and log
     logger.error(f"[commands] Unhandled command error: {error}", exc_info=error)
+    await _send_error_reply(interaction, "Something went wrong. Please try again later.")
 
 
 @bot.event

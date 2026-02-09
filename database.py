@@ -1313,6 +1313,7 @@ async def init_db() -> None:
             guild_id INTEGER NOT NULL,
             user_id INTEGER NOT NULL,
             suggestion_text TEXT NOT NULL,
+            category TEXT NOT NULL DEFAULT 'other',
             status TEXT NOT NULL DEFAULT 'PENDING',
             message_id INTEGER,
             created_at TEXT NOT NULL,
@@ -1320,6 +1321,18 @@ async def init_db() -> None:
             reviewed_at TEXT,
             review_note TEXT
         )""")
+
+        # Add category column to suggestions if missing (migration)
+        try:
+            cur = await db.execute("PRAGMA table_info(suggestions)")
+            cols = await cur.fetchall()
+            col_names = [c[1] for c in cols]
+            if "category" not in col_names:
+                await db.execute("ALTER TABLE suggestions ADD COLUMN category TEXT NOT NULL DEFAULT 'other'")
+                await db.commit()
+                logger.info("[db] Added category column to suggestions table")
+        except Exception as e:
+            logger.warning(f"[db] Error adding category to suggestions: {e}")
 
         await db.execute("""
         CREATE TABLE IF NOT EXISTS application_settings (
@@ -1939,6 +1952,19 @@ async def init_db() -> None:
             channel_id INTEGER,
             reminder_text TEXT NOT NULL,
             remind_at TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            sent INTEGER NOT NULL DEFAULT 0
+        )""")
+
+        # Scheduled messages (one-time)
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS scheduled_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            channel_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            message_content TEXT NOT NULL,
+            send_at TEXT NOT NULL,
             created_at TEXT NOT NULL,
             sent INTEGER NOT NULL DEFAULT 0
         )""")
