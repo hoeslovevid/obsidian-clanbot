@@ -14,10 +14,33 @@ EXP_PER_LEVEL = 75  # XP needed = level * EXP_PER_LEVEL (e.g. 75 for L1->L2, 150
 EXP_FEED = 8
 EXP_PLAY = 15
 
+# Decay: hunger and happiness decrease over time when not tended
+HUNGER_DECAY_PER_HOUR = 5
+HAPPINESS_DECAY_PER_HOUR = 3
+
 
 def _exp_needed_for_level(level: int) -> int:
     """XP required to level up from current level to next."""
     return level * EXP_PER_LEVEL
+
+
+def _apply_decay(
+    current: int,
+    last_action_at: Optional[str],
+    created_at: str,
+    decay_per_hour: int,
+) -> int:
+    """Compute effective value after decay since last action. Uses created_at if last_action_at is None."""
+    ref = last_action_at or created_at
+    try:
+        ref_time = dateparser.parse(ref, settings={"TIMEZONE": "UTC", "RETURN_AS_TIMEZONE_AWARE": True})
+        if ref_time:
+            hours = (datetime.now(timezone.utc) - ref_time).total_seconds() / 3600
+            decayed = current - int(hours * decay_per_hour)
+            return max(0, min(100, decayed))
+    except Exception:
+        pass
+    return current
 
 
 def setup(bot, group=None):
@@ -191,7 +214,7 @@ def setup(bot, group=None):
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute("""
                 SELECT p.pet_name, p.pet_type, p.level, p.experience, p.hunger, p.happiness,
-                       p.last_fed_at, p.last_played_at, pt.max_level
+                       p.last_fed_at, p.last_played_at, p.created_at, pt.max_level
                 FROM pets p
                 JOIN pet_types pt ON p.pet_type = pt.pet_type
                 WHERE p.guild_id=? AND p.user_id=?
@@ -208,7 +231,11 @@ def setup(bot, group=None):
                 )
             )
         
-        pet_name, pet_type, level, exp, hunger, happiness, last_fed, last_played, max_level = row
+        pet_name, pet_type, level, exp, hunger, happiness, last_fed, last_played, created_at, max_level = row
+        
+        # Apply decay for display (hunger/happiness decrease over time)
+        hunger = _apply_decay(hunger, last_fed, created_at, HUNGER_DECAY_PER_HOUR)
+        happiness = _apply_decay(happiness, last_played, created_at, HAPPINESS_DECAY_PER_HOUR)
         
         exp_needed = _exp_needed_for_level(level)
         pet_text = f"**Name:** {pet_name}\n**Type:** {pet_type}\n**Level:** {level} / {max_level}\n"
@@ -267,7 +294,7 @@ def setup(bot, group=None):
         
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute("""
-                SELECT p.hunger, p.experience, p.level, p.pet_type, pt.max_level
+                SELECT p.hunger, p.experience, p.level, p.pet_type, p.last_fed_at, p.created_at, pt.max_level
                 FROM pets p
                 JOIN pet_types pt ON p.pet_type = pt.pet_type
                 WHERE p.guild_id=? AND p.user_id=?
@@ -284,7 +311,8 @@ def setup(bot, group=None):
                     )
                 )
             
-            hunger, exp, level, pet_type, max_level = row
+            hunger, exp, level, pet_type, last_fed_at, created_at, max_level = row
+            hunger = _apply_decay(hunger, last_fed_at, created_at, HUNGER_DECAY_PER_HOUR)
             hunger = min(100, hunger + 20)  # Increase hunger by 20, max 100
             exp = exp + EXP_FEED
             
@@ -343,7 +371,7 @@ def setup(bot, group=None):
         
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute("""
-                SELECT p.happiness, p.experience, p.level, pt.max_level
+                SELECT p.happiness, p.experience, p.level, p.last_played_at, p.created_at, pt.max_level
                 FROM pets p
                 JOIN pet_types pt ON p.pet_type = pt.pet_type
                 WHERE p.guild_id=? AND p.user_id=?
@@ -360,7 +388,8 @@ def setup(bot, group=None):
                     )
                 )
             
-            happiness, exp, level, max_level = row
+            happiness, exp, level, last_played_at, created_at, max_level = row
+            happiness = _apply_decay(happiness, last_played_at, created_at, HAPPINESS_DECAY_PER_HOUR)
             happiness = min(100, happiness + 15)  # Increase happiness by 15
             exp = exp + EXP_PLAY  # Gain experience
             
