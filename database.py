@@ -14,8 +14,8 @@ try:
 except ImportError:
     discord = None  # type: ignore
 
-# Import DB_PATH from environment
-DB_PATH = os.getenv("DB_PATH", "obsidian_clanbot.db")
+# Use config for DB_PATH (single source of truth)
+from config import DB_PATH
 
 logger = logging.getLogger(__name__)
 

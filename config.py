@@ -1,0 +1,64 @@
+"""
+Central configuration for Obsidian Clan Bot.
+All environment variables and config values are loaded here to keep bot.py lean
+and avoid loading heavy modules at startup.
+"""
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# --- Required ---
+TOKEN = os.getenv("DISCORD_TOKEN", "").strip()
+if not TOKEN:
+    raise RuntimeError(
+        "Missing DISCORD_TOKEN environment variable. "
+        "Please set DISCORD_TOKEN in your environment variables or Railway dashboard."
+    )
+
+# --- Optional (faster command sync when set; otherwise global sync) ---
+GUILD_ID = int(os.getenv("GUILD_ID", "0") or "0")
+
+# --- Moderation ---
+MOD_ROLE_NAME = os.getenv("MOD_ROLE_NAME", "Obsidian Inheritor")
+TIMEZONE = os.getenv("TIMEZONE", "America/New_York")
+
+# --- Database ---
+DB_PATH = os.getenv("DB_PATH", "obsidian_clanbot.db")
+
+# --- Version ---
+BOT_VERSION = os.getenv("BOT_VERSION", "1.2.0")
+BOT_CHANGELOG = os.getenv("BOT_CHANGELOG", "")
+
+# --- Temp VC ---
+TEMP_VC_CATEGORY_ID = int(os.getenv("TEMP_VC_CATEGORY_ID", "0") or "0")
+TEMP_VC_CATEGORY_NAME = os.getenv("TEMP_VC_CATEGORY_NAME", "Temp VCs")
+CREATE_VC_NAME = os.getenv("CREATE_VC_NAME", "➕ Form Squad")
+VOICE_IDLE_DELETE_MINUTES = int(os.getenv("VOICE_IDLE_DELETE_MINUTES", "5"))
+VC_CLEANUP_INTERVAL_MINUTES = int(os.getenv("VC_CLEANUP_INTERVAL_MINUTES", "2"))
+
+# --- Channels ---
+VOICE_PANEL_CHANNEL_ID = int(os.getenv("VOICE_PANEL_CHANNEL_ID", "0") or "0")
+VOICE_PANEL_CHANNEL_NAME = os.getenv("VOICE_PANEL_CHANNEL_NAME", "obsidian-console")
+COMPLAINTS_CHANNEL_ID = int(os.getenv("COMPLAINTS_CHANNEL_ID", "0") or "0")
+COMPLAINTS_CHANNEL_NAME = os.getenv("COMPLAINTS_CHANNEL_NAME", "inheritor-docket")
+COMPLAINTS_LOG_CHANNEL_ID = int(os.getenv("COMPLAINTS_LOG_CHANNEL_ID", "0") or "0")
+COMPLAINTS_LOG_CHANNEL_NAME = os.getenv("COMPLAINTS_LOG_CHANNEL_NAME", "docket-ledger")
+EVENTS_CHANNEL_ID = int(os.getenv("EVENTS_CHANNEL_ID", "0") or "0")
+EVENTS_CHANNEL_NAME = os.getenv("EVENTS_CHANNEL_NAME", "ops-board")
+
+# --- Economy ---
+ECONOMY_ENABLED = os.getenv("ECONOMY_ENABLED", "true").lower() == "true"
+COINS_PER_MESSAGE = int(os.getenv("COINS_PER_MESSAGE", "5"))
+COINS_PER_MINUTE_VOICE = int(os.getenv("COINS_PER_MINUTE_VOICE", "2"))
+COINS_DAILY_REWARD = int(os.getenv("COINS_DAILY_REWARD", "100"))
+MESSAGE_COOLDOWN_SECONDS = int(os.getenv("MESSAGE_COOLDOWN_SECONDS", "60"))
+VOICE_REWARD_INTERVAL_MINUTES = int(os.getenv("VOICE_REWARD_INTERVAL_MINUTES", "1"))
+MIN_VOICE_MINUTES_FOR_REWARD = int(os.getenv("MIN_VOICE_MINUTES_FOR_REWARD", "1"))
+
+# --- Events ---
+EVENT_REMINDER_MINUTES_BEFORE = int(os.getenv("EVENT_REMINDER_MINUTES_BEFORE", "60"))
+EVENT_REMINDER_LOOP_MINUTES = int(os.getenv("EVENT_REMINDER_LOOP_MINUTES", "1"))
+
+# --- Auto setup ---
+AUTO_SETUP = os.getenv("AUTO_SETUP", "true").lower() in ("1", "true", "yes", "y", "on")

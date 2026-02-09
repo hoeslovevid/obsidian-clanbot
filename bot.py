@@ -12,7 +12,6 @@ import dateparser  # type: ignore
 import discord  # type: ignore
 from discord import app_commands  # type: ignore
 from discord.ext import commands, tasks  # type: ignore
-from dotenv import load_dotenv  # type: ignore
 import json
 
 # Configure logging
@@ -28,87 +27,56 @@ logger = logging.getLogger(__name__)
 # - Join-to-create temporary voice channels in "Temp VCs"
 # - Obsidian voice control panels (buttons + modals)
 # - Complaints desk (button -> modal -> case embed + staff thread)
-# - Mod actions + DM status updates to user
 # - Ops events (natural language time parsing, RSVP, reminder)
 # ============================================================
 
-load_dotenv()
+# Import config first (loads env, no heavy deps)
+from config import (
+    TOKEN, GUILD_ID, MOD_ROLE_NAME, TIMEZONE, DB_PATH,
+    BOT_VERSION, BOT_CHANGELOG,
+    TEMP_VC_CATEGORY_ID, TEMP_VC_CATEGORY_NAME, CREATE_VC_NAME,
+    VOICE_IDLE_DELETE_MINUTES, VC_CLEANUP_INTERVAL_MINUTES,
+    VOICE_PANEL_CHANNEL_ID, VOICE_PANEL_CHANNEL_NAME,
+    COMPLAINTS_CHANNEL_ID, COMPLAINTS_CHANNEL_NAME,
+    COMPLAINTS_LOG_CHANNEL_ID, COMPLAINTS_LOG_CHANNEL_NAME,
+    EVENTS_CHANNEL_ID, EVENTS_CHANNEL_NAME,
+    ECONOMY_ENABLED, COINS_PER_MESSAGE, COINS_PER_MINUTE_VOICE,
+    COINS_DAILY_REWARD, MESSAGE_COOLDOWN_SECONDS,
+    VOICE_REWARD_INTERVAL_MINUTES, MIN_VOICE_MINUTES_FOR_REWARD,
+    EVENT_REMINDER_MINUTES_BEFORE, EVENT_REMINDER_LOOP_MINUTES,
+    AUTO_SETUP,
+)
 
-TOKEN = os.getenv("DISCORD_TOKEN", "").strip()
-if not TOKEN:
-    raise RuntimeError(
-        "Missing DISCORD_TOKEN environment variable. "
-        "Please set DISCORD_TOKEN in your environment variables or Railway dashboard."
-    )
-
-# Optional (faster command sync when set; otherwise global sync)
-GUILD_ID = int(os.getenv("GUILD_ID", "0") or "0")
-
-MOD_ROLE_NAME = os.getenv("MOD_ROLE_NAME", "Obsidian Inheritor")
-TIMEZONE = os.getenv("TIMEZONE", "America/New_York")
-
-# Database path - use consistent location
-# On Railway, use /tmp for ephemeral storage or mount a persistent volume
-# For persistent storage on Railway, set DB_PATH env var to a mounted volume path
-# Example: DB_PATH=/data/obsidian_clanbot.db (if you mount a volume at /data)
-DB_PATH = os.getenv("DB_PATH", "obsidian_clanbot.db")
-
-# Bot version - starts at 1.2.0, auto-increments on changes
-BOT_VERSION = os.getenv("BOT_VERSION", "1.2.0")
-BOT_CHANGELOG = os.getenv("BOT_CHANGELOG", "")  # Optional: changelog text for this version
-
-# Temp VC config
-TEMP_VC_CATEGORY_ID = int(os.getenv("TEMP_VC_CATEGORY_ID", "0") or "0")
-TEMP_VC_CATEGORY_NAME = os.getenv("TEMP_VC_CATEGORY_NAME", "Temp VCs")
-CREATE_VC_NAME = os.getenv("CREATE_VC_NAME", "➕ Form Squad")
-VOICE_IDLE_DELETE_MINUTES = int(os.getenv("VOICE_IDLE_DELETE_MINUTES", "5"))
-VC_CLEANUP_INTERVAL_MINUTES = int(os.getenv("VC_CLEANUP_INTERVAL_MINUTES", "2"))
-
-# Channel names (used if IDs not provided / when AUTO_SETUP makes them)
-VOICE_PANEL_CHANNEL_ID = int(os.getenv("VOICE_PANEL_CHANNEL_ID", "0") or "0")
-VOICE_PANEL_CHANNEL_NAME = os.getenv("VOICE_PANEL_CHANNEL_NAME", "obsidian-console")
-
-COMPLAINTS_CHANNEL_ID = int(os.getenv("COMPLAINTS_CHANNEL_ID", "0") or "0")
-COMPLAINTS_CHANNEL_NAME = os.getenv("COMPLAINTS_CHANNEL_NAME", "inheritor-docket")
-
-COMPLAINTS_LOG_CHANNEL_ID = int(os.getenv("COMPLAINTS_LOG_CHANNEL_ID", "0") or "0")
-COMPLAINTS_LOG_CHANNEL_NAME = os.getenv("COMPLAINTS_LOG_CHANNEL_NAME", "docket-ledger")
-
-EVENTS_CHANNEL_ID = int(os.getenv("EVENTS_CHANNEL_ID", "0") or "0")
-EVENTS_CHANNEL_NAME = os.getenv("EVENTS_CHANNEL_NAME", "ops-board")
-
-# Economy config
-ECONOMY_ENABLED = os.getenv("ECONOMY_ENABLED", "true").lower() == "true"
-COINS_PER_MESSAGE = int(os.getenv("COINS_PER_MESSAGE", "5"))
-COINS_PER_MINUTE_VOICE = int(os.getenv("COINS_PER_MINUTE_VOICE", "2"))
-COINS_DAILY_REWARD = int(os.getenv("COINS_DAILY_REWARD", "100"))
-MESSAGE_COOLDOWN_SECONDS = int(os.getenv("MESSAGE_COOLDOWN_SECONDS", "60"))
-VOICE_REWARD_INTERVAL_MINUTES = int(os.getenv("VOICE_REWARD_INTERVAL_MINUTES", "1"))
-MIN_VOICE_MINUTES_FOR_REWARD = int(os.getenv("MIN_VOICE_MINUTES_FOR_REWARD", "1"))
-
-AUTO_SETUP = os.getenv("AUTO_SETUP", "true").lower() in ("1", "true", "yes", "y", "on")
-
-# Events
-EVENT_REMINDER_MINUTES_BEFORE = int(os.getenv("EVENT_REMINDER_MINUTES_BEFORE", "60"))
-EVENT_REMINDER_LOOP_MINUTES = int(os.getenv("EVENT_REMINDER_LOOP_MINUTES", "1"))
+# Re-export config for modules that import from bot (backward compat)
+__all__ = [
+    "bot", "check_auto_mod", "post_vc_panel", "log_complaint_action",
+    "TOKEN", "GUILD_ID", "MOD_ROLE_NAME", "TIMEZONE", "DB_PATH",
+    "BOT_VERSION", "BOT_CHANGELOG",
+    "TEMP_VC_CATEGORY_ID", "TEMP_VC_CATEGORY_NAME", "CREATE_VC_NAME",
+    "VOICE_PANEL_CHANNEL_ID", "VOICE_PANEL_CHANNEL_NAME",
+    "COMPLAINTS_CHANNEL_ID", "COMPLAINTS_CHANNEL_NAME",
+    "COMPLAINTS_LOG_CHANNEL_ID", "COMPLAINTS_LOG_CHANNEL_NAME",
+    "EVENTS_CHANNEL_ID", "EVENTS_CHANNEL_NAME",
+    "ECONOMY_ENABLED", "AUTO_SETUP",
+    "ensure_core_channels", "resolve_channel_id", "ComplaintPanel",
+    "ComplaintModView", "RSVPView", "add_coins", "get_user_balance",
+    "transfer_coins", "get_user_xp", "detect_and_update_version",
+]
 
 # Intents
 INTENTS = discord.Intents.default()
-INTENTS.message_content = True  # Required for reading message content (economy/XP system)
+INTENTS.message_content = True
 INTENTS.guilds = True
 INTENTS.members = True
 INTENTS.voice_states = True
 
-
-
-# Import utilities and modules
+# Import utilities and modules (avoid heavy: tasks, version_tracking, warframe_api)
 from utils import obsidian_embed, extract_id, get_mod_role, is_mod, parse_time_natural, display_case_status
 from database import (
     get_user_balance, add_coins, remove_coins, transfer_coins,
     get_user_xp, add_xp, calculate_level, xp_for_level, xp_for_next_level,
-    get_guild_setting, set_guild_setting, now_utc, DB_PATH, init_db
+    get_guild_setting, set_guild_setting, now_utc, init_db
 )
-from warframe_api import fetch_baro_data, fetch_cycle_data, get_all_cycles, get_baro_status
 from channels import (
     resolve_channel_id, find_or_create_text_channel,
     resolve_temp_vc_category, ensure_join_to_create_channel, ensure_core_channels,
@@ -116,8 +84,11 @@ from channels import (
 )
 from modals import RenameVCModal, InviteModal, RemoveAccessModal, TransferOwnerModal, ComplaintModal, RequestInfoModal
 from views import VCPanelView, ComplaintPanel, ComplaintModView, RSVPView, SetLimitView, SetLimitSelect
-from tasks import setup_tasks
-from version_tracking import detect_and_update_version, check_and_post_updates
+# tasks and version_tracking: lazy-import to defer ~2k lines until needed
+def detect_and_update_version(*args, **kwargs):
+    """Lazy wrapper - loads version_tracking only when called (e.g. /force_version_update)."""
+    from version_tracking import detect_and_update_version as _fn
+    return _fn(*args, **kwargs)
 
 
 
@@ -2386,8 +2357,9 @@ async def on_ready():
                     print(f"[startup] Ensure failed in {bot.guilds[guild_idx].name}: {result}")
     
     async def setup_background_tasks():
-        """Setup background tasks."""
+        """Setup background tasks (lazy-import defers tasks.py ~1700 lines until ready)."""
         try:
+            from tasks import setup_tasks
             tasks_dict = setup_tasks(bot)
             print(f"[ready] Background tasks initialized: {len(tasks_dict)} tasks")
         except Exception as e:
@@ -2571,8 +2543,9 @@ async def on_ready():
     
     # Wait a bit for commands to fully sync, then check and post automatic update logs (non-blocking)
     async def check_updates():
-        """Check for updates in background."""
+        """Check for updates in background (lazy-import defers version_tracking until ready)."""
         try:
+            from version_tracking import check_and_post_updates
             logger.info("[ready] Waiting for commands to sync, then checking for automatic updates...")
             await asyncio.sleep(5)  # Give commands more time to fully register and sync with Discord
             logger.info("[ready] Starting update check...")
