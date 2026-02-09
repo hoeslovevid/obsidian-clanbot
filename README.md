@@ -95,7 +95,7 @@ Create a `.env` file in the project root (or set variables in your host, e.g. Ra
 |-----------------------------|---------|
 | `ECONOMY_ENABLED`           | `true`  |
 | `XP_ENABLED`                | `true`  |
-| `COINS_PER_MESSAGE`         | `5`     |
+| `COINS_PER_MESSAGE`         | `10`    |
 | `XP_PER_MESSAGE`            | `20`    |
 | `XP_PER_MINUTE_VOICE`       | `10`    |
 | `XP_LEVEL_MULTIPLIER`       | `100`   |

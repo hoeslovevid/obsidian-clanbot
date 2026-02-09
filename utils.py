@@ -18,16 +18,12 @@ XP_LEVELUP_CHANNEL_KEY = "xp_levelup_channel_id"
 # Default celebration image for level-up embeds (party popper / sparkles)
 LEVELUP_IMAGE_URL = "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/512x512/1f389.png"
 
-# Import config from bot (will be set when bot.py loads)
-MOD_ROLE_NAME = os.getenv("MOD_ROLE_NAME", "Obsidian Inheritor")
-TIMEZONE = os.getenv("TIMEZONE", "America/New_York")
-DB_PATH = os.getenv("DB_PATH", "obsidian_clanbot.db")
-ECONOMY_ENABLED = os.getenv("ECONOMY_ENABLED", "true").lower() == "true"
-COINS_PER_MESSAGE = int(os.getenv("COINS_PER_MESSAGE", "5"))
-COINS_PER_MINUTE_VOICE = int(os.getenv("COINS_PER_MINUTE_VOICE", "2"))
-COINS_DAILY_REWARD = int(os.getenv("COINS_DAILY_REWARD", "100"))
-MESSAGE_COOLDOWN_SECONDS = int(os.getenv("MESSAGE_COOLDOWN_SECONDS", "60"))
-MIN_VOICE_MINUTES_FOR_REWARD = int(os.getenv("MIN_VOICE_MINUTES_FOR_REWARD", "1"))
+# Economy config from config.py (single source of truth)
+from config import (
+    MOD_ROLE_NAME, TIMEZONE, ECONOMY_ENABLED,
+    COINS_PER_MESSAGE, COINS_PER_MINUTE_VOICE, COINS_DAILY_REWARD,
+    MESSAGE_COOLDOWN_SECONDS, MIN_VOICE_MINUTES_FOR_REWARD,
+)
 
 # XP System
 XP_ENABLED = os.getenv("XP_ENABLED", "true").lower() == "true"
