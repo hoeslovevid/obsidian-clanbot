@@ -9,6 +9,16 @@ from database import DB_PATH, now_utc, get_user_balance, remove_coins, add_coins
 import aiosqlite
 import dateparser
 
+# Pet leveling constants
+EXP_PER_LEVEL = 75  # XP needed = level * EXP_PER_LEVEL (e.g. 75 for L1->L2, 150 for L2->L3)
+EXP_FEED = 8
+EXP_PLAY = 15
+
+
+def _exp_needed_for_level(level: int) -> int:
+    """XP required to level up from current level to next."""
+    return level * EXP_PER_LEVEL
+
 
 def setup(bot, group=None):
     """Register pet commands."""
@@ -180,8 +190,11 @@ def setup(bot, group=None):
         
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute("""
-                SELECT pet_name, pet_type, level, experience, hunger, happiness, last_fed_at, last_played_at
-                FROM pets WHERE guild_id=? AND user_id=?
+                SELECT p.pet_name, p.pet_type, p.level, p.experience, p.hunger, p.happiness,
+                       p.last_fed_at, p.last_played_at, pt.max_level
+                FROM pets p
+                JOIN pet_types pt ON p.pet_type = pt.pet_type
+                WHERE p.guild_id=? AND p.user_id=?
             """, (interaction.guild.id, interaction.user.id))
             row = await cur.fetchone()
         
@@ -195,12 +208,10 @@ def setup(bot, group=None):
                 )
             )
         
-        pet_name, pet_type, level, exp, hunger, happiness, last_fed, last_played = row
+        pet_name, pet_type, level, exp, hunger, happiness, last_fed, last_played, max_level = row
         
-        # Calculate exp needed for next level (simple formula: level * 100)
-        exp_needed = level * 100
-        
-        pet_text = f"**Name:** {pet_name}\n**Type:** {pet_type}\n**Level:** {level}\n"
+        exp_needed = _exp_needed_for_level(level)
+        pet_text = f"**Name:** {pet_name}\n**Type:** {pet_type}\n**Level:** {level} / {max_level}\n"
         pet_text += f"**Experience:** {exp}/{exp_needed}\n"
         pet_text += f"**Hunger:** {hunger}/100 {'🍽️' if hunger < 50 else '✅'}\n"
         pet_text += f"**Happiness:** {happiness}/100 {'😢' if happiness < 50 else '😊'}\n"
@@ -256,7 +267,10 @@ def setup(bot, group=None):
         
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute("""
-                SELECT hunger FROM pets WHERE guild_id=? AND user_id=?
+                SELECT p.hunger, p.experience, p.level, p.pet_type, pt.max_level
+                FROM pets p
+                JOIN pet_types pt ON p.pet_type = pt.pet_type
+                WHERE p.guild_id=? AND p.user_id=?
             """, (interaction.guild.id, interaction.user.id))
             row = await cur.fetchone()
             
@@ -270,18 +284,27 @@ def setup(bot, group=None):
                     )
                 )
             
-            hunger = min(100, row[0] + 20)  # Increase hunger by 20, max 100
+            hunger, exp, level, pet_type, max_level = row
+            hunger = min(100, hunger + 20)  # Increase hunger by 20, max 100
+            exp = exp + EXP_FEED
+            
+            # Level-up logic (cap at max_level)
+            new_level = level
+            while new_level < max_level and exp >= _exp_needed_for_level(new_level):
+                exp -= _exp_needed_for_level(new_level)
+                new_level += 1
             
             await remove_coins(interaction.guild.id, interaction.user.id, cost, "PET", "Pet food")
             await db.execute("""
-                UPDATE pets SET hunger=?, last_fed_at=? WHERE guild_id=? AND user_id=?
-            """, (hunger, now_utc().isoformat(), interaction.guild.id, interaction.user.id))
+                UPDATE pets SET hunger=?, experience=?, level=?, last_fed_at=? WHERE guild_id=? AND user_id=?
+            """, (hunger, exp, new_level, now_utc().isoformat(), interaction.guild.id, interaction.user.id))
             await db.commit()
         
+        level_up_text = f"\n🎉 **Level Up!** Your pet is now level {new_level}!" if new_level > level else ""
         await interaction.followup.send(
             embed=obsidian_embed(
                 "🍽️ Pet Fed",
-                f"Your pet has been fed! Hunger: {hunger}/100",
+                f"Your pet has been fed! Hunger: {hunger}/100{level_up_text}",
                 color=discord.Color.green(),
                 client=interaction.client,
             )
@@ -320,7 +343,10 @@ def setup(bot, group=None):
         
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute("""
-                SELECT happiness, experience, level FROM pets WHERE guild_id=? AND user_id=?
+                SELECT p.happiness, p.experience, p.level, pt.max_level
+                FROM pets p
+                JOIN pet_types pt ON p.pet_type = pt.pet_type
+                WHERE p.guild_id=? AND p.user_id=?
             """, (interaction.guild.id, interaction.user.id))
             row = await cur.fetchone()
             
@@ -334,16 +360,15 @@ def setup(bot, group=None):
                     )
                 )
             
-            happiness, exp, level = row
+            happiness, exp, level, max_level = row
             happiness = min(100, happiness + 15)  # Increase happiness by 15
-            exp += 10  # Gain experience
+            exp = exp + EXP_PLAY  # Gain experience
             
-            # Check for level up
-            exp_needed = level * 100
+            # Level-up logic (cap at max_level, carry over excess exp)
             new_level = level
-            if exp >= exp_needed:
-                new_level = level + 1
-                exp = 0  # Reset exp on level up
+            while new_level < max_level and exp >= _exp_needed_for_level(new_level):
+                exp -= _exp_needed_for_level(new_level)
+                new_level += 1
             
             await remove_coins(interaction.guild.id, interaction.user.id, cost, "PET", "Play with pet")
             await db.execute("""
