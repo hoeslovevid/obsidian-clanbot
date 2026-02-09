@@ -1,6 +1,6 @@
 """Configure Warframe in-game achievement roles (playtime-based). Moderators only."""
-import discord
-from discord import app_commands
+import discord  # type: ignore
+from discord import app_commands  # type: ignore
 from typing import Optional
 
 from utils import obsidian_embed, is_mod
@@ -186,4 +186,4 @@ def setup(bot, group=None):
                     client=interaction.client,
                 ),
                 ephemeral=True,
-            )
+            )  # type: ignore[awaitable]
