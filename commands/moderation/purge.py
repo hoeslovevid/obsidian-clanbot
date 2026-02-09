@@ -49,13 +49,19 @@ def setup(bot, group=None):
         try:
             if amount.lower() == "all":
                 # Delete in batches of 100 (Discord API limit)
+                # No manual sleep - discord.py handles rate limits; retry on 429
                 while True:
-                    deleted_messages = await interaction.channel.purge(limit=100, check=lambda m: not m.pinned)
+                    try:
+                        deleted_messages = await interaction.channel.purge(limit=100, check=lambda m: not m.pinned)
+                    except discord.HTTPException as e:
+                        if e.status == 429:
+                            wait = getattr(e, "retry_after", None) or 1.0
+                            await asyncio.sleep(wait)
+                            continue
+                        raise
                     if not deleted_messages:
                         break
                     deleted += len(deleted_messages)
-                    # Small delay to avoid rate limits
-                    await asyncio.sleep(0.5)
             else:
                 # Delete specified amount
                 deleted_messages = await interaction.channel.purge(limit=limit, check=lambda m: not m.pinned)
