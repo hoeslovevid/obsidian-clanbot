@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from typing import Optional
 
-from utils import obsidian_embed, is_mod
+from utils import obsidian_embed, error_embed, is_mod
 from database import get_guild_setting, set_guild_setting, DB_PATH
 import aiosqlite  # type: ignore
 
@@ -24,6 +24,7 @@ def setup(bot, group=None):
         app_commands.Choice(name="Message Edits", value="message_edit"),
         app_commands.Choice(name="Member Bans", value="member_ban"),
         app_commands.Choice(name="Member Kicks", value="member_kick"),
+        app_commands.Choice(name="Member Warnings", value="member_warn"),
         app_commands.Choice(name="Member Joins", value="member_join"),
         app_commands.Choice(name="Member Leaves", value="member_leave"),
         app_commands.Choice(name="Role Changes", value="role_change"),
@@ -85,6 +86,7 @@ def setup(bot, group=None):
                 "message_edit": "Message Edits",
                 "member_ban": "Member Bans",
                 "member_kick": "Member Kicks",
+                "member_warn": "Member Warnings",
                 "member_join": "Member Joins",
                 "member_leave": "Member Leaves",
                 "role_change": "Role Changes",
@@ -156,11 +158,6 @@ def setup(bot, group=None):
         
         else:
             await interaction.followup.send(
-                embed=obsidian_embed(
-                    "❌ Invalid Action",
-                    "Valid actions: `setup`, `remove`, `status`",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
+                embed=error_embed("Invalid Action", "Valid actions: `setup`, `remove`, `status`", client=interaction.client),
                 ephemeral=True
             )

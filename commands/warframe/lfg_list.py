@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from datetime import datetime, timezone
 
-from utils import obsidian_embed
+from utils import obsidian_embed, error_embed
 from database import DB_PATH
 from views import EmbedPaginator
 from commands.warframe.lfg import MISSION_TYPES
@@ -13,9 +13,16 @@ ITEMS_PER_PAGE = 5
 
 
 async def mission_type_autocomplete(interaction: discord.Interaction, current: str):
-    """Autocomplete for mission type filter."""
-    current_lower = (current or "").lower()
-    matches = [m for m in MISSION_TYPES if current_lower in m.lower()][:25]
+    """Autocomplete for mission type filter. Paginated: top 25 by relevance."""
+    from utils import AUTOCOMPLETE_MAX_CHOICES
+    current_lower = (current or "").lower().strip()
+    if not current_lower:
+        matches = list(MISSION_TYPES)[:AUTOCOMPLETE_MAX_CHOICES]
+    else:
+        exact = [m for m in MISSION_TYPES if m.lower() == current_lower]
+        start = [m for m in MISSION_TYPES if m.lower().startswith(current_lower) and m not in exact]
+        contains = [m for m in MISSION_TYPES if current_lower in m.lower() and m not in exact and m not in start]
+        matches = (exact + start + contains)[:AUTOCOMPLETE_MAX_CHOICES]
     return [app_commands.Choice(name=m, value=m) for m in matches]
 
 
@@ -28,6 +35,15 @@ def setup(bot, group=None):
     @app_commands.autocomplete(mission_type=mission_type_autocomplete)
     async def lfg_list(interaction: discord.Interaction, mission_type: str = None):
         """Display active LFG posts."""
+        if mission_type and mission_type not in MISSION_TYPES:
+            return await interaction.response.send_message(
+                embed=error_embed(
+                    "Invalid Mission Type",
+                    f"'{mission_type}' is not valid. Choose from: {', '.join(list(MISSION_TYPES)[:10])}{'...' if len(MISSION_TYPES) > 10 else ''}",
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
         async with aiosqlite.connect(DB_PATH) as db:
             if mission_type:
                 cur = await db.execute("""

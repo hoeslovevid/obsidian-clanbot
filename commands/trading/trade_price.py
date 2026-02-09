@@ -2,7 +2,7 @@
 import discord
 from discord import app_commands
 
-from utils import obsidian_embed
+from utils import obsidian_embed, error_embed
 from warframe_api import search_warframe_market_item, get_warframe_market_price
 
 POPULAR_ITEMS = [
@@ -15,9 +15,16 @@ POPULAR_ITEMS = [
 
 
 async def item_autocomplete(interaction: discord.Interaction, current: str):
-    """Autocomplete for item names."""
-    current_lower = (current or "").lower()
-    matches = [i for i in POPULAR_ITEMS if current_lower in i.lower()][:25]
+    """Autocomplete for item names. Paginated: top 25 by relevance."""
+    from utils import AUTOCOMPLETE_MAX_CHOICES
+    current_lower = (current or "").lower().strip()
+    if not current_lower:
+        matches = POPULAR_ITEMS[:AUTOCOMPLETE_MAX_CHOICES]
+    else:
+        exact = [i for i in POPULAR_ITEMS if i.lower() == current_lower]
+        start = [i for i in POPULAR_ITEMS if i.lower().startswith(current_lower) and i not in exact]
+        contains = [i for i in POPULAR_ITEMS if current_lower in i.lower() and i not in exact and i not in start]
+        matches = (exact + start + contains)[:AUTOCOMPLETE_MAX_CHOICES]
     return [app_commands.Choice(name=m, value=m) for m in matches]
 
 
@@ -56,10 +63,9 @@ def setup(bot, group=None):
                 "Set the **WARFRAME_MARKET_PROXY** (or **HTTPS_PROXY**) environment variable to an HTTP(S) proxy URL to try to bypass this."
             )
             return await interaction.followup.send(
-                embed=obsidian_embed(
-                    "❌ Item Not Found",
+                embed=error_embed(
+                    "Item Not Found",
                     f"Could not find '{item}' on Warframe Market. Please check the spelling and try again.{hint}",
-                    color=discord.Color.red(),
                     client=interaction.client,
                 ),
                 ephemeral=True
@@ -73,10 +79,9 @@ def setup(bot, group=None):
         
         if not price_data:
             return await interaction.followup.send(
-                embed=obsidian_embed(
-                    "❌ Price Data Unavailable",
+                embed=error_embed(
+                    "Price Data Unavailable",
                     f"Could not fetch price data for '{item_name}'. The item may not be tradeable or have no active listings.",
-                    color=discord.Color.red(),
                     client=interaction.client,
                 ),
                 ephemeral=True

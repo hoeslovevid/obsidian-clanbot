@@ -33,6 +33,48 @@ XP_LEVEL_MULTIPLIER = int(os.getenv("XP_LEVEL_MULTIPLIER", "100"))
 XP_LEVEL_EXPONENT = float(os.getenv("XP_LEVEL_EXPONENT", "2.25"))  # XP needed = level^exponent * multiplier (steeper = more XP at high levels)
 
 
+# Discord embed limits
+EMBED_DESC_MAX = 4096
+EMBED_FIELD_VALUE_MAX = 1024
+EMBED_FIELD_NAME_MAX = 256
+EMBED_TITLE_MAX = 256
+AUTOCOMPLETE_MAX_CHOICES = 25
+
+
+def truncate_field(value: str, max_len: int = EMBED_FIELD_VALUE_MAX) -> str:
+    """Truncate field value to Discord limit, with ellipsis."""
+    if not value or len(value) <= max_len:
+        return value or ""
+    return value[: max_len - 3] + "..."
+
+
+def truncate_desc(desc: str, max_len: int = EMBED_DESC_MAX) -> str:
+    """Truncate embed description to Discord limit."""
+    if not desc or len(desc) <= max_len:
+        return desc or ""
+    return desc[: max_len - 3] + "..."
+
+
+def error_embed(title: str, message: str, *, client=None) -> discord.Embed:
+    """Consistent error embed format across all commands."""
+    return obsidian_embed(
+        f"❌ {title}" if not title.startswith("❌") else title,
+        truncate_desc(str(message)),
+        color=discord.Color.red(),
+        client=client,
+    )
+
+
+def message_jump_url(guild_id: int, channel_id: int, message_id: int) -> str:
+    """Build Discord jump URL for a message."""
+    return f"https://discord.com/channels/{guild_id}/{channel_id}/{message_id}"
+
+
+def channel_jump_url(guild_id: int, channel_id: int) -> str:
+    """Build Discord channel URL for jump links."""
+    return f"https://discord.com/channels/{guild_id}/{channel_id}"
+
+
 def discord_timestamp(dt: datetime, style: str = "R") -> str:
     """Format datetime as Discord timestamp. Styles: t, T, d, D, f, F, R."""
     return f"<t:{int(dt.timestamp())}:{style}>"
@@ -80,6 +122,8 @@ def obsidian_embed(
     if color is None:
         color = discord.Color.from_rgb(75, 0, 130)  # Indigo/purple
     
+    title = str(title)[:EMBED_TITLE_MAX]
+    desc = truncate_desc(str(desc), EMBED_DESC_MAX)
     e = discord.Embed(title=title, description=desc, color=color)
     
     # Only add timestamp if requested (default True for consistency)
@@ -103,7 +147,7 @@ def obsidian_embed(
     if image:
         e.set_image(url=image)
     
-    # Add fields
+    # Add fields (truncate to Discord limits)
     if fields:
         for field in fields:
             if len(field) == 2:
@@ -111,6 +155,8 @@ def obsidian_embed(
                 inline = False
             else:
                 name, value, inline = field
+            name = str(name)[:EMBED_FIELD_NAME_MAX]
+            value = truncate_field(str(value), EMBED_FIELD_VALUE_MAX)
             e.add_field(name=name, value=value, inline=inline)
     
     # Set footer (default to bot name with icon if not specified)

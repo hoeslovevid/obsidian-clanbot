@@ -4,8 +4,9 @@ from discord import app_commands
 from typing import Optional
 import dateparser
 
-from utils import obsidian_embed, is_mod
-from database import DB_PATH, now_utc
+from utils import obsidian_embed, error_embed, is_mod, channel_jump_url
+from database import DB_PATH, now_utc, get_log_channel_id
+from views import EmbedPaginator
 import aiosqlite
 
 
@@ -20,34 +21,19 @@ def setup(bot, group=None):
         """Warn a user."""
         if not interaction.guild:
             return await interaction.response.send_message(
-                embed=obsidian_embed(
-                    "❌ Invalid Context",
-                    "This command can only be used in a server.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
+                embed=error_embed("Invalid Context", "This command can only be used in a server.", client=interaction.client),
                 ephemeral=True
             )
         
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
             return await interaction.response.send_message(
-                embed=obsidian_embed(
-                    "❌ Permission Denied",
-                    "Sorry, but you are not an Administrator in this server.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
+                embed=error_embed("Permission Denied", "Sorry, but you are not an Administrator in this server.", client=interaction.client),
                 ephemeral=True
             )
         
         if user.bot:
             return await interaction.response.send_message(
-                embed=obsidian_embed(
-                    "❌ Invalid User",
-                    "You cannot warn bots.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
+                embed=error_embed("Invalid User", "You cannot warn bots.", client=interaction.client),
                 ephemeral=True
             )
         
@@ -124,6 +110,25 @@ def setup(bot, group=None):
         except:
             pass
         
+        # Send to mod log channel if configured
+        log_channel_id = await get_log_channel_id(interaction.guild.id, "member_warn")
+        if log_channel_id and interaction.channel:
+            log_channel = interaction.guild.get_channel(log_channel_id)
+            if log_channel and isinstance(log_channel, discord.TextChannel):
+                jump_url = channel_jump_url(interaction.guild.id, interaction.channel.id)
+                log_embed = obsidian_embed(
+                    "⚠️ Member Warned",
+                    f"**User:** {user.mention} ({user.id})\n**Moderator:** {interaction.user.mention}\n**Reason:** {reason}\n**Warnings:** {warning_count}/{max_warnings}",
+                    color=discord.Color.orange(),
+                    client=interaction.client,
+                    fields=[("Context", f"[Command run in {interaction.channel.mention}]({jump_url})", False)],
+                )
+                log_embed.set_author(name=str(interaction.user), icon_url=interaction.user.display_avatar.url)
+                try:
+                    await log_channel.send(embed=log_embed)
+                except discord.Forbidden:
+                    pass
+
         # Send confirmation
         action_text = f" ({action} executed)" if warning_count >= max_warnings else ""
         await interaction.followup.send(
@@ -143,12 +148,7 @@ def setup(bot, group=None):
         """View user warnings."""
         if not interaction.guild:
             return await interaction.response.send_message(
-                embed=obsidian_embed(
-                    "❌ Invalid Context",
-                    "This command can only be used in a server.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
+                embed=error_embed("Invalid Context", "This command can only be used in a server.", client=interaction.client),
                 ephemeral=True
             )
         
@@ -177,19 +177,39 @@ def setup(bot, group=None):
                 ),
                 ephemeral=True
             )
-        
-        warnings_text = "\n".join([
+
+        per_page = 15
+        lines = [
             f"**{i+1}.** {reason} - <t:{int(dateparser.parse(created_at, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True}).timestamp())}:R>"
             for i, (mod_id, reason, created_at) in enumerate(warnings_list)
-        ])
-        
-        embed = obsidian_embed(
-            f"⚠️ Warnings for {user.display_name}",
-            f"**Total:** {len(warnings_list)}/{max_warnings}\n\n{warnings_text}",
-            color=discord.Color.orange(),
-            client=interaction.client,
-        )
-        await interaction.followup.send(embed=embed, ephemeral=True)
+        ]
+        if len(lines) <= per_page:
+            warnings_text = "\n".join(lines)
+            embed = obsidian_embed(
+                f"⚠️ Warnings for {user.display_name}",
+                f"**Total:** {len(warnings_list)}/{max_warnings}\n\n{warnings_text}",
+                color=discord.Color.orange(),
+                client=interaction.client,
+            )
+            await interaction.followup.send(embed=embed, ephemeral=True)
+        else:
+            pages = []
+            for i in range(0, len(lines), per_page):
+                chunk = lines[i:i + per_page]
+                pages.append({
+                    "description": f"**Total:** {len(warnings_list)}/{max_warnings}\n\n" + "\n".join(chunk),
+                })
+            view = EmbedPaginator(
+                f"⚠️ Warnings for {user.display_name}",
+                pages,
+                color=discord.Color.orange(),
+                client=interaction.client,
+            )
+            await interaction.followup.send(
+                embed=view._build_embed(),
+                view=view,
+                ephemeral=True,
+            )
     
     command_decorator = group.command(name="warn_setup", description="Configure warn system (moderators only).") if group else bot.tree.command(name="warn_setup", description="Configure warn system (moderators only).")
     
@@ -204,34 +224,19 @@ def setup(bot, group=None):
         """Configure warn system."""
         if not interaction.guild:
             return await interaction.response.send_message(
-                embed=obsidian_embed(
-                    "❌ Invalid Context",
-                    "This command can only be used in a server.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
+                embed=error_embed("Invalid Context", "This command can only be used in a server.", client=interaction.client),
                 ephemeral=True
             )
         
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
             return await interaction.response.send_message(
-                embed=obsidian_embed(
-                    "❌ Permission Denied",
-                    "Sorry, but you are not an Administrator in this server.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
+                embed=error_embed("Permission Denied", "Sorry, but you are not an Administrator in this server.", client=interaction.client),
                 ephemeral=True
             )
         
         if max_warnings < 1:
             return await interaction.response.send_message(
-                embed=obsidian_embed(
-                    "❌ Invalid Value",
-                    "Maximum warnings must be at least 1.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
+                embed=error_embed("Invalid Value", "Maximum warnings must be at least 1.", client=interaction.client),
                 ephemeral=True
             )
         

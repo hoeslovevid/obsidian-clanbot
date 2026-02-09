@@ -47,6 +47,17 @@ async def set_guild_setting(guild_id: int, key: str, value: str):
         await db.commit()
 
 
+async def get_log_channel_id(guild_id: int, log_type: str) -> Optional[int]:
+    """Get the channel ID for a log type, or None if not configured."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            "SELECT channel_id FROM log_channels WHERE guild_id=? AND log_type=? AND enabled=1",
+            (guild_id, log_type),
+        )
+        row = await cur.fetchone()
+        return row[0] if row else None
+
+
 # --------------------- Economy Functions ---------------------
 async def get_user_balance(guild_id: int, user_id: int) -> int:
     """Get a user's coin balance."""

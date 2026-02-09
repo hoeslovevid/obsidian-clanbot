@@ -134,6 +134,7 @@ def load_all_commands(bot):
         "commands.general.voice_leaderboard",
         "commands.general.coinflip",
         "commands.warframe.build",
+        "commands.context_menus",
     ]
 
     group_mapping = {
@@ -240,6 +241,7 @@ def load_all_commands(bot):
         "commands.updates.update_log": updates_group,
         "commands.updates.update_log_setup": updates_group,
         "commands.updates.force_version_update": updates_group,
+        "commands.context_menus": general_group,
     }
 
     loaded_count = 0

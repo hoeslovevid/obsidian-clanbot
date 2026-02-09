@@ -178,14 +178,21 @@ def setup(bot, group=None):
         )
     
     async def pet_type_autocomplete(interaction: discord.Interaction, current: str):
-        """Autocomplete for pet types."""
+        """Autocomplete for pet types. Paginated: returns top 25 by relevance."""
+        from utils import AUTOCOMPLETE_MAX_CHOICES
         async with aiosqlite.connect(DB_PATH) as db:
-            cur = await db.execute(
-                "SELECT pet_type FROM pet_types WHERE pet_type LIKE ? ORDER BY pet_type LIMIT 25",
-                (f"%{current}%" if current else "%",)
-            )
+            cur = await db.execute("SELECT pet_type FROM pet_types ORDER BY pet_type")
             rows = await cur.fetchall()
-        return [app_commands.Choice(name=r[0], value=r[0]) for r in rows]
+        all_types = [r[0] for r in rows]
+        current_lower = (current or "").lower().strip()
+        if not current_lower:
+            matches = all_types[:AUTOCOMPLETE_MAX_CHOICES]
+        else:
+            exact = [t for t in all_types if t.lower() == current_lower]
+            start = [t for t in all_types if t.lower().startswith(current_lower) and t not in exact]
+            contains = [t for t in all_types if current_lower in t.lower() and t not in exact and t not in start]
+            matches = (exact + start + contains)[:AUTOCOMPLETE_MAX_CHOICES]
+        return [app_commands.Choice(name=m, value=m) for m in matches]
 
     command_decorator = group.command(name="pet_buy", description="Buy a pet.") if group else bot.tree.command(name="pet_buy", description="Buy a pet.")
     

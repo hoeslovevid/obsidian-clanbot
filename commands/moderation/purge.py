@@ -3,7 +3,7 @@ import asyncio
 import discord  # type: ignore
 from discord import app_commands  # type: ignore
 
-from utils import obsidian_embed, is_mod
+from utils import obsidian_embed, error_embed, is_mod
 from views import ConfirmView
 
 
@@ -18,11 +18,17 @@ def setup(bot, group=None):
     async def purge(interaction: discord.Interaction, amount: str):
         # Check if user is a mod
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
-            return await interaction.response.send_message("Sorry, but you are not an Administrator in this server.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=error_embed("Permission Denied", "Sorry, but you are not an Administrator in this server.", client=interaction.client),
+                ephemeral=True
+            )
 
         # Check if channel is a text channel
         if not isinstance(interaction.channel, discord.TextChannel):
-            return await interaction.response.send_message("This command can only be used in text channels.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=error_embed("Invalid Context", "This command can only be used in text channels.", client=interaction.client),
+                ephemeral=True
+            )
 
         # Parse amount
         if amount.lower() == "all":
@@ -32,17 +38,26 @@ def setup(bot, group=None):
             try:
                 limit = int(amount)
                 if limit < 1:
-                    return await interaction.response.send_message("Amount must be at least 1.", ephemeral=True)
+                    return await interaction.response.send_message(
+                        embed=error_embed("Invalid Amount", "Amount must be at least 1.", client=interaction.client),
+                        ephemeral=True
+                    )
                 if limit > 100:
-                    return await interaction.response.send_message("Amount cannot exceed 100 per command. Use the command multiple times or use 'all'.", ephemeral=True)
+                    return await interaction.response.send_message(
+                        embed=error_embed("Invalid Amount", "Amount cannot exceed 100 per command. Use the command multiple times or use 'all'.", client=interaction.client),
+                        ephemeral=True
+                    )
                 delete_count = limit
             except ValueError:
-                return await interaction.response.send_message("Invalid amount. Use a number (1-100) or 'all'.", ephemeral=True)
+                return await interaction.response.send_message(
+                    embed=error_embed("Invalid Amount", "Use a number (1-100) or 'all'.", client=interaction.client),
+                    ephemeral=True
+                )
 
         # Check bot permissions
         if not interaction.channel.permissions_for(interaction.guild.me).manage_messages:
             return await interaction.response.send_message(
-                "I need **Manage Messages** in this channel. Ask an admin to grant it.",
+                embed=error_embed("Missing Permissions", "I need **Manage Messages** in this channel. Ask an admin to grant it.", client=interaction.client),
                 ephemeral=True,
             )
 
