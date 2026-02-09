@@ -74,7 +74,15 @@ def setup(bot, group=None):
             desc = f"Added **{amount:,}** XP to {user.mention}."
             if leveled_up:
                 desc += f"\n\n🎉 **Level Up!** {user.mention} reached level **{new_level}**!"
-            
+                from utils import send_levelup_announcement
+                await send_levelup_announcement(
+                    interaction.guild,
+                    user,
+                    new_level,
+                    new_xp,
+                    new_total_xp,
+                )
+
             embed = obsidian_embed(
                 "✅ XP Added",
                 desc,

@@ -34,6 +34,7 @@ At minimum:
 
 Optional but recommended:
 - Set `GUILD_ID` to your server ID (faster command sync during setup)
+- Set `WARFRAME_MARKET_PROXY` (or `HTTPS_PROXY`) to an HTTP(S) proxy URL if `/trade_price` gets 404s (e.g. when the bot runs on a datacenter IP).
 
 ## 4) Install dependencies + run
 ```bash
@@ -67,3 +68,4 @@ Run this command in the channel where you want the panels to appear:
 ## Notes
 - If a user has DMs closed, they may not receive complaint updates.
 - Old buttons remain functional after bot restarts (persistent views are re-registered from the DB).
+- **Warframe Market API** (used by `/trade_price`): if the bot runs on a server and gets 404s from api.warframe.market, set **WARFRAME_MARKET_PROXY** (or **HTTPS_PROXY**) to an HTTP(S) proxy URL to bypass IP blocking.

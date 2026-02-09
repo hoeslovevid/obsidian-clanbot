@@ -1,6 +1,7 @@
 """
 Shared utilities and helper functions for the Obsidian Clan Bot.
 """
+import logging
 import os
 import re
 from datetime import datetime, timezone
@@ -8,6 +9,14 @@ from typing import Optional
 
 import discord  # type: ignore
 import dateparser  # type: ignore
+
+logger = logging.getLogger(__name__)
+
+# Guild setting key for level-up announcement channel
+XP_LEVELUP_CHANNEL_KEY = "xp_levelup_channel_id"
+
+# Default celebration image for level-up embeds (party popper / sparkles)
+LEVELUP_IMAGE_URL = "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/512x512/1f389.png"
 
 # Import config from bot (will be set when bot.py loads)
 MOD_ROLE_NAME = os.getenv("MOD_ROLE_NAME", "Obsidian Inheritor")
@@ -22,9 +31,10 @@ MIN_VOICE_MINUTES_FOR_REWARD = int(os.getenv("MIN_VOICE_MINUTES_FOR_REWARD", "1"
 
 # XP System
 XP_ENABLED = os.getenv("XP_ENABLED", "true").lower() == "true"
-XP_PER_MESSAGE = int(os.getenv("XP_PER_MESSAGE", "10"))
-XP_PER_MINUTE_VOICE = int(os.getenv("XP_PER_MINUTE_VOICE", "5"))
-XP_LEVEL_MULTIPLIER = int(os.getenv("XP_LEVEL_MULTIPLIER", "100"))  # XP needed = level^2 * multiplier
+XP_PER_MESSAGE = int(os.getenv("XP_PER_MESSAGE", "20"))  # Doubled from 10
+XP_PER_MINUTE_VOICE = int(os.getenv("XP_PER_MINUTE_VOICE", "10"))  # Doubled from 5
+XP_LEVEL_MULTIPLIER = int(os.getenv("XP_LEVEL_MULTIPLIER", "100"))
+XP_LEVEL_EXPONENT = float(os.getenv("XP_LEVEL_EXPONENT", "2.25"))  # XP needed = level^exponent * multiplier (steeper = more XP at high levels)
 
 
 def now_utc() -> datetime:
@@ -158,6 +168,65 @@ def extract_id(text: str) -> Optional[int]:
     """Extract a Discord ID from text."""
     m = re.search(r"(\d{15,25})", text or "")
     return int(m.group(1)) if m else None
+
+
+async def send_levelup_announcement(
+    guild: discord.Guild,
+    member: discord.Member,
+    level: int,
+    xp: int,
+    total_xp: int,
+) -> bool:
+    """
+    Send a level-up announcement embed to the configured channel.
+    Returns True if sent, False otherwise.
+    """
+    from database import get_guild_setting
+    from database import xp_for_level, xp_for_next_level
+
+    channel_id_str = await get_guild_setting(guild.id, XP_LEVELUP_CHANNEL_KEY)
+    if not channel_id_str or not channel_id_str.isdigit():
+        return False
+
+    channel = guild.get_channel(int(channel_id_str))
+    if not channel or not hasattr(channel, "send"):
+        return False
+
+    xp_needed_for_level = xp_for_level(level, XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT)
+    xp_for_next = xp_for_next_level(level, XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT)
+    xp_in_current_level = xp - xp_needed_for_level
+    xp_needed_in_level = xp_for_next - xp_needed_for_level
+    progress_pct = min(100, int(100 * xp_in_current_level / xp_needed_in_level)) if xp_needed_in_level > 0 else 100
+
+    bar_filled = int(progress_pct / 10)
+    bar_empty = 10 - bar_filled
+    progress_bar = "▰" * bar_filled + "▱" * bar_empty
+
+    fields = [
+        ("⭐ Level", f"**{level}**", True),
+        ("📊 XP", f"{xp:,} / {xp_for_next:,}", True),
+        ("Progress", f"{progress_bar} {progress_pct}%", False),
+    ]
+
+    embed = obsidian_embed(
+        "🎉 Level Up!",
+        f"{member.mention} has leveled up to **Level {level}**!\n\n"
+        f"*Keep chatting and staying active to climb even higher!*",
+        color=discord.Color.gold(),
+        author=member,
+        thumbnail=member.display_avatar.url if member.display_avatar else None,
+        image=LEVELUP_IMAGE_URL,
+        fields=fields,
+        footer=f"Total XP: {total_xp:,}",
+        client=None,
+    )
+
+    try:
+        await channel.send(embed=embed)
+        return True
+    except Exception as e:
+        logger.warning(f"Failed to send level-up announcement: {e}")
+        return False
 
 
 def display_case_status(status: str) -> str:

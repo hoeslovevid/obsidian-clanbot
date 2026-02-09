@@ -52,7 +52,6 @@ async def get_user_profile_data(guild_id: int, user_id: int) -> dict:
             data["total_earned"] = row[1] or 0
         
         # XP data
-        from utils import XP_LEVEL_MULTIPLIER
         cur = await db.execute("""
             SELECT xp, level, total_xp FROM user_xp
             WHERE guild_id=? AND user_id=?
@@ -219,11 +218,12 @@ def setup(bot, group=None):
         profile_data = await get_user_profile_data(interaction.guild.id, target_user.id)
         
         # Calculate XP progress
-        from utils import XP_LEVEL_MULTIPLIER
+        from database import xp_for_level, xp_for_next_level
+        from utils import XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT
         current_level = profile_data["level"]
         current_xp = profile_data["xp"]
-        xp_for_current = (current_level ** 2) * XP_LEVEL_MULTIPLIER if current_level > 0 else 0
-        xp_for_next = ((current_level + 1) ** 2) * XP_LEVEL_MULTIPLIER
+        xp_for_current = xp_for_level(current_level, XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT) if current_level > 0 else 0
+        xp_for_next = xp_for_next_level(current_level, XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT)
         xp_needed = xp_for_next - current_xp
         xp_progress = current_xp - xp_for_current
         xp_range = xp_for_next - xp_for_current

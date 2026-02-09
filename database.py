@@ -157,28 +157,28 @@ async def transfer_coins(guild_id: int, from_user_id: int, to_user_id: int, amou
 
 
 # --------------------- XP Functions ---------------------
-def calculate_level(xp: int, multiplier: int = 100) -> int:
-    """Calculate level from XP. Formula: XP = level^2 * multiplier"""
+def calculate_level(xp: int, multiplier: int = 100, exponent: float = 2.25) -> int:
+    """Calculate level from XP. Formula: XP = level^exponent * multiplier"""
     if xp <= 0:
         return 0
     import math
-    level = int(math.sqrt(xp / multiplier))
+    level = int((xp / multiplier) ** (1 / exponent))
     return max(0, level)
 
 
-def xp_for_level(level: int, multiplier: int = 100) -> int:
-    """Calculate XP needed for a specific level."""
-    return int(level ** 2 * multiplier)
+def xp_for_level(level: int, multiplier: int = 100, exponent: float = 2.25) -> int:
+    """Calculate XP needed for a specific level. Higher exponent = more XP required at high levels."""
+    return int(level ** exponent * multiplier)
 
 
-def xp_for_next_level(current_level: int, multiplier: int = 100) -> int:
+def xp_for_next_level(current_level: int, multiplier: int = 100, exponent: float = 2.25) -> int:
     """Calculate XP needed to reach the next level."""
-    return xp_for_level(current_level + 1, multiplier)
+    return xp_for_level(current_level + 1, multiplier, exponent)
 
 
 async def get_user_xp(guild_id: int, user_id: int) -> Tuple[int, int, int]:
     """Get a user's XP, level, and total XP. Returns (xp, level, total_xp)."""
-    from utils import XP_LEVEL_MULTIPLIER
+    from utils import XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT
     async with aiosqlite.connect(DB_PATH) as db:
         cur = await db.execute(
             "SELECT xp, level, total_xp FROM user_xp WHERE guild_id=? AND user_id=?",
@@ -188,7 +188,7 @@ async def get_user_xp(guild_id: int, user_id: int) -> Tuple[int, int, int]:
         if row:
             xp, level, total_xp = row
             # Recalculate level in case XP changed
-            actual_level = calculate_level(xp, XP_LEVEL_MULTIPLIER)
+            actual_level = calculate_level(xp, XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT)
             if actual_level != level:
                 # Update level if it changed
                 await db.execute(
@@ -203,7 +203,7 @@ async def get_user_xp(guild_id: int, user_id: int) -> Tuple[int, int, int]:
 
 async def add_xp(guild_id: int, user_id: int, amount: int, source: str = "ACTIVITY") -> bool:
     """Add XP to a user. Returns True if user leveled up."""
-    from utils import XP_LEVEL_MULTIPLIER
+    from utils import XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT
     async with aiosqlite.connect(DB_PATH) as db:
         # Get current XP
         cur = await db.execute(
@@ -223,7 +223,7 @@ async def add_xp(guild_id: int, user_id: int, amount: int, source: str = "ACTIVI
             new_total_xp = amount
         
         # Calculate new level
-        new_level = calculate_level(new_xp, XP_LEVEL_MULTIPLIER)
+        new_level = calculate_level(new_xp, XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT)
         
         # Update or insert
         await db.execute("""
@@ -243,7 +243,7 @@ async def add_xp(guild_id: int, user_id: int, amount: int, source: str = "ACTIVI
 
 async def remove_xp(guild_id: int, user_id: int, amount: int) -> bool:
     """Remove XP from a user. Returns True if successful, False if insufficient XP."""
-    from utils import XP_LEVEL_MULTIPLIER
+    from utils import XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT
     if amount <= 0:
         return False
     
@@ -266,7 +266,7 @@ async def remove_xp(guild_id: int, user_id: int, amount: int) -> bool:
         # Calculate new values
         new_xp = max(0, current_xp - amount)
         # Note: total_xp should not decrease (it's a lifetime total)
-        new_level = calculate_level(new_xp, XP_LEVEL_MULTIPLIER)
+        new_level = calculate_level(new_xp, XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT)
         
         # Update
         await db.execute("""

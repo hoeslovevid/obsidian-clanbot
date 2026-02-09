@@ -2,7 +2,7 @@
 import discord
 from discord import app_commands
 
-from utils import obsidian_embed, XP_ENABLED, XP_LEVEL_MULTIPLIER
+from utils import obsidian_embed, XP_ENABLED, XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT
 
 
 def setup(bot, group=None):
@@ -42,8 +42,9 @@ def setup(bot, group=None):
         xp, level, total_xp = await get_user_xp(interaction.guild.id, target_user.id)
         
         # Calculate XP needed for next level
-        xp_for_current_level = int(level ** 2 * XP_LEVEL_MULTIPLIER)
-        xp_for_next = int((level + 1) ** 2 * XP_LEVEL_MULTIPLIER)
+        from database import xp_for_level, xp_for_next_level
+        xp_for_current_level = xp_for_level(level, XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT)
+        xp_for_next = xp_for_next_level(level, XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT)
         xp_needed = xp_for_next - xp
         progress = xp - xp_for_current_level
         progress_needed = xp_for_next - xp_for_current_level

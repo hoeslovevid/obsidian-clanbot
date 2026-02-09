@@ -466,6 +466,8 @@ def setup_tasks(bot):
                                         if leveled_up:
                                             xp, level, total_xp = await get_user_xp(guild.id, user_id)
                                             logger.info(f"User {user_id} leveled up to level {level} in guild {guild.id} (voice activity)")
+                                            from utils import send_levelup_announcement
+                                            await send_levelup_announcement(guild, user, level, xp, total_xp)
                                 
                                 # Update tracking
                                 new_total = total_minutes + minutes_to_reward

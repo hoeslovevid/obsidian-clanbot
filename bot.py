@@ -302,6 +302,7 @@ def load_all_commands():
         "commands.economy.xpleaderboard",
         "commands.economy.add_coins",
         "commands.economy.manage_xp",
+        "commands.economy.xp_settings",
         "commands.economy.invest",
         "commands.economy.shop",
         "commands.economy.shop_manage",
@@ -353,6 +354,7 @@ def load_all_commands():
         "commands.economy.xpleaderboard": economy_group,
         "commands.economy.add_coins": economy_group,
         "commands.economy.manage_xp": economy_group,
+        "commands.economy.xp_settings": economy_group,
         "commands.economy.invest": economy_group,
         "commands.economy.shop": economy_group,
         "commands.economy.shop_manage": economy_group,
@@ -1006,6 +1008,10 @@ async def on_message(message: discord.Message):
             # User leveled up! Assign level roles
             xp, level, total_xp = await get_user_xp(message.guild.id, message.author.id)
             logger.info(f"User {message.author.id} leveled up to level {level} in guild {message.guild.id}")
+            
+            # Send level-up announcement to configured channel
+            from utils import send_levelup_announcement
+            await send_levelup_announcement(message.guild, message.author, level, xp, total_xp)
             
             # Assign level roles
             from database import get_all_level_roles_up_to
