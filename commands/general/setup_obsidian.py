@@ -10,7 +10,7 @@ _setup_in_progress = set()
 
 def setup(bot, group=None):
     """Register the setup_obsidian command."""
-    command_decorator = group.command(name="setup_obsidian", description="Create/ensure core channels and post bot panels (mods only).") if group else bot.tree.command(name="setup_obsidian", description="Create/ensure core channels and post bot panels (mods only).")
+    command_decorator = group.command(name="setup_obsidian", description="Set up voice, events, and core channels (mods only).") if group else bot.tree.command(name="setup_obsidian", description="Set up voice, events, and core channels (mods only).")
     
     @command_decorator
     async def setup_obsidian(interaction: discord.Interaction):

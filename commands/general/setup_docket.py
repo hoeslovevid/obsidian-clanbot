@@ -10,7 +10,7 @@ _docket_setup_in_progress = set()
 
 def setup(bot, group=None):
     """Register the setup_docket command."""
-    command_decorator = group.command(name="setup_docket", description="Post the complaints panel (mods only).") if group else bot.tree.command(name="setup_docket", description="Post the complaints panel (mods only).")
+    command_decorator = group.command(name="setup_docket", description="Post the complaints/help request panel (mods only).") if group else bot.tree.command(name="setup_docket", description="Post the complaints/help request panel (mods only).")
     
     @command_decorator
     async def setup_docket(interaction: discord.Interaction):

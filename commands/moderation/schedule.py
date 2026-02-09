@@ -12,9 +12,9 @@ import aiosqlite  # type: ignore
 def setup(bot, group=None):
     """Register the schedule command."""
     command_decorator = (
-        group.command(name="schedule", description="Schedule a message to be sent at a future time (mods only).")
+        group.command(name="schedule", description="Schedule a message to be sent at a future time.")
         if group
-        else bot.tree.command(name="schedule", description="Schedule a message to be sent at a future time (mods only).")
+        else bot.tree.command(name="schedule", description="Schedule a message to be sent at a future time.")
     )
 
     @command_decorator

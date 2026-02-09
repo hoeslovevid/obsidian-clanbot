@@ -8,9 +8,9 @@ from utils import obsidian_embed
 def setup(bot, group=None):
     """Register the ping command."""
     command_decorator = (
-        group.command(name="ping", description="Check bot latency and response time.")
+        group.command(name="ping", description="Check bot latency (ms).")
         if group
-        else bot.tree.command(name="ping", description="Check bot latency and response time.")
+        else bot.tree.command(name="ping", description="Check bot latency (ms).")
     )
 
     @command_decorator

@@ -240,7 +240,7 @@ class LFGView(discord.ui.View):
 
 def setup(bot, group=None):
     """Register the lfg command."""
-    command_decorator = group.command(name="lfg", description="Create a Looking for Group post for a Warframe mission.") if group else bot.tree.command(name="lfg", description="Create a Looking for Group post for a Warframe mission.")
+    command_decorator = group.command(name="lfg", description="Create an LFG post for a Warframe mission.") if group else bot.tree.command(name="lfg", description="Create an LFG post for a Warframe mission.")
     
     @command_decorator
     @app_commands.describe(

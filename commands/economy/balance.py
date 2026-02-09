@@ -6,7 +6,7 @@ from utils import obsidian_embed, ECONOMY_ENABLED, COINS_PER_MESSAGE, MESSAGE_CO
 
 def setup(bot, group=None):
     """Register the balance command."""
-    command_decorator = group.command(name="balance", description="Check your coin balance.") if group else bot.tree.command(name="balance", description="Check your coin balance.")
+    command_decorator = group.command(name="balance", description="View your coin balance.") if group else bot.tree.command(name="balance", description="View your coin balance.")
     
     @command_decorator
     async def balance(interaction: discord.Interaction):

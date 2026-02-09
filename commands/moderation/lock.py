@@ -8,14 +8,14 @@ from utils import obsidian_embed, is_mod
 def setup(bot, group=None):
     """Register lock and unlock commands."""
     lock_decorator = (
-        group.command(name="lock", description="Lock the channel (prevent @everyone from sending messages).")
+        group.command(name="lock", description="Lock channel — prevent @everyone from sending messages.")
         if group
-        else bot.tree.command(name="lock", description="Lock the channel (prevent @everyone from sending messages).")
+        else bot.tree.command(name="lock", description="Lock channel — prevent @everyone from sending messages.")
     )
     unlock_decorator = (
-        group.command(name="unlock", description="Unlock the channel (restore sending for @everyone).")
+        group.command(name="unlock", description="Unlock channel — restore sending for @everyone.")
         if group
-        else bot.tree.command(name="unlock", description="Unlock the channel (restore sending for @everyone).")
+        else bot.tree.command(name="unlock", description="Unlock channel — restore sending for @everyone.")
     )
 
     @lock_decorator

@@ -297,7 +297,7 @@ class HelpSelect(discord.ui.Select):
 
 def setup(bot, group=None):
     """Register the help command."""
-    command_decorator = group.command(name="help", description="Get help and information about all bot commands.") if group else bot.tree.command(name="help", description="Get help and information about all bot commands.")
+    command_decorator = group.command(name="help", description="Browse all commands and get usage help.") if group else bot.tree.command(name="help", description="Browse all commands and get usage help.")
     
     @command_decorator
     @app_commands.describe(command="Get help for a specific command (e.g., 'economy balance' or 'warframe baro')")

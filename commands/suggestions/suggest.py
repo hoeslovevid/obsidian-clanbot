@@ -17,7 +17,7 @@ SUGGESTION_TEMPLATES = {
 
 def setup(bot, group=None):
     """Register the suggest command."""
-    command_decorator = group.command(name="suggest", description="Submit a suggestion (commands, features, improvements).") if group else bot.tree.command(name="suggest", description="Submit a suggestion (commands, features, improvements).")
+    command_decorator = group.command(name="suggest", description="Submit a suggestion with category and optional template.") if group else bot.tree.command(name="suggest", description="Submit a suggestion with category and optional template.")
     
     @command_decorator
     @app_commands.choices(category=[app_commands.Choice(name=c.title(), value=c) for c in SUGGESTION_CATEGORIES])

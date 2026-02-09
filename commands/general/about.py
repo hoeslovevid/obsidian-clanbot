@@ -11,9 +11,9 @@ from database import DB_PATH
 def setup(bot, group=None):
     """Register the about command."""
     command_decorator = (
-        group.command(name="about", description="Learn about the bot, its features, and developer.")
+        group.command(name="about", description="View bot info, features, version, and developer.")
         if group
-        else bot.tree.command(name="about", description="Learn about the bot, its features, and developer.")
+        else bot.tree.command(name="about", description="View bot info, features, version, and developer.")
     )
 
     @command_decorator

@@ -8,7 +8,7 @@ from utils import obsidian_embed, is_mod
 
 def setup(bot, group=None):
     """Register the purge command."""
-    command_decorator = group.command(name="purge", description="Clear messages from the current channel (mods only).") if group else bot.tree.command(name="purge", description="Clear messages from the current channel (mods only).")
+    command_decorator = group.command(name="purge", description="Delete messages (1–100 or 'all') from this channel.") if group else bot.tree.command(name="purge", description="Delete messages (1–100 or 'all') from this channel.")
     
     @command_decorator
     @app_commands.describe(

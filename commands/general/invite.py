@@ -8,9 +8,9 @@ from utils import obsidian_embed
 def setup(bot, group=None):
     """Register the invite command."""
     command_decorator = (
-        group.command(name="invite", description="Get the bot's invite link to add it to another server.")
+        group.command(name="invite", description="Get the bot invite link to add it to other servers.")
         if group
-        else bot.tree.command(name="invite", description="Get the bot's invite link to add it to another server.")
+        else bot.tree.command(name="invite", description="Get the bot invite link to add it to other servers.")
     )
 
     @command_decorator

@@ -10,15 +10,15 @@ from discord import app_commands  # type: ignore
 def load_all_commands(bot):
     """Load all command modules and organize them into groups."""
     # Create command groups (Discord limit: 25 commands per group)
-    economy_group = app_commands.Group(name="economy", description="💰 Economy and coin management")
-    warframe_group = app_commands.Group(name="warframe", description="🎮 Warframe game information")
-    moderation_group = app_commands.Group(name="mod", description="🛡️ Moderation and server management")
-    general_group = app_commands.Group(name="general", description="📋 General bot commands")
-    community_group = app_commands.Group(name="community", description="👥 Community features")
-    music_group = app_commands.Group(name="music", description="🎵 Music commands")
-    updates_group = app_commands.Group(name="updates", description="📝 Update log commands")
-    giveaways_group = app_commands.Group(name="giveaways", description="🎁 Giveaway commands")
-    trading_group = app_commands.Group(name="trading", description="💼 Trading commands")
+    economy_group = app_commands.Group(name="economy", description="💰 Coins, XP, shop, gambling, and pets")
+    warframe_group = app_commands.Group(name="warframe", description="🎮 Baro, cycles, alerts, LFG, builds, and more")
+    moderation_group = app_commands.Group(name="mod", description="🛡️ Purge, lock, warn, automod, logging, and moderation tools")
+    general_group = app_commands.Group(name="general", description="📋 Help, about, setup, profiles, and server tools")
+    community_group = app_commands.Group(name="community", description="👥 Events, tickets, suggestions, applications, and community features")
+    music_group = app_commands.Group(name="music", description="🎵 Play, pause, skip, and manage music in voice channels")
+    updates_group = app_commands.Group(name="updates", description="📝 Update log and version management")
+    giveaways_group = app_commands.Group(name="giveaways", description="🎁 Create, manage, and enter giveaways")
+    trading_group = app_commands.Group(name="trading", description="💼 Trading post, prices, and Warframe market lookup")
 
     bot.tree.add_command(economy_group)
     bot.tree.add_command(warframe_group)
@@ -132,6 +132,8 @@ def load_all_commands(bot):
         "commands.general.announcements",
         "commands.general.cross_server",
         "commands.general.voice_leaderboard",
+        "commands.general.coinflip",
+        "commands.warframe.build",
     ]
 
     group_mapping = {
@@ -212,6 +214,8 @@ def load_all_commands(bot):
         "commands.general.announcements": general_group,
         "commands.general.cross_server": general_group,
         "commands.general.voice_leaderboard": general_group,
+        "commands.general.coinflip": community_group,
+        "commands.warframe.build": warframe_group,
         "commands.music.music": music_group,
         "commands.events.event_create": community_group,
         "commands.complaints.submit_complaint": community_group,
