@@ -1,7 +1,7 @@
 # Bot.py Refactoring Plan
 
 ## Current Status
-- `bot.py`: ~3300 lines (event handlers still inline; config + deferred imports done)
+- `bot.py`: ~2940 lines (event handlers inline; command loading extracted)
 - Goal: Split into modular files for better performance and maintainability
 
 ## Modules Created
@@ -14,16 +14,35 @@
 5. **views.py** - All View classes (VCPanelView, ComplaintModView, RSVPView, etc.)
 6. **modals.py** - All Modal classes (RenameVCModal, InviteModal, ComplaintModal, etc.)
 7. **tasks.py** - Background tasks (baro_check_loop, cycle_check_loop, etc.)
+8. **commands_loader.py** - Command loading and group registration (~260 lines extracted)
 
-### ✅ Load/Deploy Optimizations (Jan 2025)
-8. **Deferred imports**
-   - `tasks.py` and `version_tracking.check_and_post_updates` are lazy-imported in `on_ready` (saves ~2k lines at startup)
-   - `warframe_api` removed from bot.py (only used by tasks/commands)
-   - `detect_and_update_version` wrapped so `version_tracking` loads only when `/force_version_update` runs
-9. **Single config source** - `database.py` uses `config.DB_PATH`; `bot.py` imports from `config`
+### ✅ Load/Deploy Optimizations
+9. **Deferred imports** - tasks, version_tracking lazy-loaded in on_ready
+10. **Single config source** - database.py uses config.DB_PATH
 
-## Expected Benefits
-- Faster bot startup (tasks/version_tracking load after connect)
-- Lower memory at cold start
-- Better code organization
-- Easier to maintain and debug
+### 📋 Structure (clean)
+```
+obsidian_clanbot/
+├── bot.py              # Bot class, events, orchestration
+├── config.py           # All env/config
+├── commands_loader.py  # Command registration
+├── channels.py         # Channel helpers
+├── database.py         # DB layer
+├── modals.py           # Modal classes
+├── views.py            # View classes
+├── tasks.py            # Background tasks
+├── utils.py            # Utilities
+├── warframe_api.py     # Warframe API
+└── commands/           # Slash commands by category
+```
+
+## What Stays in bot.py (by design)
+- ClanBot class + bot instance
+- Event handlers (@bot.event) - require bot reference
+- Helpers used by events: check_auto_mod, post_vc_panel, log_complaint_action, format_thread_name
+- incident_mode_check + install
+- main() entry point
+
+## Future (optional)
+- Extract handlers to handlers/ with lazy-load wrappers for faster cold start
+- Extract helpers to core/ package
