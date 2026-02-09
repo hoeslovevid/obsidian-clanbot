@@ -5,6 +5,7 @@ from typing import Optional
 from datetime import datetime, timezone
 import dateparser
 
+from config import TIMEZONE
 from utils import obsidian_embed
 from database import DB_PATH, now_utc
 import aiosqlite
@@ -32,8 +33,8 @@ def setup(bot, group=None):
         
         await interaction.response.defer(ephemeral=True)
         
-        # Parse when
-        remind_time = dateparser.parse(when, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True}, relative_base=datetime.now(timezone.utc))
+        # Parse when (use configured timezone)
+        remind_time = dateparser.parse(when, settings={'TIMEZONE': TIMEZONE, 'RETURN_AS_TIMEZONE_AWARE': True, 'TO_TIMEZONE': 'UTC'}, relative_base=datetime.now(timezone.utc))
         
         if not remind_time:
             return await interaction.followup.send(

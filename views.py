@@ -3,14 +3,97 @@ View classes for Discord interactions.
 This module contains all View classes used by the bot.
 """
 import logging
-import discord
+import discord  # type: ignore
 import aiosqlite  # type: ignore
-from typing import Optional
+from typing import Optional, Callable, Awaitable, Any
 
 from utils import is_mod, display_case_status, obsidian_embed
 from database import DB_PATH, now_utc, log_complaint_action
 
 logger = logging.getLogger(__name__)
+
+
+class EmbedPaginator(discord.ui.View):
+    """Reusable paginated embed view with Prev/Next buttons."""
+
+    def __init__(self, title: str, pages: list, *, color=None, client=None, timeout: float = 120):
+        super().__init__(timeout=timeout)
+        self.title = title
+        self.pages = pages
+        self.color = color or discord.Color.blue()
+        self.client = client
+        self.page = 0
+        self.total_pages = max(1, len(pages))
+        self._update_buttons()
+
+    def _update_buttons(self):
+        for c in self.children:
+            if getattr(c, "custom_id", "") == "paginator_prev":
+                c.disabled = self.page <= 0
+            elif getattr(c, "custom_id", "") == "paginator_next":
+                c.disabled = self.page >= self.total_pages - 1
+
+    def _build_embed(self) -> discord.Embed:
+        p = self.pages[self.page]
+        desc = p.get("description", "")
+        fields = p.get("fields", [])
+        footer = p.get("footer") or f"Page {self.page + 1}/{self.total_pages}"
+        return obsidian_embed(
+            self.title,
+            desc,
+            color=self.color,
+            fields=fields if fields else None,
+            footer=footer,
+            client=self.client,
+        )
+
+    async def on_timeout(self):
+        for c in self.children:
+            c.disabled = True
+
+    @discord.ui.button(label="◀ Prev", style=discord.ButtonStyle.secondary, custom_id="paginator_prev")
+    async def prev_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.page = max(0, self.page - 1)
+        self._update_buttons()
+        await interaction.response.edit_message(embed=self._build_embed(), view=self)
+
+    @discord.ui.button(label="Next ▶", style=discord.ButtonStyle.secondary, custom_id="paginator_next")
+    async def next_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.page = min(self.total_pages - 1, self.page + 1)
+        self._update_buttons()
+        await interaction.response.edit_message(embed=self._build_embed(), view=self)
+
+
+class ConfirmView(discord.ui.View):
+    """Reusable confirmation view with Confirm/Cancel buttons."""
+
+    def __init__(self, callback: Callable[[discord.Interaction, bool], Awaitable[Any]], *, timeout: float = 60):
+        super().__init__(timeout=timeout)
+        self.callback_fn = callback
+
+    @discord.ui.button(label="Confirm", style=discord.ButtonStyle.danger)
+    async def confirm_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        for c in self.children:
+            c.disabled = True
+        try:
+            await interaction.response.edit_message(view=self)
+        except Exception:
+            pass
+        await self.callback_fn(interaction, True)
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
+    async def cancel_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        for c in self.children:
+            c.disabled = True
+        try:
+            await interaction.response.edit_message(view=self)
+        except Exception:
+            pass
+        await self.callback_fn(interaction, False)
+
+    async def on_timeout(self):
+        for c in self.children:
+            c.disabled = True
 
 
 class SetLimitSelect(discord.ui.Select):

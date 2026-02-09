@@ -3,6 +3,7 @@ import discord  # type: ignore
 from discord import app_commands  # type: ignore
 
 from utils import obsidian_embed, is_mod
+from views import ConfirmView
 
 
 def setup(bot, group=None):
@@ -33,28 +34,34 @@ def setup(bot, group=None):
             )
         if not interaction.channel.permissions_for(interaction.guild.me).manage_channels:
             return await interaction.response.send_message(
-                "I don't have permission to manage this channel.",
+                "I need **Manage Channels** in this server. Ask an admin to grant it.",
                 ephemeral=True,
             )
 
-        overwrites = dict(interaction.channel.overwrites)
-        default_role = interaction.guild.default_role
-        current = overwrites.get(default_role, discord.PermissionOverwrite())
-        current.send_messages = False
-        overwrites[default_role] = current
-
-        await interaction.channel.edit(
-            overwrites=overwrites,
-            reason=f"Channel locked by {interaction.user}",
+        embed = obsidian_embed(
+            "⚠️ Confirm Lock",
+            f"Lock {interaction.channel.mention}? Only members with overwrites will be able to send messages.",
+            color=discord.Color.orange(),
+            client=interaction.client,
         )
-        await interaction.response.send_message(
-            embed=obsidian_embed(
-                "🔒 Channel Locked",
-                "Only members with overwrites can send messages. Use `/unlock` to restore.",
-                color=discord.Color.orange(),
-                client=interaction.client,
-            ),
-        )
+        async def on_confirm(btn_interaction: discord.Interaction, confirmed: bool):
+            if not confirmed:
+                await btn_interaction.response.send_message("Cancelled.", ephemeral=True)
+                return
+            if btn_interaction.user.id != interaction.user.id:
+                await btn_interaction.response.send_message("Only the person who started this can confirm.", ephemeral=True)
+                return
+            overwrites = dict(interaction.channel.overwrites)
+            default_role = interaction.guild.default_role
+            current = overwrites.get(default_role, discord.PermissionOverwrite())
+            current.send_messages = False
+            overwrites[default_role] = current
+            await interaction.channel.edit(overwrites=overwrites, reason=f"Channel locked by {interaction.user}")
+            await btn_interaction.response.send_message(
+                embed=obsidian_embed("🔒 Channel Locked", "Only members with overwrites can send messages. Use `/unlock` to restore.", color=discord.Color.green(), client=interaction.client),
+            )
+        view = ConfirmView(on_confirm)
+        await interaction.response.send_message(embed=embed, view=view)
 
     @unlock_decorator
     async def unlock(interaction: discord.Interaction):
@@ -71,7 +78,7 @@ def setup(bot, group=None):
             )
         if not interaction.channel.permissions_for(interaction.guild.me).manage_channels:
             return await interaction.response.send_message(
-                "I don't have permission to manage this channel.",
+                "I need **Manage Channels** in this server. Ask an admin to grant it.",
                 ephemeral=True,
             )
 

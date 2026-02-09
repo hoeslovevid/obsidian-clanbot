@@ -5,7 +5,10 @@ from datetime import datetime, timezone
 
 from utils import obsidian_embed
 from database import DB_PATH
+from views import EmbedPaginator
 import aiosqlite
+
+ITEMS_PER_PAGE = 5
 
 
 def setup(bot, group=None):
@@ -23,7 +26,7 @@ def setup(bot, group=None):
                     FROM lfg_posts
                     WHERE guild_id=? AND channel_id=? AND status='OPEN' AND mission_type LIKE ?
                     ORDER BY created_at DESC
-                    LIMIT 10
+                    LIMIT 50
                 """, (interaction.guild.id, interaction.channel.id, f"%{mission_type}%"))
             else:
                 cur = await db.execute("""
@@ -31,7 +34,7 @@ def setup(bot, group=None):
                     FROM lfg_posts
                     WHERE guild_id=? AND channel_id=? AND status='OPEN'
                     ORDER BY created_at DESC
-                    LIMIT 10
+                    LIMIT 50
                 """, (interaction.guild.id, interaction.channel.id))
             
             posts = await cur.fetchall()
@@ -59,41 +62,49 @@ def setup(bot, group=None):
                 ephemeral=True
             )
         
-        # Build fields for each LFG post
-        fields = []
-        for lfg_id, creator_id, mission_type_val, max_players, description, expires_at, created_at in posts:
-            rsvp_count = counts_by_id.get(int(lfg_id), 0)
-            
-            creator = interaction.guild.get_member(creator_id)
-            creator_name = creator.display_name if creator else f"User {creator_id}"
-            
-            # Parse expiry time
-            try:
-                expiry_dt = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
-                time_remaining = expiry_dt - datetime.now(timezone.utc)
-                if time_remaining.total_seconds() > 0:
-                    hours = int(time_remaining.total_seconds() // 3600)
-                    time_str = f"{hours}h remaining" if hours > 0 else "Expiring soon"
-                else:
-                    time_str = "Expired"
-            except Exception:
-                time_str = "Unknown"
-            
-            value = f"👥 {rsvp_count}/{max_players} players\n"
-            value += f"👤 {creator_name}\n"
-            value += f"⏰ {time_str}\n"
-            if description:
-                value += f"📝 _{description[:60]}{'...' if len(description) > 60 else ''}_\n"
-            value += f"`ID: {lfg_id}`"
-            
-            fields.append((f"🎯 {mission_type_val}", value, True))
-        
-        embed = obsidian_embed(
-            f"🔍 Active LFG Posts",
-            f"**{len(posts)}** active group{'s' if len(posts) != 1 else ''} in this channel",
-            color=discord.Color.blue(),
-            fields=fields,
-            client=interaction.client,
-        )
-        
-        await interaction.response.send_message(embed=embed, ephemeral=False)
+        # Build pages (5 posts per page)
+        pages = []
+        for i in range(0, len(posts), ITEMS_PER_PAGE):
+            page_posts = posts[i : i + ITEMS_PER_PAGE]
+            fields = []
+            for lfg_id, creator_id, mission_type_val, max_players, description, expires_at, created_at in page_posts:
+                rsvp_count = counts_by_id.get(int(lfg_id), 0)
+
+                creator = interaction.guild.get_member(creator_id)
+                creator_name = creator.display_name if creator else f"User {creator_id}"
+
+                try:
+                    expiry_dt = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
+                    time_remaining = expiry_dt - datetime.now(timezone.utc)
+                    if time_remaining.total_seconds() > 0:
+                        hours = int(time_remaining.total_seconds() // 3600)
+                        time_str = f"Expires in {hours}h" if hours > 0 else "Expiring soon"
+                    else:
+                        time_str = "Expired"
+                except Exception:
+                    time_str = "Unknown"
+
+                value = f"👥 {rsvp_count}/{max_players} players\n"
+                value += f"👤 {creator_name}\n"
+                value += f"⏰ {time_str}\n"
+                if description:
+                    value += f"📝 _{description[:60]}{'...' if len(description) > 60 else ''}_\n"
+                value += f"`ID: {lfg_id}`"
+
+                fields.append((f"🎯 {mission_type_val}", value, True))
+
+            desc = f"**{len(posts)}** active group{'s' if len(posts) != 1 else ''} in this channel"
+            pages.append({"description": desc, "fields": fields})
+
+        if len(pages) == 1:
+            embed = obsidian_embed(
+                "🔍 Active LFG Posts",
+                pages[0]["description"],
+                color=discord.Color.blue(),
+                fields=pages[0]["fields"],
+                client=interaction.client,
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=False)
+        else:
+            view = EmbedPaginator("🔍 Active LFG Posts", pages, color=discord.Color.blue(), client=interaction.client)
+            await interaction.response.send_message(embed=view._build_embed(), view=view, ephemeral=False)

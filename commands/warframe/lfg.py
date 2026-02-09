@@ -332,10 +332,13 @@ def setup(bot, group=None):
         # Create embed with better formatting
         mission_name = mission_type.value
         
+        # Human-readable expiry: "Expires in Xh"
+        hrs = duration_hours
+        expires_str = f"Expires in {hrs}h • <t:{int(expires_at.timestamp())}:R>"
         fields = [
             ("🎯 Mission", mission_name, True),
             ("👤 Created by", interaction.user.mention, True),
-            ("⏰ Expires", f"<t:{int(expires_at.timestamp())}:R>", True),
+            ("⏰ Expires", expires_str, True),
         ]
         
         if description:

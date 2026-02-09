@@ -2819,13 +2819,19 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
         return
     
     if error_type_name == "MissingPermissions":
-        await _send_error_reply(interaction, "I don't have the required permissions to run this command.")
+        # User lacks permissions - show which ones if available
+        perms = getattr(error, "missing_permissions", None) or []
+        if perms:
+            names = [str(p).replace("_", " ").title() for p in perms]
+            await _send_error_reply(interaction, f"You need: **{', '.join(names)}**. Ask an admin to grant them.")
+        else:
+            await _send_error_reply(interaction, "You don't have permission to use this command.")
         return
-    
+
     if error_type_name in ("Forbidden", "HTTPException"):
         err_msg = str(error)
         if "Missing Access" in err_msg or "50013" in err_msg:
-            await _send_error_reply(interaction, "I don't have permission to do that in this channel.")
+            await _send_error_reply(interaction, "I need additional permissions (e.g. **Manage Messages**, **Send Messages**). Ask an admin to grant them for this channel.")
         elif "Unknown Channel" in err_msg:
             await _send_error_reply(interaction, "That channel no longer exists.")
         else:
@@ -2840,7 +2846,7 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
         if orig_name in ("Forbidden", "HTTPException"):
             err_msg = str(orig)
             if "Missing Access" in err_msg or "50013" in err_msg:
-                await _send_error_reply(interaction, "I don't have permission to do that in this channel.")
+                await _send_error_reply(interaction, "I need additional permissions (e.g. **Manage Messages**, **Send Messages**). Ask an admin to grant them for this channel.")
             elif "Unknown Channel" in err_msg:
                 await _send_error_reply(interaction, "That channel no longer exists.")
             else:

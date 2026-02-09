@@ -9,6 +9,7 @@ import io
 
 from utils import obsidian_embed, is_mod
 from database import DB_PATH, now_utc
+from views import ConfirmView
 import aiosqlite
 
 
@@ -642,21 +643,30 @@ def setup(bot, group=None):
                         client=interaction.client,
                     )
                 )
-            
-        # Close flow (transcript + satisfaction DM + channel delete)
-        await close_ticket(
-            interaction=interaction,
-            ticket_db_id=int(ticket_db_id),
-            closer_id=interaction.user.id,
-            reason=reason,
-        )
 
-        await interaction.followup.send(
-            embed=obsidian_embed(
-                "✅ Ticket Closed",
-                f"Ticket `{ticket_id}` has been closed.",
-                color=discord.Color.green(),
-                client=interaction.client,
-            ),
-            ephemeral=True,
+        embed = obsidian_embed(
+            "⚠️ Confirm Close",
+            f"Close ticket `{ticket_id}`? A transcript will be saved and the channel will be archived.",
+            color=discord.Color.orange(),
+            client=interaction.client,
         )
+        async def on_confirm(btn_interaction: discord.Interaction, confirmed: bool):
+            if not confirmed:
+                await btn_interaction.response.send_message("Cancelled.", ephemeral=True)
+                return
+            if btn_interaction.user.id != interaction.user.id:
+                await btn_interaction.response.send_message("Only the person who started this can confirm.", ephemeral=True)
+                return
+            await btn_interaction.response.defer(ephemeral=True)
+            await close_ticket(
+                interaction=btn_interaction,
+                ticket_db_id=int(ticket_db_id),
+                closer_id=interaction.user.id,
+                reason=reason,
+            )
+            await btn_interaction.followup.send(
+                embed=obsidian_embed("✅ Ticket Closed", f"Ticket `{ticket_id}` has been closed.", color=discord.Color.green(), client=interaction.client),
+                ephemeral=True,
+            )
+        view = ConfirmView(on_confirm)
+        await interaction.followup.send(embed=embed, view=view, ephemeral=True)

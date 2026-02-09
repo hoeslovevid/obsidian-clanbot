@@ -1,8 +1,8 @@
 """Sync commands command - forces a command sync (mods only)."""
-import discord
-from discord import app_commands
+import discord  # type: ignore
+from discord import app_commands  # type: ignore
 
-from utils import is_mod
+from utils import is_mod, obsidian_embed
 
 
 def setup(bot, group=None):
@@ -18,43 +18,38 @@ def setup(bot, group=None):
         await interaction.response.defer(ephemeral=True)
         
         try:
-            # Get commands from the tree directly (before sync)
-            # Use walk_commands() to get all commands recursively
-            all_commands = []
-            for cmd in bot.tree.walk_commands():
-                if isinstance(cmd, app_commands.Command):
-                    all_commands.append(cmd.name)
-            
-            # Remove duplicates and sort
-            command_list = sorted(set(all_commands))
-            
             # Sync commands
             if interaction.guild:
                 guild_obj = discord.Object(id=interaction.guild.id)
-                synced = await bot.tree.sync(guild=guild_obj)
+                await bot.tree.sync(guild=guild_obj)
             else:
-                synced = await bot.tree.sync()
+                await bot.tree.sync()
             
-            # Build response
-            if command_list:
-                command_list_str = ', '.join(command_list)
-            else:
-                command_list_str = "No commands found"
+            # Build group -> count from tree (after sync)
+            by_group = {}
+            for cmd in bot.tree.walk_commands():
+                if isinstance(cmd, app_commands.Command):
+                    parent = cmd.parent
+                    group_name = parent.name if parent and isinstance(parent, app_commands.Group) else "root"
+                    by_group[group_name] = by_group.get(group_name, 0) + 1
             
-            await interaction.followup.send(
-                f"✅ Commands synced!\n\n"
-                f"**Commands registered:** {len(command_list)}\n"
-                f"**Command list:** {command_list_str}\n\n"
-                f"Please wait 1-2 minutes for Discord to update, then refresh (Ctrl+R / Cmd+R).",
-                ephemeral=True,
+            total = sum(by_group.values())
+            lines = [f"**{g}:** {c} command(s)" for g, c in sorted(by_group.items())]
+            
+            embed = obsidian_embed(
+                "✅ Commands Synced",
+                f"**Registered:** {total} command(s)\n\n" + "\n".join(lines) + "\n\n"
+                "_Discord may take 1–2 minutes to update. Refresh (Ctrl+R) if commands don't appear._",
+                color=discord.Color.green(),
+                client=interaction.client,
             )
+            await interaction.followup.send(embed=embed, ephemeral=True)
         except Exception as e:
             import traceback
-            error_msg = f"❌ Failed to sync commands: {e}\n\n```\n{traceback.format_exc()}\n```"
-            # Truncate if too long
-            if len(error_msg) > 2000:
-                error_msg = error_msg[:1900] + "... (truncated)"
+            error_msg = str(e)
+            if len(error_msg) > 1000:
+                error_msg = error_msg[:1000] + "..."
             await interaction.followup.send(
-                error_msg,
+                embed=obsidian_embed("❌ Sync Failed", f"```\n{error_msg}\n```", color=discord.Color.red(), client=interaction.client),
                 ephemeral=True,
             )

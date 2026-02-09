@@ -4,6 +4,7 @@ import discord  # type: ignore
 from discord import app_commands  # type: ignore
 from datetime import datetime, timezone
 
+from config import TIMEZONE
 from utils import obsidian_embed, is_mod
 from database import DB_PATH, now_utc
 import aiosqlite  # type: ignore
@@ -46,7 +47,7 @@ def setup(bot, group=None):
 
         send_time = dateparser.parse(
             when,
-            settings={"TIMEZONE": "UTC", "RETURN_AS_TIMEZONE_AWARE": True},
+            settings={"TIMEZONE": TIMEZONE, "RETURN_AS_TIMEZONE_AWARE": True, "TO_TIMEZONE": "UTC"},
             relative_base=datetime.now(timezone.utc),
         )
 

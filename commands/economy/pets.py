@@ -30,9 +30,10 @@ PETS_PER_PAGE = 4
 class PetShopView(discord.ui.View):
     """Pagination view for pet shop."""
 
-    def __init__(self, pets: list, timeout: float = 120):
+    def __init__(self, pets: list, *, client=None, timeout: float = 120):
         super().__init__(timeout=timeout)
         self.pets = pets
+        self.client = client
         self.page = 0
         self.total_pages = max(1, (len(pets) + PETS_PER_PAGE - 1) // PETS_PER_PAGE)
         self._update_buttons()
@@ -54,14 +55,16 @@ class PetShopView(discord.ui.View):
         for pet_type, price, max_level, desc in page_pets:
             lines.append(f"**{pet_type}** • {price:,} coins • Max Lv.{max_level}\n{desc}")
 
-        embed = discord.Embed(
-            title="🐾 Pet Shop",
-            description="Browse pets below. Use the buttons to change pages.\n\n" + "\n\n".join(lines),
+        desc = "Browse pets below. Use the buttons to change pages.\n\n" + "\n\n".join(lines)
+        footer = f"Page {self.page + 1}/{self.total_pages} • Use /pet_buy to purchase"
+        return obsidian_embed(
+            "🐾 Pet Shop",
+            desc,
             color=discord.Color.gold(),
+            thumbnail=thumbnail,
+            footer=footer,
+            client=self.client,
         )
-        embed.set_thumbnail(url=thumbnail)
-        embed.set_footer(text=f"Page {self.page + 1}/{self.total_pages} • Use /pet_buy to purchase")
-        return embed
 
     async def on_timeout(self):
         for item in self.children:
@@ -168,7 +171,7 @@ def setup(bot, group=None):
                 """)
                 pets = await cur.fetchall()
         
-        view = PetShopView(pets)
+        view = PetShopView(pets, client=interaction.client)
         await interaction.followup.send(
             embed=view._build_embed(),
             view=view,
