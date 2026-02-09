@@ -9,20 +9,76 @@ from database import DB_PATH, now_utc, get_user_balance, remove_coins, add_coins
 import aiosqlite
 import dateparser
 
-# Pet images: Twemoji CDN icons + Wikimedia Commons photos for embed visualization
-# Format: (thumbnail_icon_url, large_image_url)
-PET_IMAGES = {
-    "Dog": ("https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/512x512/1f436.png", "https://upload.wikimedia.org/wikipedia/commons/thumb/2/26/YellowLabradorLooking_new.jpg/640px-YellowLabradorLooking_new.jpg"),
-    "Cat": ("https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/512x512/1f431.png", "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3a/Cat03.jpg/640px-Cat03.jpg"),
-    "Bird": ("https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/512x512/1f426.png", "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b6/Bengalese_Finch.jpg/640px-Bengalese_Finch.jpg"),
-    "Fish": ("https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/512x512/1f41f.png", "https://upload.wikimedia.org/wikipedia/commons/thumb/2/23/Georgia_Aquarium_-_Giant_Grouper.jpg/640px-Georgia_Aquarium_-_Giant_Grouper.jpg"),
-    "Rabbit": ("https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/512x512/1f430.png", "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1f/Oryctolagus_cuniculus_Rcdo.jpg/640px-Oryctolagus_cuniculus_Rcdo.jpg"),
-    "Fox": ("https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/512x512/1f98a.png", "https://upload.wikimedia.org/wikipedia/commons/thumb/4/43/Red_Fox_in_Blijdorp_Zoo.jpg/640px-Red_Fox_in_Blijdorp_Zoo.jpg"),
-    "Robot": ("https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/512x512/1f916.png", "https://upload.wikimedia.org/wikipedia/commons/thumb/4/44/Atlas_from_Boston_Dynamics.jpg/640px-Atlas_from_Boston_Dynamics.jpg"),
-    "Wolf": ("https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/512x512/1f43a.png", "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/Kolm%C3%A5rden_Wolf.jpg/640px-Kolm%C3%A5rden_Wolf.jpg"),
-    "Dragon": ("https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/512x512/1f409.png", "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9e/Bearded_dragon.jpg/640px-Bearded_dragon.jpg"),
-    "Phoenix": ("https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/512x512/1f525.png", "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/Ph%C3%B6nix-pavlensky-2.jpg/640px-Ph%C3%B6nix-pavlensky-2.jpg"),
+# Pet icons: Twemoji CDN (reliable, Discord-friendly)
+PET_ICONS = {
+    "Dog": "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/512x512/1f436.png",
+    "Cat": "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/512x512/1f431.png",
+    "Bird": "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/512x512/1f426.png",
+    "Fish": "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/512x512/1f41f.png",
+    "Rabbit": "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/512x512/1f430.png",
+    "Fox": "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/512x512/1f98a.png",
+    "Robot": "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/512x512/1f916.png",
+    "Wolf": "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/512x512/1f43a.png",
+    "Dragon": "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/512x512/1f409.png",
+    "Phoenix": "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/512x512/1f525.png",
 }
+DEFAULT_PET_ICON = "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/512x512/1f43e.png"
+
+PETS_PER_PAGE = 4
+
+
+class PetShopView(discord.ui.View):
+    """Pagination view for pet shop."""
+
+    def __init__(self, pets: list, timeout: float = 120):
+        super().__init__(timeout=timeout)
+        self.pets = pets
+        self.page = 0
+        self.total_pages = max(1, (len(pets) + PETS_PER_PAGE - 1) // PETS_PER_PAGE)
+        self._update_buttons()
+
+    def _update_buttons(self):
+        for c in self.children:
+            if getattr(c, "custom_id", "") == "pet_shop_prev":
+                c.disabled = self.page <= 0
+            elif getattr(c, "custom_id", "") == "pet_shop_next":
+                c.disabled = self.page >= self.total_pages - 1
+
+    def _build_embed(self) -> discord.Embed:
+        start = self.page * PETS_PER_PAGE
+        page_pets = self.pets[start : start + PETS_PER_PAGE]
+        first_pet_type = page_pets[0][0] if page_pets else None
+        thumbnail = PET_ICONS.get(first_pet_type, DEFAULT_PET_ICON) if first_pet_type else DEFAULT_PET_ICON
+
+        lines = []
+        for pet_type, price, max_level, desc in page_pets:
+            lines.append(f"**{pet_type}** • {price:,} coins • Max Lv.{max_level}\n{desc}")
+
+        embed = discord.Embed(
+            title="🐾 Pet Shop",
+            description="Browse pets below. Use the buttons to change pages.\n\n" + "\n\n".join(lines),
+            color=discord.Color.gold(),
+        )
+        embed.set_thumbnail(url=thumbnail)
+        embed.set_footer(text=f"Page {self.page + 1}/{self.total_pages} • Use /pet_buy to purchase")
+        return embed
+
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
+
+    @discord.ui.button(label="◀ Previous", style=discord.ButtonStyle.secondary, custom_id="pet_shop_prev")
+    async def prev_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.page = max(0, self.page - 1)
+        self._update_buttons()
+        await interaction.response.edit_message(embed=self._build_embed(), view=self)
+
+    @discord.ui.button(label="Next ▶", style=discord.ButtonStyle.secondary, custom_id="pet_shop_next")
+    async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.page = min(self.total_pages - 1, self.page + 1)
+        self._update_buttons()
+        await interaction.response.edit_message(embed=self._build_embed(), view=self)
+
 
 # Pet leveling constants
 EXP_PER_LEVEL = 75  # XP needed = level * EXP_PER_LEVEL (e.g. 75 for L1->L2, 150 for L2->L3)
@@ -112,30 +168,10 @@ def setup(bot, group=None):
                 """)
                 pets = await cur.fetchall()
         
-        # Build multiple embeds: one per pet with thumbnail and refined layout
-        embeds = []
-        for pet_type, price, max_level, desc in pets:
-            icon_url, image_url = PET_IMAGES.get(pet_type, (None, None))
-            if not icon_url:
-                icon_url = "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/512x512/1f43e.png"  # paw prints fallback
-            
-            e = discord.Embed(
-                title=f"🐾 {pet_type}",
-                description=desc,
-                color=discord.Color.gold(),
-            )
-            e.add_field(name="💰 Price", value=f"**{price:,}** coins", inline=True)
-            e.add_field(name="📈 Max Level", value=str(max_level), inline=True)
-            e.add_field(name="\u200b", value="\u200b", inline=True)  # spacer
-            e.set_thumbnail(url=icon_url)
-            if image_url:
-                e.set_image(url=image_url)
-            e.set_footer(text=f"Use /pet_buy • Choose \"{pet_type}\" as pet type")
-            embeds.append(e)
-        
-        # Discord allows 10 embeds per message
+        view = PetShopView(pets)
         await interaction.followup.send(
-            embeds=embeds[:10],
+            embed=view._build_embed(),
+            view=view,
         )
     
     command_decorator = group.command(name="pet_buy", description="Buy a pet.") if group else bot.tree.command(name="pet_buy", description="Buy a pet.")
