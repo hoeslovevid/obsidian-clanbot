@@ -10,6 +10,20 @@ import aiosqlite
 import dateparser
 
 
+def _parse_baro_item_name(item: dict) -> str:
+    """Extract readable item name from API response. Handles 'item', 'itemType', 'itemName'."""
+    name = item.get("item") or item.get("itemName")
+    if name:
+        return str(name)
+    raw = item.get("itemType", "")
+    if not raw:
+        return "Unknown"
+    # itemType is often a path like /Lotus/StoreItems/Mods/PrimeMod - use last segment, clean up
+    parts = str(raw).strip("/").split("/")
+    last = parts[-1] if parts else raw
+    return last.replace("_", " ").replace("-", " ").title()
+
+
 def format_baro_time(expiry_time: datetime) -> str:
     """Format time remaining for Baro."""
     time_remaining = expiry_time - datetime.now(timezone.utc)
@@ -60,9 +74,9 @@ def build_baro_embed(baro_data: dict, is_active: bool, client) -> discord.Embed:
         
         if inventory:
             for item in inventory[:15]:  # Limit to 15 items to avoid embed limits
-                item_name = item.get("item", "Unknown")
-                ducats = item.get("ducats", 0)
-                credits = item.get("credits", 0)
+                item_name = _parse_baro_item_name(item)
+                ducats = int(item.get("ducats") or item.get("ducatPrice") or 0)
+                credits = int(item.get("credits") or item.get("creditPrice") or 0)
                 total_ducats += ducats
                 total_credits += credits
                 inventory_list += f"`{item_name}`\n"

@@ -139,44 +139,15 @@ async def check_and_notify_baro_arrival(bot):
             if not isinstance(ch, discord.TextChannel):
                 continue
             
-            # Build notification embed
-            location = baro_data.get("location", "Unknown")
-            expiry = baro_data.get("expiry", "")
-            inventory = baro_data.get("inventory", [])
+            # Re-fetch Baro data to get freshest inventory (API may have delayed population at arrival)
+            _, fresh_baro_data = await get_baro_status()
+            data_to_use = fresh_baro_data if fresh_baro_data else baro_data
             
-            try:
-                expiry_time = dateparser.parse(expiry, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
-                if expiry_time:
-                    time_remaining = expiry_time - datetime.now(timezone.utc)
-                    hours = int(time_remaining.total_seconds() // 3600)
-                    minutes = int((time_remaining.total_seconds() % 3600) // 60)
-                    time_str = f"{hours}h {minutes}m"
-                else:
-                    time_str = "Unknown"
-            except Exception:
-                time_str = "Unknown"
-            
-            desc = f"**Location:** {location}\n"
-            desc += f"**Time Remaining:** {time_str}\n\n"
-            
-            if inventory:
-                desc += "**Inventory:**\n"
-                for item in inventory[:10]:  # Limit to first 10 items
-                    item_name = item.get("item", "Unknown")
-                    ducats = item.get("ducats", 0)
-                    credits = item.get("credits", 0)
-                    desc += f"• {item_name} - {ducats} ducats, {credits:,} credits\n"
-                if len(inventory) > 10:
-                    desc += f"\n_...and {len(inventory) - 10} more items_"
-            else:
-                desc += "Inventory not available yet."
-            
-            embed = obsidian_embed(
-                "🛒 Baro Ki'Teer Has Arrived!",
-                desc,
-                color=discord.Color.gold(),
-                client=bot,
-            )
+            # Use shared embed builder for consistent inventory display
+            build_baro_embed = get_baro_embed_builder()
+            embed = build_baro_embed(data_to_use, True, bot)
+            embed.title = "🛒 Baro Ki'Teer Has Arrived!"
+            embed.color = discord.Color.gold()
             
             try:
                 await ch.send(embed=embed)
