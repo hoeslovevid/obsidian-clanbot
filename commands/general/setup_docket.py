@@ -10,7 +10,7 @@ _docket_setup_in_progress = set()
 
 def setup(bot, group=None):
     """Register the setup_docket command."""
-    command_decorator = group.command(name="setup_docket", description="Post the Obsidian Docket (complaint/help request) panel (mods only).") if group else bot.tree.command(name="setup_docket", description="Post the Obsidian Docket (complaint/help request) panel (mods only).")
+    command_decorator = group.command(name="setup_docket", description="Post the complaints panel (mods only).") if group else bot.tree.command(name="setup_docket", description="Post the complaints panel (mods only).")
     
     @command_decorator
     async def setup_docket(interaction: discord.Interaction):
@@ -63,20 +63,20 @@ def setup(bot, group=None):
                     ephemeral=True,
                 )
 
-            # Post the Docket panel
+            # Post the complaints panel
             await interaction.channel.send(
                 embed=obsidian_embed(
-                    "Obsidian Docket",
-                    "Seal a docket entry for the Inheritors.\n\n"
+                    "Complaints",
+                    "File a complaint or help request.\n\n"
                     "• Provide details & evidence links\n"
                     "• False reports may be actioned\n"
-                    "• You will receive DM docket updates",
+                    "• You will receive DM updates",
                     color=discord.Color.red(),
                 ),
                 view=ComplaintPanel(),
             )
 
-            await interaction.followup.send("Obsidian Docket deployed.", ephemeral=True)
+            await interaction.followup.send("Complaints panel deployed.", ephemeral=True)
         finally:
             await asyncio.sleep(1)
             _docket_setup_in_progress.discard(interaction_key)

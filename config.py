@@ -20,7 +20,11 @@ if not TOKEN:
 GUILD_ID = int(os.getenv("GUILD_ID", "0") or "0")
 
 # --- Moderation ---
-MOD_ROLE_NAME = os.getenv("MOD_ROLE_NAME", "Obsidian Inheritor")
+# Optional: role name for VC overwrites; if unset, uses first role with Administrator permission
+MOD_ROLE_NAME = os.getenv("MOD_ROLE_NAME", "").strip() or None
+
+# --- Bot branding (optional) ---
+BOT_STATUS = os.getenv("BOT_STATUS", "Discord")  # Custom status text (e.g. "Watching Discord")
 TIMEZONE = os.getenv("TIMEZONE", "America/New_York")
 
 # --- Database ---

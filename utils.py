@@ -119,17 +119,21 @@ def obsidian_embed(
             e.set_footer(text=bot_name, icon_url=bot_avatar)
         else:
             # Fallback to default if no client provided
-            e.set_footer(text="Obsidian Clan Bot", icon_url="https://i.imgur.com/4M34hi2.png")
+            e.set_footer(text="Bot", icon_url=None)
     
     return e
 
 
 def get_mod_role(guild: discord.Guild) -> Optional[discord.Role]:
-    """Get the primary moderator role for a guild (returns first found, prioritizing MOD_ROLE_NAME)."""
-    mod_roles = [MOD_ROLE_NAME, "Shadow Chancellor", "Supreme Chancellor"]
-    for role_name in mod_roles:
-        role = discord.utils.get(guild.roles, name=role_name)
+    """Get a role with Administrator permission for VC overwrites. Uses MOD_ROLE_NAME if set, else first role with admin."""
+    if MOD_ROLE_NAME:
+        role = discord.utils.get(guild.roles, name=MOD_ROLE_NAME)
         if role:
+            return role
+    for role in sorted(guild.roles, key=lambda r: -r.position):
+        if role.is_default():
+            continue
+        if role.permissions.administrator:
             return role
     return None
 

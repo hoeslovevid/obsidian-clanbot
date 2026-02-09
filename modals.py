@@ -7,7 +7,7 @@ import discord  # type: ignore
 import aiosqlite  # type: ignore
 from typing import Optional
 
-from utils import extract_id, get_mod_role, is_mod, MOD_ROLE_NAME, obsidian_embed
+from utils import extract_id, get_mod_role, is_mod, obsidian_embed
 from database import DB_PATH, now_utc
 
 logger = logging.getLogger(__name__)
@@ -24,7 +24,7 @@ class RenameVCModal(discord.ui.Modal, title="Recalibrate Comms Node"):  # type: 
         vc = interaction.guild.get_channel(self.vc_id)
         if not isinstance(vc, discord.VoiceChannel):
             return await interaction.response.send_message("Channel not found.", ephemeral=True)
-        await vc.edit(name=str(self.new_name), reason="Obsidian VC rename")
+        await vc.edit(name=str(self.new_name), reason="VC rename")
         await interaction.response.send_message("Renamed.", ephemeral=True)
 
 
@@ -53,7 +53,7 @@ class InviteModal(discord.ui.Modal, title="Grant Access"):  # type: ignore
         ow.view_channel = True
         ow.connect = True
         overwrites[member] = ow
-        await vc.edit(overwrites=overwrites, reason="Obsidian VC invite")
+        await vc.edit(overwrites=overwrites, reason="VC invite")
         await interaction.response.send_message(f"Invited {member.mention}.", ephemeral=True)
 
 
@@ -80,7 +80,7 @@ class RemoveAccessModal(discord.ui.Modal, title="Revoke Access"):  # type: ignor
         overwrites = vc.overwrites
         if member in overwrites:
             del overwrites[member]
-            await vc.edit(overwrites=overwrites, reason="Obsidian VC remove access")
+            await vc.edit(overwrites=overwrites, reason="VC remove access")
         await interaction.response.send_message(f"Access removed for {member.mention}.", ephemeral=True)
 
 
@@ -116,7 +116,7 @@ class TransferOwnerModal(discord.ui.Modal, title="Pass Command"):  # type: ignor
         if not isinstance(actor, discord.Member):
             return await interaction.response.send_message("Not allowed.", ephemeral=True)
         if not (is_mod(actor) or actor.id == current_owner_id):
-            return await interaction.response.send_message("Only the owner (or Obsidian Inheritor) can transfer.", ephemeral=True)
+            return await interaction.response.send_message("Only the owner (or an Administrator) can transfer.", ephemeral=True)
 
         overwrites = vc.overwrites
 
@@ -145,7 +145,7 @@ class TransferOwnerModal(discord.ui.Modal, title="Pass Command"):  # type: ignor
             m.connect = True
             overwrites[mod_role] = m
 
-        await vc.edit(overwrites=overwrites, reason="Obsidian transfer ownership")
+        await vc.edit(overwrites=overwrites, reason="Transfer ownership")
 
         async with aiosqlite.connect(DB_PATH) as db:
             await db.execute(
@@ -157,7 +157,7 @@ class TransferOwnerModal(discord.ui.Modal, title="Pass Command"):  # type: ignor
         await interaction.response.send_message(f"Ownership transferred to {new_owner.mention}.", ephemeral=True)
 
 
-class ComplaintModal(discord.ui.Modal, title="Obsidian Docket Submission"):  # type: ignore
+class ComplaintModal(discord.ui.Modal, title="File Complaint"):  # type: ignore
     def __init__(self):
         super().__init__(timeout=300, custom_id="complaint_modal")
         

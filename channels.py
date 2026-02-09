@@ -8,7 +8,7 @@ from typing import Optional
 import aiosqlite  # type: ignore
 
 from database import get_guild_setting, set_guild_setting, DB_PATH
-from utils import MOD_ROLE_NAME, get_mod_role
+from utils import get_mod_role
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ async def find_or_create_text_channel(guild: discord.Guild, *, name: str) -> dis
     existing = discord.utils.get(guild.text_channels, name=name)
     if existing:
         return existing
-    return await guild.create_text_channel(name=name, reason="Obsidian bot auto-setup")
+    return await guild.create_text_channel(name=name, reason="Bot auto-setup")
 
 
 async def resolve_channel_id(
@@ -122,7 +122,7 @@ async def resolve_temp_vc_category(guild: discord.Guild) -> discord.CategoryChan
 
     if not AUTO_SETUP:
         raise RuntimeError("Temp VC category not found. Set TEMP_VC_CATEGORY_ID or TEMP_VC_CATEGORY_NAME.")
-    return await guild.create_category(name=TEMP_VC_CATEGORY_NAME, reason="Obsidian bot auto-setup")
+    return await guild.create_category(name=TEMP_VC_CATEGORY_NAME, reason="Bot auto-setup")
 
 
 async def ensure_join_to_create_channel(guild: discord.Guild) -> int:

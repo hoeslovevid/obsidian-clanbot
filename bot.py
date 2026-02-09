@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 # Import config first (loads env, no heavy deps)
 from config import (
-    TOKEN, GUILD_ID, MOD_ROLE_NAME, TIMEZONE, DB_PATH,
+    TOKEN, GUILD_ID, MOD_ROLE_NAME, BOT_STATUS, TIMEZONE, DB_PATH,
     BOT_VERSION, BOT_CHANGELOG,
     TEMP_VC_CATEGORY_ID, TEMP_VC_CATEGORY_NAME, CREATE_VC_NAME,
     VOICE_IDLE_DELETE_MINUTES, VC_CLEANUP_INTERVAL_MINUTES,
@@ -50,7 +50,7 @@ from config import (
 # Re-export config for modules that import from bot (backward compat)
 __all__ = [
     "bot", "check_auto_mod", "post_vc_panel", "log_complaint_action",
-    "TOKEN", "GUILD_ID", "MOD_ROLE_NAME", "TIMEZONE", "DB_PATH",
+    "TOKEN", "GUILD_ID", "MOD_ROLE_NAME", "BOT_STATUS", "TIMEZONE", "DB_PATH",
     "BOT_VERSION", "BOT_CHANGELOG",
     "TEMP_VC_CATEGORY_ID", "TEMP_VC_CATEGORY_NAME", "CREATE_VC_NAME",
     "VOICE_PANEL_CHANNEL_ID", "VOICE_PANEL_CHANNEL_NAME",
@@ -371,11 +371,11 @@ async def post_vc_panel(guild: discord.Guild, vc: discord.VoiceChannel, owner: d
         return
 
     embed = obsidian_embed(
-        "Obsidian Dojo • Cell Control",
+        "Voice Channel Control",
         f"**Channel:** {vc.mention}\n"
         f"**Owner:** {owner.mention}\n\n"
-        "Configure your cell channel using the controls below.\n"
-        "_Obsidian Inheritors retain oversight._",
+        "Configure your voice channel using the controls below.\n"
+        "_Administrators retain oversight._",
         color=discord.Color.dark_grey(),
         client=bot,
     )
@@ -853,7 +853,7 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
     mod_role = get_mod_role(guild)
 
     # Create VC
-    vc_name = f"{member.display_name} • Obsidian Squad"
+    vc_name = f"{member.display_name} • Squad"
     overwrites = {
         guild.default_role: discord.PermissionOverwrite(view_channel=True, connect=True, speak=True),
         member: discord.PermissionOverwrite(
@@ -872,7 +872,7 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
         name=vc_name,
         category=category,
         overwrites=overwrites,
-        reason="Join-to-create Obsidian cell VC",
+        reason="Join-to-create temp VC",
     )
 
     async with aiosqlite.connect(DB_PATH) as db:
@@ -989,7 +989,7 @@ async def on_interaction(interaction: discord.Interaction):
                     try:
                         e = obsidian_embed(
                             f"Evidence Requested • {case_id}",
-                            f"**Directive from Obsidian Inheritors:**\n{question_val}\n\n"
+                            f"**Staff request:**\n{question_val}\n\n"
                             "Respond using:\n"
                             f"**/submit_complaint** (case_id: `{case_id}`)\n\n"
                             "_If your DMs are closed, you may not receive updates._",
@@ -1191,7 +1191,7 @@ async def on_interaction(interaction: discord.Interaction):
                 assert isinstance(ch, discord.TextChannel)
 
                 mod_role = get_mod_role(guild)
-                mention = mod_role.mention if mod_role else f"@{MOD_ROLE_NAME}"
+                mention = mod_role.mention if mod_role else "**Administrators**"
 
                 desc = f"**Category:** {category_val}\n\n**Details:**\n{details_val}"
                 if evidence_val.strip():
@@ -1505,7 +1505,7 @@ async def on_interaction(interaction: discord.Interaction):
                     assert isinstance(ch, discord.TextChannel)
 
                     mod_role = get_mod_role(guild)
-                    mention = mod_role.mention if mod_role else f"@{MOD_ROLE_NAME}"
+                    mention = mod_role.mention if mod_role else "**Administrators**"
 
                     desc = f"**Category:** {category_val}\n\n**Details:**\n{details_val}"
                     if evidence_val.strip():
@@ -1791,7 +1791,7 @@ async def on_interaction(interaction: discord.Interaction):
                     allowed = bool(row and int(row[0]) == member.id)
 
                 if not allowed:
-                    return await interaction.response.send_message("Only the squad owner (or Obsidian Inheritor) may do that.", ephemeral=True)
+                    return await interaction.response.send_message("Only the squad owner (or an Administrator) may do that.", ephemeral=True)
 
                 vc = interaction.guild.get_channel(vc_id)
                 if not isinstance(vc, discord.VoiceChannel):
@@ -1820,7 +1820,7 @@ async def on_interaction(interaction: discord.Interaction):
                     owner_ow.connect = True
                     overwrites[member] = owner_ow
 
-                    await vc.edit(overwrites=overwrites, reason="Obsidian VC panel action")
+                    await vc.edit(overwrites=overwrites, reason="VC panel action")
 
                 if action == "rename":
                     await interaction.response.send_modal(RenameVCModal(vc_id))
@@ -2015,10 +2015,10 @@ async def on_ready():
     # Set custom status
     activity = discord.Activity(
         type=discord.ActivityType.watching,
-        name="Over The Land of The Obsidian Oath Legion"
+        name=BOT_STATUS
     )
     await bot.change_presence(activity=activity, status=discord.Status.online)
-    print(f"[ready] Status set: Watching Over The Land of The Obsidian Oath Legion")
+    print(f"[ready] Status set: Watching {BOT_STATUS}")
 
     # Parallelize startup tasks for faster initialization
     async def setup_guild_channels():

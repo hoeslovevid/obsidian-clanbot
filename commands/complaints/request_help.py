@@ -3,7 +3,6 @@ import discord
 from discord import app_commands
 
 from utils import obsidian_embed, is_mod, display_case_status, now_utc, get_mod_role
-from utils import MOD_ROLE_NAME
 
 
 def setup(bot, group=None):
@@ -118,7 +117,7 @@ def setup(bot, group=None):
             await db.commit()
         
         mod_role = get_mod_role(guild)
-        mention = mod_role.mention if mod_role else f"@{MOD_ROLE_NAME}"
+        mention = mod_role.mention if mod_role else "**Administrators**"
         
         desc = f"**Category:** {category}\n\n**Details:**\n{details}"
         if evidence and evidence.strip():

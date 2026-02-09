@@ -41,7 +41,7 @@ class SetLimitSelect(discord.ui.Select):
         except ValueError:
             return await interaction.response.send_message("Invalid limit.", ephemeral=True)
 
-        await vc.edit(user_limit=limit, reason="Obsidian VC limit")
+        await vc.edit(user_limit=limit, reason="VC limit")
         await interaction.response.send_message("Limit updated.", ephemeral=True)
 
 

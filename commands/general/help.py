@@ -410,7 +410,7 @@ def setup(bot, group=None):
         # Add feature info
         desc += "\n**💬 Features:**\n"
         desc += "• Join-to-Create Voice Channels • Voice Channel Controls\n"
-        desc += "• Obsidian Docket (complaints) • Tickets • Suggestions\n"
+        desc += "• Complaints • Tickets • Suggestions\n"
         desc += "• Application System • Event RSVP • Trading Post • Giveaways\n"
         desc += "• LFG (Looking for Group) • Twitch stream notifications\n"
         desc += "• Achievements & Milestones • XP & Levels • Pets • Badges\n"
@@ -421,7 +421,7 @@ def setup(bot, group=None):
         desc += "\n\n**💡 Tip:** Use the dropdown below to browse commands by category, or use `/help <command>` for specific help!"
         
         embed = obsidian_embed(
-            "Obsidian Clan Bot • Command Reference",
+            "Command Reference",
             desc,
             color=discord.Color.blurple(),
             client=interaction.client,

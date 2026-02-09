@@ -10,7 +10,7 @@ _setup_in_progress = set()
 
 def setup(bot, group=None):
     """Register the setup_obsidian command."""
-    command_decorator = group.command(name="setup_obsidian", description="Create/ensure core channels and post Obsidian panels (mods only).") if group else bot.tree.command(name="setup_obsidian", description="Create/ensure core channels and post Obsidian panels (mods only).")
+    command_decorator = group.command(name="setup_obsidian", description="Create/ensure core channels and post bot panels (mods only).") if group else bot.tree.command(name="setup_obsidian", description="Create/ensure core channels and post bot panels (mods only).")
     
     @command_decorator
     async def setup_obsidian(interaction: discord.Interaction):
@@ -43,25 +43,25 @@ def setup(bot, group=None):
             await resolve_channel_id(interaction.guild, "events_channel_id", EVENTS_CHANNEL_ID, EVENTS_CHANNEL_NAME)
             await ensure_join_to_create_channel(interaction.guild)
 
-            # Post panels where command is run (Dojo Comms and Ops Board only)
+            # Post panels where command is run
             await interaction.channel.send(
                 embed=obsidian_embed(
-                    "Dojo Comms",
-                    f"Join **{CREATE_VC_NAME}** inside **{TEMP_VC_CATEGORY_NAME}** to forge a temporary cell channel.\n"
+                    "Voice Channels",
+                    f"Join **{CREATE_VC_NAME}** inside **{TEMP_VC_CATEGORY_NAME}** to create a temporary voice channel.\n"
                     f"A control panel will appear in **#{VOICE_PANEL_CHANNEL_NAME}** for the squad owner.",
                 )
             )
 
             await interaction.channel.send(
                 embed=obsidian_embed(
-                    "Ops Board",
+                    "Events",
                     "Create events with **/event_create**.\n"
                     "Times support natural phrasing (e.g., `tomorrow 8pm`).\n"
                     "RSVP buttons + reminder included.",
                 )
             )
 
-            await interaction.followup.send("Obsidian systems deployed.", ephemeral=True)
+            await interaction.followup.send("Setup complete.", ephemeral=True)
         finally:
             await asyncio.sleep(1)
             _setup_in_progress.discard(interaction_key)

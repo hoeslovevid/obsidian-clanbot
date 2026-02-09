@@ -7,7 +7,7 @@ from utils import obsidian_embed, parse_time_natural, extract_id, now_utc
 
 def setup(bot, group=None):
     """Register the event_create command."""
-    command_decorator = group.command(name="event_create", description="Create an Obsidian Ops event with RSVP + reminder.") if group else bot.tree.command(name="event_create", description="Create an Obsidian Ops event with RSVP + reminder.")
+    command_decorator = group.command(name="event_create", description="Create an event with RSVP and reminder.") if group else bot.tree.command(name="event_create", description="Create an event with RSVP and reminder.")
     
     @command_decorator
     @app_commands.describe(
