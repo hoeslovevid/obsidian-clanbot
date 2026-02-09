@@ -14,6 +14,7 @@ def load_all_commands(bot):
     warframe_group = app_commands.Group(name="warframe", description="🎮 Baro, cycles, alerts, LFG, builds, and more")
     moderation_group = app_commands.Group(name="mod", description="🛡️ Purge, lock, warn, automod, logging, and moderation tools")
     general_group = app_commands.Group(name="general", description="📋 Help, about, setup, profiles, and server tools")
+    tools_group = app_commands.Group(name="tools", description="🔧 Invest, prestige, schedule, coinflip, and utilities")
     community_group = app_commands.Group(name="community", description="👥 Events, tickets, suggestions, applications, and community features")
     music_group = app_commands.Group(name="music", description="🎵 Play, pause, skip, and manage music in voice channels")
     updates_group = app_commands.Group(name="updates", description="📝 Update log and version management")
@@ -24,6 +25,7 @@ def load_all_commands(bot):
     bot.tree.add_command(warframe_group)
     bot.tree.add_command(moderation_group)
     bot.tree.add_command(general_group)
+    bot.tree.add_command(tools_group)
     bot.tree.add_command(community_group)
     bot.tree.add_command(music_group)
     bot.tree.add_command(updates_group)
@@ -147,12 +149,12 @@ def load_all_commands(bot):
         "commands.economy.add_coins": economy_group,
         "commands.economy.manage_xp": economy_group,
         "commands.economy.xp_settings": economy_group,
-        "commands.economy.invest": economy_group,
+        "commands.economy.invest": tools_group,  # Moved: economy at 25 limit
         "commands.economy.shop": economy_group,
         "commands.economy.shop_manage": economy_group,
         "commands.economy.gambling": economy_group,
         "commands.economy.pets": economy_group,
-        "commands.economy.prestige": economy_group,
+        "commands.economy.prestige": tools_group,  # Moved: economy at 25 limit
         "commands.warframe.baro": warframe_group,
         "commands.warframe.baro_notify": warframe_group,
         "commands.warframe.lfg": warframe_group,
@@ -189,7 +191,7 @@ def load_all_commands(bot):
         "commands.moderation.kpis": moderation_group,
         "commands.moderation.raid_protection": moderation_group,
         "commands.moderation.lock": moderation_group,
-        "commands.moderation.schedule": moderation_group,
+        "commands.moderation.schedule": tools_group,  # Moved: mod at 25 limit
         "commands.general.help": general_group,
         "commands.general.about": general_group,
         "commands.general.ping": community_group,
@@ -215,7 +217,7 @@ def load_all_commands(bot):
         "commands.general.announcements": general_group,
         "commands.general.cross_server": general_group,
         "commands.general.voice_leaderboard": general_group,
-        "commands.general.coinflip": community_group,
+        "commands.general.coinflip": tools_group,  # Moved: community at 25 limit
         "commands.warframe.build": warframe_group,
         "commands.music.music": music_group,
         "commands.events.event_create": community_group,
