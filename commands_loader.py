@@ -272,32 +272,8 @@ def load_all_commands(bot):
             traceback.print_exc()
             failed_modules.append(module_name)
 
-    # Subcommand discovery: add "help" to economy and warframe groups
-    def _add_group_help(group: app_commands.Group, group_name: str):
-        lines = []
-        for cmd in group.commands:
-            if isinstance(cmd, app_commands.Command):
-                desc = (cmd.description or "No description")[:50]
-                lines.append(f"• **/{group_name} {cmd.name}** - {desc}")
-        if lines:
-            help_text = "\n".join(lines)
-            gname = group_name
-
-            @group.command(name="help", description=f"List all {group_name} subcommands")
-            async def group_help(interaction: discord.Interaction, _ht: str = help_text, _gn: str = gname):
-                from utils import obsidian_embed
-                await interaction.response.send_message(
-                    embed=obsidian_embed(
-                        f"{_gn.title()} Commands",
-                        _ht,
-                        color=discord.Color.blue(),
-                        client=interaction.client,
-                    ),
-                    ephemeral=True,
-                )
-
-    _add_group_help(economy_group, "economy")
-    _add_group_help(warframe_group, "warframe")
+    # Note: Subcommand discovery (/economy help, /warframe help) skipped to stay under
+    # Discord's 25-command-per-group limit. Use /help to explore commands by group.
 
     print(f"[commands] Loaded {loaded_count}/{len(command_modules)} command modules")
     if failed_modules:
