@@ -1,6 +1,6 @@
 """Help command with interactive group selection."""
-import discord
-from discord import app_commands
+import discord  # type: ignore
+from discord import app_commands  # type: ignore
 from typing import Optional
 
 from utils import obsidian_embed, is_mod, ECONOMY_ENABLED, COINS_PER_MESSAGE, COINS_DAILY_REWARD, MESSAGE_COOLDOWN_SECONDS, COINS_PER_MINUTE_VOICE
@@ -288,7 +288,7 @@ class HelpSelect(discord.ui.Select):
             # Use followup to edit if response is already done
             try:
                 await interaction.followup.edit_message(interaction.message.id, embed=embed, view=self.parent_view)
-            except:
+            except Exception:
                 # Fallback: try editing the original message
                 await interaction.message.edit(embed=embed, view=self.parent_view)
         else:

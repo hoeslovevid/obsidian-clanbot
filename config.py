@@ -4,7 +4,7 @@ All environment variables and config values are loaded here to keep bot.py lean
 and avoid loading heavy modules at startup.
 """
 import os
-from dotenv import load_dotenv
+from dotenv import load_dotenv  # type: ignore
 
 load_dotenv()
 
