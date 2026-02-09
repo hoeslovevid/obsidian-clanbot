@@ -25,6 +25,7 @@ def setup(bot, group=None):
     @command_decorator
     @app_commands.describe(
         steam="Your Steam profile URL or Steam ID (e.g. https://steamcommunity.com/id/username)",
+        in_game_name="Your Warframe in-game name (your server nickname will be set to this)",
         action="Link or unlink your Steam account"
     )
     @app_commands.choices(action=[
@@ -35,6 +36,7 @@ def setup(bot, group=None):
         interaction: discord.Interaction,
         action: app_commands.Choice[str],
         steam: Optional[str] = None,
+        in_game_name: Optional[str] = None,
     ):
         """Link or unlink Steam account for Warframe playtime tracking."""
         if not interaction.guild:
@@ -64,6 +66,16 @@ def setup(bot, group=None):
 
         # Link
         if not steam or not steam.strip():
+            if in_game_name and in_game_name.strip():
+                return await interaction.followup.send(
+                    embed=obsidian_embed(
+                        "❌ Steam Required",
+                        "To update your in-game name, also provide your Steam URL. Or use action:Unlink first.",
+                        color=discord.Color.red(),
+                        client=interaction.client,
+                    ),
+                    ephemeral=True,
+                )
             current = await get_linked_steam_id(interaction.guild.id, interaction.user.id)
             if current:
                 hours = await fetch_steam_warframe_playtime(current)
@@ -81,7 +93,7 @@ def setup(bot, group=None):
             return await interaction.followup.send(
                 embed=obsidian_embed(
                     "❌ Missing Steam Info",
-                    "Please provide your Steam profile URL or Steam ID.\n\n"
+                    "Please provide your Steam profile URL or Steam ID and your Warframe in-game name.\n\n"
                     "Examples:\n"
                     "• `https://steamcommunity.com/id/yourname`\n"
                     "• `https://steamcommunity.com/profiles/76561198000000000`\n"
@@ -92,6 +104,19 @@ def setup(bot, group=None):
                 ),
                 ephemeral=True,
             )
+
+        if not in_game_name or not in_game_name.strip():
+            return await interaction.followup.send(
+                embed=obsidian_embed(
+                    "❌ In-Game Name Required",
+                    "Please provide your Warframe in-game name. Your server nickname will be set to match it.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+
+        ign = in_game_name.strip()[:32]  # Discord nickname limit
 
         steam_id = await resolve_steam_id(steam.strip())
         if not steam_id:
@@ -108,7 +133,19 @@ def setup(bot, group=None):
                 ephemeral=True,
             )
 
-        await link_steam_account(interaction.guild.id, interaction.user.id, steam_id)
+        await link_steam_account(interaction.guild.id, interaction.user.id, steam_id, warframe_ign=ign)
+
+        # Set server nickname to in-game name
+        nick_set = False
+        if isinstance(interaction.user, discord.Member):
+            if interaction.guild.me.guild_permissions.manage_nicknames:
+                try:
+                    await interaction.user.edit(nick=ign, reason="Warframe account link - set to IGN")
+                    nick_set = True
+                except discord.Forbidden:
+                    pass  # User may have higher role than bot
+                except discord.HTTPException:
+                    pass  # Nickname invalid or other API error
 
         # Verify we can fetch playtime and store it
         hours = await fetch_steam_warframe_playtime(steam_id)
@@ -135,10 +172,11 @@ def setup(bot, group=None):
                         except discord.Forbidden:
                             pass
         if hours is None:
+            nick_note = f"Your nickname has been set to **{ign}**.\n\n" if nick_set else ""
             return await interaction.followup.send(
                 embed=obsidian_embed(
                     "⚠️ Linked (Playtime Private)",
-                    "Your Steam account is linked, but playtime could not be fetched.\n\n"
+                    f"{nick_note}Your Steam account is linked, but playtime could not be fetched.\n\n"
                     "**Set your Game details to Public:**\n"
                     "Steam → Profile → Edit Profile → Privacy Settings → Game details: **Public**\n\n"
                     "Roles will be assigned once your playtime is visible.",
@@ -148,11 +186,12 @@ def setup(bot, group=None):
                 ephemeral=True,
             )
 
+        nick_msg = f"Your nickname has been set to **{ign}**.\n\n" if nick_set else ""
         return await interaction.followup.send(
             embed=obsidian_embed(
-                "✅ Steam Account Linked",
+                "✅ Warframe Account Linked",
                 f"Your Steam account is linked. Warframe playtime: **{hours:,} hours**.\n\n"
-                "You'll receive roles automatically as you hit playtime milestones (if configured by moderators).",
+                f"{nick_msg}You'll receive roles automatically as you hit playtime milestones (if configured by moderators).",
                 color=discord.Color.green(),
                 client=interaction.client,
             ),

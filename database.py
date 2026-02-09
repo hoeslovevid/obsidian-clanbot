@@ -690,13 +690,13 @@ async def get_all_level_roles_up_to(guild_id: int, level: int) -> list:
 
 
 # --------------------- Warframe Achievement Roles (Steam playtime, etc.) ---------------------
-async def link_steam_account(guild_id: int, user_id: int, steam_id_64: str):
+async def link_steam_account(guild_id: int, user_id: int, steam_id_64: str, warframe_ign: Optional[str] = None):
     """Link a Discord user's Steam account for Warframe playtime tracking."""
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("""
-            INSERT OR REPLACE INTO linked_steam_accounts (guild_id, user_id, steam_id_64, linked_at)
-            VALUES (?, ?, ?, ?)
-        """, (guild_id, user_id, steam_id_64, now_utc().isoformat()))
+            INSERT OR REPLACE INTO linked_steam_accounts (guild_id, user_id, steam_id_64, warframe_ign, linked_at)
+            VALUES (?, ?, ?, ?, ?)
+        """, (guild_id, user_id, steam_id_64, warframe_ign, now_utc().isoformat()))
         await db.commit()
 
 
@@ -2104,11 +2104,21 @@ async def init_db() -> None:
             guild_id INTEGER NOT NULL,
             user_id INTEGER NOT NULL,
             steam_id_64 TEXT NOT NULL,
+            warframe_ign TEXT,
             linked_at TEXT NOT NULL,
             last_playtime_hours INTEGER,
             last_checked_at TEXT,
             PRIMARY KEY (guild_id, user_id)
         )""")
+        # Migration: add warframe_ign if missing
+        try:
+            cur = await db.execute("PRAGMA table_info(linked_steam_accounts)")
+            cols = [row[1] for row in await cur.fetchall()]
+            if "warframe_ign" not in cols:
+                await db.execute("ALTER TABLE linked_steam_accounts ADD COLUMN warframe_ign TEXT")
+                await db.commit()
+        except Exception:
+            pass
         await db.execute("""
         CREATE TABLE IF NOT EXISTS warframe_achievement_roles (
             guild_id INTEGER NOT NULL,
