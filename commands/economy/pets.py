@@ -1,6 +1,6 @@
 """Pet system commands."""
-import discord
-from discord import app_commands
+import discord  # type: ignore
+from discord import app_commands  # type: ignore
 from typing import Optional
 from datetime import datetime, timedelta, timezone
 
@@ -8,6 +8,21 @@ from utils import obsidian_embed
 from database import DB_PATH, now_utc, get_user_balance, remove_coins, add_coins
 import aiosqlite
 import dateparser
+
+# Pet images: Twemoji CDN icons + Wikimedia Commons photos for embed visualization
+# Format: (thumbnail_icon_url, large_image_url)
+PET_IMAGES = {
+    "Dog": ("https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/512x512/1f436.png", "https://upload.wikimedia.org/wikipedia/commons/thumb/2/26/YellowLabradorLooking_new.jpg/640px-YellowLabradorLooking_new.jpg"),
+    "Cat": ("https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/512x512/1f431.png", "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3a/Cat03.jpg/640px-Cat03.jpg"),
+    "Bird": ("https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/512x512/1f426.png", "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b6/Bengalese_Finch.jpg/640px-Bengalese_Finch.jpg"),
+    "Fish": ("https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/512x512/1f41f.png", "https://upload.wikimedia.org/wikipedia/commons/thumb/2/23/Georgia_Aquarium_-_Giant_Grouper.jpg/640px-Georgia_Aquarium_-_Giant_Grouper.jpg"),
+    "Rabbit": ("https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/512x512/1f430.png", "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1f/Oryctolagus_cuniculus_Rcdo.jpg/640px-Oryctolagus_cuniculus_Rcdo.jpg"),
+    "Fox": ("https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/512x512/1f98a.png", "https://upload.wikimedia.org/wikipedia/commons/thumb/4/43/Red_Fox_in_Blijdorp_Zoo.jpg/640px-Red_Fox_in_Blijdorp_Zoo.jpg"),
+    "Robot": ("https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/512x512/1f916.png", "https://upload.wikimedia.org/wikipedia/commons/thumb/4/44/Atlas_from_Boston_Dynamics.jpg/640px-Atlas_from_Boston_Dynamics.jpg"),
+    "Wolf": ("https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/512x512/1f43a.png", "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/Kolm%C3%A5rden_Wolf.jpg/640px-Kolm%C3%A5rden_Wolf.jpg"),
+    "Dragon": ("https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/512x512/1f409.png", "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9e/Bearded_dragon.jpg/640px-Bearded_dragon.jpg"),
+    "Phoenix": ("https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/512x512/1f525.png", "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/Ph%C3%B6nix-pavlensky-2.jpg/640px-Ph%C3%B6nix-pavlensky-2.jpg"),
+}
 
 # Pet leveling constants
 EXP_PER_LEVEL = 75  # XP needed = level * EXP_PER_LEVEL (e.g. 75 for L1->L2, 150 for L2->L3)
@@ -97,18 +112,30 @@ def setup(bot, group=None):
                 """)
                 pets = await cur.fetchall()
         
-        shop_text = "\n".join([
-            f"**{pet_type}** - {price} coins\n  {desc} (Max Level: {max_level})"
-            for pet_type, price, max_level, desc in pets
-        ])
-        
-        await interaction.followup.send(
-            embed=obsidian_embed(
-                "🐾 Pet Shop",
-                shop_text,
+        # Build multiple embeds: one per pet with thumbnail and refined layout
+        embeds = []
+        for pet_type, price, max_level, desc in pets:
+            icon_url, image_url = PET_IMAGES.get(pet_type, (None, None))
+            if not icon_url:
+                icon_url = "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/512x512/1f43e.png"  # paw prints fallback
+            
+            e = discord.Embed(
+                title=f"🐾 {pet_type}",
+                description=desc,
                 color=discord.Color.gold(),
-                client=interaction.client,
             )
+            e.add_field(name="💰 Price", value=f"**{price:,}** coins", inline=True)
+            e.add_field(name="📈 Max Level", value=str(max_level), inline=True)
+            e.add_field(name="\u200b", value="\u200b", inline=True)  # spacer
+            e.set_thumbnail(url=icon_url)
+            if image_url:
+                e.set_image(url=image_url)
+            e.set_footer(text=f"Use /pet_buy • Choose \"{pet_type}\" as pet type")
+            embeds.append(e)
+        
+        # Discord allows 10 embeds per message
+        await interaction.followup.send(
+            embeds=embeds[:10],
         )
     
     command_decorator = group.command(name="pet_buy", description="Buy a pet.") if group else bot.tree.command(name="pet_buy", description="Buy a pet.")
