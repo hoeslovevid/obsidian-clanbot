@@ -341,6 +341,86 @@ async def fetch_alerts() -> Optional[List[Dict[str, Any]]]:
         return None
 
 
+# Warframe Steam App ID (for playtime lookup)
+WARFRAME_STEAM_APP_ID = 230410
+
+
+async def resolve_steam_id(vanity_url_or_id: str) -> Optional[str]:
+    """
+    Resolve Steam profile URL or vanity name to 64-bit Steam ID.
+    Returns Steam ID string or None if not found/invalid.
+    """
+    key = os.environ.get("STEAM_API_KEY", "")
+    if not key:
+        logger.warning("STEAM_API_KEY not set - cannot resolve Steam IDs")
+        return None
+    stripped = (vanity_url_or_id or "").strip()
+    if not stripped:
+        return None
+    # Extract vanity name from URL: steamcommunity.com/id/USERNAME
+    vanity = None
+    if "steamcommunity.com/id/" in stripped:
+        parts = stripped.split("steamcommunity.com/id/")[-1].split("/")[0].split("?")[0]
+        if parts:
+            vanity = parts
+    elif "steamcommunity.com/profiles/" in stripped:
+        # Already a numeric ID
+        parts = stripped.split("steamcommunity.com/profiles/")[-1].split("/")[0].split("?")[0]
+        if parts.isdigit():
+            return parts
+    elif stripped.isdigit() and len(stripped) >= 17:
+        return stripped  # Already 64-bit ID
+    else:
+        vanity = stripped  # Assume vanity name
+    if not vanity:
+        return None
+    if vanity.isdigit():
+        return vanity
+    try:
+        async with aiohttp.ClientSession() as session:
+            url = f"https://api.steampowered.com/ISteamUser/ResolveVanityURL/v1/?key={key}&vanityurl={vanity}"
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status != 200:
+                    return None
+                data = await resp.json()
+                r = data.get("response", {})
+                if r.get("success") == 1 and r.get("steamid"):
+                    return r["steamid"]
+    except Exception as e:
+        logger.error(f"Error resolving Steam ID: {e}")
+    return None
+
+
+async def fetch_steam_warframe_playtime(steam_id_64: str) -> Optional[int]:
+    """
+    Fetch Warframe playtime in hours from Steam API.
+    Requires STEAM_API_KEY. Returns hours or None if unavailable.
+    Note: User must have Steam profile/game details set to public.
+    """
+    key = os.environ.get("STEAM_API_KEY", "")
+    if not key:
+        logger.warning("STEAM_API_KEY not set - cannot fetch Warframe playtime")
+        return None
+    try:
+        async with aiohttp.ClientSession() as session:
+            url = (
+                f"https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/"
+                f"?key={key}&steamid={steam_id_64}&include_played_free_games=1"
+            )
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status != 200:
+                    return None
+                data = await resp.json()
+                games = data.get("response", {}).get("games", [])
+                for g in games:
+                    if str(g.get("appid")) == str(WARFRAME_STEAM_APP_ID):
+                        minutes = int(g.get("playtime_forever", 0) or 0)
+                        return minutes // 60  # Convert to hours
+    except Exception as e:
+        logger.error(f"Error fetching Steam Warframe playtime: {e}")
+    return None
+
+
 async def fetch_twitch_stream_status(channel_name: str = "playwarframe") -> Optional[Dict[str, Any]]:
     """
     Check if a Twitch channel is live using Twitch API.

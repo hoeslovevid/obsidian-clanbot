@@ -689,6 +689,111 @@ async def get_all_level_roles_up_to(guild_id: int, level: int) -> list:
         return [{"level": row[0], "role_id": row[1]} for row in rows]
 
 
+# --------------------- Warframe Achievement Roles (Steam playtime, etc.) ---------------------
+async def link_steam_account(guild_id: int, user_id: int, steam_id_64: str):
+    """Link a Discord user's Steam account for Warframe playtime tracking."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            INSERT OR REPLACE INTO linked_steam_accounts (guild_id, user_id, steam_id_64, linked_at)
+            VALUES (?, ?, ?, ?)
+        """, (guild_id, user_id, steam_id_64, now_utc().isoformat()))
+        await db.commit()
+
+
+async def unlink_steam_account(guild_id: int, user_id: int):
+    """Unlink a user's Steam account."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "DELETE FROM linked_steam_accounts WHERE guild_id=? AND user_id=?",
+            (guild_id, user_id),
+        )
+        await db.commit()
+
+
+async def get_linked_steam_id(guild_id: int, user_id: int) -> Optional[str]:
+    """Get linked Steam 64 ID for a user, or None."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            "SELECT steam_id_64 FROM linked_steam_accounts WHERE guild_id=? AND user_id=?",
+            (guild_id, user_id),
+        )
+        row = await cur.fetchone()
+        return row[0] if row else None
+
+
+async def get_all_linked_steam_accounts(guild_id: int) -> list:
+    """Get all (user_id, steam_id_64) for a guild."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            "SELECT user_id, steam_id_64 FROM linked_steam_accounts WHERE guild_id=?",
+            (guild_id,),
+        )
+        return await cur.fetchall()
+
+
+async def update_steam_playtime(guild_id: int, user_id: int, hours: int):
+    """Update stored playtime and last checked time."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            UPDATE linked_steam_accounts
+            SET last_playtime_hours=?, last_checked_at=?
+            WHERE guild_id=? AND user_id=?
+        """, (hours, now_utc().isoformat(), guild_id, user_id))
+        await db.commit()
+
+
+async def add_warframe_achievement_role(guild_id: int, achievement_type: str, threshold_value: int, role_id: int):
+    """Add a role to assign when user reaches a playtime threshold."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            INSERT OR REPLACE INTO warframe_achievement_roles (guild_id, achievement_type, threshold_value, role_id)
+            VALUES (?, ?, ?, ?)
+        """, (guild_id, achievement_type, threshold_value, role_id))
+        await db.commit()
+
+
+async def remove_warframe_achievement_role(guild_id: int, achievement_type: str, threshold_value: int):
+    """Remove a warframe achievement role."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            DELETE FROM warframe_achievement_roles
+            WHERE guild_id=? AND achievement_type=? AND threshold_value=?
+        """, (guild_id, achievement_type, threshold_value))
+        await db.commit()
+
+
+async def get_warframe_achievement_roles(guild_id: int) -> list:
+    """Get all warframe achievement role configs: (achievement_type, threshold_value, role_id)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("""
+            SELECT achievement_type, threshold_value, role_id
+            FROM warframe_achievement_roles WHERE guild_id=?
+            ORDER BY achievement_type, threshold_value
+        """, (guild_id,))
+        return await cur.fetchall()
+
+
+async def record_warframe_achievement_unlock(guild_id: int, user_id: int, achievement_type: str, threshold_value: int):
+    """Record that a user has been assigned a role for this achievement."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            INSERT OR IGNORE INTO warframe_achievement_unlocks
+            (guild_id, user_id, achievement_type, threshold_value, unlocked_at)
+            VALUES (?, ?, ?, ?, ?)
+        """, (guild_id, user_id, achievement_type, threshold_value, now_utc().isoformat()))
+        await db.commit()
+
+
+async def has_warframe_achievement_unlock(guild_id: int, user_id: int, achievement_type: str, threshold_value: int) -> bool:
+    """Check if user has already received this achievement role."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("""
+            SELECT 1 FROM warframe_achievement_unlocks
+            WHERE guild_id=? AND user_id=? AND achievement_type=? AND threshold_value=?
+        """, (guild_id, user_id, achievement_type, threshold_value))
+        return await cur.fetchone() is not None
+
+
 # --------------------- AFK Functions ---------------------
 async def set_afk(guild_id: int, user_id: int, reason: Optional[str] = None):
     """Set a user as AFK."""
@@ -1993,6 +2098,35 @@ async def init_db() -> None:
             await db.commit()
 
         # Prestige system tables
+        # Warframe in-game achievement roles (Steam playtime, etc.)
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS linked_steam_accounts (
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            steam_id_64 TEXT NOT NULL,
+            linked_at TEXT NOT NULL,
+            last_playtime_hours INTEGER,
+            last_checked_at TEXT,
+            PRIMARY KEY (guild_id, user_id)
+        )""")
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS warframe_achievement_roles (
+            guild_id INTEGER NOT NULL,
+            achievement_type TEXT NOT NULL,
+            threshold_value INTEGER NOT NULL,
+            role_id INTEGER NOT NULL,
+            PRIMARY KEY (guild_id, achievement_type, threshold_value)
+        )""")
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS warframe_achievement_unlocks (
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            achievement_type TEXT NOT NULL,
+            threshold_value INTEGER NOT NULL,
+            unlocked_at TEXT NOT NULL,
+            PRIMARY KEY (guild_id, user_id, achievement_type, threshold_value)
+        )""")
+
         await db.execute("""
         CREATE TABLE IF NOT EXISTS user_prestige (
             guild_id INTEGER NOT NULL,

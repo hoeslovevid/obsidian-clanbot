@@ -327,6 +327,8 @@ def load_all_commands():
         "commands.warframe.alerts_notify",
         "commands.warframe.devstream_notify",
         "commands.warframe.dojo",
+        "commands.warframe.warframe_link",
+        "commands.warframe.warframe_roles",
         # Activity commands
         "commands.activity.activity",
         "commands.activity.activity_leaderboard",
@@ -379,6 +381,8 @@ def load_all_commands():
         "commands.warframe.alerts_notify": warframe_group,
         "commands.warframe.devstream_notify": warframe_group,
         "commands.warframe.dojo": warframe_group,
+        "commands.warframe.warframe_link": warframe_group,
+        "commands.warframe.warframe_roles": warframe_group,
         # Moderation commands
         "commands.moderation.purge": moderation_group,
         "commands.moderation.reaction_roles": moderation_group,

@@ -58,6 +58,7 @@ This can happen due to:
 - `MOD_ROLE_NAME` - Mod role name (default: "Obsidian Inheritor")
 
 ### Optional:
+- `STEAM_API_KEY` - Steam Web API key for Warframe playtime roles (get at https://steamcommunity.com/dev/apikey)
 - `TIMEZONE` - Timezone for event parsing (default: "America/New_York")
 - `AUTO_SETUP` - Auto-create channels (default: "true")
 - `VOICE_PANEL_CHANNEL_ID` - Voice panel channel ID

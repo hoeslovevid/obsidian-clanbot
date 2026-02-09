@@ -568,6 +568,83 @@ def setup_tasks(bot):
     async def before_baro_live_update_loop():
         await bot.wait_until_ready()
 
+    @tasks.loop(hours=6)  # Check every 6 hours for Warframe playtime role assignments
+    async def warframe_achievement_roles_loop():
+        """Assign roles based on Warframe playtime and other in-game achievements."""
+        try:
+            from database import (
+                get_all_linked_steam_accounts,
+                get_warframe_achievement_roles,
+                has_warframe_achievement_unlock,
+                record_warframe_achievement_unlock,
+                update_steam_playtime,
+            )
+            from warframe_api import fetch_steam_warframe_playtime
+
+            if not os.environ.get("STEAM_API_KEY"):
+                return
+
+            for guild in bot.guilds:
+                try:
+                    role_configs = await get_warframe_achievement_roles(guild.id)
+                    if not role_configs:
+                        continue
+
+                    linked = await get_all_linked_steam_accounts(guild.id)
+                    if not linked:
+                        continue
+
+                    for user_id, steam_id_64 in linked:
+                        try:
+                            member = guild.get_member(user_id)
+                            if not member:
+                                continue
+
+                            # Fetch fresh playtime
+                            hours = await fetch_steam_warframe_playtime(steam_id_64)
+                            if hours is None:
+                                continue
+                            await update_steam_playtime(guild.id, user_id, hours)
+
+                            # Check each playtime role config
+                            for ach_type, threshold, role_id in role_configs:
+                                if ach_type != "playtime":
+                                    continue
+                                if hours < threshold:
+                                    continue
+                                if await has_warframe_achievement_unlock(guild.id, user_id, ach_type, threshold):
+                                    continue
+
+                                role = guild.get_role(role_id)
+                                if not role:
+                                    continue
+                                if role in member.roles:
+                                    await record_warframe_achievement_unlock(guild.id, user_id, ach_type, threshold)
+                                    continue
+                                if not guild.me.guild_permissions.manage_roles:
+                                    continue
+                                if guild.me.top_role <= role:
+                                    continue
+
+                                try:
+                                    await member.add_roles(role, reason=f"Warframe playtime: {hours:,}h (≥{threshold:,}h)")
+                                    await record_warframe_achievement_unlock(guild.id, user_id, ach_type, threshold)
+                                    logger.info(f"[warframe_roles] Assigned {role.name} to {member} ({hours}h playtime)")
+                                except discord.Forbidden:
+                                    logger.warning(f"[warframe_roles] Cannot assign role to {member}")
+                                except Exception as e:
+                                    logger.error(f"[warframe_roles] Error assigning role: {e}")
+                        except Exception as e:
+                            logger.error(f"[warframe_roles] Error processing user {user_id}: {e}")
+                except Exception as e:
+                    logger.error(f"[warframe_roles] Error processing guild {guild.id}: {e}")
+        except Exception as e:
+            logger.error(f"Error in warframe_achievement_roles_loop: {e}", exc_info=True)
+
+    @warframe_achievement_roles_loop.before_loop
+    async def before_warframe_achievement_roles_loop():
+        await bot.wait_until_ready()
+
     @tasks.loop(hours=1)  # Check every hour for expired LFG posts
     async def lfg_expire_loop():
         """Auto-expire LFG posts that have passed their expiry time."""
@@ -1613,6 +1690,7 @@ def setup_tasks(bot):
         ('voice_reward_loop', voice_reward_loop),
         ('baro_check_loop', baro_check_loop),
         ('baro_live_update_loop', baro_live_update_loop),
+        ('warframe_achievement_roles_loop', warframe_achievement_roles_loop),
         ('lfg_expire_loop', lfg_expire_loop),
         ('cycle_check_loop', cycle_check_loop),
         ('invasion_check_loop', invasion_check_loop),
