@@ -10,7 +10,7 @@ import dateparser  # type: ignore
 import discord
 from discord.ext import tasks  # type: ignore
 
-from database import DB_PATH, now_utc, get_guild_setting, add_coins, add_xp, get_user_xp
+from database import DB_PATH, now_utc, get_guild_setting, set_guild_setting, add_coins, add_xp, get_user_xp
 from channels import resolve_channel_id, delete_temp_vc_and_panel
 from warframe_api import get_baro_status, get_all_cycles, fetch_invasions, fetch_archon_hunt_data, fetch_events_data, fetch_alerts, fetch_duviri_circuit
 from utils import obsidian_embed, ECONOMY_ENABLED, COINS_PER_MINUTE_VOICE, MIN_VOICE_MINUTES_FOR_REWARD, XP_ENABLED, XP_PER_MINUTE_VOICE
@@ -705,6 +705,72 @@ def setup_tasks(bot):
 
     @lfg_expire_loop.before_loop
     async def before_lfg_expire_loop():
+        await bot.wait_until_ready()
+
+    @tasks.loop(hours=6)  # Check every 6 hours for pet decay
+    async def pet_decay_reminder_loop():
+        """DM users when their pet's hunger or happiness is low."""
+        try:
+            if not bot.is_ready() or not ECONOMY_ENABLED:
+                return
+            from commands.economy.pets import _apply_decay, HUNGER_DECAY_PER_HOUR, HAPPINESS_DECAY_PER_HOUR
+
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute("""
+                    SELECT guild_id, user_id, pet_name, hunger, happiness, last_fed_at, last_played_at, created_at
+                    FROM pets
+                """)
+                pets = await cur.fetchall()
+
+            now = now_utc()
+            for guild_id, user_id, pet_name, hunger, happiness, last_fed, last_played, created_at in pets:
+                try:
+                    h = _apply_decay(hunger, last_fed, created_at, HUNGER_DECAY_PER_HOUR)
+                    hap = _apply_decay(happiness, last_played, created_at, HAPPINESS_DECAY_PER_HOUR)
+                    if h >= 30 and hap >= 30:
+                        continue
+
+                    # Check last reminder (max 1 per 12 hours)
+                    last_key = f"pet_decay_reminder_{user_id}"
+                    last_reminder = await get_guild_setting(guild_id, last_key)
+                    if last_reminder:
+                        try:
+                            last_dt = datetime.fromisoformat(last_reminder.replace("Z", "+00:00"))
+                            if (now - last_dt.replace(tzinfo=timezone.utc)).total_seconds() < 12 * 3600:
+                                continue
+                        except Exception:
+                            pass
+
+                    guild = bot.get_guild(guild_id)
+                    if not guild:
+                        continue
+                    user = guild.get_member(user_id)
+                    if not user:
+                        try:
+                            user = await bot.fetch_user(user_id)
+                        except Exception:
+                            continue
+
+                    issues = []
+                    if h < 30:
+                        issues.append(f"hunger ({h}/100)")
+                    if hap < 30:
+                        issues.append(f"happiness ({hap}/100)")
+
+                    msg = f"Your pet **{pet_name}** needs attention! Low: {', '.join(issues)}.\n\nUse `/economy pet_feed` and `/economy pet_play` to care for your pet."
+                    try:
+                        await user.send(embed=obsidian_embed("🐾 Pet Needs Care", msg, color=discord.Color.orange(), client=bot))
+                        await set_guild_setting(guild_id, last_key, now.isoformat())
+                    except discord.Forbidden:
+                        pass
+                except Exception as e:
+                    logger.debug(f"Pet decay reminder for user {user_id}: {e}")
+
+        except Exception as e:
+            logger.error(f"Error in pet_decay_reminder_loop: {e}", exc_info=True)
+
+    @pet_decay_reminder_loop.before_loop
+    async def before_pet_decay_reminder_loop():
         await bot.wait_until_ready()
 
     @tasks.loop(minutes=5)  # Check every 5 minutes for cycle changes
@@ -1726,6 +1792,7 @@ def setup_tasks(bot):
         ('baro_live_update_loop', baro_live_update_loop),
         ('warframe_achievement_roles_loop', warframe_achievement_roles_loop),
         ('lfg_expire_loop', lfg_expire_loop),
+        ('pet_decay_reminder_loop', pet_decay_reminder_loop),
         ('cycle_check_loop', cycle_check_loop),
         ('invasion_check_loop', invasion_check_loop),
         ('archon_check_loop', archon_check_loop),

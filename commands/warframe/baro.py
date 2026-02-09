@@ -105,36 +105,43 @@ def build_baro_embed(baro_data: dict, is_active: bool, client) -> discord.Embed:
             client=client,
         )
     else:
-        # Baro is not active
+        # Baro is not active - show prominent countdown
         fields = []
+        countdown_line = ""
         if activation:
             try:
                 activation_time = dateparser.parse(activation, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
                 if activation_time:
                     time_until = activation_time - datetime.now(timezone.utc)
                     if time_until.total_seconds() > 0:
-                        days = int(time_until.total_seconds() // 86400)
-                        hours = int((time_until.total_seconds() % 86400) // 3600)
-                        time_str = f"{days}d {hours}h"
+                        total_s = int(time_until.total_seconds())
+                        days = total_s // 86400
+                        hours = (total_s % 86400) // 3600
+                        mins = (total_s % 3600) // 60
+                        time_str = f"{days}d {hours}h {mins}m"
                         arrival_discord = f"<t:{int(activation_time.timestamp())}:R>"
+                        countdown_line = f"\n\n**Countdown:** {time_str} until arrival\n{arrival_discord}"
+                        fields = [
+                            ("⏰ Next Arrival", f"{time_str}\n{arrival_discord}", True),
+                            ("📍 Location", location if location != 'Unknown' else 'TBA', True),
+                        ]
                     else:
                         time_str = "Recently departed"
                         arrival_discord = "Recently departed"
+                        countdown_line = "\n\nBaro just left. Next visit in ~2 weeks."
+                        fields = [("⏰ Status", "Recently departed", True), ("📍 Location", location if location != 'Unknown' else 'TBA', True)]
                 else:
                     time_str = "Unknown"
                     arrival_discord = "Unknown"
+                    fields = [("⏰ Next Arrival", "Unknown", True), ("📍 Location", location if location != 'Unknown' else 'TBA', True)]
             except Exception:
                 time_str = "Unknown"
                 arrival_discord = "Unknown"
-            
-            fields = [
-                ("⏰ Next Arrival", f"{time_str}\n{arrival_discord}", True),
-                ("📍 Location", location if location != 'Unknown' else 'TBA', True),
-            ]
-        
+                fields = [("⏰ Next Arrival", "Unknown", True), ("📍 Location", location if location != 'Unknown' else 'TBA', True)]
+
         embed = obsidian_embed(
             "🛒 Baro Ki'Teer",
-            "🔴 **Not Currently Active**\n\nPrepare your ducats for the next visit!",
+            "🔴 **Not Currently Active**\n\nPrepare your ducats for the next visit!" + countdown_line,
             color=discord.Color.orange(),
             thumbnail="https://vignette.wikia.nocookie.net/warframe/images/4/4a/BaroKiTeer.png/revision/latest?cb=20150213150000",
             fields=fields,

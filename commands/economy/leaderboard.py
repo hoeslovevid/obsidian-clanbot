@@ -10,8 +10,15 @@ def setup(bot, group=None):
     command_decorator = group.command(name="leaderboard", description="View the top coin earners.") if group else bot.tree.command(name="leaderboard", description="View the top coin earners.")
     
     @command_decorator
-    @app_commands.describe(limit="Number of users to show (default: 10, max: 25)")
-    async def leaderboard(interaction: discord.Interaction, limit: int = 10):
+    @app_commands.describe(
+        limit="Number of users to show (default: 10, max: 25)",
+        sort_by="Sort order: by current balance or total earned"
+    )
+    @app_commands.choices(sort_by=[
+        app_commands.Choice(name="Balance (current)", value="balance"),
+        app_commands.Choice(name="Total Earned", value="total_earned"),
+    ])
+    async def leaderboard(interaction: discord.Interaction, limit: int = 10, sort_by: app_commands.Choice[str] = None):
         """Display the top coin earners."""
         # Import bot-specific functions inside to avoid circular imports
         from bot import DB_PATH
@@ -41,25 +48,32 @@ def setup(bot, group=None):
         
         if limit < 1 or limit > 25:
             limit = 10
-        
+        order_col = "total_earned" if sort_by and sort_by.value == "total_earned" else "balance"
+        sort_label = "total earned" if order_col == "total_earned" else "balance"
+
         async with aiosqlite.connect(DB_PATH) as db:
-            # Only show users with balance > 0
-            cur = await db.execute("""
+            cur = await db.execute(
+                f"""
                 SELECT user_id, balance, total_earned
                 FROM user_balances
-                WHERE guild_id=? AND balance > 0
-                ORDER BY balance DESC
+                WHERE guild_id=? AND (balance > 0 OR total_earned > 0)
+                ORDER BY {order_col} DESC
                 LIMIT ?
-            """, (interaction.guild.id, limit))
+                """,
+                (interaction.guild.id, limit),
+            )
             rows = await cur.fetchall()
 
-            # "You're here": get viewer's rank if not in top N
-            cur2 = await db.execute("""
+            # "You're here": get viewer's rank if not in top N (use same sort column)
+            cur2 = await db.execute(
+                f"""
                 SELECT COUNT(*) + 1 FROM user_balances a
-                WHERE a.guild_id=? AND a.balance > COALESCE(
-                    (SELECT b.balance FROM user_balances b WHERE b.guild_id=? AND b.user_id=?), 0
+                WHERE a.guild_id=? AND a.{order_col} > COALESCE(
+                    (SELECT b.{order_col} FROM user_balances b WHERE b.guild_id=? AND b.user_id=?), 0
                 )
-            """, (interaction.guild.id, interaction.guild.id, interaction.user.id))
+                """,
+                (interaction.guild.id, interaction.guild.id, interaction.user.id),
+            )
             user_rank_row = await cur2.fetchone()
             user_rank = user_rank_row[0] if user_rank_row else None
             in_top = any(r[0] == interaction.user.id for r in rows)
@@ -106,13 +120,20 @@ def setup(bot, group=None):
         from database import get_user_balance
         you_line = ""
         if not in_top and user_rank is not None:
-            ub = await get_user_balance(interaction.guild.id, interaction.user.id)
-            if ub > 0:
-                you_line = f"\n_You're here: **#{user_rank}** • {ub:,} coins_"
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur3 = await db.execute(
+                    "SELECT balance, total_earned FROM user_balances WHERE guild_id=? AND user_id=?",
+                    (interaction.guild.id, interaction.user.id),
+                )
+                urow = await cur3.fetchone()
+            if urow and (urow[0] or 0) + (urow[1] or 0) > 0:
+                val = urow[1] if order_col == "total_earned" else urow[0]
+                lbl = "total earned" if order_col == "total_earned" else "coins"
+                you_line = f"\n_You're here: **#{user_rank}** • {val:,} {lbl}_"
 
         embed = obsidian_embed(
             "🏆 Coin Leaderboard",
-            f"Top {len(rows)} coin earners{you_line}",
+            f"Top {len(rows)} by {sort_label}{you_line}",
             color=discord.Color.gold(),
             fields=[("Rankings", leaderboard_text.strip(), False)],
             client=interaction.client,

@@ -177,10 +177,21 @@ def setup(bot, group=None):
             view=view,
         )
     
+    async def pet_type_autocomplete(interaction: discord.Interaction, current: str):
+        """Autocomplete for pet types."""
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT pet_type FROM pet_types WHERE pet_type LIKE ? ORDER BY pet_type LIMIT 25",
+                (f"%{current}%" if current else "%",)
+            )
+            rows = await cur.fetchall()
+        return [app_commands.Choice(name=r[0], value=r[0]) for r in rows]
+
     command_decorator = group.command(name="pet_buy", description="Buy a pet.") if group else bot.tree.command(name="pet_buy", description="Buy a pet.")
     
     @command_decorator
     @app_commands.describe(pet_type="Type of pet to buy", pet_name="Name for your pet")
+    @app_commands.autocomplete(pet_type=pet_type_autocomplete)
     async def pet_buy(interaction: discord.Interaction, pet_type: str, pet_name: str):
         """Buy a pet."""
         if not interaction.guild:
@@ -561,4 +572,58 @@ def setup(bot, group=None):
                 color=discord.Color.green(),
                 client=interaction.client,
             )
+        )
+
+    command_decorator = group.command(name="pet_rename", description="Rename your pet.") if group else bot.tree.command(name="pet_rename", description="Rename your pet.")
+    
+    @command_decorator
+    @app_commands.describe(new_name="New name for your pet (2-32 characters)")
+    async def pet_rename(interaction: discord.Interaction, new_name: str):
+        """Rename your pet."""
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Invalid Context",
+                    "This command can only be used in a server.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
+        new_name = (new_name or "").strip()
+        if len(new_name) < 2 or len(new_name) > 32:
+            return await interaction.response.send_message(
+                "Pet name must be 2-32 characters.",
+                ephemeral=True
+            )
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT pet_name FROM pets WHERE guild_id=? AND user_id=?",
+                (interaction.guild.id, interaction.user.id)
+            )
+            row = await cur.fetchone()
+            if not row:
+                return await interaction.response.send_message(
+                    embed=obsidian_embed(
+                        "❌ No Pet",
+                        "You don't have a pet! Use `/pet_buy` to buy one.",
+                        color=discord.Color.red(),
+                        client=interaction.client,
+                    ),
+                    ephemeral=True
+                )
+            old_name = row[0]
+            await db.execute(
+                "UPDATE pets SET pet_name=? WHERE guild_id=? AND user_id=?",
+                (new_name[:32], interaction.guild.id, interaction.user.id)
+            )
+            await db.commit()
+        await interaction.response.send_message(
+            embed=obsidian_embed(
+                "✅ Pet Renamed",
+                f"Your pet **{old_name}** is now named **{new_name}**!",
+                color=discord.Color.green(),
+                client=interaction.client,
+            ),
+            ephemeral=True
         )

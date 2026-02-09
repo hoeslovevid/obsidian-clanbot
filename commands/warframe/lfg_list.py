@@ -6,9 +6,17 @@ from datetime import datetime, timezone
 from utils import obsidian_embed
 from database import DB_PATH
 from views import EmbedPaginator
+from commands.warframe.lfg import MISSION_TYPES
 import aiosqlite
 
 ITEMS_PER_PAGE = 5
+
+
+async def mission_type_autocomplete(interaction: discord.Interaction, current: str):
+    """Autocomplete for mission type filter."""
+    current_lower = (current or "").lower()
+    matches = [m for m in MISSION_TYPES if current_lower in m.lower()][:25]
+    return [app_commands.Choice(name=m, value=m) for m in matches]
 
 
 def setup(bot, group=None):
@@ -17,6 +25,7 @@ def setup(bot, group=None):
     
     @command_decorator
     @app_commands.describe(mission_type="Filter by mission type (optional)")
+    @app_commands.autocomplete(mission_type=mission_type_autocomplete)
     async def lfg_list(interaction: discord.Interaction, mission_type: str = None):
         """Display active LFG posts."""
         async with aiosqlite.connect(DB_PATH) as db:

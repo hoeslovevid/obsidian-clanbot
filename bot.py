@@ -580,6 +580,18 @@ async def on_message(message: discord.Message):
     if message.author.bot or not message.guild:
         return
 
+    # Bot mention for help: when user @mentions the bot, reply with quick help
+    if message.guild.me in message.mentions:
+        try:
+            help_text = (
+                "Hi! I'm the Obsidian Clan Bot. Use **`/help`** to explore commands.\n"
+                "Quick links: **`/economy balance`** · **`/warframe cycles`** · **`/general profile`**"
+            )
+            await message.reply(help_text, mention_author=False)
+            return  # Don't process economy for mention-only messages
+        except discord.Forbidden:
+            pass
+
     # Ticket enhancements: track ticket SLA / activity timestamps
     # Only do DB work if message is inside the Tickets category
     try:

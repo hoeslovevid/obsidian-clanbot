@@ -5,6 +5,21 @@ from discord import app_commands
 from utils import obsidian_embed
 from warframe_api import search_warframe_market_item, get_warframe_market_price
 
+POPULAR_ITEMS = [
+    "Mesa Prime Set", "Saryn Prime Set", "Rhino Prime Set", "Nova Prime Set",
+    "Primed Continuity", "Primed Flow", "Primed Pressure Point", "Primed Reach",
+    "Corrupted Mod", "Blind Rage", "Fleeting Expertise", "Overextended", "Narrow Minded",
+    "Ash Prime Set", "Trinity Prime Set", "Valkyr Prime Set", "Nekros Prime Set",
+    "Frost Prime Set", "Loki Prime Set", "Ember Prime Set", "Mag Prime Set",
+]
+
+
+async def item_autocomplete(interaction: discord.Interaction, current: str):
+    """Autocomplete for item names."""
+    current_lower = (current or "").lower()
+    matches = [i for i in POPULAR_ITEMS if current_lower in i.lower()][:25]
+    return [app_commands.Choice(name=m, value=m) for m in matches]
+
 
 def setup(bot, group=None):
     """Register the trade_price command."""
@@ -15,6 +30,7 @@ def setup(bot, group=None):
         item="Item name (e.g., 'Mesa Prime Set', 'Primed Continuity')",
         platform="Platform (default: PC)"
     )
+    @app_commands.autocomplete(item=item_autocomplete)
     @app_commands.choices(platform=[
         app_commands.Choice(name="PC", value="pc"),
         app_commands.Choice(name="Xbox", value="xbox"),

@@ -17,19 +17,22 @@ logger = logging.getLogger(__name__)
 
 
 async def fetch_baro_data() -> Optional[Dict[str, Any]]:
-    """Fetch Baro Ki'Teer data from Warframe World State API."""
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get("https://api.warframestat.us/pc/voidTrader", timeout=aiohttp.ClientTimeout(total=10)) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    return data
-                else:
+    """Fetch Baro Ki'Teer data from Warframe World State API. Cached for 60s."""
+    from cache_utils import get_cached
+
+    async def _fetch():
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get("https://api.warframestat.us/pc/voidTrader", timeout=aiohttp.ClientTimeout(total=10)) as response:
+                    if response.status == 200:
+                        return await response.json()
                     logger.warning(f"Warframe API returned status {response.status}")
                     return None
-    except Exception as e:
-        logger.error(f"Error fetching Baro data: {e}")
-        return None
+        except Exception as e:
+            logger.error(f"Error fetching Baro data: {e}")
+            return None
+
+    return await get_cached("warframe:baro", 60, _fetch)
 
 
 async def fetch_cycle_data(cycle_type: str) -> Optional[Dict[str, Any]]:
@@ -120,21 +123,23 @@ async def get_baro_status() -> Tuple[bool, Optional[Dict[str, Any]]]:
 
 
 async def fetch_invasions() -> Optional[list]:
-    """Fetch invasion data from Warframe World State API."""
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get("https://api.warframestat.us/pc/invasions", timeout=aiohttp.ClientTimeout(total=10)) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    # Filter out completed invasions
-                    active_invasions = [inv for inv in data if inv.get("completed", False) == False]
-                    return active_invasions
-                else:
+    """Fetch invasion data from Warframe World State API. Cached for 60s."""
+    from cache_utils import get_cached
+
+    async def _fetch():
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get("https://api.warframestat.us/pc/invasions", timeout=aiohttp.ClientTimeout(total=10)) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        return [inv for inv in data if inv.get("completed", False) == False]
                     logger.warning(f"Warframe API returned status {response.status} for invasions")
                     return None
-    except Exception as e:
-        logger.error(f"Error fetching invasion data: {e}")
-        return None
+        except Exception as e:
+            logger.error(f"Error fetching invasion data: {e}")
+            return None
+
+    return await get_cached("warframe:invasions", 60, _fetch)
 
 
 async def fetch_archon_hunt_data() -> Optional[Dict[str, Any]]:
