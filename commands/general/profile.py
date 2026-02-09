@@ -171,6 +171,26 @@ async def get_user_profile_data(guild_id: int, user_id: int) -> dict:
             data["suggestions"]["total"] = row[0] or 0
             data["suggestions"]["accepted"] = row[1] or 0
         
+        # Pet (for pet status in profile)
+        cur = await db.execute("""
+            SELECT p.pet_name, p.pet_type, p.hunger, p.happiness, p.last_fed_at, p.last_played_at, p.created_at
+            FROM pets p
+            WHERE p.guild_id=? AND p.user_id=?
+        """, (guild_id, user_id))
+        pet_row = await cur.fetchone()
+        if pet_row:
+            data["pet"] = {
+                "name": pet_row[0],
+                "type": pet_row[1],
+                "hunger": pet_row[2],
+                "happiness": pet_row[3],
+                "last_fed": pet_row[4],
+                "last_played": pet_row[5],
+                "created_at": pet_row[6],
+            }
+        else:
+            data["pet"] = None
+
         # Tickets
         cur = await db.execute("""
             SELECT 
@@ -244,6 +264,23 @@ def setup(bot, group=None):
         # Build embed
         fields = []
         
+        # Pet section (if user has a pet)
+        if profile_data.get("pet"):
+            from commands.economy.pets import _apply_decay, HUNGER_DECAY_PER_HOUR, HAPPINESS_DECAY_PER_HOUR
+            pet = profile_data["pet"]
+            hunger = _apply_decay(pet["hunger"], pet.get("last_fed"), pet.get("created_at"), HUNGER_DECAY_PER_HOUR)
+            happiness = _apply_decay(pet["happiness"], pet.get("last_played"), pet.get("created_at"), HAPPINESS_DECAY_PER_HOUR)
+            hunger_emoji = "🍽️" if hunger < 50 else "✅"
+            happy_emoji = "😢" if happiness < 50 else "😊"
+            fields.append((
+                "🐾 Pet",
+                f"**{pet['name']}** ({pet['type']})\n"
+                f"Hunger: {hunger}/100 {hunger_emoji}\n"
+                f"Happiness: {happiness}/100 {happy_emoji}\n"
+                f"_Use `/pet_feed` and `/pet_play` to care for your pet._",
+                True
+            ))
+
         # Economy section
         if profile_data["balance"] > 0 or profile_data["total_earned"] > 0:
             fields.append((
@@ -336,7 +373,10 @@ def setup(bot, group=None):
             fields=fields,
             client=interaction.client,
         )
-        
+
+        # Ephemeral when viewing own profile (private)
+        ephemeral = target_user.id == interaction.user.id
+
         # Add footer
         footer_text = f"User ID: {target_user.id}"
         if profile_data["last_activity"]:
@@ -348,5 +388,5 @@ def setup(bot, group=None):
                 pass
         embed.set_footer(text=footer_text)
         embed.set_thumbnail(url=target_user.display_avatar.url)
-        
-        await interaction.followup.send(embed=embed)
+
+        await interaction.followup.send(embed=embed, ephemeral=ephemeral)

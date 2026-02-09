@@ -272,6 +272,33 @@ def load_all_commands(bot):
             traceback.print_exc()
             failed_modules.append(module_name)
 
+    # Subcommand discovery: add "help" to economy and warframe groups
+    def _add_group_help(group: app_commands.Group, group_name: str):
+        lines = []
+        for cmd in group.commands:
+            if isinstance(cmd, app_commands.Command):
+                desc = (cmd.description or "No description")[:50]
+                lines.append(f"• **/{group_name} {cmd.name}** - {desc}")
+        if lines:
+            help_text = "\n".join(lines)
+            gname = group_name
+
+            @group.command(name="help", description=f"List all {group_name} subcommands")
+            async def group_help(interaction: discord.Interaction, _ht: str = help_text, _gn: str = gname):
+                from utils import obsidian_embed
+                await interaction.response.send_message(
+                    embed=obsidian_embed(
+                        f"{_gn.title()} Commands",
+                        _ht,
+                        color=discord.Color.blue(),
+                        client=interaction.client,
+                    ),
+                    ephemeral=True,
+                )
+
+    _add_group_help(economy_group, "economy")
+    _add_group_help(warframe_group, "warframe")
+
     print(f"[commands] Loaded {loaded_count}/{len(command_modules)} command modules")
     if failed_modules:
         print(f"[commands] WARNING: {len(failed_modules)} failed: {', '.join(failed_modules)}")

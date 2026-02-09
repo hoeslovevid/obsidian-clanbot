@@ -52,6 +52,17 @@ def setup(bot, group=None):
                 LIMIT ?
             """, (interaction.guild.id, limit))
             rows = await cur.fetchall()
+
+            # "You're here": get viewer's rank if not in top N
+            cur2 = await db.execute("""
+                SELECT COUNT(*) + 1 FROM user_balances a
+                WHERE a.guild_id=? AND a.balance > COALESCE(
+                    (SELECT b.balance FROM user_balances b WHERE b.guild_id=? AND b.user_id=?), 0
+                )
+            """, (interaction.guild.id, interaction.guild.id, interaction.user.id))
+            user_rank_row = await cur2.fetchone()
+            user_rank = user_rank_row[0] if user_rank_row else None
+            in_top = any(r[0] == interaction.user.id for r in rows)
         
         if not rows:
             # Check if there are any users at all in the database for debugging
@@ -90,10 +101,18 @@ def setup(bot, group=None):
             medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"`{i}.`"
             leaderboard_text += f"{medal} **{username}**\n"
             leaderboard_text += f"💰 {balance:,} coins • 📊 {total_earned:,} total\n\n"
-        
+
+        # "You're here" when not in top N
+        from database import get_user_balance
+        you_line = ""
+        if not in_top and user_rank is not None:
+            ub = await get_user_balance(interaction.guild.id, interaction.user.id)
+            if ub > 0:
+                you_line = f"\n_You're here: **#{user_rank}** • {ub:,} coins_"
+
         embed = obsidian_embed(
             "🏆 Coin Leaderboard",
-            f"Top {len(rows)} coin earners",
+            f"Top {len(rows)} coin earners{you_line}",
             color=discord.Color.gold(),
             fields=[("Rankings", leaderboard_text.strip(), False)],
             client=interaction.client,

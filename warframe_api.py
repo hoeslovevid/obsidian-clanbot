@@ -65,12 +65,19 @@ async def fetch_cycle_data(cycle_type: str) -> Optional[Dict[str, Any]]:
 
 
 async def get_all_cycles() -> Dict[str, Optional[Dict[str, Any]]]:
-    """Fetch all cycle data (Cetus, Fortuna, Deimos)."""
-    return {
-        'cetus': await fetch_cycle_data('cetus'),
-        'vallis': await fetch_cycle_data('vallis'),
-        'cambion': await fetch_cycle_data('cambion'),
-    }
+    """Fetch all cycle data (Cetus, Fortuna, Deimos). Cached for 60s."""
+    from cache_utils import get_cached
+
+    async def _fetch():
+        import asyncio
+        cetus, vallis, cambion = await asyncio.gather(
+            fetch_cycle_data('cetus'),
+            fetch_cycle_data('vallis'),
+            fetch_cycle_data('cambion'),
+        )
+        return {'cetus': cetus, 'vallis': vallis, 'cambion': cambion}
+
+    return await get_cached("warframe:cycles", 60, _fetch)
 
 
 async def get_baro_status() -> Tuple[bool, Optional[Dict[str, Any]]]:

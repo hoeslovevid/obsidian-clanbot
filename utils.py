@@ -33,6 +33,11 @@ XP_LEVEL_MULTIPLIER = int(os.getenv("XP_LEVEL_MULTIPLIER", "100"))
 XP_LEVEL_EXPONENT = float(os.getenv("XP_LEVEL_EXPONENT", "2.25"))  # XP needed = level^exponent * multiplier (steeper = more XP at high levels)
 
 
+def discord_timestamp(dt: datetime, style: str = "R") -> str:
+    """Format datetime as Discord timestamp. Styles: t, T, d, D, f, F, R."""
+    return f"<t:{int(dt.timestamp())}:{style}>"
+
+
 def now_utc() -> datetime:
     """Get current UTC datetime."""
     return datetime.now(timezone.utc)

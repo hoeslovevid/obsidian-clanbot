@@ -49,7 +49,7 @@ def setup(bot, group=None):
         # Confirmation for large purges
         needs_confirm = amount.lower() == "all" or (amount.lower() != "all" and int(amount) >= 10)
         if needs_confirm:
-            preview = "all messages" if amount.lower() == "all" else f"{amount} messages"
+            preview = "all unpinned messages" if amount.lower() == "all" else f"up to {amount} messages"
             embed = obsidian_embed(
                 "⚠️ Confirm Purge",
                 f"Delete **{preview}** from {interaction.channel.mention}?\n\nThis cannot be undone.",

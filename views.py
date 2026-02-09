@@ -64,6 +64,24 @@ class EmbedPaginator(discord.ui.View):
         await interaction.response.edit_message(embed=self._build_embed(), view=self)
 
 
+class RetryView(discord.ui.View):
+    """View with Retry button for flaky operations (e.g. API failures)."""
+
+    def __init__(self, retry_callback, *, timeout: float = 60):
+        super().__init__(timeout=timeout)
+        self.retry_callback = retry_callback
+
+    @discord.ui.button(label="Retry", style=discord.ButtonStyle.primary, emoji="🔄")
+    async def retry_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        for c in self.children:
+            c.disabled = True
+        try:
+            await interaction.response.edit_message(view=self)
+        except Exception:
+            pass
+        await self.retry_callback(interaction)
+
+
 class ConfirmView(discord.ui.View):
     """Reusable confirmation view with Confirm/Cancel buttons."""
 

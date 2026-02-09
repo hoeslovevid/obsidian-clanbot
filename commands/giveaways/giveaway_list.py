@@ -43,7 +43,7 @@ def setup(bot, group=None):
             return await interaction.response.send_message(
                 embed=obsidian_embed(
                     "📋 No Active Giveaways",
-                    "There are currently no active giveaways in this server.",
+                    "There are currently no active giveaways in this server.\n\nUse `/giveaways giveaway` to create one!",
                     color=discord.Color.blue(),
                     client=interaction.client,
                 ),

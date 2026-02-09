@@ -22,7 +22,7 @@ def setup(bot, group=None):
         async with aiosqlite.connect(DB_PATH) as db:
             if mission_type:
                 cur = await db.execute("""
-                    SELECT id, creator_id, mission_type, max_players, description, expires_at, created_at
+                    SELECT id, creator_id, mission_type, max_players, description, expires_at, created_at, message_id
                     FROM lfg_posts
                     WHERE guild_id=? AND channel_id=? AND status='OPEN' AND mission_type LIKE ?
                     ORDER BY created_at DESC
@@ -30,7 +30,7 @@ def setup(bot, group=None):
                 """, (interaction.guild.id, interaction.channel.id, f"%{mission_type}%"))
             else:
                 cur = await db.execute("""
-                    SELECT id, creator_id, mission_type, max_players, description, expires_at, created_at
+                    SELECT id, creator_id, mission_type, max_players, description, expires_at, created_at, message_id
                     FROM lfg_posts
                     WHERE guild_id=? AND channel_id=? AND status='OPEN'
                     ORDER BY created_at DESC
@@ -67,7 +67,7 @@ def setup(bot, group=None):
         for i in range(0, len(posts), ITEMS_PER_PAGE):
             page_posts = posts[i : i + ITEMS_PER_PAGE]
             fields = []
-            for lfg_id, creator_id, mission_type_val, max_players, description, expires_at, created_at in page_posts:
+            for lfg_id, creator_id, mission_type_val, max_players, description, expires_at, created_at, message_id in page_posts:
                 rsvp_count = counts_by_id.get(int(lfg_id), 0)
 
                 creator = interaction.guild.get_member(creator_id)
@@ -89,7 +89,10 @@ def setup(bot, group=None):
                 value += f"⏰ {time_str}\n"
                 if description:
                     value += f"📝 _{description[:60]}{'...' if len(description) > 60 else ''}_\n"
-                value += f"`ID: {lfg_id}`"
+                jump_link = ""
+                if message_id and interaction.channel.id:
+                    jump_link = f"\n[Jump to post](https://discord.com/channels/{interaction.guild.id}/{interaction.channel.id}/{message_id})"
+                value += f"`ID: {lfg_id}`{jump_link}"
 
                 fields.append((f"🎯 {mission_type_val}", value, True))
 

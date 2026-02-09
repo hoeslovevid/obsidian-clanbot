@@ -404,6 +404,86 @@ def setup(bot, group=None):
             )
         )
     
+    command_decorator = group.command(name="pet_care", description="Feed and play with your pet in one go (costs 15 coins).") if group else bot.tree.command(name="pet_care", description="Feed and play with your pet in one go (costs 15 coins).")
+
+    @command_decorator
+    async def pet_care(interaction: discord.Interaction):
+        """Batch action: feed + play with pet (costs 15 coins)."""
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Invalid Context",
+                    "This command can only be used in a server.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
+
+        await interaction.response.defer()
+
+        cost = 15
+        balance = await get_user_balance(interaction.guild.id, interaction.user.id)
+
+        if balance < cost:
+            return await interaction.followup.send(
+                embed=obsidian_embed(
+                    "❌ Insufficient Funds",
+                    f"You need {cost} coins for pet care (feed + play). You have {balance} coins.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                )
+            )
+
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute("""
+                SELECT p.hunger, p.happiness, p.experience, p.level, p.last_fed_at, p.last_played_at, p.created_at, pt.max_level
+                FROM pets p
+                JOIN pet_types pt ON p.pet_type = pt.pet_type
+                WHERE p.guild_id=? AND p.user_id=?
+            """, (interaction.guild.id, interaction.user.id))
+            row = await cur.fetchone()
+
+            if not row:
+                return await interaction.followup.send(
+                    embed=obsidian_embed(
+                        "❌ No Pet",
+                        "You don't have a pet! Use `/pet_buy` to buy one.",
+                        color=discord.Color.red(),
+                        client=interaction.client,
+                    )
+                )
+
+            hunger, happiness, exp, level, last_fed_at, last_played_at, created_at, max_level = row
+            hunger = _apply_decay(hunger, last_fed_at, created_at, HUNGER_DECAY_PER_HOUR)
+            happiness = _apply_decay(happiness, last_played_at, created_at, HAPPINESS_DECAY_PER_HOUR)
+            hunger = min(100, hunger + 20)
+            happiness = min(100, happiness + 15)
+            exp = exp + EXP_FEED + EXP_PLAY
+
+            new_level = level
+            while new_level < max_level and exp >= _exp_needed_for_level(new_level):
+                exp -= _exp_needed_for_level(new_level)
+                new_level += 1
+
+            now_str = now_utc().isoformat()
+            await remove_coins(interaction.guild.id, interaction.user.id, cost, "PET", "Pet care (feed + play)")
+            await db.execute("""
+                UPDATE pets SET hunger=?, happiness=?, experience=?, level=?, last_fed_at=?, last_played_at=?
+                WHERE guild_id=? AND user_id=?
+            """, (hunger, happiness, exp, new_level, now_str, now_str, interaction.guild.id, interaction.user.id))
+            await db.commit()
+
+        level_up_text = f"\n🎉 **Level Up!** Your pet is now level {new_level}!" if new_level > level else ""
+        await interaction.followup.send(
+            embed=obsidian_embed(
+                "🐾 Pet Cared For",
+                f"Fed and played with your pet!\n**Hunger:** {hunger}/100 • **Happiness:** {happiness}/100{level_up_text}",
+                color=discord.Color.green(),
+                client=interaction.client,
+            )
+        )
+
     command_decorator = group.command(name="pet_play", description="Play with your pet (costs 5 coins).") if group else bot.tree.command(name="pet_play", description="Play with your pet (costs 5 coins).")
     
     @command_decorator
