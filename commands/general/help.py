@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from typing import Optional
 
-from utils import obsidian_embed, is_mod, ECONOMY_ENABLED, COINS_PER_MESSAGE, MESSAGE_COOLDOWN_SECONDS, COINS_PER_MINUTE_VOICE
+from utils import obsidian_embed, is_mod, ECONOMY_ENABLED, COINS_PER_MESSAGE, COINS_DAILY_REWARD, MESSAGE_COOLDOWN_SECONDS, COINS_PER_MINUTE_VOICE
 
 
 class PageButton(discord.ui.Button):
@@ -409,17 +409,14 @@ def setup(bot, group=None):
         
         # Add feature info
         desc += "\n**💬 Features:**\n"
-        desc += "• Join-to-Create Voice Channels\n"
-        desc += "• Obsidian Docket (complaint system)\n"
-        desc += "• Voice Channel Controls\n"
-        desc += "• Application System\n"
-        desc += "• Event RSVP System\n"
-        desc += "• Trading Post\n"
-        desc += "• Giveaways\n"
-        desc += "• Achievements & Milestones"
+        desc += "• Join-to-Create Voice Channels • Voice Channel Controls\n"
+        desc += "• Obsidian Docket (complaints) • Tickets • Suggestions\n"
+        desc += "• Application System • Event RSVP • Trading Post • Giveaways\n"
+        desc += "• LFG (Looking for Group) • Twitch stream notifications\n"
+        desc += "• Achievements & Milestones • XP & Levels • Pets • Badges\n"
+        desc += "• Warframe: Baro, cycles, alerts, link account, achievement roles"
         if ECONOMY_ENABLED:
-            desc += f"\n• Economy: {COINS_PER_MESSAGE} coins/msg ({MESSAGE_COOLDOWN_SECONDS}s cooldown)"
-            desc += f"\n• Voice: {COINS_PER_MINUTE_VOICE} coins/minute"
+            desc += f"\n• Economy: {COINS_PER_MESSAGE} coins/msg, {COINS_DAILY_REWARD:,} daily, {COINS_PER_MINUTE_VOICE}/min voice ({MESSAGE_COOLDOWN_SECONDS}s msg cooldown)"
         
         desc += "\n\n**💡 Tip:** Use the dropdown below to browse commands by category, or use `/help <command>` for specific help!"
         
