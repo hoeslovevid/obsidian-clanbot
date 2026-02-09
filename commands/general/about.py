@@ -1,6 +1,6 @@
 """About command - bot description, features, and developer info."""
-import discord
-from discord import app_commands
+import discord  # type: ignore
+from discord import app_commands  # type: ignore
 
 from utils import obsidian_embed
 from config import BOT_VERSION, BOT_WEBSITE, BOT_DEVELOPER

@@ -25,8 +25,8 @@ MOD_ROLE_NAME = os.getenv("MOD_ROLE_NAME", "").strip() or None
 
 # --- Bot branding (optional) ---
 BOT_STATUS = os.getenv("BOT_STATUS", "Discord")  # Custom status text (e.g. "Watching Discord")
-BOT_WEBSITE = (os.getenv("BOT_WEBSITE", "").strip() or None)  # Link shown in /about
-BOT_DEVELOPER = os.getenv("BOT_DEVELOPER", "")  # Developer name/credit (e.g. "YourName#1234")
+BOT_WEBSITE = (os.getenv("BOT_WEBSITE", "https://obsidianoathlegion.netlify.app/").strip() or None)  # Link shown in /about
+BOT_DEVELOPER = os.getenv("BOT_DEVELOPER", "Danger!")  # Developer name/credit (e.g. "YourName#1234")
 TIMEZONE = os.getenv("TIMEZONE", "America/New_York")
 
 # --- Database ---
