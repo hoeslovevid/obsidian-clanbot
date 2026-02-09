@@ -33,6 +33,8 @@ def load_all_commands(bot):
     command_modules = [
         "commands.general.help",
         "commands.general.about",
+        "commands.general.ping",
+        "commands.general.invite",
         "commands.general.member_count",
         "commands.general.setup_obsidian",
         "commands.general.setup_docket",
@@ -183,6 +185,8 @@ def load_all_commands(bot):
         "commands.moderation.raid_protection": moderation_group,
         "commands.general.help": general_group,
         "commands.general.about": general_group,
+        "commands.general.ping": general_group,
+        "commands.general.invite": general_group,
         "commands.general.member_count": general_group,
         "commands.general.setup_obsidian": general_group,
         "commands.general.setup_docket": general_group,
