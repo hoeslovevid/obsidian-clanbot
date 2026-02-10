@@ -41,7 +41,6 @@ def setup(bot, group=None):
         
         await interaction.response.defer(ephemeral=(user is None))
         
-        # Get user achievements
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute("""
                 SELECT a.achievement_id, a.unlocked_at, ad.name, ad.description, ad.category
@@ -51,6 +50,8 @@ def setup(bot, group=None):
                 ORDER BY a.unlocked_at DESC
             """, (interaction.guild.id, target.id))
             rows = await cur.fetchall()
+            cur2 = await db.execute("SELECT COUNT(*) FROM achievement_definitions")
+            total_ach = (await cur2.fetchone())[0] or 0
         
         if not rows:
             return await interaction.followup.send(
@@ -63,27 +64,36 @@ def setup(bot, group=None):
                 ephemeral=(user is None)
             )
         
-        # Group by category
         achievements_by_category = {}
         for achievement_id, unlocked_at, name, description, category in rows:
             if category not in achievements_by_category:
                 achievements_by_category[category] = []
             achievements_by_category[category].append((name, description, unlocked_at))
         
-        # Build description
-        desc = ""
+        unlocked_count = len(rows)
+        pct = min(100, int(100 * unlocked_count / total_ach)) if total_ach > 0 else 0
+        bar_len = 10
+        filled = int(bar_len * pct / 100)
+        progress_bar = "█" * filled + "░" * (bar_len - filled)
+        
+        fields = [
+            ("📊 Progress", f"**{unlocked_count}/{total_ach}** unlocked\n`[{progress_bar}]` {pct}%", True),
+        ]
         for category, achievement_list in achievements_by_category.items():
-            desc += f"**{category.replace('_', ' ').title()}:**\n"
-            for name, description, unlocked_at in achievement_list:
-                desc += f"🏆 **{name}**\n{description}\n\n"
+            cat_text = "\n".join(f"🏆 **{name}**\n{desc}" for name, desc, _ in achievement_list[:5])
+            if len(achievement_list) > 5:
+                cat_text += f"\n_...and {len(achievement_list) - 5} more_"
+            fields.append((category.replace("_", " ").title(), cat_text[:1024], False))
         
         embed = obsidian_embed(
             f"🏆 Achievements - {target.display_name}",
-            desc[:4000],  # Discord embed limit
+            f"Unlocked achievements for {target.mention}",
             color=discord.Color.gold(),
+            thumbnail=target.display_avatar.url if target.display_avatar else None,
+            fields=fields,
+            footer=f"{unlocked_count} achievement(s) unlocked",
             client=interaction.client,
         )
-        embed.set_thumbnail(url=target.display_avatar.url if target.display_avatar else None)
         
         await interaction.followup.send(embed=embed, ephemeral=(user is None))
     

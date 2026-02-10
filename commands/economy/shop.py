@@ -4,7 +4,7 @@ from discord import app_commands
 from typing import Optional
 
 from utils import obsidian_embed, ECONOMY_ENABLED
-from database import DB_PATH, remove_coins, add_coins, get_user_balance
+from database import DB_PATH, remove_coins, add_coins
 import aiosqlite  # type: ignore
 
 
@@ -48,6 +48,12 @@ def setup(bot, group=None):
                 ORDER BY price ASC
             """, (interaction.guild.id,))
             rows = await cur.fetchall()
+            cur2 = await db.execute(
+                "SELECT balance FROM user_balances WHERE guild_id=? AND user_id=?",
+                (interaction.guild.id, interaction.user.id),
+            )
+            row = await cur2.fetchone()
+            balance = row[0] or 0 if row else 0
         
         if not rows:
             return await interaction.followup.send(
@@ -60,28 +66,36 @@ def setup(bot, group=None):
                 ephemeral=True
             )
         
-        desc = ""
-        for item_id, item_name, description, price, item_type, item_value, stock in rows:
+        item_type_emoji = {"role": "🎭", "coins": "💰", "xp": "⭐", "custom": "🎁"}
+        fields = []
+        items_text = ""
+        for item_id, item_name, description, price, item_type, item_value, stock in rows[:15]:
             stock_text = f"({stock} left)" if stock >= 0 else "(Unlimited)"
-            item_type_emoji = {
-                "role": "🎭",
-                "coins": "💰",
-                "xp": "⭐",
-                "custom": "🎁",
-            }.get(item_type, "📦")
-            
-            desc += f"{item_type_emoji} **{item_name}** - {price:,} coins {stock_text}\n"
-            desc += f"   {description}\n\n"
+            emoji = item_type_emoji.get(item_type, "📦")
+            items_text += f"{emoji} **{item_name}** — {price:,} coins {stock_text}\n"
+            items_text += f"   _{description[:80]}{'...' if len(description) > 80 else ''}_\n\n"
+        if len(rows) > 15:
+            items_text += f"_...and {len(rows) - 15} more_"
         
-        balance = await get_user_balance(interaction.guild.id, interaction.user.id)
+        bar_max = 100_000
+        pct = min(100, int(100 * balance / bar_max)) if bar_max > 0 else 0
+        bar_len = 8
+        filled = int(bar_len * pct / 100)
+        bar_str = "█" * filled + "░" * (bar_len - filled)
+        balance_line = f"**{balance:,}** coins\n`[{bar_str}]` {pct}%"
         
         embed = obsidian_embed(
             "🛒 Shop",
-            desc[:4000],
+            "Use `/economy store buy <item_name>` to purchase.",
             color=discord.Color.blue(),
+            thumbnail=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
+            fields=[
+                ("💰 Your Balance", balance_line, True),
+                ("📦 Items", items_text.strip()[:1024], False),
+            ],
+            footer=f"{len(rows)} item(s) • Use /economy store buy <item> to purchase",
             client=interaction.client,
         )
-        embed.set_footer(text=f"Your balance: {balance:,} coins • Use /buy to purchase items")
         
         await interaction.followup.send(embed=embed, ephemeral=True)
     
@@ -115,7 +129,6 @@ def setup(bot, group=None):
         
         await interaction.response.defer(ephemeral=True)
         
-        # Find item
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute("""
                 SELECT id, item_name, description, price, item_type, item_value, stock
@@ -123,6 +136,13 @@ def setup(bot, group=None):
                 WHERE guild_id=? AND item_name LIKE ? AND enabled=1
             """, (interaction.guild.id, f"%{item_name}%"))
             rows = await cur.fetchall()
+            balance_row = None
+            if rows:
+                cur2 = await db.execute(
+                    "SELECT balance FROM user_balances WHERE guild_id=? AND user_id=?",
+                    (interaction.guild.id, interaction.user.id),
+                )
+                balance_row = await cur2.fetchone()
         
         if not rows:
             return await interaction.followup.send(
@@ -158,8 +178,7 @@ def setup(bot, group=None):
                 ephemeral=True
             )
         
-        # Check balance
-        balance = await get_user_balance(interaction.guild.id, interaction.user.id)
+        balance = balance_row[0] or 0 if balance_row else 0
         if balance < price:
             return await interaction.followup.send(
                 embed=obsidian_embed(
@@ -171,7 +190,6 @@ def setup(bot, group=None):
                 ephemeral=True
             )
         
-        # Process purchase
         success = await remove_coins(
             interaction.guild.id,
             interaction.user.id,
@@ -191,17 +209,10 @@ def setup(bot, group=None):
                 ephemeral=True
             )
         
-        # Update stock if limited
-        if stock > 0:
-            async with aiosqlite.connect(DB_PATH) as db:
-                await db.execute("""
-                    UPDATE shop_items SET stock=stock-1 WHERE id=?
-                """, (item_id,))
-                await db.commit()
-        
-        # Record purchase
         from datetime import datetime, timezone
         async with aiosqlite.connect(DB_PATH) as db:
+            if stock > 0:
+                await db.execute("UPDATE shop_items SET stock=stock-1 WHERE id=?", (item_id,))
             await db.execute("""
                 INSERT INTO user_purchases (guild_id, user_id, item_id, item_name, price_paid, purchased_at)
                 VALUES (?, ?, ?, ?, ?, ?)

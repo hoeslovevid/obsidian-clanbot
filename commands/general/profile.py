@@ -40,183 +40,114 @@ async def get_user_profile_data(guild_id: int, user_id: int) -> dict:
         "equipped_badge": None,  # tuple (emoji, name)
     }
     
+    g, u = guild_id, user_id
     async with aiosqlite.connect(DB_PATH) as db:
-        # Economy data
+        # Query 1: Main stats (economy, xp, activity, warnings, reputation, title, streak) via scalar subqueries
         cur = await db.execute("""
-            SELECT balance, total_earned FROM user_balances
-            WHERE guild_id=? AND user_id=?
-        """, (guild_id, user_id))
+            SELECT
+                (SELECT balance FROM user_balances WHERE guild_id=? AND user_id=?),
+                (SELECT total_earned FROM user_balances WHERE guild_id=? AND user_id=?),
+                (SELECT xp FROM user_xp WHERE guild_id=? AND user_id=?),
+                (SELECT level FROM user_xp WHERE guild_id=? AND user_id=?),
+                (SELECT total_xp FROM user_xp WHERE guild_id=? AND user_id=?),
+                (SELECT messages_sent FROM activity_stats WHERE guild_id=? AND user_id=?),
+                (SELECT voice_minutes FROM activity_stats WHERE guild_id=? AND user_id=?),
+                (SELECT commands_used FROM activity_stats WHERE guild_id=? AND user_id=?),
+                (SELECT events_attended FROM activity_stats WHERE guild_id=? AND user_id=?),
+                (SELECT weekly_score FROM activity_stats WHERE guild_id=? AND user_id=?),
+                (SELECT monthly_score FROM activity_stats WHERE guild_id=? AND user_id=?),
+                (SELECT last_activity_date FROM activity_stats WHERE guild_id=? AND user_id=?),
+                (SELECT COUNT(*) FROM achievements WHERE guild_id=? AND user_id=?),
+                (SELECT COUNT(*) FROM warnings WHERE guild_id=? AND user_id=?),
+                (SELECT reputation_points FROM reputation WHERE guild_id=? AND user_id=?),
+                (SELECT title FROM user_titles WHERE guild_id=? AND user_id=?),
+                (SELECT streak_days FROM daily_claims WHERE guild_id=? AND user_id=?)
+        """, (g, u) * 17)
         row = await cur.fetchone()
         if row:
             data["balance"] = row[0] or 0
             data["total_earned"] = row[1] or 0
-        
-        # XP data
-        cur = await db.execute("""
-            SELECT xp, level, total_xp FROM user_xp
-            WHERE guild_id=? AND user_id=?
-        """, (guild_id, user_id))
-        row = await cur.fetchone()
-        if row:
-            data["xp"] = row[0] or 0
-            data["level"] = row[1] or 0
-            data["total_xp"] = row[2] or 0
-        
-        # Activity stats
-        cur = await db.execute("""
-            SELECT messages_sent, voice_minutes, commands_used, events_attended,
-                   weekly_score, monthly_score, last_activity_date
-            FROM activity_stats
-            WHERE guild_id=? AND user_id=?
-        """, (guild_id, user_id))
-        row = await cur.fetchone()
-        if row:
-            data["messages_sent"] = row[0] or 0
-            data["voice_minutes"] = row[1] or 0
-            data["commands_used"] = row[2] or 0
-            data["events_attended"] = row[3] or 0
-            data["weekly_score"] = row[4] or 0
-            data["monthly_score"] = row[5] or 0
-            data["last_activity"] = row[6]
-        
-        # Achievements
-        cur = await db.execute("""
-            SELECT COUNT(*) FROM achievements
-            WHERE guild_id=? AND user_id=?
-        """, (guild_id, user_id))
-        row = await cur.fetchone()
-        data["achievements_count"] = row[0] if row else 0
-        
-        # Get recent achievements
+            data["xp"] = row[2] or 0
+            data["level"] = row[3] or 0
+            data["total_xp"] = row[4] or 0
+            data["messages_sent"] = row[5] or 0
+            data["voice_minutes"] = row[6] or 0
+            data["commands_used"] = row[7] or 0
+            data["events_attended"] = row[8] or 0
+            data["weekly_score"] = row[9] or 0
+            data["monthly_score"] = row[10] or 0
+            data["last_activity"] = row[11]
+            data["achievements_count"] = row[12] or 0
+            data["warnings"] = row[13] or 0
+            data["reputation"] = row[14] or 0
+            data["title"] = row[15] if row[15] else None
+            data["daily_streak"] = row[16] or 0
+
+        # Query 2: Recent achievements + badge + pet + apps/suggestions/tickets/complaints (parallel fetches in one connection)
         cur = await db.execute("""
             SELECT a.achievement_id, a.unlocked_at, ad.name, ad.description
             FROM achievements a
             LEFT JOIN achievement_definitions ad ON a.achievement_id = ad.achievement_id
             WHERE a.guild_id=? AND a.user_id=?
-            ORDER BY a.unlocked_at DESC
-            LIMIT 5
-        """, (guild_id, user_id))
+            ORDER BY a.unlocked_at DESC LIMIT 5
+        """, (g, u))
         data["achievements"] = await cur.fetchall()
-        
-        # Warnings
-        cur = await db.execute("""
-            SELECT COUNT(*) FROM warnings
-            WHERE guild_id=? AND user_id=?
-        """, (guild_id, user_id))
-        row = await cur.fetchone()
-        data["warnings"] = row[0] if row else 0
-        
-        # Reputation
-        cur = await db.execute("""
-            SELECT reputation_points FROM reputation
-            WHERE guild_id=? AND user_id=?
-        """, (guild_id, user_id))
-        row = await cur.fetchone()
-        data["reputation"] = row[0] if row else 0
 
-        # Title (optional)
         cur = await db.execute("""
-            SELECT title FROM user_titles
-            WHERE guild_id=? AND user_id=?
-        """, (guild_id, user_id))
-        row = await cur.fetchone()
-        data["title"] = row[0] if row and row[0] else None
-
-        # Equipped badge (optional)
-        cur = await db.execute("""
-            SELECT bd.icon_emoji, bd.name
-            FROM user_badges ub
+            SELECT bd.icon_emoji, bd.name FROM user_badges ub
             LEFT JOIN badge_definitions bd ON ub.badge_id = bd.badge_id
             WHERE ub.guild_id=? AND ub.user_id=? AND ub.is_equipped=1
-            ORDER BY ub.unlocked_at DESC
-            LIMIT 1
-        """, (guild_id, user_id))
-        row = await cur.fetchone()
-        if row:
-            data["equipped_badge"] = (row[0], row[1])
-        
-        # Daily streak
+            ORDER BY ub.unlocked_at DESC LIMIT 1
+        """, (g, u))
+        brow = await cur.fetchone()
+        if brow:
+            data["equipped_badge"] = (brow[0], brow[1])
+
         cur = await db.execute("""
-            SELECT streak_days FROM daily_claims
-            WHERE guild_id=? AND user_id=?
-        """, (guild_id, user_id))
-        row = await cur.fetchone()
-        data["daily_streak"] = row[0] if row else 0
-        
-        # Applications
-        cur = await db.execute("""
-            SELECT 
-                COUNT(*) as total,
-                SUM(CASE WHEN status='APPROVED' THEN 1 ELSE 0 END) as approved,
-                SUM(CASE WHEN status='PENDING' THEN 1 ELSE 0 END) as pending
-            FROM applications
-            WHERE guild_id=? AND user_id=?
-        """, (guild_id, user_id))
-        row = await cur.fetchone()
-        if row:
-            data["applications"]["total"] = row[0] or 0
-            data["applications"]["approved"] = row[1] or 0
-            data["applications"]["pending"] = row[2] or 0
-        
-        # Suggestions
-        cur = await db.execute("""
-            SELECT 
-                COUNT(*) as total,
-                SUM(CASE WHEN status='ACCEPTED' THEN 1 ELSE 0 END) as accepted
-            FROM suggestions
-            WHERE guild_id=? AND user_id=?
-        """, (guild_id, user_id))
-        row = await cur.fetchone()
-        if row:
-            data["suggestions"]["total"] = row[0] or 0
-            data["suggestions"]["accepted"] = row[1] or 0
-        
-        # Pet (for pet status in profile)
-        cur = await db.execute("""
-            SELECT p.pet_name, p.pet_type, p.hunger, p.happiness, p.last_fed_at, p.last_played_at, p.created_at
-            FROM pets p
-            WHERE p.guild_id=? AND p.user_id=?
-        """, (guild_id, user_id))
+            SELECT pet_name, pet_type, hunger, happiness, last_fed_at, last_played_at, created_at
+            FROM pets WHERE guild_id=? AND user_id=?
+        """, (g, u))
         pet_row = await cur.fetchone()
         if pet_row:
-            data["pet"] = {
-                "name": pet_row[0],
-                "type": pet_row[1],
-                "hunger": pet_row[2],
-                "happiness": pet_row[3],
-                "last_fed": pet_row[4],
-                "last_played": pet_row[5],
-                "created_at": pet_row[6],
-            }
+            data["pet"] = {"name": pet_row[0], "type": pet_row[1], "hunger": pet_row[2], "happiness": pet_row[3],
+                          "last_fed": pet_row[4], "last_played": pet_row[5], "created_at": pet_row[6]}
         else:
             data["pet"] = None
 
-        # Tickets
+        # Query 4: Applications, suggestions, tickets, complaints
         cur = await db.execute("""
-            SELECT 
-                COUNT(*) as total,
-                SUM(CASE WHEN status='open' THEN 1 ELSE 0 END) as open
-            FROM tickets
-            WHERE guild_id=? AND user_id=?
-        """, (guild_id, user_id))
+            SELECT COUNT(*), COALESCE(SUM(CASE WHEN status='APPROVED' THEN 1 ELSE 0 END),0),
+                   COALESCE(SUM(CASE WHEN status='PENDING' THEN 1 ELSE 0 END),0)
+            FROM applications WHERE guild_id=? AND user_id=?
+        """, (g, u))
         row = await cur.fetchone()
         if row:
-            data["tickets"]["total"] = row[0] or 0
-            data["tickets"]["open"] = row[1] or 0
-        
-        # Complaints
+            data["applications"] = {"total": row[0] or 0, "approved": row[1] or 0, "pending": row[2] or 0}
+
         cur = await db.execute("""
-            SELECT 
-                COUNT(*) as total,
-                SUM(CASE WHEN status='OPEN' THEN 1 ELSE 0 END) as open
-            FROM complaints
-            WHERE guild_id=? AND user_id=?
-        """, (guild_id, user_id))
+            SELECT COUNT(*), COALESCE(SUM(CASE WHEN status='ACCEPTED' THEN 1 ELSE 0 END),0)
+            FROM suggestions WHERE guild_id=? AND user_id=?
+        """, (g, u))
         row = await cur.fetchone()
         if row:
-            data["complaints"]["total"] = row[0] or 0
-            data["complaints"]["open"] = row[1] or 0
-    
+            data["suggestions"] = {"total": row[0] or 0, "accepted": row[1] or 0}
+
+        cur = await db.execute("""
+            SELECT COUNT(*), COALESCE(SUM(CASE WHEN status='open' THEN 1 ELSE 0 END),0)
+            FROM tickets WHERE guild_id=? AND user_id=?
+        """, (g, u))
+        row = await cur.fetchone()
+        if row:
+            data["tickets"] = {"total": row[0] or 0, "open": row[1] or 0}
+
+        cur = await db.execute("""
+            SELECT COUNT(*), COALESCE(SUM(CASE WHEN status='OPEN' THEN 1 ELSE 0 END),0)
+            FROM complaints WHERE guild_id=? AND user_id=?
+        """, (g, u))
+        row = await cur.fetchone()
+        if row:
+            data["complaints"] = {"total": row[0] or 0, "open": row[1] or 0}
+
     return data
 
 
