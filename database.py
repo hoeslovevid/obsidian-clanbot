@@ -2144,6 +2144,14 @@ async def init_db() -> None:
                 )
             await db.commit()
 
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS pet_battle_cooldowns (
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            last_battle_at TEXT NOT NULL,
+            PRIMARY KEY (guild_id, user_id)
+        )""")
+
         # Prestige system tables
         # Warframe in-game achievement roles (Steam playtime, etc.)
         await db.execute("""

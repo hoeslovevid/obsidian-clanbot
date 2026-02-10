@@ -3,11 +3,32 @@ import discord  # type: ignore
 from discord import app_commands  # type: ignore
 from typing import Optional
 from datetime import datetime, timedelta, timezone
+import random
 
 from utils import obsidian_embed
 from database import DB_PATH, now_utc, get_user_balance, remove_coins, add_coins
 import aiosqlite
 import dateparser
+
+# Pet type battle bonuses (attack_mult, defense_mult)
+PET_TYPE_BONUSES = {
+    "Dragon": (1.15, 1.0),
+    "Wolf": (1.1, 1.05),
+    "Phoenix": (1.12, 0.98),
+    "Robot": (1.0, 1.15),
+    "Fox": (1.08, 1.02),
+    "Cat": (1.05, 1.03),
+    "Rabbit": (0.95, 1.08),
+}
+DEFAULT_BONUS = (1.0, 1.0)
+
+BATTLE_COOLDOWN_MINUTES = 5
+MIN_HUNGER_TO_BATTLE = 20
+MIN_HAPPINESS_TO_BATTLE = 20
+BATTLE_WINNER_COINS_BASE = 15
+BATTLE_LOSER_COINS = 5
+BATTLE_XP_WINNER = 20
+BATTLE_XP_LOSER = 8
 
 # Pet icons: Twemoji CDN (reliable, Discord-friendly)
 PET_ICONS = {
@@ -115,6 +136,197 @@ def _apply_decay(
     except Exception:
         pass
     return current
+
+
+def _battle_stats(level: int, pet_type: str) -> tuple[int, int, int]:
+    """Return (hp, attack, defense) for battle."""
+    hp = 30 + level * 4
+    attack = 3 + level
+    defense = 1 + level // 2
+    atk_mult, def_mult = PET_TYPE_BONUSES.get(pet_type, DEFAULT_BONUS)
+    return hp, int(attack * atk_mult), int(defense * def_mult)
+
+
+def _resolve_battle(
+    p1: tuple[str, str, int, int, int, int, int],
+    p2: tuple[str, str, int, int, int, int, int],
+) -> tuple[int, list[str]]:
+    """
+    Resolve a battle. p1/p2 = (pet_name, pet_type, level, hp, attack, defense, user_id).
+    Returns (winner_user_id, log_lines).
+    """
+    name1, type1, lv1, hp1, atk1, def1, uid1 = p1
+    name2, type2, lv2, hp2, atk2, def2, uid2 = p2
+    log = []
+
+    while hp1 > 0 and hp2 > 0:
+        # P1 attacks P2
+        dmg = max(1, int(atk1 * random.uniform(0.85, 1.15) - def2 * 0.4))
+        hp2 -= dmg
+        log.append(f"**{name1}** hits **{name2}** for {dmg} damage!")
+        if hp2 <= 0:
+            break
+        # P2 attacks P1
+        dmg = max(1, int(atk2 * random.uniform(0.85, 1.15) - def1 * 0.4))
+        hp1 -= dmg
+        log.append(f"**{name2}** hits **{name1}** for {dmg} damage!")
+
+    winner = uid1 if hp2 <= 0 else uid2
+    return winner, log
+
+
+class PetBattleChallengeView(discord.ui.View):
+    """View with Accept/Decline for pet battle challenges."""
+
+    def __init__(self, challenger_id: int, defender_id: int, guild_id: int, challenger_name: str, defender_name: str, timeout: float = 60):
+        super().__init__(timeout=timeout)
+        self.challenger_id = challenger_id
+        self.defender_id = defender_id
+        self.guild_id = guild_id
+        self.challenger_name = challenger_name
+        self.defender_name = defender_name
+        self.resolved = False
+
+    @discord.ui.button(label="Accept", style=discord.ButtonStyle.success, emoji="⚔️")
+    async def accept_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.defender_id:
+            return await interaction.response.send_message("Only the challenged player can accept.", ephemeral=True)
+        if self.resolved:
+            return await interaction.response.send_message("This challenge was already resolved.", ephemeral=True)
+        self.resolved = True
+        for c in self.children:
+            c.disabled = True
+        await interaction.response.edit_message(view=self)
+
+        # Resolve battle
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute("""
+                SELECT pet_name, pet_type, level, hunger, happiness, last_fed_at, last_played_at, created_at
+                FROM pets WHERE guild_id=? AND user_id=?
+            """, (self.guild_id, self.challenger_id))
+            row1 = await cur.fetchone()
+            cur = await db.execute("""
+                SELECT pet_name, pet_type, level, hunger, happiness, last_fed_at, last_played_at, created_at
+                FROM pets WHERE guild_id=? AND user_id=?
+            """, (self.guild_id, self.defender_id))
+            row2 = await cur.fetchone()
+
+        if not row1 or not row2:
+            return await interaction.followup.send("One or both pets are no longer available.", ephemeral=True)
+
+        n1, t1, lv1, h1, hp1, lf1, lp1, c1 = row1
+        n2, t2, lv2, h2, hp2, lf2, lp2, c2 = row2
+
+        h1_eff = _apply_decay(h1, lf1, c1, HUNGER_DECAY_PER_HOUR)
+        hp1_eff = _apply_decay(hp1, lp1, c1, HAPPINESS_DECAY_PER_HOUR)
+        h2_eff = _apply_decay(h2, lf2, c2, HUNGER_DECAY_PER_HOUR)
+        hp2_eff = _apply_decay(hp2, lp2, c2, HAPPINESS_DECAY_PER_HOUR)
+
+        if h1_eff < MIN_HUNGER_TO_BATTLE or hp1_eff < MIN_HAPPINESS_TO_BATTLE:
+            return await interaction.followup.send(
+                f"{self.challenger_name}'s pet is too hungry or unhappy to battle (need {MIN_HUNGER_TO_BATTLE}+ hunger, {MIN_HAPPINESS_TO_BATTLE}+ happiness)."
+            )
+        if h2_eff < MIN_HUNGER_TO_BATTLE or hp2_eff < MIN_HAPPINESS_TO_BATTLE:
+            return await interaction.followup.send(
+                f"{self.defender_name}'s pet is too hungry or unhappy to battle."
+            )
+
+        hp_a, atk_a, def_a = _battle_stats(lv1, t1)
+        hp_b, atk_b, def_b = _battle_stats(lv2, t2)
+
+        p1 = (n1, t1, lv1, hp_a, atk_a, def_a, self.challenger_id)
+        p2 = (n2, t2, lv2, hp_b, atk_b, def_b, self.defender_id)
+        winner_uid, log_lines = _resolve_battle(p1, p2)
+
+        loser_uid = self.defender_id if winner_uid == self.challenger_id else self.challenger_id
+        winner_name = self.challenger_name if winner_uid == self.challenger_id else self.defender_name
+        loser_name = self.defender_name if loser_uid == self.defender_id else self.challenger_name
+
+        # Rewards: coins and XP
+        coins_win = BATTLE_WINNER_COINS_BASE + (lv1 + lv2)  # Scale slightly with combined level
+        await add_coins(self.guild_id, winner_uid, coins_win, "PET_BATTLE", "Won pet battle")
+        await add_coins(self.guild_id, loser_uid, BATTLE_LOSER_COINS, "PET_BATTLE", "Lost pet battle")
+
+        async with aiosqlite.connect(DB_PATH) as db:
+            now_str = now_utc().isoformat()
+            # Winner XP
+            cur = await db.execute("SELECT experience, level FROM pets WHERE guild_id=? AND user_id=?", (self.guild_id, winner_uid))
+            row = await cur.fetchone()
+            if row:
+                exp, lvl = row
+                exp += BATTLE_XP_WINNER
+                exp_needed = _exp_needed_for_level(lvl)
+                while exp >= exp_needed:
+                    exp -= exp_needed
+                    lvl += 1
+                    exp_needed = _exp_needed_for_level(lvl)
+                cur2 = await db.execute("SELECT max_level FROM pet_types pt JOIN pets p ON p.pet_type=pt.pet_type WHERE p.guild_id=? AND p.user_id=?", (self.guild_id, winner_uid))
+                max_lv = (await cur2.fetchone())[0]
+                lvl = min(lvl, max_lv)
+                await db.execute("UPDATE pets SET experience=?, level=? WHERE guild_id=? AND user_id=?", (exp, lvl, self.guild_id, winner_uid))
+            # Loser XP
+            cur = await db.execute("SELECT experience, level FROM pets WHERE guild_id=? AND user_id=?", (self.guild_id, loser_uid))
+            row = await cur.fetchone()
+            if row:
+                exp, lvl = row
+                exp += BATTLE_XP_LOSER
+                exp_needed = _exp_needed_for_level(lvl)
+                while exp >= exp_needed:
+                    exp -= exp_needed
+                    lvl += 1
+                    exp_needed = _exp_needed_for_level(lvl)
+                cur2 = await db.execute("SELECT max_level FROM pet_types pt JOIN pets p ON p.pet_type=pt.pet_type WHERE p.guild_id=? AND p.user_id=?", (self.guild_id, loser_uid))
+                max_lv = (await cur2.fetchone())[0]
+                lvl = min(lvl, max_lv)
+                await db.execute("UPDATE pets SET experience=?, level=? WHERE guild_id=? AND user_id=?", (exp, lvl, self.guild_id, loser_uid))
+            # Cooldowns
+            await db.execute("""
+                INSERT OR REPLACE INTO pet_battle_cooldowns (guild_id, user_id, last_battle_at)
+                VALUES (?, ?, ?), (?, ?, ?)
+            """, (self.guild_id, self.challenger_id, now_str, self.guild_id, self.defender_id, now_str))
+            await db.commit()
+
+        log_text = "\n".join(log_lines[-6:])  # Last 6 lines
+        if len(log_lines) > 6:
+            log_text = "..." + log_text
+        result_embed = obsidian_embed(
+            "⚔️ Pet Battle Result",
+            f"**{winner_name}** wins!\n\n{log_text}\n\n"
+            f"🏆 **{winner_name}** +{coins_win} coins, +{BATTLE_XP_WINNER} XP\n"
+            f"💔 **{loser_name}** +{BATTLE_LOSER_COINS} coins, +{BATTLE_XP_LOSER} XP",
+            color=discord.Color.green() if winner_uid == self.challenger_id else discord.Color.blue(),
+            client=interaction.client,
+        )
+        await interaction.followup.send(embed=result_embed)
+
+    @discord.ui.button(label="Decline", style=discord.ButtonStyle.secondary)
+    async def decline_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.defender_id:
+            return await interaction.response.send_message("Only the challenged player can decline.", ephemeral=True)
+        if self.resolved:
+            return await interaction.response.send_message("Already resolved.", ephemeral=True)
+        self.resolved = True
+        for c in self.children:
+            c.disabled = True
+        await interaction.response.edit_message(
+            content=f"**{self.defender_name}** declined the pet battle challenge.",
+            embed=None,
+            view=self,
+        )
+
+    async def on_timeout(self):
+        for c in self.children:
+            c.disabled = True
+        if not self.resolved:
+            self.resolved = True
+            try:
+                await self.message.edit(
+                    content="⏰ Challenge timed out.",
+                    embed=None,
+                    view=self,
+                )
+            except Exception:
+                pass
 
 
 def setup(bot, group=None):
@@ -634,3 +846,91 @@ def setup(bot, group=None):
             ),
             ephemeral=True
         )
+
+    command_decorator = group.command(name="pet_battle", description="Challenge another user's pet to a battle!") if group else bot.tree.command(name="pet_battle", description="Challenge another user's pet to a battle!")
+
+    @command_decorator
+    @app_commands.describe(opponent="The user whose pet you want to challenge")
+    async def pet_battle(interaction: discord.Interaction, opponent: discord.Member):
+        """Challenge another user's pet to a battle."""
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=obsidian_embed("❌ Invalid Context", "This can only be used in a server.", color=discord.Color.red(), client=interaction.client),
+                ephemeral=True,
+            )
+        if opponent.id == interaction.user.id:
+            return await interaction.response.send_message("You can't battle your own pet!", ephemeral=True)
+        if opponent.bot:
+            return await interaction.response.send_message("You can't challenge a bot's pet!", ephemeral=True)
+
+        await interaction.response.defer()
+
+        async with aiosqlite.connect(DB_PATH) as db:
+            # Check challenger has pet
+            cur = await db.execute("""
+                SELECT pet_name, pet_type, level, hunger, happiness, last_fed_at, last_played_at, created_at
+                FROM pets WHERE guild_id=? AND user_id=?
+            """, (interaction.guild.id, interaction.user.id))
+            row1 = await cur.fetchone()
+            if not row1:
+                return await interaction.followup.send(
+                    embed=obsidian_embed("❌ No Pet", "You need a pet to battle! Use `/pet_buy` to get one.", color=discord.Color.red(), client=interaction.client),
+                )
+            # Check defender has pet
+            cur = await db.execute("""
+                SELECT pet_name FROM pets WHERE guild_id=? AND user_id=?
+            """, (interaction.guild.id, opponent.id))
+            if not await cur.fetchone():
+                return await interaction.followup.send(
+                    embed=obsidian_embed("❌ No Opponent Pet", f"{opponent.display_name} doesn't have a pet.", color=discord.Color.red(), client=interaction.client),
+                )
+            # Cooldown check
+            now_str = now_utc().isoformat()
+            cur = await db.execute(
+                "SELECT last_battle_at FROM pet_battle_cooldowns WHERE guild_id=? AND user_id=?",
+                (interaction.guild.id, interaction.user.id),
+            )
+            cd_row = await cur.fetchone()
+            if cd_row:
+                try:
+                    last = dateparser.parse(cd_row[0], settings={"TIMEZONE": "UTC", "RETURN_AS_TIMEZONE_AWARE": True})
+                    if last:
+                        mins = (datetime.now(timezone.utc) - last).total_seconds() / 60
+                        if mins < BATTLE_COOLDOWN_MINUTES:
+                            left = int(BATTLE_COOLDOWN_MINUTES - mins)
+                            return await interaction.followup.send(
+                                embed=obsidian_embed("⏳ Cooldown", f"You can battle again in {left} minutes.", color=discord.Color.orange(), client=interaction.client),
+                            )
+                except Exception:
+                    pass
+
+        n1, t1, lv1, h1, hp1, lf1, lp1, c1 = row1
+        h1_eff = _apply_decay(h1, lf1, c1, HUNGER_DECAY_PER_HOUR)
+        hp1_eff = _apply_decay(hp1, lp1, c1, HAPPINESS_DECAY_PER_HOUR)
+        if h1_eff < MIN_HUNGER_TO_BATTLE or hp1_eff < MIN_HAPPINESS_TO_BATTLE:
+            return await interaction.followup.send(
+                embed=obsidian_embed(
+                    "🐾 Pet Too Tired",
+                    f"Your pet needs at least {MIN_HUNGER_TO_BATTLE} hunger and {MIN_HAPPINESS_TO_BATTLE} happiness to battle. Feed and play with it first!",
+                    color=discord.Color.orange(),
+                    client=interaction.client,
+                ),
+            )
+
+        view = PetBattleChallengeView(
+            challenger_id=interaction.user.id,
+            defender_id=opponent.id,
+            guild_id=interaction.guild.id,
+            challenger_name=interaction.user.display_name,
+            defender_name=opponent.display_name,
+        )
+        embed = obsidian_embed(
+            "⚔️ Pet Battle Challenge",
+            f"**{interaction.user.display_name}** challenges **{opponent.display_name}** to a pet battle!\n\n"
+            f"Challenger's pet: **{n1}** ({t1}) Lv.{lv1}\n\n"
+            f"{opponent.display_name}, click **Accept** to fight or **Decline** to back out.",
+            color=discord.Color.gold(),
+            client=interaction.client,
+        )
+        msg = await interaction.followup.send(embed=embed, view=view)
+        view.message = msg
