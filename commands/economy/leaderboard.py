@@ -65,8 +65,14 @@ def setup(bot, group=None):
             )
             rows = await cur.fetchall()
 
-            # "You're here": get viewer's rank if not in top N (use same sort column)
+            # Get total count (users with economy activity) in same connection
             cur2 = await db.execute(
+                "SELECT COUNT(*) FROM user_balances WHERE guild_id=? AND (balance > 0 OR total_earned > 0)",
+                (interaction.guild.id,),
+            )
+            total_count = (await cur2.fetchone())[0]
+
+            cur3 = await db.execute(
                 f"""
                 SELECT COUNT(*) + 1 FROM user_balances a
                 WHERE a.guild_id=? AND a.{order_col} > COALESCE(
@@ -75,17 +81,20 @@ def setup(bot, group=None):
                 """,
                 (interaction.guild.id, interaction.guild.id, interaction.user.id),
             )
-            user_rank_row = await cur2.fetchone()
+            user_rank_row = await cur3.fetchone()
             user_rank = user_rank_row[0] if user_rank_row else None
             in_top = any(r[0] == interaction.user.id for r in rows)
+
+            # Get viewer's balance/total for "You're here" in same connection
+            urow = None
+            if not in_top and user_rank is not None:
+                cur4 = await db.execute(
+                    "SELECT balance, total_earned FROM user_balances WHERE guild_id=? AND user_id=?",
+                    (interaction.guild.id, interaction.user.id),
+                )
+                urow = await cur4.fetchone()
         
         if not rows:
-            # Check if there are any users at all in the database for debugging
-            async with aiosqlite.connect(DB_PATH) as db:
-                debug_cur = await db.execute("""
-                    SELECT COUNT(*) FROM user_balances WHERE guild_id=?
-                """, (interaction.guild.id,))
-                total_count = (await debug_cur.fetchone())[0]
             
             if total_count == 0:
                 return await interaction.followup.send(
@@ -108,35 +117,35 @@ def setup(bot, group=None):
                     ephemeral=True
                 )
         
-        # Build leaderboard entries
+        # Build leaderboard entries with inline fields for top 3
         leaderboard_text = ""
         for i, (user_id, balance, total_earned) in enumerate(rows, 1):
             user = interaction.guild.get_member(user_id)
             username = user.display_name if user else f"User {user_id}"
             medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"`{i}.`"
-            leaderboard_text += f"{medal} **{username}**\n"
-            leaderboard_text += f"💰 {balance:,} coins • 📊 {total_earned:,} total\n\n"
+            leaderboard_text += f"{medal} **{username}** — 💰 {balance:,} • 📊 {total_earned:,}\n"
 
-        # "You're here" when not in top N
-        from database import get_user_balance
+        # "You're here" when not in top N (urow already fetched above)
         you_line = ""
-        if not in_top and user_rank is not None:
-            async with aiosqlite.connect(DB_PATH) as db:
-                cur3 = await db.execute(
-                    "SELECT balance, total_earned FROM user_balances WHERE guild_id=? AND user_id=?",
-                    (interaction.guild.id, interaction.user.id),
-                )
-                urow = await cur3.fetchone()
-            if urow and (urow[0] or 0) + (urow[1] or 0) > 0:
-                val = urow[1] if order_col == "total_earned" else urow[0]
-                lbl = "total earned" if order_col == "total_earned" else "coins"
-                you_line = f"\n_You're here: **#{user_rank}** • {val:,} {lbl}_"
+        if not in_top and user_rank is not None and urow and (urow[0] or 0) + (urow[1] or 0) > 0:
+            val = urow[1] if order_col == "total_earned" else urow[0]
+            lbl = "total earned" if order_col == "total_earned" else "coins"
+            you_line = f"\n_You're here: **#{user_rank}** • {val:,} {lbl}_"
+
+        # Use first-place user's avatar as thumbnail if available
+        thumb_url = None
+        if rows:
+            top_user = interaction.guild.get_member(rows[0][0])
+            if top_user and top_user.display_avatar:
+                thumb_url = top_user.display_avatar.url
 
         embed = obsidian_embed(
             "🏆 Coin Leaderboard",
             f"Top {len(rows)} by {sort_label}{you_line}",
             color=discord.Color.gold(),
+            thumbnail=thumb_url,
             fields=[("Rankings", leaderboard_text.strip(), False)],
+            footer=f"{interaction.guild.name} • {total_count} users with economy activity",
             client=interaction.client,
         )
         

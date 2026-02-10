@@ -205,9 +205,38 @@ def _extract_items_list(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
     return []
 
 
+async def _fetch_warframe_market_items_list() -> List[Dict[str, Any]]:
+    """Fetch full Warframe Market items list. Cached for 5 minutes."""
+    from cache_utils import get_cached
+
+    async def _fetch():
+        headers = {
+            "Language": "en",
+            "Accept": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Origin": "https://warframe.market",
+            "Referer": "https://warframe.market/",
+        }
+        proxy = _market_proxy()
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                "https://api.warframe.market/v1/items",
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=20),
+                proxy=proxy,
+            ) as resp:
+                if resp.status != 200:
+                    return []
+                data = await resp.json()
+                payload = data.get("payload") or data
+                return _extract_items_list(payload) if isinstance(payload, dict) else []
+
+    return await get_cached("warframe_market:items_list", 300, _fetch)
+
+
 async def search_warframe_market_item(item_name: str, platform: str = "pc") -> Optional[Dict[str, Any]]:
     """
-    Search for an item on Warframe Market. Fetches the full item list first, then fuzzy-matches.
+    Search for an item on Warframe Market. Uses cached items list, then fuzzy-matches.
     """
     try:
         stripped = item_name.strip()
@@ -216,65 +245,43 @@ async def search_warframe_market_item(item_name: str, platform: str = "pc") -> O
         search_name = stripped.lower().replace(" ", "_")
         item_lower = stripped.lower()
 
+        all_items = await _fetch_warframe_market_items_list()
+
+        def score(it: Dict[str, Any]) -> int:
+            iname = (it.get("item_name") or "").lower()
+            uname = (it.get("url_name") or "").lower()
+            if uname == search_name or uname == item_lower.replace(" ", "_"):
+                return 100
+            if iname == item_lower or iname == stripped:
+                return 95
+            if iname.startswith(item_lower) or item_lower in iname:
+                return 80
+            if search_name in uname or item_lower.replace(" ", "_") in uname:
+                return 60
+            if item_lower in iname:
+                return 50
+            return 0
+
+        if all_items:
+            scored = [(score(it), it) for it in all_items]
+            scored = [(s, it) for s, it in scored if s > 0]
+            scored.sort(key=lambda x: (-x[0], len(x[1].get("item_name", ""))))
+            if scored:
+                _, best = scored[0]
+                return _normalize_item_payload(best, best.get("url_name", search_name))
+
+        # Fallback: direct GET by url_name variants
+        headers = {
+            "Language": "en",
+            "Accept": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Origin": "https://warframe.market",
+            "Referer": "https://warframe.market/",
+        }
+        timeout = aiohttp.ClientTimeout(total=20)
+        proxy = _market_proxy()
+
         async with aiohttp.ClientSession() as session:
-            # Browser-like headers; some CDNs return 404 without Origin/Referer
-            headers = {
-                "Language": "en",
-                "Accept": "application/json",
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Origin": "https://warframe.market",
-                "Referer": "https://warframe.market/",
-            }
-            timeout = aiohttp.ClientTimeout(total=20)
-
-            # 1) Fetch full items list first (most reliable endpoint)
-            all_items: List[Dict[str, Any]] = []
-            list_url = "https://api.warframe.market/v1/items"
-            proxy = _market_proxy()
-            try:
-                async with session.get(list_url, headers=headers, timeout=timeout, proxy=proxy) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        payload = data.get("payload") or data
-                        if isinstance(payload, dict):
-                            all_items = _extract_items_list(payload)
-                        if not all_items and isinstance(data.get("payload", {}).get("items"), list):
-                            all_items = data["payload"]["items"]
-                    else:
-                        logger.warning(
-                            f"Warframe Market items list returned {resp.status} for {list_url}. "
-                            "If the bot runs on a server, the API may block requests; set WARFRAME_MARKET_PROXY (or HTTPS_PROXY) to an HTTP(S) proxy URL to bypass."
-                        )
-            except Exception as e:
-                logger.warning(f"Failed to fetch Warframe Market items list: {e}")
-            if not all_items:
-                logger.debug("Warframe Market items list is empty; using direct item lookups")
-
-            # 2) Search in list: exact url_name, then item_name startswith/contains, then url_name contains
-            def score(it: Dict[str, Any]) -> int:
-                iname = (it.get("item_name") or "").lower()
-                uname = (it.get("url_name") or "").lower()
-                if uname == search_name or uname == item_lower.replace(" ", "_"):
-                    return 100
-                if iname == item_lower or iname == stripped:
-                    return 95
-                if iname.startswith(item_lower) or item_lower in iname:
-                    return 80
-                if search_name in uname or item_lower.replace(" ", "_") in uname:
-                    return 60
-                if item_lower in iname:
-                    return 50
-                return 0
-
-            if all_items:
-                scored = [(score(it), it) for it in all_items]
-                scored = [(s, it) for s, it in scored if s > 0]
-                scored.sort(key=lambda x: (-x[0], len(x[1].get("item_name", ""))))
-                if scored:
-                    _, best = scored[0]
-                    return _normalize_item_payload(best, best.get("url_name", search_name))
-
-            # 3) Fallback: direct GET by url_name variants (no list needed)
             def _url_variants() -> List[str]:
                 seen: set = set()
                 out: List[str] = []
@@ -543,7 +550,7 @@ async def calculate_next_devstream_date() -> Optional[datetime]:
 
 async def get_warframe_market_price(item_url_name: str, platform: str = "pc") -> Optional[Dict[str, Any]]:
     """
-    Get price statistics for an item from Warframe Market.
+    Get price statistics for an item from Warframe Market. Cached for 90 seconds per item/platform.
     
     Args:
         item_url_name: The item's URL name (from search_warframe_market_item)
@@ -552,61 +559,58 @@ async def get_warframe_market_price(item_url_name: str, platform: str = "pc") ->
     Returns:
         Price statistics dict with orders and stats, or None if error
     """
-    try:
-        proxy = _market_proxy()
-        async with aiohttp.ClientSession() as session:
-            # Get orders
-            wfm_headers = {
-                "Language": "en",
-                "Accept": "application/json",
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Origin": "https://warframe.market",
-                "Referer": "https://warframe.market/",
-            }
-            async with session.get(
-                f"https://api.warframe.market/v1/items/{item_url_name}/orders",
-                params={"platform": platform, "status": "ingame"},
-                headers=wfm_headers,
-                timeout=aiohttp.ClientTimeout(total=10),
-                proxy=proxy
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    orders = data.get("payload", {}).get("orders", [])
-                    
-                    # Get statistics
-                    async with session.get(
-                        f"https://api.warframe.market/v1/items/{item_url_name}/statistics",
-                        params={"platform": platform},
-                        headers=wfm_headers,
-                        timeout=aiohttp.ClientTimeout(total=10),
-                        proxy=proxy
-                    ) as stats_response:
-                        stats_data = None
-                        if stats_response.status == 200:
-                            stats_data = await stats_response.json()
-                        
-                        # Calculate price stats from orders
-                        sell_orders = [o for o in orders if o.get("order_type") == "sell" and o.get("user", {}).get("status") == "ingame"]
-                        buy_orders = [o for o in orders if o.get("order_type") == "buy" and o.get("user", {}).get("status") == "ingame"]
-                        
-                        sell_prices = sorted([o.get("platinum", 0) for o in sell_orders if o.get("platinum")])
-                        buy_prices = sorted([o.get("platinum", 0) for o in buy_orders if o.get("platinum")], reverse=True)
-                        
-                        result = {
-                            "item_url_name": item_url_name,
-                            "platform": platform,
-                            "sell_orders": sell_orders[:5],  # Top 5 cheapest
-                            "buy_orders": buy_orders[:5],  # Top 5 highest buy offers
-                            "lowest_sell": sell_prices[0] if sell_prices else None,
-                            "highest_buy": buy_prices[0] if buy_prices else None,
-                            "stats": stats_data.get("payload", {}).get("statistics_closed", {}).get("90days", [])[-1] if stats_data else None,
-                        }
-                        
-                        return result
-                else:
-                    logger.warning(f"Warframe Market API returned status {response.status} for {item_url_name}")
-                    return None
-    except Exception as e:
-        logger.error(f"Error fetching Warframe Market price for {item_url_name}: {e}")
-        return None
+    from cache_utils import get_cached
+
+    async def _fetch():
+        try:
+            proxy = _market_proxy()
+            async with aiohttp.ClientSession() as session:
+                wfm_headers = {
+                    "Language": "en",
+                    "Accept": "application/json",
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Origin": "https://warframe.market",
+                    "Referer": "https://warframe.market/",
+                }
+                async with session.get(
+                    f"https://api.warframe.market/v1/items/{item_url_name}/orders",
+                    params={"platform": platform, "status": "ingame"},
+                    headers=wfm_headers,
+                    timeout=aiohttp.ClientTimeout(total=10),
+                    proxy=proxy
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        orders = data.get("payload", {}).get("orders", [])
+                        async with session.get(
+                            f"https://api.warframe.market/v1/items/{item_url_name}/statistics",
+                            params={"platform": platform},
+                            headers=wfm_headers,
+                            timeout=aiohttp.ClientTimeout(total=10),
+                            proxy=proxy
+                        ) as stats_response:
+                            stats_data = None
+                            if stats_response.status == 200:
+                                stats_data = await stats_response.json()
+                            sell_orders = [o for o in orders if o.get("order_type") == "sell" and o.get("user", {}).get("status") == "ingame"]
+                            buy_orders = [o for o in orders if o.get("order_type") == "buy" and o.get("user", {}).get("status") == "ingame"]
+                            sell_prices = sorted([o.get("platinum", 0) for o in sell_orders if o.get("platinum")])
+                            buy_prices = sorted([o.get("platinum", 0) for o in buy_orders if o.get("platinum")], reverse=True)
+                            result = {
+                                "item_url_name": item_url_name,
+                                "platform": platform,
+                                "sell_orders": sell_orders[:5],
+                                "buy_orders": buy_orders[:5],
+                                "lowest_sell": sell_prices[0] if sell_prices else None,
+                                "highest_buy": buy_prices[0] if buy_prices else None,
+                                "stats": stats_data.get("payload", {}).get("statistics_closed", {}).get("90days", [])[-1] if stats_data else None,
+                            }
+                            return result
+                    else:
+                        logger.warning(f"Warframe Market API returned status {response.status} for {item_url_name}")
+                        return None
+        except Exception as e:
+            logger.error(f"Error fetching Warframe Market price for {item_url_name}: {e}")
+            return None
+
+    return await get_cached(f"warframe_market:price:{item_url_name}:{platform}", 90, _fetch)

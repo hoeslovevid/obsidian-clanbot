@@ -10,9 +10,6 @@ def setup(bot, group=None):
     """Register the balance and bal (alias) commands."""
     async def balance_callback(interaction: discord.Interaction):
         """Display the user's current coin balance."""
-        # Import bot-specific functions inside to avoid circular imports
-        from bot import get_user_balance
-        
         if not ECONOMY_ENABLED:
             return await interaction.response.send_message(
                 embed=obsidian_embed(
@@ -35,10 +32,33 @@ def setup(bot, group=None):
                 ephemeral=True
             )
         await interaction.response.defer(ephemeral=True)
-        balance = await get_user_balance(interaction.guild.id, interaction.user.id)
+
+        # Single connection: balance + pets in one go
+        balance = 0
+        pet_row = None
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT balance FROM user_balances WHERE guild_id=? AND user_id=?",
+                (interaction.guild.id, interaction.user.id),
+            )
+            row = await cur.fetchone()
+            if row:
+                balance = row[0] or 0
+            cur2 = await db.execute(
+                "SELECT pet_type, pet_name, hunger, happiness, last_fed_at, last_played_at, created_at FROM pets WHERE guild_id=? AND user_id=?",
+                (interaction.guild.id, interaction.user.id),
+            )
+            pet_row = await cur2.fetchone()
+
+        # Compact layout with progress bar (visual bar for balance, capped at 100k display)
+        bar_max = 100_000
+        pct = min(100, int(100 * balance / bar_max)) if bar_max > 0 else 0
+        bar_len = 10
+        filled = int(bar_len * pct / 100)
+        bar_str = "█" * filled + "░" * (bar_len - filled)
 
         fields = [
-            ("💰 Balance", f"**{balance:,}** coins", True),
+            ("💰 Balance", f"**{balance:,}** coins\n`[{bar_str}]` {pct}%", True),
             ("📊 Earning Methods",
              f"• `/daily` - {COINS_DAILY_REWARD:,} coins/day\n"
              f"• Messages - {COINS_PER_MESSAGE} coins ({MESSAGE_COOLDOWN_SECONDS}s cooldown)\n"
@@ -46,13 +66,6 @@ def setup(bot, group=None):
              False)
         ]
 
-        pet_row = None
-        async with aiosqlite.connect(DB_PATH) as db:
-            cur = await db.execute(
-                "SELECT pet_type, pet_name, hunger, happiness, last_fed_at, last_played_at, created_at FROM pets WHERE guild_id=? AND user_id=?",
-                (interaction.guild.id, interaction.user.id),
-            )
-            pet_row = await cur.fetchone()
         if pet_row:
             from commands.economy.pets import _apply_decay, HUNGER_DECAY_PER_HOUR, HAPPINESS_DECAY_PER_HOUR
             pet_type, pet_name, hunger, happiness, last_fed_at, last_played_at, created_at = pet_row

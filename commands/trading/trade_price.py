@@ -4,7 +4,8 @@ from discord import app_commands
 
 from utils import obsidian_embed, error_embed
 from warframe_api import search_warframe_market_item, get_warframe_market_price
-from views import RetryView
+from views import RetryView, RefreshView
+from cache_utils import invalidate
 
 POPULAR_ITEMS = [
     "Mesa Prime Set", "Saryn Prime Set", "Rhino Prime Set", "Nova Prime Set",
@@ -37,11 +38,11 @@ def _build_trade_embed(item_data: dict, price_data: dict, platform_val: str, cli
     sell_orders = price_data.get("sell_orders", [])[:5]
     if sell_orders:
         sell_list = [f"**{o.get('platinum', 0)}p** (R{o.get('mod_rank', 0)}, x{o.get('quantity', 1)})" if o.get("mod_rank", 0) > 0 else f"**{o.get('platinum', 0)}p** (x{o.get('quantity', 1)})" for o in sell_orders]
-        fields.append(("💰 Cheapest Sellers", "\n".join(sell_list[:5]), False))
+        fields.append(("💰 Cheapest Sellers", "\n".join(sell_list[:5]), True))
     buy_orders = price_data.get("buy_orders", [])[:5]
     if buy_orders:
         buy_list = [f"**{o.get('platinum', 0)}p** (R{o.get('mod_rank', 0)}, x{o.get('quantity', 1)})" if o.get("mod_rank", 0) > 0 else f"**{o.get('platinum', 0)}p** (x{o.get('quantity', 1)})" for o in buy_orders]
-        fields.append(("💵 Highest Buyers", "\n".join(buy_list[:5]), False))
+        fields.append(("💵 Highest Buyers", "\n".join(buy_list[:5]), True))
     summary = []
     if price_data.get("lowest_sell"):
         summary.append(f"**Lowest Sell:** {price_data['lowest_sell']}p")
@@ -49,16 +50,19 @@ def _build_trade_embed(item_data: dict, price_data: dict, platform_val: str, cli
         summary.append(f"**Highest Buy:** {price_data['highest_buy']}p")
     stats = price_data.get("stats")
     if stats and stats.get("avg_price"):
-        summary.append(f"**90-Day Average:** {stats['avg_price']:.0f}p")
+        summary.append(f"**90-Day Avg:** {stats['avg_price']:.0f}p")
     if summary:
-        fields.append(("📊 Price Summary", "\n".join(summary), False))
+        fields.append(("📊 Summary", "\n".join(summary), True))
     fields.append(("Platform", platform_val.upper(), True))
     market_url = f"https://warframe.market/items/{item_url_name}"
+    thumb = f"https://warframe.market/static/assets/icons/en/{item_url_name}.png" if item_url_name else None
     return obsidian_embed(
         f"💎 Market Prices: {item_name}",
         f"[View on Warframe Market]({market_url})",
         color=discord.Color.gold(),
+        thumbnail=thumb,
         fields=fields,
+        footer="Warframe Market • Prices refresh every 90s",
         client=client,
     )
 
@@ -149,4 +153,20 @@ def setup(bot, group=None):
             )
         
         embed = _build_trade_embed(item_data, price_data, platform_val, interaction.client)
-        await interaction.followup.send(embed=embed, ephemeral=True)
+        market_url = f"https://warframe.market/items/{item_url_name}"
+
+        async def on_refresh(btn_interaction: discord.Interaction):
+            if btn_interaction.user.id != interaction.user.id:
+                return await btn_interaction.followup.send("Only the person who ran this can refresh.", ephemeral=True)
+            invalidate(f"warframe_market:price:{item_url_name}:{platform_val}")
+            new_price = await get_warframe_market_price(item_url_name, platform_val)
+            if not new_price:
+                return await btn_interaction.followup.send("Could not fetch fresh prices. Try again later.", ephemeral=True)
+            new_emb = _build_trade_embed(item_data, new_price, platform_val, interaction.client)
+            v2 = RefreshView(on_refresh, timeout=300)
+            v2.add_item(discord.ui.Button(label="View on Warframe Market", url=market_url, style=discord.ButtonStyle.link, emoji="🔗"))
+            await btn_interaction.message.edit(embed=new_emb, view=v2)
+
+        v = RefreshView(on_refresh, timeout=300)
+        v.add_item(discord.ui.Button(label="View on Warframe Market", url=market_url, style=discord.ButtonStyle.link, emoji="🔗"))
+        await interaction.followup.send(embed=embed, view=v, ephemeral=True)

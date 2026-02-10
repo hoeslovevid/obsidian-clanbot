@@ -57,16 +57,13 @@ def setup(bot, group=None):
                 
                 # Check if already claimed today
                 if last_claim_date == today:
-                    # Calculate time until next claim (next day in UTC)
-                    tomorrow = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-                    tomorrow = tomorrow.replace(day=tomorrow.day + 1)
-                    time_until = tomorrow - datetime.now(timezone.utc)
-                    hours = int(time_until.total_seconds() // 3600)
-                    minutes = int((time_until.total_seconds() % 3600) // 60)
-                    
+                    from datetime import timedelta as _td
+                    tomorrow_dt = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0) + _td(days=1)
+                    next_ts = int(tomorrow_dt.timestamp())
+                    streak_fire = "🔥" * min(streak_days, 10) + (f" +{streak_days - 10}" if streak_days > 10 else "")
                     fields = [
-                        ("🔥 Current Streak", f"{streak_days} day(s)", True),
-                        ("⏰ Next Claim", f"{hours}h {minutes}m", True),
+                        ("🔥 Current Streak", f"{streak_fire}\n{streak_days} day(s)", True),
+                        ("⏰ Next Claim", f"<t:{next_ts}:R>", True),
                     ]
                     
                     return await interaction.response.send_message(
@@ -135,20 +132,38 @@ def setup(bot, group=None):
                 except Exception:
                     pass
 
-        # Success message
+        # Success message with streak visualization and next claim time
+        streak_fire = "🔥" * min(new_streak, 10) + (f" +{new_streak - 10}" if new_streak > 10 else "")
+        tomorrow = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        from datetime import timedelta
+        tomorrow = tomorrow + timedelta(days=1)
+        next_ts = int(tomorrow.timestamp())
+        next_line = f"Next daily: <t:{next_ts}:R>"
+
         fields = [
             ("💰 Reward", f"**{COINS_DAILY_REWARD:,}** coins", True),
-            ("🔥 Streak", f"{new_streak} day(s)", True),
+            ("🔥 Streak", f"{streak_fire}\n{new_streak} day(s)", True),
+            ("⏰ Next Claim", next_line, True),
         ]
         if used_freeze:
             fields.append(("🛡️ Streak Freeze", "Used 1 monthly freeze to preserve streak", True))
-        
+
+        # Celebratory style for milestones
+        if new_streak >= 100:
+            title, color = "💯 Century Streak!", discord.Color.purple()
+        elif new_streak >= 30:
+            title, color = "🌟 30-Day Streak!", discord.Color.gold()
+        elif new_streak >= 10:
+            title, color = "🔥 10-Day Streak!", discord.Color.orange()
+        else:
+            title, color = "🎁 Daily Reward Claimed!", discord.Color.green()
+
         embed = obsidian_embed(
-            "🎁 Daily Reward Claimed!",
+            title,
             "Come back tomorrow for another reward!" + ("\n\n_Used streak freeze (1 per month)._" if used_freeze else ""),
-            color=discord.Color.green(),
+            color=color,
             fields=fields,
             client=interaction.client,
         )
-        
+
         await interaction.response.send_message(embed=embed, ephemeral=True)

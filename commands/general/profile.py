@@ -277,7 +277,7 @@ def setup(bot, group=None):
                 f"**{pet['name']}** ({pet['type']})\n"
                 f"Hunger: {hunger}/100 {hunger_emoji}\n"
                 f"Happiness: {happiness}/100 {happy_emoji}\n"
-                f"_Use `/pet_feed` and `/pet_play` to care for your pet._",
+                f"_Use `/economy pets feed` and `/economy pets play` to care for your pet._",
                 True
             ))
 
