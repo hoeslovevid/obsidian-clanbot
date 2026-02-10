@@ -703,8 +703,9 @@ async def on_message(message: discord.Message):
         # Initialize achievements if needed (cached)
         global _achievement_definitions_initialized
         if not _achievement_definitions_initialized:
-            from database import initialize_achievement_definitions
+            from database import initialize_achievement_definitions, initialize_badge_definitions
             await initialize_achievement_definitions()
+            await initialize_badge_definitions()
             _achievement_definitions_initialized = True
         
         # Batch database operations - get message count and update in one transaction
@@ -2218,8 +2219,9 @@ async def on_ready():
         """Initialize achievement definitions (cached)."""
         global _achievement_definitions_initialized
         try:
-            from database import initialize_achievement_definitions
+            from database import initialize_achievement_definitions, initialize_badge_definitions
             await initialize_achievement_definitions()
+            await initialize_badge_definitions()
             _achievement_definitions_initialized = True
             logger.info("[ready] Achievement definitions initialized")
         except Exception as e:
@@ -2299,13 +2301,14 @@ async def on_member_join(member: discord.Member):
     """Send welcome message when a member joins."""
     # Check for join anniversary milestones (check existing join date)
     global _achievement_definitions_initialized
-    from database import check_and_record_milestone, check_and_unlock_achievement, initialize_achievement_definitions
+    from database import check_and_record_milestone, check_and_unlock_achievement, initialize_achievement_definitions, initialize_badge_definitions
     
     # Only initialize once (cached)
     if not _achievement_definitions_initialized:
         await initialize_achievement_definitions()
+        await initialize_badge_definitions()
         _achievement_definitions_initialized = True
-    
+
     # Get member's join date
     join_date = member.joined_at or now_utc()
     years_in_server = (now_utc() - join_date.replace(tzinfo=timezone.utc)).days // 365

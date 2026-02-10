@@ -926,8 +926,17 @@ async def check_and_unlock_achievement(guild_id: int, user_id: int, achievement_
             INSERT INTO achievements (guild_id, user_id, achievement_id, unlocked_at)
             VALUES (?, ?, ?, ?)
         """, (guild_id, user_id, achievement_id, now_utc().isoformat()))
+
+        # Grant linked badge if one exists
+        cur = await db.execute("SELECT 1 FROM badge_definitions WHERE badge_id=?", (achievement_id,))
+        if await cur.fetchone():
+            await db.execute("""
+                INSERT OR IGNORE INTO user_badges (guild_id, user_id, badge_id, unlocked_at, is_equipped)
+                VALUES (?, ?, ?, ?, 0)
+            """, (guild_id, user_id, achievement_id, now_utc().isoformat()))
+
         await db.commit()
-        
+
         # Award rewards
         if reward_coins > 0:
             await add_coins(guild_id, user_id, reward_coins, "ACHIEVEMENT", f"Achievement: {achievement_id}")
@@ -952,6 +961,12 @@ async def initialize_achievement_definitions():
         ("join_anniversary_2", "Two Years", "Celebrate 2 years in the server", "milestone", "2 year anniversary", 1000, 500),
         ("voice_hour", "Voice Active", "Spend 1 hour in voice", "voice", "1 hour in voice", 50, 25),
         ("voice_ten_hours", "Voice Veteran", "Spend 10 hours in voice", "voice", "10 hours in voice", 200, 100),
+        ("pet_first", "Pet Owner", "Get your first pet", "pets", "Own a pet", 50, 25),
+        ("pet_battle_win", "Pet Fighter", "Win your first pet battle", "pets", "Win 1 pet battle", 75, 50),
+        ("pet_battle_5", "Pet Champion", "Win 5 pet battles", "pets", "Win 5 pet battles", 200, 100),
+        ("pet_level_25", "Pet Trainer", "Level your pet to 25", "pets", "Pet reaches level 25", 150, 75),
+        ("pet_evolved", "Pet Evolver", "Evolve your pet", "pets", "Evolve a pet", 250, 125),
+        ("daily_streak_10", "Dedicated", "10-day daily streak", "economy", "10 day streak", 200, 100),
     ]
     
     async with aiosqlite.connect(DB_PATH) as db:
@@ -961,6 +976,28 @@ async def initialize_achievement_definitions():
                 (achievement_id, name, description, category, requirement, reward_coins, reward_xp)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             """, (achievement_id, name, description, category, requirement, reward_coins, reward_xp))
+        await db.commit()
+
+
+async def initialize_badge_definitions():
+    """Initialize default badge definitions (achievement-linked badges)."""
+    default_badges = [
+        ("pet_first", "Pet Owner", "Get your first pet", "🐾", "common"),
+        ("pet_battle_win", "Pet Fighter", "Win your first pet battle", "⚔️", "common"),
+        ("pet_battle_5", "Pet Champion", "Win 5 pet battles", "🏆", "rare"),
+        ("pet_level_25", "Pet Trainer", "Level your pet to 25", "📈", "rare"),
+        ("pet_evolved", "Pet Evolver", "Evolve your pet", "✨", "epic"),
+        ("daily_streak_10", "Dedicated", "10-day daily streak", "🔥", "rare"),
+        ("first_message", "First Message", "Send your first message", "💬", "common"),
+        ("level_10", "Rising Star", "Reach level 10", "⭐", "common"),
+        ("level_50", "Master", "Reach level 50", "🌟", "epic"),
+    ]
+    async with aiosqlite.connect(DB_PATH) as db:
+        for badge_id, name, description, icon_emoji, rarity in default_badges:
+            await db.execute("""
+                INSERT OR IGNORE INTO badge_definitions (badge_id, name, description, icon_emoji, rarity)
+                VALUES (?, ?, ?, ?, ?)
+            """, (badge_id, name, description, icon_emoji, rarity))
         await db.commit()
 
 
@@ -2144,6 +2181,33 @@ async def init_db() -> None:
                 )
             await db.commit()
 
+        # Seed pet evolutions (base_type -> evolved_type at required_level)
+        cur = await db.execute("SELECT COUNT(*) FROM pet_evolutions")
+        if (await cur.fetchone())[0] == 0:
+            evolutions = [
+                ("Dog", "Golden Retriever", 25),
+                ("Cat", "Shadow Cat", 30),
+                ("Bird", "Phoenix Chick", 20),
+                ("Rabbit", "Moon Rabbit", 25),
+                ("Fox", "Arctic Fox", 35),
+                ("Robot", "Mech Prime", 40),
+                ("Wolf", "Alpha Wolf", 45),
+                ("Dragon", "Elder Dragon", 50),
+                ("Phoenix", "Inferno Phoenix", 55),
+            ]
+            for base, evolved, lvl in evolutions:
+                await db.execute(
+                    "INSERT OR IGNORE INTO pet_evolutions (base_type, evolved_type, required_level) VALUES (?, ?, ?)",
+                    (base, evolved, lvl),
+                )
+            # Add evolved types to pet_types if not present
+            for _, evolved, _ in evolutions:
+                await db.execute(
+                    "INSERT OR IGNORE INTO pet_types (pet_type, base_price, max_level, description) VALUES (?, 0, 100, 'Evolved form')",
+                    (evolved,),
+                )
+            await db.commit()
+
         await db.execute("""
         CREATE TABLE IF NOT EXISTS pet_battle_cooldowns (
             guild_id INTEGER NOT NULL,
@@ -2151,6 +2215,44 @@ async def init_db() -> None:
             last_battle_at TEXT NOT NULL,
             PRIMARY KEY (guild_id, user_id)
         )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS pet_battle_stats (
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            wins INTEGER NOT NULL DEFAULT 0,
+            losses INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (guild_id, user_id)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS pet_evolutions (
+            base_type TEXT NOT NULL,
+            evolved_type TEXT NOT NULL,
+            required_level INTEGER NOT NULL,
+            PRIMARY KEY (base_type)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS pet_listings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            pet_id INTEGER NOT NULL,
+            seller_id INTEGER NOT NULL,
+            price INTEGER NOT NULL,
+            listed_at TEXT NOT NULL,
+            FOREIGN KEY (pet_id) REFERENCES pets(id)
+        )""")
+
+        # Add evolution_tier to pets if missing
+        try:
+            cur = await db.execute("PRAGMA table_info(pets)")
+            cols = [row[1] for row in await cur.fetchall()]
+            if "evolution_tier" not in cols:
+                await db.execute("ALTER TABLE pets ADD COLUMN evolution_tier INTEGER NOT NULL DEFAULT 0")
+                await db.commit()
+        except Exception:
+            pass
 
         # Prestige system tables
         # Warframe in-game achievement roles (Steam playtime, etc.)
@@ -2291,6 +2393,26 @@ async def init_db() -> None:
             user_id INTEGER NOT NULL,
             account_age_days INTEGER,
             joined_at TEXT NOT NULL
+        )""")
+
+        # Raid protection: add gate_role_id and verify_role_id for auto-verify
+        try:
+            cur = await db.execute("PRAGMA table_info(raid_protection_settings)")
+            cols = [row[1] for row in await cur.fetchall()]
+            if "gate_role_id" not in cols:
+                await db.execute("ALTER TABLE raid_protection_settings ADD COLUMN gate_role_id INTEGER")
+            if "verify_role_id" not in cols:
+                await db.execute("ALTER TABLE raid_protection_settings ADD COLUMN verify_role_id INTEGER")
+            await db.commit()
+        except Exception:
+            pass
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS raid_restricted_users (
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            restricted_at TEXT NOT NULL,
+            PRIMARY KEY (guild_id, user_id)
         )""")
 
         # Cross-server communication tables

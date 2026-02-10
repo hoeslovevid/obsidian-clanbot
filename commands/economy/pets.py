@@ -284,7 +284,29 @@ class PetBattleChallengeView(discord.ui.View):
                 INSERT OR REPLACE INTO pet_battle_cooldowns (guild_id, user_id, last_battle_at)
                 VALUES (?, ?, ?), (?, ?, ?)
             """, (self.guild_id, self.challenger_id, now_str, self.guild_id, self.defender_id, now_str))
+            # Battle stats
+            await db.execute("""
+                INSERT INTO pet_battle_stats (guild_id, user_id, wins, losses)
+                VALUES (?, ?, 1, 0)
+                ON CONFLICT(guild_id, user_id) DO UPDATE SET wins = wins + 1
+            """, (self.guild_id, winner_uid))
+            await db.execute("""
+                INSERT INTO pet_battle_stats (guild_id, user_id, wins, losses)
+                VALUES (?, ?, 0, 1)
+                ON CONFLICT(guild_id, user_id) DO UPDATE SET losses = losses + 1
+            """, (self.guild_id, loser_uid))
+            cur = await db.execute("SELECT wins FROM pet_battle_stats WHERE guild_id=? AND user_id=?", (self.guild_id, winner_uid))
+            winner_wins = (await cur.fetchone())[0] if cur else 1
             await db.commit()
+            # Achievement triggers (after commit)
+            try:
+                from database import check_and_unlock_achievement
+                if winner_wins == 1:
+                    await check_and_unlock_achievement(self.guild_id, winner_uid, "pet_battle_win", interaction.client)
+                elif winner_wins >= 5:
+                    await check_and_unlock_achievement(self.guild_id, winner_uid, "pet_battle_5", interaction.client)
+            except Exception:
+                pass
 
         log_text = "\n".join(log_lines[-6:])  # Last 6 lines
         if len(log_lines) > 6:
@@ -478,7 +500,12 @@ def setup(bot, group=None):
                 VALUES (?, ?, ?, ?, 1, 0, 100, 100, ?)
             """, (interaction.guild.id, interaction.user.id, pet_name, pet_type, now_utc().isoformat()))
             await db.commit()
-        
+            try:
+                from database import check_and_unlock_achievement
+                await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "pet_first", getattr(interaction.client, "bot", interaction.client))
+            except Exception:
+                pass
+
         await interaction.followup.send(
             embed=obsidian_embed(
                 "✅ Pet Purchased",
@@ -624,6 +651,12 @@ def setup(bot, group=None):
             """, (hunger, exp, new_level, now_utc().isoformat(), interaction.guild.id, interaction.user.id))
             await db.commit()
         
+        if new_level >= 25 and level < 25:
+            try:
+                from database import check_and_unlock_achievement
+                await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "pet_level_25", interaction.client)
+            except Exception:
+                pass
         level_up_text = f"\n🎉 **Level Up!** Your pet is now level {new_level}!" if new_level > level else ""
         await interaction.followup.send(
             embed=obsidian_embed(
@@ -704,6 +737,12 @@ def setup(bot, group=None):
             """, (hunger, happiness, exp, new_level, now_str, now_str, interaction.guild.id, interaction.user.id))
             await db.commit()
 
+        if new_level >= 25 and level < 25:
+            try:
+                from database import check_and_unlock_achievement
+                await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "pet_level_25", interaction.client)
+            except Exception:
+                pass
         level_up_text = f"\n🎉 **Level Up!** Your pet is now level {new_level}!" if new_level > level else ""
         await interaction.followup.send(
             embed=obsidian_embed(
@@ -782,8 +821,14 @@ def setup(bot, group=None):
             """, (happiness, exp, new_level, now_utc().isoformat(), interaction.guild.id, interaction.user.id))
             await db.commit()
         
+        if new_level >= 25 and level < 25:
+            try:
+                from database import check_and_unlock_achievement
+                await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "pet_level_25", interaction.client)
+            except Exception:
+                pass
         level_up_text = f"\n🎉 **Level Up!** Your pet is now level {new_level}!" if new_level > level else ""
-        
+
         await interaction.followup.send(
             embed=obsidian_embed(
                 "🎮 Played with Pet",
@@ -934,3 +979,166 @@ def setup(bot, group=None):
         )
         msg = await interaction.followup.send(embed=embed, view=view)
         view.message = msg
+
+    # Pet evolve
+    command_decorator = group.command(name="pet_evolve", description="Evolve your pet when it reaches the required level.") if group else bot.tree.command(name="pet_evolve", description="Evolve your pet when it reaches the required level.")
+    @command_decorator
+    async def pet_evolve(interaction: discord.Interaction):
+        """Evolve pet to next tier."""
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=obsidian_embed("❌ Invalid Context", "This can only be used in a server.", color=discord.Color.red(), client=interaction.client),
+                ephemeral=True,
+            )
+        await interaction.response.defer()
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute("""
+                SELECT p.id, p.pet_name, p.pet_type, p.level, p.experience, p.evolution_tier
+                FROM pets p WHERE p.guild_id=? AND p.user_id=?
+            """, (interaction.guild.id, interaction.user.id))
+            row = await cur.fetchone()
+            if not row:
+                return await interaction.followup.send(
+                    embed=obsidian_embed("❌ No Pet", "You don't have a pet.", color=discord.Color.red(), client=interaction.client),
+                )
+            pet_id, pet_name, pet_type, level, exp, evo_tier = row
+            evo_tier = evo_tier or 0
+            if evo_tier >= 1:
+                return await interaction.followup.send(
+                    embed=obsidian_embed("✅ Already Evolved", "Your pet has already evolved!", color=discord.Color.blue(), client=interaction.client),
+                )
+            cur = await db.execute("SELECT evolved_type, required_level FROM pet_evolutions WHERE base_type=?", (pet_type,))
+            evo_row = await cur.fetchone()
+            if not evo_row:
+                return await interaction.followup.send(
+                    embed=obsidian_embed("❌ Cannot Evolve", f"{pet_type} cannot evolve.", color=discord.Color.red(), client=interaction.client),
+                )
+            evolved_type, req_level = evo_row
+            if level < req_level:
+                return await interaction.followup.send(
+                    embed=obsidian_embed("❌ Level Too Low", f"Your pet needs level {req_level} to evolve into {evolved_type}. Current: {level}.", color=discord.Color.red(), client=interaction.client),
+                )
+            await db.execute(
+                "UPDATE pets SET pet_type=?, evolution_tier=1 WHERE id=?",
+                (evolved_type, pet_id),
+            )
+            await db.commit()
+            try:
+                from database import check_and_unlock_achievement
+                await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "pet_evolved", interaction.client)
+            except Exception:
+                pass
+        await interaction.followup.send(
+            embed=obsidian_embed(
+                "✨ Pet Evolved!",
+                f"**{pet_name}** evolved from {pet_type} to **{evolved_type}**!",
+                color=discord.Color.gold(),
+                client=interaction.client,
+            ),
+        )
+
+    # Pet list (for sale)
+    command_decorator = group.command(name="pet_list", description="List your pet for sale on the marketplace.") if group else bot.tree.command(name="pet_list", description="List your pet for sale on the marketplace.")
+    @command_decorator
+    @app_commands.describe(price="Asking price in coins")
+    async def pet_list(interaction: discord.Interaction, price: int):
+        """List pet for sale."""
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=obsidian_embed("❌ Invalid Context", "This can only be used in a server.", color=discord.Color.red(), client=interaction.client),
+                ephemeral=True,
+            )
+        if price < 1:
+            return await interaction.response.send_message("Price must be at least 1 coin.", ephemeral=True)
+        await interaction.response.defer()
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute("SELECT id, pet_name, pet_type, level FROM pets WHERE guild_id=? AND user_id=?", (interaction.guild.id, interaction.user.id))
+            row = await cur.fetchone()
+            if not row:
+                return await interaction.followup.send(embed=obsidian_embed("❌ No Pet", "You don't have a pet.", color=discord.Color.red(), client=interaction.client))
+            pet_id, pet_name, pet_type, level = row
+            cur = await db.execute("SELECT 1 FROM pet_listings WHERE pet_id=?", (pet_id,))
+            if await cur.fetchone():
+                return await interaction.followup.send(embed=obsidian_embed("❌ Already Listed", "Your pet is already listed.", color=discord.Color.orange(), client=interaction.client))
+            await db.execute(
+                "INSERT INTO pet_listings (guild_id, pet_id, seller_id, price, listed_at) VALUES (?, ?, ?, ?, ?)",
+                (interaction.guild.id, pet_id, interaction.user.id, price, now_utc().isoformat()),
+            )
+            await db.commit()
+        await interaction.followup.send(
+            embed=obsidian_embed("✅ Pet Listed", f"**{pet_name}** ({pet_type}) Lv.{level} listed for {price:,} coins. Use `/pet_marketplace` to browse.", color=discord.Color.green(), client=interaction.client),
+        )
+
+    # Pet marketplace (browse and buy)
+    command_decorator = group.command(name="pet_marketplace", description="Browse and buy pets listed for sale.") if group else bot.tree.command(name="pet_marketplace", description="Browse and buy pets listed for sale.")
+    @command_decorator
+    async def pet_marketplace(interaction: discord.Interaction):
+        """Browse pet marketplace."""
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=obsidian_embed("❌ Invalid Context", "This can only be used in a server.", color=discord.Color.red(), client=interaction.client),
+                ephemeral=True,
+            )
+        await interaction.response.defer()
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute("""
+                SELECT pl.id, pl.pet_id, pl.seller_id, pl.price, p.pet_name, p.pet_type, p.level
+                FROM pet_listings pl
+                JOIN pets p ON pl.pet_id = p.id
+                WHERE pl.guild_id=? AND p.guild_id=?
+                ORDER BY pl.listed_at DESC
+                LIMIT 20
+            """, (interaction.guild.id, interaction.guild.id))
+            rows = await cur.fetchall()
+        if not rows:
+            return await interaction.followup.send(
+                embed=obsidian_embed("📦 Pet Marketplace", "No pets are listed for sale. Use `/pet_list` to list yours!", color=discord.Color.blue(), client=interaction.client),
+            )
+        fields = []
+        for listing_id, pet_id, seller_id, price, pet_name, pet_type, level in rows:
+            seller = interaction.guild.get_member(seller_id)
+            seller_name = seller.display_name if seller else f"User {seller_id}"
+            fields.append((f"#{listing_id} {pet_name} ({pet_type}) Lv.{level}", f"💰 {price:,} coins\n👤 Seller: {seller_name}\n`/pet_buy_listed {listing_id}`", True))
+        await interaction.followup.send(
+            embed=obsidian_embed("📦 Pet Marketplace", "Pets for sale. Use `/pet_buy_listed listing_id:N` to purchase.", color=discord.Color.gold(), fields=fields, client=interaction.client),
+        )
+
+    # Pet buy listed
+    command_decorator = group.command(name="pet_buy_listed", description="Buy a pet from the marketplace.") if group else bot.tree.command(name="pet_buy_listed", description="Buy a pet from the marketplace.")
+    @command_decorator
+    @app_commands.describe(listing_id="The listing ID from /pet_marketplace")
+    async def pet_buy_listed(interaction: discord.Interaction, listing_id: int):
+        """Buy a listed pet."""
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=obsidian_embed("❌ Invalid Context", "This can only be used in a server.", color=discord.Color.red(), client=interaction.client),
+                ephemeral=True,
+            )
+        await interaction.response.defer()
+        balance = await get_user_balance(interaction.guild.id, interaction.user.id)
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute("""
+                SELECT pl.id, pl.pet_id, pl.seller_id, pl.price, p.pet_name, p.pet_type, p.level
+                FROM pet_listings pl
+                JOIN pets p ON pl.pet_id = p.id
+                WHERE pl.guild_id=? AND pl.id=?
+            """, (interaction.guild.id, listing_id))
+            row = await cur.fetchone()
+            if not row:
+                return await interaction.followup.send(embed=obsidian_embed("❌ Not Found", "Listing not found.", color=discord.Color.red(), client=interaction.client))
+            _, pet_id, seller_id, price, pet_name, pet_type, level = row
+            if seller_id == interaction.user.id:
+                return await interaction.followup.send(embed=obsidian_embed("❌ Can't Buy", "You can't buy your own pet.", color=discord.Color.red(), client=interaction.client))
+            if balance < price:
+                return await interaction.followup.send(embed=obsidian_embed("❌ Insufficient Funds", f"You need {price:,} coins. You have {balance:,}.", color=discord.Color.red(), client=interaction.client))
+            cur = await db.execute("SELECT 1 FROM pets WHERE guild_id=? AND user_id=?", (interaction.guild.id, interaction.user.id))
+            if await cur.fetchone():
+                return await interaction.followup.send(embed=obsidian_embed("❌ Already Have Pet", "You must not have a pet to buy one. Use `/pet_list` to sell yours first.", color=discord.Color.red(), client=interaction.client))
+            await remove_coins(interaction.guild.id, interaction.user.id, price, "PET_TRADE", f"Bought {pet_name} from marketplace")
+            await add_coins(interaction.guild.id, seller_id, price, "PET_TRADE", f"Sold {pet_name}")
+            await db.execute("UPDATE pets SET user_id=? WHERE id=?", (interaction.user.id, pet_id))
+            await db.execute("DELETE FROM pet_listings WHERE id=?", (listing_id,))
+            await db.commit()
+        await interaction.followup.send(
+            embed=obsidian_embed("✅ Pet Purchased", f"You bought **{pet_name}** ({pet_type}) Lv.{level} for {price:,} coins!", color=discord.Color.green(), client=interaction.client),
+        )

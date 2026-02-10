@@ -128,7 +128,13 @@ def setup(bot, group=None):
                 freeze_val,
             ))
             await db.commit()
-        
+            if new_streak >= 10:
+                try:
+                    from database import check_and_unlock_achievement
+                    await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "daily_streak_10", None)
+                except Exception:
+                    pass
+
         # Success message
         fields = [
             ("💰 Reward", f"**{COINS_DAILY_REWARD:,}** coins", True),

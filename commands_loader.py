@@ -84,6 +84,7 @@ def load_all_commands(bot):
         "commands.moderation.incident_mode",
         "commands.moderation.kpis",
         "commands.moderation.raid_protection",
+        "commands.moderation.embed_builder",
         "commands.moderation.lock",
         "commands.moderation.schedule",
         "commands.economy.balance",
@@ -192,6 +193,7 @@ def load_all_commands(bot):
         "commands.moderation.incident_mode": moderation_group,
         "commands.moderation.kpis": moderation_group,
         "commands.moderation.raid_protection": moderation_group,
+        "commands.moderation.embed_builder": moderation_group,
         "commands.moderation.lock": moderation_group,
         "commands.moderation.schedule": tools_group,  # Moved: mod at 25 limit
         "commands.general.help": general_group,
