@@ -41,16 +41,19 @@ def setup(bot, group=None):
         # Get current date in UTC
         today = datetime.now(timezone.utc).date().isoformat()
         
+        current_month = datetime.now(timezone.utc).strftime("%Y-%m")
+        
         async with aiosqlite.connect(DB_PATH) as db:
             # Check last claim
             cur = await db.execute(
-                "SELECT last_claim_date, streak_days FROM daily_claims WHERE guild_id=? AND user_id=?",
+                "SELECT last_claim_date, streak_days, freeze_used_month FROM daily_claims WHERE guild_id=? AND user_id=?",
                 (interaction.guild.id, interaction.user.id),
             )
             row = await cur.fetchone()
             
             if row:
                 last_claim_date, streak_days = row[0], int(row[1])
+                freeze_used_month = row[2] if len(row) > 2 else None
                 
                 # Check if already claimed today
                 if last_claim_date == today:
@@ -77,20 +80,27 @@ def setup(bot, group=None):
                         ephemeral=True,
                     )
                 
-                # Check if streak continues (claimed yesterday)
+                # Check if streak continues (claimed yesterday) or use streak freeze
                 yesterday = datetime.now(timezone.utc).date()
                 from datetime import timedelta
-                yesterday = (yesterday - timedelta(days=1)).isoformat()
+                yesterday_str = (yesterday - timedelta(days=1)).isoformat()
                 
-                if last_claim_date == yesterday:
+                if last_claim_date == yesterday_str:
                     # Streak continues
                     new_streak = streak_days + 1
+                    used_freeze = False
+                elif freeze_used_month != current_month:
+                    # Streak freeze: one per month - keep streak, use freeze
+                    new_streak = streak_days
+                    used_freeze = True
                 else:
                     # Streak broken, reset to 1
                     new_streak = 1
+                    used_freeze = False
             else:
                 # First time claiming
                 new_streak = 1
+                used_freeze = False
             
             # Award coins
             await add_coins(
@@ -101,20 +111,21 @@ def setup(bot, group=None):
                 f"Daily reward (streak: {new_streak})",
             )
             
-            # Update or insert claim record
+            # Update or insert claim record (set freeze_used_month when freeze is used)
+            freeze_val = current_month if used_freeze else None
             await db.execute("""
-                INSERT INTO daily_claims (guild_id, user_id, last_claim_date, streak_days)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO daily_claims (guild_id, user_id, last_claim_date, streak_days, freeze_used_month)
+                VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT(guild_id, user_id) DO UPDATE SET
-                    last_claim_date = ?,
-                    streak_days = ?
+                    last_claim_date = excluded.last_claim_date,
+                    streak_days = excluded.streak_days,
+                    freeze_used_month = COALESCE(excluded.freeze_used_month, freeze_used_month)
             """, (
                 interaction.guild.id,
                 interaction.user.id,
                 today,
                 new_streak,
-                today,
-                new_streak,
+                freeze_val,
             ))
             await db.commit()
         
@@ -123,10 +134,12 @@ def setup(bot, group=None):
             ("💰 Reward", f"**{COINS_DAILY_REWARD:,}** coins", True),
             ("🔥 Streak", f"{new_streak} day(s)", True),
         ]
+        if used_freeze:
+            fields.append(("🛡️ Streak Freeze", "Used 1 monthly freeze to preserve streak", True))
         
         embed = obsidian_embed(
             "🎁 Daily Reward Claimed!",
-            "Come back tomorrow for another reward!",
+            "Come back tomorrow for another reward!" + ("\n\n_Used streak freeze (1 per month)._" if used_freeze else ""),
             color=discord.Color.green(),
             fields=fields,
             client=interaction.client,

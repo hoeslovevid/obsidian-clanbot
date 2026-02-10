@@ -1147,8 +1147,18 @@ async def init_db() -> None:
             user_id INTEGER NOT NULL,
             last_claim_date TEXT NOT NULL,
             streak_days INTEGER NOT NULL DEFAULT 1,
+            freeze_used_month TEXT,
             PRIMARY KEY (guild_id, user_id)
         )""")
+        # Migration: add freeze_used_month if missing (existing DBs)
+        try:
+            cur = await db.execute("PRAGMA table_info(daily_claims)")
+            cols = [row[1] for row in await cur.fetchall()]
+            if "freeze_used_month" not in cols:
+                await db.execute("ALTER TABLE daily_claims ADD COLUMN freeze_used_month TEXT")
+                await db.commit()
+        except Exception as e:
+            logger.warning(f"[db] daily_claims freeze_used_month migration: {e}")
 
         await db.execute("""
         CREATE TABLE IF NOT EXISTS baro_visits (

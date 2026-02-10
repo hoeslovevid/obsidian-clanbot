@@ -46,6 +46,9 @@ def setup(bot, group=None):
 
         limit = max(1, min(25, limit))
 
+        from database import get_user_balance
+        current_balance = await get_user_balance(interaction.guild.id, target.id)
+
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute("""
                 SELECT amount, transaction_type, description, created_at
@@ -68,13 +71,15 @@ def setup(bot, group=None):
             )
 
         lines = []
+        running_balance = current_balance
         for amount, txn_type, desc, created_at in rows:
             sign = "+" if amount >= 0 else ""
             # Shorten type for display (e.g. TRANSFER_IN -> Transfer In)
             type_label = txn_type.replace("_", " ").title() if txn_type else "?"
             desc_short = (desc[:40] + "…") if desc and len(desc) > 40 else (desc or "")
             time_str = created_at[:19].replace("T", " ") if created_at else "?"
-            lines.append(f"**{sign}{amount:,}** {type_label} — {desc_short} — {time_str}")
+            lines.append(f"**{sign}{amount:,}** {type_label} — {desc_short} — {time_str} → **{running_balance:,}**")
+            running_balance -= amount
 
         desc_text = "\n".join(lines)
         title = f"📜 Transactions for {target.display_name}"

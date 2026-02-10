@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 from utils import obsidian_embed
 from warframe_api import get_baro_status
+from views import RetryView
 from database import DB_PATH
 import aiosqlite
 import dateparser
@@ -163,13 +164,24 @@ def setup(bot, group=None):
         is_active, baro_data = await get_baro_status()
         
         if not baro_data:
+            async def on_retry(btn_interaction: discord.Interaction):
+                if btn_interaction.user.id != interaction.user.id:
+                    return await btn_interaction.response.send_message("Only the person who ran this can retry.", ephemeral=True)
+                await btn_interaction.response.defer()
+                is_active, new_data = await get_baro_status()
+                if not new_data:
+                    return await btn_interaction.followup.send("Still unable to fetch. Try again later.", ephemeral=True)
+                emb = build_baro_embed(new_data, is_active, interaction.client)
+                await btn_interaction.message.edit(embed=emb, view=None)
             return await interaction.followup.send(
                 embed=obsidian_embed(
                     "❌ Error",
                     "Could not fetch Baro Ki'Teer data from Warframe API. Please try again later.",
                     color=discord.Color.red(),
+                    client=interaction.client,
                 ),
-                ephemeral=True
+                view=RetryView(on_retry),
+                ephemeral=True,
             )
         
         embed = build_baro_embed(baro_data, is_active, interaction.client)

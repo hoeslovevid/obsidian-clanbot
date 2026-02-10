@@ -238,6 +238,111 @@ class LFGView(discord.ui.View):
         await interaction.followup.send(f"You {action} the group! ({current_count}/{max_players}){thread_mention}", ephemeral=True)
 
 
+async def create_lfg_post(bot, interaction, mission_type: str, max_players: int, duration_hours: int, description: str, ping_role_id: int | None):
+    """Create an LFG post. Used by both /warframe lfg and the Quick LFG context menu."""
+    from utils import get_mod_role
+
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=duration_hours)
+    mention = ""
+    if ping_role_id:
+        try:
+            cooldown_s = await get_guild_setting(interaction.guild.id, "lfg_ping_cooldown_minutes")
+            cooldown_min = int(cooldown_s) if cooldown_s and cooldown_s.isdigit() else 30
+            last_ping_s = await get_guild_setting(interaction.guild.id, "lfg_last_ping_ts")
+            last_ping_ts = int(last_ping_s) if last_ping_s and last_ping_s.isdigit() else 0
+            now_ts = int(datetime.now(timezone.utc).timestamp())
+            if now_ts - last_ping_ts >= max(0, cooldown_min) * 60:
+                role = interaction.guild.get_role(int(ping_role_id))
+                if role:
+                    mention = role.mention
+                    await set_guild_setting(interaction.guild.id, "lfg_last_ping_ts", str(now_ts))
+        except Exception:
+            pass
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            INSERT INTO lfg_posts (guild_id, channel_id, message_id, creator_id, mission_type, player_count, max_players, description, created_at, expires_at, status, ping_role_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?)
+        """, (
+            interaction.guild.id,
+            interaction.channel.id,
+            0,
+            interaction.user.id,
+            mission_type,
+            1,
+            max_players,
+            description[:500] if description else None,
+            datetime.now(timezone.utc).isoformat(),
+            expires_at.isoformat(),
+            int(ping_role_id or 0),
+        ))
+        await db.commit()
+        cur = await db.execute("SELECT last_insert_rowid()")
+        lfg_id = (await cur.fetchone())[0]
+
+    mission_name = mission_type
+    expires_str = f"Expires in {duration_hours}h • <t:{int(expires_at.timestamp())}:R>"
+    fields = [
+        ("🎯 Mission", mission_name, True),
+        ("👤 Created by", interaction.user.mention, True),
+        ("⏰ Expires", expires_str, True),
+    ]
+    if description:
+        fields.append(("📝 Notes", description[:500], False))
+    fields.append(("👥 Players", f"1. {interaction.user.display_name}\n\n_{max_players - 1} slot(s) remaining_", False))
+
+    embed = obsidian_embed(
+        "🔍 Looking for Group",
+        "",
+        color=discord.Color.blue(),
+        fields=fields,
+        footer=f"LFG ID: {lfg_id} • Click buttons below to join/leave",
+        client=interaction.client,
+    )
+    view = LFGView(lfg_id)
+
+    await interaction.response.send_message(content=mention if mention else None, embed=embed, view=view)
+    message = await interaction.original_response()
+    message_id = message.id
+
+    thread_id = None
+    try:
+        creator_name = interaction.user.display_name or interaction.user.name
+        thread_name = f"{creator_name} - {mission_name}"
+        if len(thread_name) > 100:
+            max_mission_len = 100 - len(creator_name) - 3
+            thread_name = f"{creator_name} - {mission_name[:max_mission_len]}" if max_mission_len > 0 else mission_name[:100]
+
+        thread = await message.create_thread(name=thread_name, auto_archive_duration=1440, reason="LFG group discussion thread")
+        thread_id = thread.id
+
+        await thread.set_permissions(interaction.guild.default_role, view_channel=False)
+        creator = interaction.guild.get_member(interaction.user.id)
+        if creator:
+            await thread.set_permissions(creator, view_channel=True, send_messages=True, read_message_history=True)
+        mod_role = get_mod_role(interaction.guild)
+        if mod_role:
+            await thread.set_permissions(mod_role, view_channel=True, send_messages=True, read_message_history=True, manage_messages=True)
+
+        welcome_msg = f"Welcome to the {mission_name} LFG thread!\n\nThis thread is for coordinating with {interaction.user.mention} and other players who join.\nOnly the creator, RSVPs, and moderators can see this thread."
+        await thread.send(welcome_msg)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Failed to create thread for LFG {lfg_id}: {e}")
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("UPDATE lfg_posts SET message_id=?, thread_id=? WHERE id=?", (message_id, thread_id, lfg_id))
+        await db.commit()
+
+    bot.add_view(view)
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO lfg_rsvps (lfg_id, user_id, response, created_at) VALUES (?, ?, 'JOIN', ?)",
+            (lfg_id, interaction.user.id, datetime.now(timezone.utc).isoformat()),
+        )
+        await db.commit()
+
+
 def setup(bot, group=None):
     """Register the lfg command."""
     command_decorator = group.command(name="lfg", description="Create an LFG post for a Warframe mission.") if group else bot.tree.command(name="lfg", description="Create an LFG post for a Warframe mission.")
@@ -262,21 +367,11 @@ def setup(bot, group=None):
         role_ping: str = ""
     ):
         """Create an LFG post for a Warframe mission."""
-        # Validate max_players
         if max_players < 1 or max_players > 8:
-            return await interaction.response.send_message(
-                "Max players must be between 1 and 8.",
-                ephemeral=True
-            )
-        
-        # Validate duration
+            return await interaction.response.send_message("Max players must be between 1 and 8.", ephemeral=True)
         if duration_hours < 1 or duration_hours > 168:
             duration_hours = 24
-        
-        # Calculate expiry time
-        expires_at = datetime.now(timezone.utc) + timedelta(hours=duration_hours)
 
-        # Optional role ping with cooldown
         ping_role_id = extract_id(role_ping) if role_ping else None
         if not ping_role_id:
             try:
@@ -286,167 +381,4 @@ def setup(bot, group=None):
             except Exception:
                 ping_role_id = None
 
-        mention = ""
-        if ping_role_id:
-            try:
-                cooldown_s = await get_guild_setting(interaction.guild.id, "lfg_ping_cooldown_minutes")
-                cooldown_min = int(cooldown_s) if cooldown_s and cooldown_s.isdigit() else 30
-                last_ping_s = await get_guild_setting(interaction.guild.id, "lfg_last_ping_ts")
-                last_ping_ts = int(last_ping_s) if last_ping_s and last_ping_s.isdigit() else 0
-
-                now_ts = int(datetime.now(timezone.utc).timestamp())
-                if now_ts - last_ping_ts >= max(0, cooldown_min) * 60:
-                    role = interaction.guild.get_role(int(ping_role_id))
-                    if role:
-                        mention = role.mention
-                        await set_guild_setting(interaction.guild.id, "lfg_last_ping_ts", str(now_ts))
-                else:
-                    mention = ""  # cooldown active
-            except Exception:
-                mention = ""
-        
-        # Create LFG post
-        async with aiosqlite.connect(DB_PATH) as db:
-            await db.execute("""
-                INSERT INTO lfg_posts (guild_id, channel_id, message_id, creator_id, mission_type, player_count, max_players, description, created_at, expires_at, status, ping_role_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?)
-            """, (
-                interaction.guild.id,
-                interaction.channel.id,
-                0,  # Will be updated after message is sent
-                interaction.user.id,
-                mission_type.value,
-                1,  # Creator counts as 1
-                max_players,
-                description[:500] if description else None,
-                datetime.now(timezone.utc).isoformat(),
-                expires_at.isoformat(),
-                int(ping_role_id or 0),
-            ))
-            await db.commit()
-            
-            # Get the LFG ID
-            cur = await db.execute("SELECT last_insert_rowid()")
-            lfg_id = (await cur.fetchone())[0]
-        
-        # Create embed with better formatting
-        mission_name = mission_type.value
-        
-        # Human-readable expiry: "Expires in Xh"
-        hrs = duration_hours
-        expires_str = f"Expires in {hrs}h • <t:{int(expires_at.timestamp())}:R>"
-        fields = [
-            ("🎯 Mission", mission_name, True),
-            ("👤 Created by", interaction.user.mention, True),
-            ("⏰ Expires", expires_str, True),
-        ]
-        
-        if description:
-            fields.append(("📝 Notes", description[:500], False))
-        
-        # Add players field
-        fields.append(("👥 Players", f"1. {interaction.user.display_name}\n\n_{max_players - 1} slot(s) remaining_", False))
-        
-        embed = obsidian_embed(
-            "🔍 Looking for Group",
-            "",
-            color=discord.Color.blue(),
-            fields=fields,
-            footer=f"LFG ID: {lfg_id} • Click buttons below to join/leave",
-            client=interaction.client,
-        )
-        
-        # Create view with buttons
-        view = LFGView(lfg_id)
-        
-        # Send message
-        await interaction.response.send_message(content=mention if mention else None, embed=embed, view=view)
-        
-        # Get the message ID from the response
-        message = await interaction.original_response()
-        message_id = message.id
-        
-        # Create a thread for this LFG post
-        thread = None
-        thread_id = None
-        try:
-            # Create thread name with creator and mission (max 100 chars)
-            creator_name = interaction.user.display_name or interaction.user.name
-            # Format: "CreatorName - Mission Type"
-            thread_name = f"{creator_name} - {mission_name}"
-            
-            # Truncate if too long (Discord limit is 100 chars)
-            if len(thread_name) > 100:
-                # Try to fit both names by truncating mission name
-                max_mission_len = 100 - len(creator_name) - 3  # 3 for " - "
-                if max_mission_len > 0:
-                    thread_name = f"{creator_name} - {mission_name[:max_mission_len]}"
-                else:
-                    # If creator name is too long, just use mission name
-                    thread_name = mission_name[:100]
-            
-            # Create thread with auto-archive duration
-            thread = await message.create_thread(
-                name=thread_name,
-                auto_archive_duration=1440,  # 24 hours
-                reason="LFG group discussion thread"
-            )
-            thread_id = thread.id
-            
-            # Set up thread permissions: only creator, RSVPs, and moderators can see it
-            # First, deny @everyone from viewing (Thread.edit() does not accept overwrites; use set_permissions)
-            await thread.set_permissions(
-                interaction.guild.default_role,
-                view_channel=False
-            )
-            
-            # Allow creator to view
-            creator = interaction.guild.get_member(interaction.user.id)
-            if creator:
-                await thread.set_permissions(
-                    creator,
-                    view_channel=True,
-                    send_messages=True,
-                    read_message_history=True
-                )
-            
-            # Allow moderators to view
-            mod_role = get_mod_role(interaction.guild)
-            if mod_role:
-                await thread.set_permissions(
-                    mod_role,
-                    view_channel=True,
-                    send_messages=True,
-                    read_message_history=True,
-                    manage_messages=True
-                )
-            
-            # Send welcome message in thread
-            welcome_msg = f"Welcome to the {mission_name} LFG thread!\n\n"
-            welcome_msg += f"This thread is for coordinating with {interaction.user.mention} and other players who join.\n"
-            welcome_msg += "Only the creator, RSVPs, and moderators can see this thread."
-            await thread.send(welcome_msg)
-            
-        except Exception as e:
-            # If thread creation fails, log but continue
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"Failed to create thread for LFG {lfg_id}: {e}")
-        
-        async with aiosqlite.connect(DB_PATH) as db:
-            await db.execute(
-                "UPDATE lfg_posts SET message_id=?, thread_id=? WHERE id=?",
-                (message_id, thread_id, lfg_id)
-            )
-            await db.commit()
-        
-        # Register the view for persistence
-        bot.add_view(view)
-        
-        # Add creator as first RSVP
-        async with aiosqlite.connect(DB_PATH) as db:
-            await db.execute("""
-                INSERT INTO lfg_rsvps (lfg_id, user_id, response, created_at)
-                VALUES (?, ?, 'JOIN', ?)
-            """, (lfg_id, interaction.user.id, datetime.now(timezone.utc).isoformat()))
-            await db.commit()
+        await create_lfg_post(bot, interaction, mission_type.value, max_players, duration_hours, description or "", ping_role_id)

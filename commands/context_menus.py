@@ -1,4 +1,4 @@
-"""Context menu commands - right-click on users for quick actions."""
+"""Context menu commands - right-click on users/messages for quick actions."""
 import discord
 from discord import app_commands
 
@@ -89,3 +89,15 @@ def setup(bot, group=None):
             client=interaction.client,
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @bot.tree.context_menu(name="Create LFG")
+    async def create_lfg_context(interaction: discord.Interaction, message: discord.Message):
+        """Quick LFG: create an LFG post in this channel with default settings."""
+        from commands.warframe.lfg import create_lfg_post
+
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=error_embed("Invalid Context", "This can only be used in a server.", client=interaction.client),
+                ephemeral=True,
+            )
+        await create_lfg_post(bot, interaction, "Other", 4, 24, "", None)

@@ -112,6 +112,15 @@ class ConfirmView(discord.ui.View):
     async def on_timeout(self):
         for c in self.children:
             c.disabled = True
+        try:
+            if self.message:
+                await self.message.edit(
+                    content="⏰ Timed out. Please run the command again.",
+                    embed=None,
+                    view=self,
+                )
+        except Exception:
+            pass
 
 
 class SetLimitSelect(discord.ui.Select):

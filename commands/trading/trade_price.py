@@ -4,6 +4,7 @@ from discord import app_commands
 
 from utils import obsidian_embed, error_embed
 from warframe_api import search_warframe_market_item, get_warframe_market_price
+from views import RetryView
 
 POPULAR_ITEMS = [
     "Mesa Prime Set", "Saryn Prime Set", "Rhino Prime Set", "Nova Prime Set",
@@ -26,6 +27,40 @@ async def item_autocomplete(interaction: discord.Interaction, current: str):
         contains = [i for i in POPULAR_ITEMS if current_lower in i.lower() and i not in exact and i not in start]
         matches = (exact + start + contains)[:AUTOCOMPLETE_MAX_CHOICES]
     return [app_commands.Choice(name=m, value=m) for m in matches]
+
+
+def _build_trade_embed(item_data: dict, price_data: dict, platform_val: str, client) -> discord.Embed:
+    """Build the trade price embed from item and price data."""
+    item_name = item_data.get("item_name", "Unknown")
+    item_url_name = item_data.get("url_name", "")
+    fields = []
+    sell_orders = price_data.get("sell_orders", [])[:5]
+    if sell_orders:
+        sell_list = [f"**{o.get('platinum', 0)}p** (R{o.get('mod_rank', 0)}, x{o.get('quantity', 1)})" if o.get("mod_rank", 0) > 0 else f"**{o.get('platinum', 0)}p** (x{o.get('quantity', 1)})" for o in sell_orders]
+        fields.append(("💰 Cheapest Sellers", "\n".join(sell_list[:5]), False))
+    buy_orders = price_data.get("buy_orders", [])[:5]
+    if buy_orders:
+        buy_list = [f"**{o.get('platinum', 0)}p** (R{o.get('mod_rank', 0)}, x{o.get('quantity', 1)})" if o.get("mod_rank", 0) > 0 else f"**{o.get('platinum', 0)}p** (x{o.get('quantity', 1)})" for o in buy_orders]
+        fields.append(("💵 Highest Buyers", "\n".join(buy_list[:5]), False))
+    summary = []
+    if price_data.get("lowest_sell"):
+        summary.append(f"**Lowest Sell:** {price_data['lowest_sell']}p")
+    if price_data.get("highest_buy"):
+        summary.append(f"**Highest Buy:** {price_data['highest_buy']}p")
+    stats = price_data.get("stats")
+    if stats and stats.get("avg_price"):
+        summary.append(f"**90-Day Average:** {stats['avg_price']:.0f}p")
+    if summary:
+        fields.append(("📊 Price Summary", "\n".join(summary), False))
+    fields.append(("Platform", platform_val.upper(), True))
+    market_url = f"https://warframe.market/items/{item_url_name}"
+    return obsidian_embed(
+        f"💎 Market Prices: {item_name}",
+        f"[View on Warframe Market]({market_url})",
+        color=discord.Color.gold(),
+        fields=fields,
+        client=client,
+    )
 
 
 def setup(bot, group=None):
@@ -62,13 +97,28 @@ def setup(bot, group=None):
                 "\n\nIf the bot runs on a server, the Warframe Market API may block requests. "
                 "Set the **WARFRAME_MARKET_PROXY** (or **HTTPS_PROXY**) environment variable to an HTTP(S) proxy URL to try to bypass this."
             )
+
+            async def on_retry_search(btn_interaction: discord.Interaction):
+                if btn_interaction.user.id != interaction.user.id:
+                    return await btn_interaction.response.send_message("Only the person who ran this can retry.", ephemeral=True)
+                await btn_interaction.response.defer()
+                new_item = await search_warframe_market_item(item, platform_val)
+                if not new_item:
+                    return await btn_interaction.followup.send("Still unable to find item. Try again later.", ephemeral=True)
+                new_price = await get_warframe_market_price(new_item.get("url_name", ""), platform_val)
+                if not new_price:
+                    return await btn_interaction.followup.send("Found item but could not fetch prices. Try again later.", ephemeral=True)
+                emb = _build_trade_embed(new_item, new_price, platform_val, interaction.client)
+                await btn_interaction.message.edit(embed=emb, view=None)
+
             return await interaction.followup.send(
                 embed=error_embed(
                     "Item Not Found",
                     f"Could not find '{item}' on Warframe Market. Please check the spelling and try again.{hint}",
                     client=interaction.client,
                 ),
-                ephemeral=True
+                view=RetryView(on_retry_search),
+                ephemeral=True,
             )
         
         item_name = item_data.get("item_name", item)
@@ -78,74 +128,25 @@ def setup(bot, group=None):
         price_data = await get_warframe_market_price(item_url_name, platform_val)
         
         if not price_data:
+            async def on_retry_price(btn_interaction: discord.Interaction):
+                if btn_interaction.user.id != interaction.user.id:
+                    return await btn_interaction.response.send_message("Only the person who ran this can retry.", ephemeral=True)
+                await btn_interaction.response.defer()
+                new_price = await get_warframe_market_price(item_url_name, platform_val)
+                if not new_price:
+                    return await btn_interaction.followup.send("Still unable to fetch prices. Try again later.", ephemeral=True)
+                emb = _build_trade_embed(item_data, new_price, platform_val, interaction.client)
+                await btn_interaction.message.edit(embed=emb, view=None)
+
             return await interaction.followup.send(
                 embed=error_embed(
                     "Price Data Unavailable",
                     f"Could not fetch price data for '{item_name}'. The item may not be tradeable or have no active listings.",
                     client=interaction.client,
                 ),
-                ephemeral=True
+                view=RetryView(on_retry_price),
+                ephemeral=True,
             )
         
-        # Build embed
-        fields = []
-        
-        # Sell orders (cheapest)
-        sell_orders = price_data.get("sell_orders", [])[:5]
-        if sell_orders:
-            sell_list = []
-            for order in sell_orders:
-                price = order.get("platinum", 0)
-                quantity = order.get("quantity", 1)
-                mod_rank = order.get("mod_rank", 0)
-                if mod_rank > 0:
-                    sell_list.append(f"**{price}p** (R{mod_rank}, x{quantity})")
-                else:
-                    sell_list.append(f"**{price}p** (x{quantity})")
-            fields.append(("💰 Cheapest Sellers", "\n".join(sell_list[:5]), False))
-        
-        # Buy orders (highest offers)
-        buy_orders = price_data.get("buy_orders", [])[:5]
-        if buy_orders:
-            buy_list = []
-            for order in buy_orders:
-                price = order.get("platinum", 0)
-                quantity = order.get("quantity", 1)
-                mod_rank = order.get("mod_rank", 0)
-                if mod_rank > 0:
-                    buy_list.append(f"**{price}p** (R{mod_rank}, x{quantity})")
-                else:
-                    buy_list.append(f"**{price}p** (x{quantity})")
-            fields.append(("💵 Highest Buyers", "\n".join(buy_list[:5]), False))
-        
-        # Price summary
-        summary = []
-        if price_data.get("lowest_sell"):
-            summary.append(f"**Lowest Sell:** {price_data['lowest_sell']}p")
-        if price_data.get("highest_buy"):
-            summary.append(f"**Highest Buy:** {price_data['highest_buy']}p")
-        
-        # Get 90-day average if available
-        stats = price_data.get("stats")
-        if stats:
-            avg_price = stats.get("avg_price")
-            if avg_price:
-                summary.append(f"**90-Day Average:** {avg_price:.0f}p")
-        
-        if summary:
-            fields.append(("📊 Price Summary", "\n".join(summary), False))
-        
-        fields.append(("Platform", platform_val.upper(), True))
-        
-        # Add market link
-        market_url = f"https://warframe.market/items/{item_url_name}"
-        
-        embed = obsidian_embed(
-            f"💎 Market Prices: {item_name}",
-            f"[View on Warframe Market]({market_url})",
-            color=discord.Color.gold(),
-            fields=fields,
-            client=interaction.client,
-        )
-        
+        embed = _build_trade_embed(item_data, price_data, platform_val, interaction.client)
         await interaction.followup.send(embed=embed, ephemeral=True)
