@@ -252,7 +252,7 @@ class HelpSelect(discord.ui.Select):
                 if len(commands_text) + len(f"\n... {remaining} more (use pagination)") <= 1024:
                     commands_text += f"\n... {remaining} more (use pagination)"
         
-        # Group descriptions
+        # Group descriptions and colors per group
         group_descriptions = {
             "general": "General bot commands and utilities",
             "economy": "💰 Economy and coin management commands",
@@ -264,10 +264,20 @@ class HelpSelect(discord.ui.Select):
             "updates": "📝 Bot update log commands (moderators only)",
             "music": "🎵 Music and audio commands"
         }
-        
-        # Build embed
+        group_colors = {
+            "general": discord.Color.blurple(),
+            "economy": discord.Color.gold(),
+            "warframe": discord.Color.blue(),
+            "community": discord.Color.green(),
+            "trading": discord.Color.blue(),
+            "mod": discord.Color.orange(),
+            "giveaways": discord.Color.purple(),
+            "updates": discord.Color.dark_grey(),
+            "music": discord.Color.magenta(),
+        }
         group_name = group.name.title()
         group_desc = group_descriptions.get(group.name, group.description or "Commands")
+        help_color = group_colors.get(group.name, discord.Color.blurple())
         
         # Add page info to description if multiple pages
         if total_pages > 1:
@@ -276,7 +286,8 @@ class HelpSelect(discord.ui.Select):
         embed = obsidian_embed(
             f"📋 {group_name} Commands",
             group_desc,
-            color=discord.Color.blurple(),
+            color=help_color,
+            thumbnail=interaction.client.user.display_avatar.url if interaction.client and interaction.client.user else None,
             fields=[("Commands", commands_text, False)],
             client=interaction.client,
         )
@@ -439,6 +450,8 @@ def setup(bot, group=None):
             "Command Reference",
             desc,
             color=discord.Color.blurple(),
+            thumbnail=interaction.guild.icon.url if interaction.guild and interaction.guild.icon else (interaction.client.user.display_avatar.url if interaction.client and interaction.client.user else None),
+            footer="Select a category below or use /help <command> for specific help",
             client=interaction.client,
         )
         

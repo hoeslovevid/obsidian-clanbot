@@ -66,16 +66,16 @@ def setup(bot, group=None):
                         ("⏰ Next Claim", f"<t:{next_ts}:R>", True),
                     ]
                     
-                    return await interaction.response.send_message(
-                        embed=obsidian_embed(
-                            "⏰ Already Claimed",
-                            "You've already claimed your daily reward today!",
-                            color=discord.Color.orange(),
-                            fields=fields,
-                            client=interaction.client,
-                        ),
-                        ephemeral=True,
+                    embed = obsidian_embed(
+                        "⏰ Already Claimed",
+                        "You've already claimed your daily reward today!",
+                        color=discord.Color.orange(),
+                        fields=fields,
+                        thumbnail=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
+                        footer="Come back tomorrow for your next reward",
+                        client=interaction.client,
                     )
+                    return await interaction.response.send_message(embed=embed, ephemeral=True)
                 
                 # Check if streak continues (claimed yesterday) or use streak freeze
                 yesterday = datetime.now(timezone.utc).date()
@@ -163,7 +163,8 @@ def setup(bot, group=None):
             "Come back tomorrow for another reward!" + ("\n\n_Used streak freeze (1 per month)._" if used_freeze else ""),
             color=color,
             fields=fields,
+            thumbnail=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
+            footer="Use /daily tomorrow • Streak resets if you miss a day",
             client=interaction.client,
         )
-
         await interaction.response.send_message(embed=embed, ephemeral=True)

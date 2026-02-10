@@ -228,12 +228,15 @@ def setup(bot, group=None):
             fields.append((f"Suggestion #{suggestion_id}", value, False))
         
         status_display = status_filter if status_filter else "All"
+        status_colors = {"PENDING": discord.Color.orange(), "APPROVED": discord.Color.green(), "REJECTED": discord.Color.red(), "IMPLEMENTED": discord.Color.blue()}
+        color = status_colors.get(status_filter, discord.Color.blue()) if status_filter else discord.Color.blue()
         embed = obsidian_embed(
             f"💡 Suggestions ({status_display})",
             f"Showing {len(rows)} suggestion(s). Use buttons on individual suggestion messages to manage them.",
-            color=discord.Color.blue(),
+            color=color,
             fields=fields,
+            thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
+            footer=f"{len(rows)} suggestion(s) • Filter: {status_display}",
             client=interaction.client,
         )
-        
         await interaction.followup.send(embed=embed, ephemeral=True)

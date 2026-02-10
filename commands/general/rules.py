@@ -47,6 +47,8 @@ async def update_rules_channel_message(guild: discord.Guild, bot):
             "📜 Server Rules",
             rules_text,
             color=discord.Color.blue(),
+            thumbnail=guild.icon.url if guild.icon else None,
+            footer=f"{guild.name} • Use /help for bot commands",
             client=bot,
         )
         

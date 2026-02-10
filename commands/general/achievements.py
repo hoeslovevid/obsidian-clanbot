@@ -171,11 +171,13 @@ def setup(bot, group=None):
                 desc += "\n"
             desc += "\n"
         
+        total_ach = len(rows)
         embed = obsidian_embed(
             "🏆 Available Achievements",
             desc[:4000],
             color=discord.Color.blue(),
+            thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
+            footer=f"{total_ach} achievement(s) available • ✅ = unlocked, 🔒 = locked",
             client=interaction.client,
         )
-        
         await interaction.followup.send(embed=embed, ephemeral=True)

@@ -141,23 +141,25 @@ def setup(bot, group=None):
                         ephemeral=True
                     )
             
-            desc = f"**Item:** {item_name}\n"
-            desc += f"**Description:** {description}\n"
-            desc += f"**Price:** {price:,} coins\n"
-            desc += f"**Type:** {item_type.value.replace('_', ' ').title()}\n"
+            fields = [
+                ("Item", item_name, True),
+                ("Description", description[:1024], False),
+                ("Price", f"{price:,} coins", True),
+                ("Type", item_type.value.replace('_', ' ').title(), True),
+                ("Stock", "Unlimited" if stock_value == -1 else str(stock_value), True),
+            ]
             if item_value:
-                desc += f"**Value:** {item_value}\n"
-            desc += f"**Stock:** {'Unlimited' if stock_value == -1 else stock_value}\n"
-            
-            await interaction.followup.send(
-                embed=obsidian_embed(
-                    "✅ Item Added",
-                    desc,
-                    color=discord.Color.green(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
+                fields.insert(4, ("Value", item_value[:1024], True))
+            embed = obsidian_embed(
+                "✅ Item Added",
+                "",
+                color=discord.Color.green(),
+                fields=fields,
+                thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
+                footer="Use action:Remove to delete from shop",
+                client=interaction.client,
             )
+            await interaction.followup.send(embed=embed, ephemeral=True)
         
         elif action.lower() == "remove":
             if not item_name:
@@ -194,15 +196,15 @@ def setup(bot, group=None):
                 """, (row[0],))
                 await db.commit()
             
-            await interaction.followup.send(
-                embed=obsidian_embed(
-                    "✅ Item Removed",
-                    f"Item '{item_name}' has been removed from the shop.",
-                    color=discord.Color.green(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
+            embed = obsidian_embed(
+                "✅ Item Removed",
+                f"Item '{item_name}' has been removed from the shop.",
+                color=discord.Color.green(),
+                thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
+                footer="Item disabled; can be re-enabled via database",
+                client=interaction.client,
             )
+            await interaction.followup.send(embed=embed, ephemeral=True)
         
         elif action.lower() == "restock":
             if not item_name or stock is None:
@@ -239,15 +241,15 @@ def setup(bot, group=None):
                 """, (stock, row[0]))
                 await db.commit()
             
-            await interaction.followup.send(
-                embed=obsidian_embed(
-                    "✅ Stock Updated",
-                    f"Stock for '{item_name}' has been set to {stock if stock >= 0 else 'Unlimited'}.",
-                    color=discord.Color.green(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
+            embed = obsidian_embed(
+                "✅ Stock Updated",
+                f"Stock for '{item_name}' has been set to {stock if stock >= 0 else 'Unlimited'}.",
+                color=discord.Color.green(),
+                thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
+                footer=f"Item: {item_name}",
+                client=interaction.client,
             )
+            await interaction.followup.send(embed=embed, ephemeral=True)
         
         elif action.lower() == "list":
             async with aiosqlite.connect(DB_PATH) as db:
@@ -277,15 +279,15 @@ def setup(bot, group=None):
                 desc += f"{status} **{item_name}** - {price:,} coins {stock_text}\n"
                 desc += f"   {description}\n\n"
             
-            await interaction.followup.send(
-                embed=obsidian_embed(
-                    "📋 Shop Items",
-                    desc[:4000],
-                    color=discord.Color.blue(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
+            embed = obsidian_embed(
+                "📋 Shop Items",
+                desc[:4000],
+                color=discord.Color.blue(),
+                thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
+                footer=f"{len(rows)} item(s) • Use action:Add/Remove/Restock to manage",
+                client=interaction.client,
             )
+            await interaction.followup.send(embed=embed, ephemeral=True)
         
         else:
             await interaction.followup.send(

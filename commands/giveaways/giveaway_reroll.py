@@ -163,12 +163,12 @@ def setup(bot, group=None):
             else:
                 winner_mentions.append(f"<@{winner_id}>")
         
-        await interaction.followup.send(
-            embed=obsidian_embed(
-                "✅ Winners Rerolled",
-                f"New winner{'s' if len(winners) > 1 else ''} selected:\n\n" + "\n".join(winner_mentions),
-                color=discord.Color.green(),
-                client=interaction.client,
-            ),
-            ephemeral=True
+        embed = obsidian_embed(
+            "✅ Winners Rerolled",
+            f"New winner{'s' if len(winners) > 1 else ''} selected:\n\n" + "\n".join(winner_mentions),
+            color=discord.Color.green(),
+            thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
+            footer=f"{len(winners)} new winner(s)",
+            client=interaction.client,
         )
+        await interaction.followup.send(embed=embed, ephemeral=True)

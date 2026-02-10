@@ -91,6 +91,8 @@ def setup(bot, group=None):
             "🌊 Duviri Circuit",
             desc,
             color=discord.Color.blue(),
+            thumbnail=interaction.guild.icon.url if interaction.guild and interaction.guild.icon else None,
+            footer="warframestat.us • Refreshes every 60s • Timestamps in your timezone",
             client=interaction.client,
         )
         

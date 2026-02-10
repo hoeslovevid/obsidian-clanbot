@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from utils import obsidian_embed, ECONOMY_ENABLED
-from database import DB_PATH, get_user_balance, remove_coins, add_coins
+from database import DB_PATH, remove_coins, add_coins
 import aiosqlite  # type: ignore
 
 
@@ -67,8 +67,13 @@ def setup(bot, group=None):
                 ephemeral=True
             )
         
-        # Check balance
-        balance = await get_user_balance(interaction.guild.id, interaction.user.id)
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT balance FROM user_balances WHERE guild_id=? AND user_id=?",
+                (interaction.guild.id, interaction.user.id),
+            )
+            row = await cur.fetchone()
+            balance = row[0] or 0 if row else 0
         if balance < amount:
             return await interaction.followup.send(
                 embed=obsidian_embed(
@@ -86,14 +91,12 @@ def setup(bot, group=None):
         total_return = int(amount * (1 + interest_rate))
         profit = total_return - amount
         
-        # Check for existing investment
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute("""
                 SELECT COUNT(*) FROM investments 
                 WHERE guild_id=? AND user_id=? AND collected=0
             """, (interaction.guild.id, interaction.user.id))
             existing_count = (await cur.fetchone())[0]
-            
             if existing_count > 0:
                 return await interaction.followup.send(
                     embed=obsidian_embed(
@@ -143,20 +146,22 @@ def setup(bot, group=None):
             ))
             await db.commit()
         
-        await interaction.followup.send(
-            embed=obsidian_embed(
-                "✅ Investment Created",
-                f"You invested **{amount:,}** coins for **{duration.value} days**.\n\n"
-                f"**Interest Rate:** {interest_rate * 100:.0f}%\n"
-                f"**Total Return:** {total_return:,} coins\n"
-                f"**Profit:** {profit:,} coins\n"
-                f"**Matures:** <t:{int(maturity_date.timestamp())}:F>\n\n"
-                f"Use `/invest_status` to check your investment.",
-                color=discord.Color.green(),
-                client=interaction.client,
-            ),
-            ephemeral=True
+        fields = [
+            ("💰 Invested", f"{amount:,} coins", True),
+            ("📈 Interest", f"{interest_rate * 100:.0f}%", True),
+            ("💎 Total Return", f"{total_return:,} coins (+{profit:,})", True),
+            ("⏰ Matures", f"<t:{int(maturity_date.timestamp())}:F>", False),
+        ]
+        embed = obsidian_embed(
+            "✅ Investment Created",
+            f"Your investment is locked for **{duration.value} days**. Use `/invest_status` to check progress.",
+            color=discord.Color.green(),
+            thumbnail=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
+            fields=fields,
+            footer=f"Matures <t:{int(maturity_date.timestamp())}:R>",
+            client=interaction.client,
         )
+        await interaction.followup.send(embed=embed, ephemeral=True)
     
     command_decorator = group.command(name="invest_status", description="Check your investment status.") if group else bot.tree.command(name="invest_status", description="Check your investment status.")
     
@@ -236,15 +241,15 @@ def setup(bot, group=None):
             desc += f"**Time Remaining:** {days}d {hours}h {minutes}m\n"
             desc += f"**Matures:** <t:{int(maturity_date.timestamp())}:F>"
         
-        await interaction.followup.send(
-            embed=obsidian_embed(
-                "💼 Investment Status",
-                desc,
-                color=discord.Color.blue(),
-                client=interaction.client,
-            ),
-            ephemeral=True
+        embed = obsidian_embed(
+            "💼 Investment Status",
+            desc,
+            color=discord.Color.blue(),
+            thumbnail=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
+            footer=f"Use /invest_collect when ready",
+            client=interaction.client,
         )
+        await interaction.followup.send(embed=embed, ephemeral=True)
     
     command_decorator = group.command(name="invest_collect", description="Collect your matured investment returns.") if group else bot.tree.command(name="invest_collect", description="Collect your matured investment returns.")
     
@@ -331,15 +336,15 @@ def setup(bot, group=None):
             f"Investment return: {amount:,} + {profit:,} profit"
         )
         
-        await interaction.followup.send(
-            embed=obsidian_embed(
-                "✅ Investment Collected",
-                f"You collected **{total_return:,}** coins from your investment!\n\n"
-                f"**Original:** {amount:,} coins\n"
-                f"**Profit:** {profit:,} coins\n"
-                f"**Total:** {total_return:,} coins",
-                color=discord.Color.green(),
-                client=interaction.client,
-            ),
-            ephemeral=True
+        embed = obsidian_embed(
+            "✅ Investment Collected",
+            f"You collected **{total_return:,}** coins from your investment!\n\n"
+            f"**Original:** {amount:,} coins\n"
+            f"**Profit:** {profit:,} coins\n"
+            f"**Total:** {total_return:,} coins",
+            color=discord.Color.green(),
+            thumbnail=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
+            footer=f"+{profit:,} profit",
+            client=interaction.client,
         )
+        await interaction.followup.send(embed=embed, ephemeral=True)

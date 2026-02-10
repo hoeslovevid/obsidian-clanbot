@@ -84,11 +84,17 @@ def setup(bot, group=None):
         url = f"{OVERFRAME_BASE}?search={urllib.parse.quote(search)}"
         tips = BUILD_TIPS.get(category_val, BUILD_TIPS["warframe"])
 
+        fields = [
+            ("Link", f"[Browse builds on Overframe.gg]({url})", False),
+            ("Modding tips", tips[:1024], False),
+        ]
         embed = obsidian_embed(
             f"🔧 Build: {search}",
-            f"**[Browse builds on Overframe.gg]({url})**\n\n{tips}",
+            "",
             color=discord.Color.blue(),
+            fields=fields,
+            thumbnail=interaction.guild.icon.url if interaction.guild and interaction.guild.icon else None,
+            footer=f"Category: {category_val} • Community builds may vary",
             client=interaction.client,
         )
-        embed.set_footer(text="Community builds may vary — experiment to find what works for you.")
         await interaction.response.send_message(embed=embed)

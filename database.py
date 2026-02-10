@@ -644,6 +644,27 @@ async def get_self_assignable_categories(guild_id: int) -> list:
         return [row[0] for row in rows if row[0]]
 
 
+async def get_self_assignable_roles_and_categories(guild_id: int) -> tuple[list, list]:
+    """Get roles and categories in one connection. Returns (roles_list, categories_list)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("""
+            SELECT role_id, category, description, max_roles
+            FROM self_assignable_roles
+            WHERE guild_id = ?
+            ORDER BY category, role_id
+        """, (guild_id,))
+        rows = await cur.fetchall()
+        roles = [{"role_id": row[0], "category": row[1], "description": row[2], "max_roles": row[3]} for row in rows]
+        cur2 = await db.execute("""
+            SELECT DISTINCT category FROM self_assignable_roles
+            WHERE guild_id = ? AND category IS NOT NULL
+            ORDER BY category
+        """, (guild_id,))
+        cat_rows = await cur2.fetchall()
+        categories = [r[0] for r in cat_rows if r[0]]
+        return (roles, categories)
+
+
 # --------------------- Level Roles Functions ---------------------
 async def add_level_role(guild_id: int, level: int, role_id: int):
     """Add a level role (role assigned at a specific level)."""

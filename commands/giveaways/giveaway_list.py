@@ -38,7 +38,19 @@ def setup(bot, group=None):
                 ORDER BY end_time ASC
             """, (interaction.guild.id,))
             rows = await cur.fetchall()
-        
+
+            # Get all entry counts in one query (same connection)
+            entry_counts = {row[0]: 0 for row in rows}
+            if rows:
+                placeholders = ",".join("?" * len(rows))
+                giveaway_ids = [row[0] for row in rows]
+                cur = await db.execute(
+                    f"SELECT giveaway_id, COUNT(*) FROM giveaway_entries WHERE giveaway_id IN ({placeholders}) GROUP BY giveaway_id",
+                    giveaway_ids,
+                )
+                for gid, count in await cur.fetchall():
+                    entry_counts[gid] = count
+
         if not rows:
             return await interaction.followup.send(
                 embed=obsidian_embed(
@@ -49,16 +61,6 @@ def setup(bot, group=None):
                 ),
                 ephemeral=True
             )
-
-        # Get all entry counts in one query
-        entry_counts = {}
-        async with aiosqlite.connect(DB_PATH) as db2:
-            for row in rows:
-                gid = row[0]
-                cur2 = await db2.execute(
-                    "SELECT COUNT(*) FROM giveaway_entries WHERE giveaway_id = ?", (gid,)
-                )
-                entry_counts[gid] = (await cur2.fetchone())[0]
 
         pages = []
         for i in range(0, len(rows), ITEMS_PER_PAGE):
@@ -101,15 +103,15 @@ def setup(bot, group=None):
             pages.append({"description": description.strip()})
 
         if len(pages) == 1:
-            await interaction.followup.send(
-                embed=obsidian_embed(
-                    "🎉 Active Giveaways",
-                    pages[0]["description"],
-                    color=discord.Color.gold(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
+            embed = obsidian_embed(
+                "🎉 Active Giveaways",
+                pages[0]["description"],
+                color=discord.Color.gold(),
+                thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
+                footer=f"{len(rows)} active giveaway(s)",
+                client=interaction.client,
             )
+            await interaction.followup.send(embed=embed, ephemeral=True)
         else:
             view = EmbedPaginator("🎉 Active Giveaways", pages, color=discord.Color.gold(), client=interaction.client)
             await interaction.followup.send(embed=view._build_embed(), view=view, ephemeral=True)

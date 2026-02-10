@@ -1,6 +1,7 @@
 """Transaction history command - view recent coin transactions."""
 import discord
 from discord import app_commands
+from datetime import datetime
 
 from utils import obsidian_embed, error_embed, ECONOMY_ENABLED
 from database import DB_PATH
@@ -46,10 +47,13 @@ def setup(bot, group=None):
 
         limit = max(1, min(25, limit))
 
-        from database import get_user_balance
-        current_balance = await get_user_balance(interaction.guild.id, target.id)
-
         async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT balance FROM user_balances WHERE guild_id=? AND user_id=?",
+                (interaction.guild.id, target.id),
+            )
+            bal_row = await cur.fetchone()
+            current_balance = bal_row[0] or 0 if bal_row else 0
             cur = await db.execute("""
                 SELECT amount, transaction_type, description, created_at
                 FROM economy_transactions
@@ -74,21 +78,26 @@ def setup(bot, group=None):
         running_balance = current_balance
         for amount, txn_type, desc, created_at in rows:
             sign = "+" if amount >= 0 else ""
-            # Shorten type for display (e.g. TRANSFER_IN -> Transfer In)
             type_label = txn_type.replace("_", " ").title() if txn_type else "?"
-            desc_short = (desc[:40] + "…") if desc and len(desc) > 40 else (desc or "")
-            time_str = created_at[:19].replace("T", " ") if created_at else "?"
-            lines.append(f"**{sign}{amount:,}** {type_label} — {desc_short} — {time_str} → **{running_balance:,}**")
+            desc_short = (desc[:35] + "…") if desc and len(desc) > 35 else (desc or "")
+            try:
+                ts = int(datetime.fromisoformat(created_at.replace("Z", "+00:00")).timestamp()) if created_at else 0
+                time_str = f"<t:{ts}:R>" if ts else "?"
+            except Exception:
+                time_str = created_at[:19].replace("T", " ") if created_at else "?"
+            emoji = "💰" if amount >= 0 else "📤"
+            lines.append(f"{emoji} **{sign}{amount:,}** {type_label} — {desc_short}\n   {time_str} → **{running_balance:,}**")
             running_balance -= amount
 
-        desc_text = "\n".join(lines)
+        desc_text = "\n\n".join(lines)
         title = f"📜 Transactions for {target.display_name}"
         embed = obsidian_embed(
             title,
             desc_text,
             color=discord.Color.gold(),
             author=target,
-            footer=f"Last {len(rows)} transaction(s)",
+            thumbnail=target.display_avatar.url if target.display_avatar else None,
+            footer=f"Balance: {current_balance:,} coins • Showing last {len(rows)} • Use limit:N for more",
             client=interaction.client,
         )
         await interaction.followup.send(embed=embed, ephemeral=True)

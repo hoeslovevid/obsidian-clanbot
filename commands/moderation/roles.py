@@ -4,7 +4,7 @@ from discord import app_commands
 from typing import Optional
 
 from utils import obsidian_embed, is_mod
-from database import get_self_assignable_roles, get_self_assignable_categories, add_self_assignable_role, remove_self_assignable_role
+from database import get_self_assignable_roles_and_categories, add_self_assignable_role, remove_self_assignable_role
 
 
 def setup(bot, group=None):
@@ -30,9 +30,7 @@ def setup(bot, group=None):
         await interaction.response.defer(ephemeral=True)
         
         if action.lower() == "list":
-            # List all self-assignable roles
-            roles_list = await get_self_assignable_roles(interaction.guild.id)
-            categories = await get_self_assignable_categories(interaction.guild.id)
+            roles_list, categories = await get_self_assignable_roles_and_categories(interaction.guild.id)
             
             if not roles_list:
                 return await interaction.followup.send(
@@ -73,15 +71,15 @@ def setup(bot, group=None):
                     if role_obj:
                         desc += f"• {role_obj.mention}\n"
             
-            await interaction.followup.send(
-                embed=obsidian_embed(
-                    "📋 Self-Assignable Roles",
-                    desc or "No roles found.",
-                    color=discord.Color.blue(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
+            embed = obsidian_embed(
+                "📋 Self-Assignable Roles",
+                desc or "No roles found.",
+                color=discord.Color.blue(),
+                thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
+                footer=f"{len(roles_list)} role(s) • Use /mod role_tools assign to get roles",
+                client=interaction.client,
             )
+            await interaction.followup.send(embed=embed, ephemeral=True)
         
         elif action.lower() == "add":
             # Add a self-assignable role (mods only)
@@ -110,15 +108,14 @@ def setup(bot, group=None):
             await add_self_assignable_role(interaction.guild.id, role.id, category)
             
             category_text = f' in category "{category}"' if category else ''
-            await interaction.followup.send(
-                embed=obsidian_embed(
-                    "✅ Role Added",
-                    f"{role.mention} has been added as a self-assignable role{category_text}.",
-                    color=discord.Color.green(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
+            embed = obsidian_embed(
+                "✅ Role Added",
+                f"{role.mention} has been added as a self-assignable role{category_text}.",
+                color=discord.Color.green(),
+                thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
+                client=interaction.client,
             )
+            await interaction.followup.send(embed=embed, ephemeral=True)
         
         elif action.lower() == "remove":
             # Remove a self-assignable role (mods only)
@@ -186,8 +183,7 @@ def setup(bot, group=None):
         
         await interaction.response.defer(ephemeral=True)
         
-        # Check if role is self-assignable
-        roles_list = await get_self_assignable_roles(interaction.guild.id)
+        roles_list, _ = await get_self_assignable_roles_and_categories(interaction.guild.id)
         role_data = next((r for r in roles_list if r["role_id"] == role.id), None)
         
         if not role_data:
@@ -229,15 +225,15 @@ def setup(bot, group=None):
             
             try:
                 await interaction.user.add_roles(role, reason="Self-assigned role")
-                await interaction.followup.send(
-                    embed=obsidian_embed(
-                        "✅ Role Assigned",
-                        f"You have been given {role.mention}.",
-                        color=discord.Color.green(),
-                        client=interaction.client,
-                    ),
-                    ephemeral=True
-                )
+            embed = obsidian_embed(
+                "✅ Role Assigned",
+                f"You have been given {role.mention}.",
+                color=discord.Color.green(),
+                thumbnail=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
+                footer=f"Use /mod role_tools assign remove to remove",
+                client=interaction.client,
+            )
+            await interaction.followup.send(embed=embed, ephemeral=True)
             except discord.Forbidden:
                 await interaction.followup.send(
                     embed=obsidian_embed(

@@ -78,7 +78,8 @@ def setup(bot, group=None):
             "Current auto-moderation configuration for this server.",
             color=discord.Color.blue() if settings["enabled"] else discord.Color.orange(),
             fields=fields,
+            thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
+            footer="Use /mod automod setup to configure",
             client=interaction.client,
         )
-        
         await interaction.response.send_message(embed=embed, ephemeral=False)

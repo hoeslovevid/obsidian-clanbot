@@ -70,28 +70,28 @@ def setup(bot, group=None):
             stats_type_val = stats_type.value if stats_type else "members"
             await set_server_stats_channel(interaction.guild.id, channel.id, stats_type_val)
             
-            await interaction.followup.send(
-                embed=obsidian_embed(
-                    "✅ Server Stats Configured",
-                    f"Server stats will be displayed in {channel.mention}.\nType: **{stats_type_val.title()}**",
-                    color=discord.Color.green(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
+            embed = obsidian_embed(
+                "✅ Server Stats Configured",
+                f"Server stats will be displayed in {channel.mention}.\nType: **{stats_type_val.title()}**",
+                color=discord.Color.green(),
+                thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
+                footer=f"Stats type: {stats_type_val}",
+                client=interaction.client,
             )
+            await interaction.followup.send(embed=embed, ephemeral=True)
         
         elif action.lower() == "remove":
             await remove_server_stats_channel(interaction.guild.id)
             
-            await interaction.followup.send(
-                embed=obsidian_embed(
-                    "✅ Server Stats Disabled",
-                    "Server stats channel has been disabled.",
-                    color=discord.Color.green(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
+            embed = obsidian_embed(
+                "✅ Server Stats Disabled",
+                "Server stats channel has been disabled.",
+                color=discord.Color.green(),
+                thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
+                footer="Use setup to reconfigure",
+                client=interaction.client,
             )
+            await interaction.followup.send(embed=embed, ephemeral=True)
         
         elif action.lower() == "status":
             settings = await get_server_stats_channel(interaction.guild.id)
@@ -110,15 +110,15 @@ def setup(bot, group=None):
             channel_obj = interaction.guild.get_channel(settings["channel_id"])
             channel_text = channel_obj.mention if channel_obj else f"Channel ID: {settings['channel_id']}"
             
-            await interaction.followup.send(
-                embed=obsidian_embed(
-                    "📊 Server Stats Status",
-                    f"**Channel:** {channel_text}\n**Type:** {settings['stats_type'].title()}\n**Enabled:** {settings['enabled']}",
-                    color=discord.Color.blue(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
+            embed = obsidian_embed(
+                "📊 Server Stats Status",
+                f"**Channel:** {channel_text}\n**Type:** {settings['stats_type'].title()}\n**Enabled:** {settings['enabled']}",
+                color=discord.Color.blue(),
+                thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
+                footer=f"{interaction.guild.name}",
+                client=interaction.client,
             )
+            await interaction.followup.send(embed=embed, ephemeral=True)
         
         else:
             await interaction.followup.send(

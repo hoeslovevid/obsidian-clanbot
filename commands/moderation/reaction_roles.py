@@ -162,18 +162,17 @@ def setup(bot, group=None):
                 try:
                     message = await channel.send(embed=embed)
                     
-                    await interaction.followup.send(
-                        embed=obsidian_embed(
-                            "✅ Reaction Role Message Created",
-                            f"Reaction role message created in {channel.mention}.\n\n"
-                            f"Use `/mod role_tools reaction action:Add` to add emoji-role pairs to this message.\n"
-                            f"Message ID: `{message.id}`\n"
-                            f"[Jump to message]({message.jump_url})",
-                            color=discord.Color.green(),
-                            client=interaction.client,
-                        ),
-                        ephemeral=True
-                    )
+                embed = obsidian_embed(
+                    "✅ Reaction Role Message Created",
+                    f"Reaction role message created in {channel.mention}.\n\n"
+                    f"Use `/mod role_tools reaction action:Add` to add emoji-role pairs.\n"
+                    f"Message ID: `{message.id}`\n[Jump to message]({message.jump_url})",
+                    color=discord.Color.green(),
+                    thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
+                    footer=f"Message ID: {message.id}",
+                    client=interaction.client,
+                )
+                await interaction.followup.send(embed=embed, ephemeral=True)
                 except discord.Forbidden:
                     await interaction.followup.send(
                         embed=obsidian_embed(
@@ -235,21 +234,20 @@ def setup(bot, group=None):
                     message = await interaction.channel.fetch_message(msg_id)
                     channel_obj = interaction.channel
                 except (discord.NotFound, discord.Forbidden):
-                    # Try to find in any channel
-                    async with aiosqlite.connect(DB_PATH) as db2:
-                        cur = await db2.execute("""
-                            SELECT channel_id FROM reaction_roles
-                            WHERE guild_id=? AND message_id=?
-                            LIMIT 1
-                        """, (interaction.guild.id, msg_id))
-                        row = await cur.fetchone()
-                        if row:
-                            channel_obj = interaction.guild.get_channel(row[0])
-                            if channel_obj:
-                                try:
-                                    message = await channel_obj.fetch_message(msg_id)
-                                except (discord.NotFound, discord.Forbidden):
-                                    pass
+                    # Try to find in any channel (use same db connection)
+                    cur = await db.execute("""
+                        SELECT channel_id FROM reaction_roles
+                        WHERE guild_id=? AND message_id=?
+                        LIMIT 1
+                    """, (interaction.guild.id, msg_id))
+                    row = await cur.fetchone()
+                    if row:
+                        channel_obj = interaction.guild.get_channel(row[0])
+                        if channel_obj:
+                            try:
+                                message = await channel_obj.fetch_message(msg_id)
+                            except (discord.NotFound, discord.Forbidden):
+                                pass
                 
                 if not message or not channel_obj:
                     return await interaction.followup.send(
@@ -447,12 +445,12 @@ def setup(bot, group=None):
                 if len(desc) > 4096:
                     desc = desc[:4093] + "..."
                 
-                await interaction.followup.send(
-                    embed=obsidian_embed(
-                        "📋 Reaction Roles",
-                        desc,
-                        color=discord.Color.blue(),
-                        client=interaction.client,
-                    ),
-                    ephemeral=True
+                embed = obsidian_embed(
+                    "📋 Reaction Roles",
+                    desc,
+                    color=discord.Color.blue(),
+                    thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
+                    footer=f"{len(rows)} reaction role(s) configured",
+                    client=interaction.client,
                 )
+                await interaction.followup.send(embed=embed, ephemeral=True)

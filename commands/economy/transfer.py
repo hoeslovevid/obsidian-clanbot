@@ -44,7 +44,9 @@ async def run_transfer_with_modal(interaction: discord.Interaction, user: discor
                 "✅ Transfer Complete",
                 f"You transferred **{amount:,}** coins to {user.mention}.",
                 color=discord.Color.green(),
+                thumbnail=user.display_avatar.url if user.display_avatar else None,
                 fields=fields,
+                footer=f"Bank transfer • Ref: {interaction.id & 0xFFFF:04X}",
                 client=interaction.client,
             )
         balance = await get_user_balance(interaction.guild.id, interaction.user.id)

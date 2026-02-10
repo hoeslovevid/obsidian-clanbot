@@ -36,8 +36,12 @@ def setup(bot, group=None):
 
         embed = obsidian_embed(
             f"Case Addendum • {case_id}",
-            f"**From:** {interaction.user.mention}\n\n{details}",
+            details[:2000],
             color=discord.Color.orange(),
+            author=interaction.user,
+            thumbnail=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
+            footer=f"Case: {case_id} • User addendum",
+            client=interaction.client,
         )
 
         if isinstance(ch, discord.TextChannel):

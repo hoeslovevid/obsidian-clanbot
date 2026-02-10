@@ -99,7 +99,8 @@ def setup(bot, group=None):
             f"Showing {len(rows)} application(s). Use buttons on individual application messages to manage them.",
             color=discord.Color.blue(),
             fields=fields,
+            thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
+            footer=f"{len(rows)} application(s) • Filter: {status_display}",
             client=interaction.client,
         )
-        
         await interaction.followup.send(embed=embed, ephemeral=True)

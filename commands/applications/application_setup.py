@@ -1,11 +1,11 @@
 """Application setup command for moderators."""
-import discord
-from discord import app_commands
+import discord  # type: ignore
+from discord import app_commands  # type: ignore
 from typing import Optional
 
 from utils import obsidian_embed, is_mod
 from database import DB_PATH
-import aiosqlite
+import aiosqlite  # type: ignore
 
 
 def setup(bot, group=None):
@@ -65,15 +65,15 @@ def setup(bot, group=None):
                 """, (interaction.guild.id, target_channel.id))
                 await db.commit()
             
-            await interaction.followup.send(
-                embed=obsidian_embed(
-                    "✅ Application Channel Set",
-                    f"Application channel set to {target_channel.mention}.\n\nUsers can now use `/application` in this channel to start an application.",
-                    color=discord.Color.green(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
+            embed = obsidian_embed(
+                "✅ Application Channel Set",
+                f"Application channel set to {target_channel.mention}.\n\nUsers can now use `/application` in this channel to start an application.",
+                color=discord.Color.green(),
+                thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
+                footer="Use add_question to add application questions",
+                client=interaction.client,
             )
+            await interaction.followup.send(embed=embed, ephemeral=True)
         
         elif action_value == "add_question":
             from modals import ApplicationQuestionModal
@@ -424,13 +424,13 @@ class RemoveQuestionView(discord.ui.View):
                     WHERE id = ?
                 """, (question_id,))
                 
-                # Reorder remaining questions
+                # Reorder remaining questions within this guild
                 await db.execute("""
                     UPDATE application_questions
                     SET question_order = question_order - 1
-                    WHERE guild_id = (SELECT guild_id FROM application_questions WHERE id = ? LIMIT 1)
+                    WHERE guild_id = ?
                     AND question_order > ?
-                """, (question_id, order))
+                """, (interaction.guild.id, order))
                 await db.commit()
                 
                 await interaction.response.send_message(

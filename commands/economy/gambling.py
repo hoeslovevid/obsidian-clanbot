@@ -5,7 +5,7 @@ from typing import Optional
 import random
 
 from utils import obsidian_embed, is_mod
-from database import DB_PATH, now_utc, get_user_balance, add_coins, remove_coins
+from database import DB_PATH, now_utc, add_coins, remove_coins
 import aiosqlite
 
 
@@ -31,64 +31,62 @@ def setup(bot, group=None):
         await interaction.response.defer()
         
         cost = 50
-        balance = await get_user_balance(interaction.guild.id, interaction.user.id)
-        
-        if balance < cost:
-            return await interaction.followup.send(
-                embed=obsidian_embed(
-                    "❌ Insufficient Funds",
-                    f"You need {cost} coins to play slots. You have {balance} coins.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                )
-            )
-        
-        # Remove coins
-        await remove_coins(interaction.guild.id, interaction.user.id, cost, "GAMBLING", "Slots spin")
-        
-        # Spin slots
-        symbols = ["🍒", "🍋", "🍊", "🍇", "🔔", "⭐", "💎", "7️⃣"]
-        reel1 = random.choice(symbols)
-        reel2 = random.choice(symbols)
-        reel3 = random.choice(symbols)
-        
-        # Calculate winnings
-        winnings = 0
-        if reel1 == reel2 == reel3:
-            if reel1 == "💎":
-                winnings = 1000
-            elif reel1 == "7️⃣":
-                winnings = 500
-            elif reel1 == "⭐":
-                winnings = 300
-            else:
-                winnings = 200
-        elif reel1 == reel2 or reel2 == reel3 or reel1 == reel3:
-            winnings = 50
-        
-        # Add winnings
-        if winnings > 0:
-            await add_coins(interaction.guild.id, interaction.user.id, winnings, "GAMBLING", "Slots winnings")
-            new_balance = await get_user_balance(interaction.guild.id, interaction.user.id)
-            result = f"**🎉 You won {winnings} coins!**\n**New Balance:** {new_balance} coins"
-            color = discord.Color.gold()
-        else:
-            new_balance = await get_user_balance(interaction.guild.id, interaction.user.id)
-            result = f"**Better luck next time!**\n**New Balance:** {new_balance} coins"
-            color = discord.Color.red()
-        
-        # Log gambling
         async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT balance FROM user_balances WHERE guild_id=? AND user_id=?",
+                (interaction.guild.id, interaction.user.id),
+            )
+            row = await cur.fetchone()
+            balance = row[0] or 0 if row else 0
+            
+            if balance < cost:
+                return await interaction.followup.send(
+                    embed=obsidian_embed(
+                        "❌ Insufficient Funds",
+                        f"You need {cost} coins to play slots. You have {balance} coins.",
+                        color=discord.Color.red(),
+                        footer="Use /daily or /economy balance to earn more",
+                        client=interaction.client,
+                    )
+                )
+            
+            await remove_coins(interaction.guild.id, interaction.user.id, cost, "GAMBLING", "Slots spin")
+            
+            symbols = ["🍒", "🍋", "🍊", "🍇", "🔔", "⭐", "💎", "7️⃣"]
+            reel1, reel2, reel3 = random.choice(symbols), random.choice(symbols), random.choice(symbols)
+            
+            winnings = 0
+            if reel1 == reel2 == reel3:
+                winnings = 1000 if reel1 == "💎" else 500 if reel1 == "7️⃣" else 300 if reel1 == "⭐" else 200
+            elif reel1 == reel2 or reel2 == reel3 or reel1 == reel3:
+                winnings = 50
+            
+            if winnings > 0:
+                await add_coins(interaction.guild.id, interaction.user.id, winnings, "GAMBLING", "Slots winnings")
+                result_pre = f"**🎉 You won {winnings} coins!**"
+                color = discord.Color.gold()
+            else:
+                result_pre = "**Better luck next time!**"
+                color = discord.Color.red()
+            
             await db.execute("""
                 INSERT INTO gambling_history (guild_id, user_id, game_type, bet_amount, win_amount, result, created_at)
                 VALUES (?, ?, 'slots', ?, ?, ?, ?)
             """, (interaction.guild.id, interaction.user.id, cost, winnings, "win" if winnings > 0 else "loss", now_utc().isoformat()))
+            cur = await db.execute(
+                "SELECT balance FROM user_balances WHERE guild_id=? AND user_id=?",
+                (interaction.guild.id, interaction.user.id),
+            )
+            nb = (await cur.fetchone())[0] or 0
             await db.commit()
         
+        footer = f"Bet: {cost} coins • {'Jackpot! Try again?' if winnings > 0 else 'Play again with /economy gambling slots'}"
         embed = obsidian_embed(
             "🎰 Slots",
-            f"**{reel1} | {reel2} | {reel3}**\n\n{result}",
+            f"**{reel1} | {reel2} | {reel3}**\n\n{result_pre}\n**New Balance:** {nb:,} coins",
             color=color,
+            thumbnail=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
+            footer=footer,
             client=interaction.client,
         )
         await interaction.followup.send(embed=embed)
@@ -123,26 +121,29 @@ def setup(bot, group=None):
         
         await interaction.response.defer()
         
-        balance = await get_user_balance(interaction.guild.id, interaction.user.id)
-        
-        if balance < bet:
-            return await interaction.followup.send(
-                embed=obsidian_embed(
-                    "❌ Insufficient Funds",
-                    f"You need {bet} coins to play. You have {balance} coins.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                )
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT balance FROM user_balances WHERE guild_id=? AND user_id=?",
+                (interaction.guild.id, interaction.user.id),
             )
+            row = await cur.fetchone()
+            balance = row[0] or 0 if row else 0
+            
+            if balance < bet:
+                return await interaction.followup.send(
+                    embed=obsidian_embed(
+                        "❌ Insufficient Funds",
+                        f"You need {bet} coins to play. You have {balance} coins.",
+                        color=discord.Color.red(),
+                        footer="Use /daily or /economy balance to earn more",
+                        client=interaction.client,
+                    )
+                )
+            
+            await remove_coins(interaction.guild.id, interaction.user.id, bet, "GAMBLING", "Dice roll")
+            user_roll = random.randint(1, 6)
+            bot_roll = random.randint(1, 6)
         
-        # Remove coins
-        await remove_coins(interaction.guild.id, interaction.user.id, bet, "GAMBLING", "Dice roll")
-        
-        # Roll dice
-        user_roll = random.randint(1, 6)
-        bot_roll = random.randint(1, 6)
-        
-        # Calculate winnings
         if user_roll > bot_roll:
             winnings = bet * 2
             await add_coins(interaction.guild.id, interaction.user.id, winnings, "GAMBLING", "Dice winnings")
@@ -156,27 +157,31 @@ def setup(bot, group=None):
             win_amount = 0
             game_result = "loss"
         else:
-            # Tie - return bet
             await add_coins(interaction.guild.id, interaction.user.id, bet, "GAMBLING", "Dice tie (bet returned)")
             result = f"**It's a tie!**\n**Your roll:** {user_roll}\n**Bot roll:** {bot_roll}\n**Bet returned:** {bet} coins"
             color = discord.Color.orange()
             win_amount = bet
             game_result = "tie"
         
-        new_balance = await get_user_balance(interaction.guild.id, interaction.user.id)
-        
-        # Log gambling
         async with aiosqlite.connect(DB_PATH) as db:
             await db.execute("""
                 INSERT INTO gambling_history (guild_id, user_id, game_type, bet_amount, win_amount, result, created_at)
                 VALUES (?, ?, 'dice', ?, ?, ?, ?)
             """, (interaction.guild.id, interaction.user.id, bet, win_amount, game_result, now_utc().isoformat()))
+            cur = await db.execute(
+                "SELECT balance FROM user_balances WHERE guild_id=? AND user_id=?",
+                (interaction.guild.id, interaction.user.id),
+            )
+            new_balance = (await cur.fetchone())[0] or 0
             await db.commit()
         
+        footer = f"Bet: {bet} coins • {'Roll again?' if user_roll > bot_roll else 'Try again with /economy gambling dice'}"
         embed = obsidian_embed(
             "🎲 Dice",
-            f"{result}\n**New Balance:** {new_balance} coins",
+            f"{result}\n**New Balance:** {new_balance:,} coins",
             color=color,
+            thumbnail=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
+            footer=footer,
             client=interaction.client,
         )
         await interaction.followup.send(embed=embed)
@@ -216,20 +221,26 @@ def setup(bot, group=None):
         
         await interaction.response.defer()
         
-        balance = await get_user_balance(interaction.guild.id, interaction.user.id)
-        
-        if balance < bet:
-            return await interaction.followup.send(
-                embed=obsidian_embed(
-                    "❌ Insufficient Funds",
-                    f"You need {bet} coins to play. You have {balance} coins.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                )
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT balance FROM user_balances WHERE guild_id=? AND user_id=?",
+                (interaction.guild.id, interaction.user.id),
             )
-        
-        # Remove coins
-        await remove_coins(interaction.guild.id, interaction.user.id, bet, "GAMBLING", "Roulette bet")
+            row = await cur.fetchone()
+            balance = row[0] or 0 if row else 0
+            
+            if balance < bet:
+                return await interaction.followup.send(
+                    embed=obsidian_embed(
+                        "❌ Insufficient Funds",
+                        f"You need {bet} coins to play. You have {balance} coins.",
+                        color=discord.Color.red(),
+                        footer="Use /daily or /economy balance to earn more",
+                        client=interaction.client,
+                    )
+                )
+            
+            await remove_coins(interaction.guild.id, interaction.user.id, bet, "GAMBLING", "Roulette bet")
         
         # Spin roulette (0-36, 0 is green)
         number = random.randint(0, 36)
@@ -259,20 +270,25 @@ def setup(bot, group=None):
             win_amount = 0
             game_result = "loss"
         
-        new_balance = await get_user_balance(interaction.guild.id, interaction.user.id)
-        
-        # Log gambling
         async with aiosqlite.connect(DB_PATH) as db:
             await db.execute("""
                 INSERT INTO gambling_history (guild_id, user_id, game_type, bet_amount, win_amount, result, created_at)
                 VALUES (?, ?, 'roulette', ?, ?, ?, ?)
             """, (interaction.guild.id, interaction.user.id, bet, win_amount, game_result, now_utc().isoformat()))
+            cur = await db.execute(
+                "SELECT balance FROM user_balances WHERE guild_id=? AND user_id=?",
+                (interaction.guild.id, interaction.user.id),
+            )
+            new_balance = (await cur.fetchone())[0] or 0
             await db.commit()
         
+        footer = f"Bet: {bet} coins • Landed on {landed_color.capitalize()} • {'Spin again?' if color == landed_color else 'Try red, black, or green'}"
         embed = obsidian_embed(
             "🎰 Roulette",
-            f"{result}\n**New Balance:** {new_balance} coins",
+            f"{result}\n**New Balance:** {new_balance:,} coins",
             color=color_emoji,
+            thumbnail=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
+            footer=footer,
             client=interaction.client,
         )
         await interaction.followup.send(embed=embed)

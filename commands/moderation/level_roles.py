@@ -54,15 +54,15 @@ def setup(bot, group=None):
             level_roles_list = await get_level_roles(interaction.guild.id)
             
             if not level_roles_list:
-                return await interaction.followup.send(
-                    embed=obsidian_embed(
-                        "📋 Level Roles",
-                        "No level roles have been configured.",
-                        color=discord.Color.orange(),
-                        client=interaction.client,
-                    ),
-                    ephemeral=True
-                )
+            embed = obsidian_embed(
+                "📋 Level Roles",
+                "No level roles have been configured. Use `add` to assign roles at specific XP levels.",
+                color=discord.Color.orange(),
+                thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
+                footer="Use action:add level:N role:Role to add",
+                client=interaction.client,
+            )
+            return await interaction.followup.send(embed=embed, ephemeral=True)
             
             desc = ""
             for lr in sorted(level_roles_list, key=lambda x: x["level"]):
@@ -70,15 +70,15 @@ def setup(bot, group=None):
                 if role_obj:
                     desc += f"**Level {lr['level']}** → {role_obj.mention}\n"
             
-            await interaction.followup.send(
-                embed=obsidian_embed(
-                    "📋 Level Roles",
-                    desc,
-                    color=discord.Color.blue(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
+            embed = obsidian_embed(
+                "📋 Level Roles",
+                desc,
+                color=discord.Color.blue(),
+                thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
+                footer=f"{len(level_roles_list)} level role(s) • Use add/remove to manage",
+                client=interaction.client,
             )
+            await interaction.followup.send(embed=embed, ephemeral=True)
         
         elif action.lower() == "add":
             if not level or not role:
@@ -105,15 +105,15 @@ def setup(bot, group=None):
             
             await add_level_role(interaction.guild.id, level, role.id)
             
-            await interaction.followup.send(
-                embed=obsidian_embed(
-                    "✅ Level Role Added",
-                    f"Users who reach level {level} will automatically receive {role.mention}.",
-                    color=discord.Color.green(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
+            embed = obsidian_embed(
+                "✅ Level Role Added",
+                f"Users who reach level {level} will automatically receive {role.mention}.",
+                color=discord.Color.green(),
+                thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
+                footer=f"Level {level} → {role.name}",
+                client=interaction.client,
             )
+            await interaction.followup.send(embed=embed, ephemeral=True)
         
         elif action.lower() == "remove":
             if not level:
@@ -129,15 +129,15 @@ def setup(bot, group=None):
             
             await remove_level_role(interaction.guild.id, level)
             
-            await interaction.followup.send(
-                embed=obsidian_embed(
-                    "✅ Level Role Removed",
-                    f"Level {level} role has been removed.",
-                    color=discord.Color.green(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
+            embed = obsidian_embed(
+                "✅ Level Role Removed",
+                f"Level {level} role has been removed.",
+                color=discord.Color.green(),
+                thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
+                footer=f"Level {level} role removed",
+                client=interaction.client,
             )
+            await interaction.followup.send(embed=embed, ephemeral=True)
         
         else:
             await interaction.followup.send(

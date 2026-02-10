@@ -96,15 +96,21 @@ def setup(bot, group=None):
                 commands_used = row[2]
                 events_attended = row[3]
             
-            medal = medals[i] if i < 3 else f"{i+1}."
-            leaderboard_text += f"{medal} **{username}** - {score} pts\n"
-            leaderboard_text += f"   └ Commands: {commands_used:,} | Events: {events_attended}\n"
+            medal = medals[i] if i < 3 else f"`{i+1}.`"
+            leaderboard_text += f"{medal} **{username}** — {score:,} pts (Commands: {commands_used:,} | Events: {events_attended})\n"
+        
+        thumb_url = None
+        if rows:
+            top_user = interaction.guild.get_member(rows[0][0])
+            if top_user and top_user.display_avatar:
+                thumb_url = top_user.display_avatar.url
         
         embed = obsidian_embed(
             title,
-            leaderboard_text,
+            leaderboard_text.strip(),
             color=discord.Color.gold(),
+            thumbnail=thumb_url,
+            footer=f"{interaction.guild.name} • Top {len(rows)} by {period.replace('-', ' ')} activity",
             client=interaction.client,
         )
-        
         await interaction.followup.send(embed=embed)

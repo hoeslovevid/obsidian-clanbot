@@ -26,48 +26,41 @@ async def start_application_process(interaction: discord.Interaction):
             except Exception:
                 pass  # Can't send, that's okay
     
-    # Check if application channel is set
+    # Check channel, existing app, and questions in one connection
     async with aiosqlite.connect(DB_PATH) as db:
         cur = await db.execute("""
             SELECT channel_id FROM application_settings WHERE guild_id = ?
         """, (interaction.guild.id,))
         row = await cur.fetchone()
-    
-    if not row or not row[0]:
-        await send_error(obsidian_embed(
-            "❌ Application System Not Configured",
-            "The application system has not been set up yet. Please contact a moderator.",
-            color=discord.Color.red(),
-            client=interaction.client,
-        ))
-        return
-    
-    app_channel_id = row[0]
-    
-    # Check if user already has an in-progress application
-    async with aiosqlite.connect(DB_PATH) as db:
+        if not row or not row[0]:
+            await send_error(obsidian_embed(
+                "❌ Application System Not Configured",
+                "The application system has not been set up yet. Please contact a moderator.",
+                color=discord.Color.red(),
+                client=interaction.client,
+            ))
+            return
+        app_channel_id = row[0]
+
         cur = await db.execute("""
             SELECT id FROM applications
             WHERE guild_id = ? AND user_id = ? AND status = 'IN_PROGRESS'
         """, (interaction.guild.id, interaction.user.id))
         existing = await cur.fetchone()
-    
-    if existing:
-        await send_error(obsidian_embed(
-            "❌ Application Already In Progress",
-            "You already have an application in progress. Please complete it or wait for it to be reviewed.",
-            color=discord.Color.red(),
-            client=interaction.client,
-        ))
-        return
-    
-    # Check if there are any questions configured
-    async with aiosqlite.connect(DB_PATH) as db:
+        if existing:
+            await send_error(obsidian_embed(
+                "❌ Application Already In Progress",
+                "You already have an application in progress. Please complete it or wait for it to be reviewed.",
+                color=discord.Color.red(),
+                client=interaction.client,
+            ))
+            return
+
         cur = await db.execute("""
             SELECT COUNT(*) FROM application_questions WHERE guild_id = ?
         """, (interaction.guild.id,))
         count = (await cur.fetchone())[0]
-    
+
     if count == 0:
         await send_error(obsidian_embed(
             "❌ No Questions Configured",
@@ -275,13 +268,13 @@ def setup(bot, group=None):
     @command_decorator
     async def application(interaction: discord.Interaction):
         """Start a clan application."""
-        # Check if application channel is set
+        # Check if application channel is set (single query)
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute("""
                 SELECT channel_id FROM application_settings WHERE guild_id = ?
             """, (interaction.guild.id,))
             row = await cur.fetchone()
-        
+
         if not row or not row[0]:
             return await interaction.response.send_message(
                 embed=obsidian_embed(

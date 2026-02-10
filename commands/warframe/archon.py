@@ -46,6 +46,7 @@ def setup(bot, group=None):
                     "❌ Error",
                     "Could not fetch Archon Hunt data from Warframe API. Please try again later.",
                     color=discord.Color.red(),
+                    footer="warframestat.us",
                     client=interaction.client,
                 ),
                 ephemeral=True
@@ -111,7 +112,7 @@ def setup(bot, group=None):
             "",
             color=color,
             fields=fields,
+            footer="warframestat.us • Refreshes every 60s",
             client=interaction.client,
         )
-        
         await interaction.followup.send(embed=embed, ephemeral=False)

@@ -6,6 +6,8 @@ import dateparser  # type: ignore
 
 from utils import obsidian_embed
 from warframe_api import fetch_alerts
+from views import RefreshView
+from cache_utils import invalidate
 
 
 def format_alert_rewards(alert: dict) -> str:
@@ -101,11 +103,33 @@ def setup(bot, group=None):
         if len(alerts_data) > 10:
             desc += f"_...and {len(alerts_data) - 10} more alerts_"
         
+        def _build_alerts_embed(data):
+            if not data:
+                return obsidian_embed("📢 Active Alerts", "No active alerts at this time.", color=discord.Color.orange(), footer="warframestat.us • Refreshes every 60s", client=interaction.client)
+            d = f"**Active Alerts:** {len(data)}\n\n"
+            for i, alert in enumerate(data[:10], 1):
+                mission = alert.get("mission", {})
+                d += f"**{i}. {mission.get('node', '?')}** ({mission.get('missionType', '?')})\n• Faction: {mission.get('faction', '?')}\n• Rewards: {format_alert_rewards(alert)}\n• Time: {format_time_remaining(alert.get('expiry', ''))}\n\n"
+            if len(data) > 10:
+                d += f"_...and {len(data) - 10} more_"
+            return obsidian_embed("📢 Active Alerts", d, color=discord.Color.blue(), footer="warframestat.us • Refreshes every 60s", client=interaction.client)
+
+        async def on_refresh(btn_interaction: discord.Interaction):
+            if btn_interaction.user.id != interaction.user.id:
+                return await btn_interaction.followup.send("Only the person who ran this can refresh.", ephemeral=True)
+            invalidate("warframe:alerts")
+            new_data = await fetch_alerts()
+            if new_data is None:
+                return await btn_interaction.followup.send("Could not fetch fresh data.", ephemeral=True)
+            emb = _build_alerts_embed(new_data)
+            await btn_interaction.message.edit(embed=emb, view=RefreshView(on_refresh, timeout=300))
+
         embed = obsidian_embed(
             "📢 Active Alerts",
             desc,
             color=discord.Color.blue(),
+            thumbnail=interaction.guild.icon.url if interaction.guild and interaction.guild.icon else None,
+            footer=f"{len(alerts_data)} active • warframestat.us • Refreshes every 60s",
             client=interaction.client,
         )
-        
-        await interaction.followup.send(embed=embed)
+        await interaction.followup.send(embed=embed, view=RefreshView(on_refresh, timeout=300))

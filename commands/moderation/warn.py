@@ -113,11 +113,26 @@ async def execute_warn(interaction: discord.Interaction, user: discord.Member, r
 
     action_text = f" ({action} executed)" if warning_count >= max_warnings else ""
     case_ref = f"**Case #** {case_id}\n" if case_id else ""
+    pct = min(100, int(100 * warning_count / max_warnings)) if max_warnings > 0 else 0
+    bar_len = 8
+    filled = int(bar_len * pct / 100)
+    bar_str = "█" * filled + "░" * (bar_len - filled)
+    warn_bar = f"`[{bar_str}]` {warning_count}/{max_warnings}"
+    warn_fields = [
+        ("User", user.mention, True),
+        ("Moderator", interaction.user.mention, True),
+        ("Reason", reason[:1024], False),
+        ("Warning Count", warn_bar + action_text, True),
+    ]
+    footer = f"Case #{case_id} • Contact mods to appeal" if case_id else "Contact moderators to appeal warnings"
     await interaction.followup.send(
         embed=obsidian_embed(
             "✅ User Warned",
-            f"{case_ref}**User:** {user.mention}\n**Reason:** {reason}\n**Warnings:** {warning_count}/{max_warnings}{action_text}",
+            "",
             color=discord.Color.orange(),
+            thumbnail=user.display_avatar.url if user.display_avatar else None,
+            fields=warn_fields,
+            footer=footer or "Contact moderators to appeal warnings",
             client=interaction.client,
         )
     )

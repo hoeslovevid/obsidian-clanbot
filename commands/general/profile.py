@@ -42,27 +42,22 @@ async def get_user_profile_data(guild_id: int, user_id: int) -> dict:
     
     g, u = guild_id, user_id
     async with aiosqlite.connect(DB_PATH) as db:
-        # Query 1: Main stats (economy, xp, activity, warnings, reputation, title, streak) via scalar subqueries
+        # Query 1: Main stats via LEFT JOINs (single scan instead of 17 scalar subqueries)
         cur = await db.execute("""
-            SELECT
-                (SELECT balance FROM user_balances WHERE guild_id=? AND user_id=?),
-                (SELECT total_earned FROM user_balances WHERE guild_id=? AND user_id=?),
-                (SELECT xp FROM user_xp WHERE guild_id=? AND user_id=?),
-                (SELECT level FROM user_xp WHERE guild_id=? AND user_id=?),
-                (SELECT total_xp FROM user_xp WHERE guild_id=? AND user_id=?),
-                (SELECT messages_sent FROM activity_stats WHERE guild_id=? AND user_id=?),
-                (SELECT voice_minutes FROM activity_stats WHERE guild_id=? AND user_id=?),
-                (SELECT commands_used FROM activity_stats WHERE guild_id=? AND user_id=?),
-                (SELECT events_attended FROM activity_stats WHERE guild_id=? AND user_id=?),
-                (SELECT weekly_score FROM activity_stats WHERE guild_id=? AND user_id=?),
-                (SELECT monthly_score FROM activity_stats WHERE guild_id=? AND user_id=?),
-                (SELECT last_activity_date FROM activity_stats WHERE guild_id=? AND user_id=?),
-                (SELECT COUNT(*) FROM achievements WHERE guild_id=? AND user_id=?),
-                (SELECT COUNT(*) FROM warnings WHERE guild_id=? AND user_id=?),
-                (SELECT reputation_points FROM reputation WHERE guild_id=? AND user_id=?),
-                (SELECT title FROM user_titles WHERE guild_id=? AND user_id=?),
-                (SELECT streak_days FROM daily_claims WHERE guild_id=? AND user_id=?)
-        """, (g, u) * 17)
+            SELECT ub.balance, ub.total_earned, ux.xp, ux.level, ux.total_xp,
+                   ast.messages_sent, ast.voice_minutes, ast.commands_used, ast.events_attended,
+                   ast.weekly_score, ast.monthly_score, ast.last_activity_date,
+                   (SELECT COUNT(*) FROM achievements WHERE guild_id=? AND user_id=?),
+                   (SELECT COUNT(*) FROM warnings WHERE guild_id=? AND user_id=?),
+                   COALESCE(rp.reputation_points, 0), ut.title, dc.streak_days
+            FROM (SELECT ? AS g, ? AS u) p
+            LEFT JOIN user_balances ub ON ub.guild_id=p.g AND ub.user_id=p.u
+            LEFT JOIN user_xp ux ON ux.guild_id=p.g AND ux.user_id=p.u
+            LEFT JOIN activity_stats ast ON ast.guild_id=p.g AND ast.user_id=p.u
+            LEFT JOIN reputation rp ON rp.guild_id=p.g AND rp.user_id=p.u
+            LEFT JOIN user_titles ut ON ut.guild_id=p.g AND ut.user_id=p.u
+            LEFT JOIN daily_claims dc ON dc.guild_id=p.g AND dc.user_id=p.u
+        """, (g, u, g, u))
         row = await cur.fetchone()
         if row:
             data["balance"] = row[0] or 0
@@ -315,8 +310,10 @@ def setup(bot, group=None):
                 last_activity = datetime.fromisoformat(profile_data["last_activity"])
                 days_ago = (now_utc() - last_activity.replace(tzinfo=timezone.utc)).days
                 footer_text += f" • Last active: {days_ago} day(s) ago"
-            except:
+            except Exception:
                 pass
+        if profile_data["achievements_count"] > 0:
+            footer_text += " • /achievements for full list"
         embed.set_footer(text=footer_text)
         embed.set_thumbnail(url=target_user.display_avatar.url)
 

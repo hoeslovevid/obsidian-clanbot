@@ -252,12 +252,20 @@ def setup(bot, group=None):
             ("🤖 Bots", f"{bot_count:,}", True),
         ]
         
+        bar_max = max(member_count * 2, 100)
+        pct = min(100, int(100 * member_count / bar_max)) if bar_max > 0 else 0
+        bar_len = 8
+        filled = int(bar_len * pct / 100)
+        bar_str = "█" * filled + "░" * (bar_len - filled)
+        fields.append(("📊 Progress", f"`[{bar_str}]` {member_count:,} members", False))
+        
         embed = obsidian_embed(
             "✅ Member Count Channel Ready",
-            f"Member count channel **{channel_type_display}** has been {'created' if was_created else 'updated'}.\n\nThe channel name will be updated automatically every 2 minutes with accurate member counts.",
+            f"Member count channel **{channel_type_display}** has been {'created' if was_created else 'updated'}.\n\nThe channel name will be updated automatically every 2 minutes.",
             color=discord.Color.green(),
+            thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
             fields=fields,
+            footer=f"{interaction.guild.name} • Updates every 2 min",
             client=interaction.client,
         )
-        
         await interaction.followup.send(embed=embed, ephemeral=False)

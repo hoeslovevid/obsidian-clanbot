@@ -174,9 +174,10 @@ def setup(bot, group=None):
             giveaway_title,
             desc,
             color=discord.Color.gold(),
+            thumbnail=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
+            footer=f"Created by {interaction.user.display_name} • {winners} winner(s)",
             client=interaction.client,
         )
-        embed.set_footer(text=f"Created by {interaction.user.display_name}")
         
         # Create view with enter button
         from views import GiveawayView
@@ -237,13 +238,12 @@ def setup(bot, group=None):
         except Exception as e:
             logger.error(f"Error adding view to giveaway message: {e}")
         
-        await interaction.followup.send(
-            embed=obsidian_embed(
-                "✅ Giveaway Created",
-                f"Giveaway created successfully!\n\n"
-                f"[Jump to giveaway]({message.jump_url})",
-                color=discord.Color.green(),
-                client=interaction.client,
-            ),
-            ephemeral=True
+        embed = obsidian_embed(
+            "✅ Giveaway Created",
+            f"Giveaway created successfully!\n\n[Jump to giveaway]({message.jump_url})",
+            color=discord.Color.green(),
+            thumbnail=interaction.guild.icon.url if interaction.guild and interaction.guild.icon else None,
+            footer=f"Ends <t:{int(end_time.timestamp())}:R>",
+            client=interaction.client,
         )
+        await interaction.followup.send(embed=embed, ephemeral=True)

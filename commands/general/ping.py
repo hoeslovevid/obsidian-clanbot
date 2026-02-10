@@ -17,10 +17,17 @@ def setup(bot, group=None):
     async def ping(interaction: discord.Interaction):
         """Return bot latency in milliseconds."""
         latency_ms = round(interaction.client.latency * 1000, 2)
+        if latency_ms < 100:
+            color = discord.Color.green()
+        elif latency_ms < 250:
+            color = discord.Color.gold()
+        else:
+            color = discord.Color.orange()
         embed = obsidian_embed(
             "🏓 Pong!",
-            f"**Latency:** {latency_ms}ms",
-            color=discord.Color.green(),
+            f"**Websocket Latency:** {latency_ms}ms",
+            color=color,
+            footer="Latency to Discord servers • Green=good, Yellow=ok, Orange=high",
             client=interaction.client,
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)

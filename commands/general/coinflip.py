@@ -19,10 +19,13 @@ def setup(bot, group=None):
         """Flip a coin and show the result."""
         result = random.choice(("Heads", "Tails"))
         emoji = "🪙" if result == "Heads" else "🔙"
+        color = discord.Color.green() if result == "Heads" else discord.Color.blue()
         embed = obsidian_embed(
             f"{emoji} {result}!",
             f"The coin landed on **{result}**.",
-            color=discord.Color.gold(),
+            color=color,
+            thumbnail=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
+            footer="Flip again with /coinflip",
             client=interaction.client,
         )
         await interaction.response.send_message(embed=embed)

@@ -506,15 +506,16 @@ def setup(bot, group=None):
             except Exception:
                 pass
 
-        await interaction.followup.send(
-            embed=obsidian_embed(
-                "✅ Pet Purchased",
-                f"You bought **{pet_name}** ({pet_type}) for {price} coins!\n\n"
-                "Use `/pet` to view your pet, `/pet_feed` to feed it, and `/pet_play` to play with it.",
-                color=discord.Color.green(),
-                client=interaction.client,
-            )
+        embed = obsidian_embed(
+            "✅ Pet Purchased",
+            f"You bought **{pet_name}** ({pet_type}) for {price:,} coins!\n\n"
+            "Use `/pet` to view your pet, `/pet_feed` to feed it, and `/pet_play` to play with it.",
+            color=discord.Color.green(),
+            thumbnail=PET_ICONS.get(pet_type, DEFAULT_PET_ICON),
+            footer=f"Pet: {pet_name} • Type: {pet_type}",
+            client=interaction.client,
         )
+        await interaction.followup.send(embed=embed)
     
     command_decorator = group.command(name="view", description="View your pet.") if group else bot.tree.command(name="view", description="View your pet.")
     
@@ -575,14 +576,15 @@ def setup(bot, group=None):
             except:
                 pass
         
-        await interaction.followup.send(
-            embed=obsidian_embed(
-                f"🐾 {pet_name}",
-                pet_text,
-                color=discord.Color.gold(),
-                client=interaction.client,
-            )
+        embed = obsidian_embed(
+            f"🐾 {pet_name}",
+            pet_text,
+            color=discord.Color.gold(),
+            thumbnail=PET_ICONS.get(pet_type, DEFAULT_PET_ICON),
+            footer=f"Level {level}/{max_level} • Feed and play to keep your pet happy!",
+            client=interaction.client,
         )
+        await interaction.followup.send(embed=embed)
     
     command_decorator = group.command(name="feed", description="Feed your pet (costs 10 coins).") if group else bot.tree.command(name="feed", description="Feed your pet (costs 10 coins).")
     

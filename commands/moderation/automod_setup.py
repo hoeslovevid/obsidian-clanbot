@@ -205,7 +205,8 @@ def setup(bot, group=None):
             f"Settings for **{feature_names.get(feature_value, feature_value)}** have been updated.",
             color=discord.Color.green(),
             fields=fields,
+            thumbnail=interaction.guild.icon.url if interaction.guild and interaction.guild.icon else None,
+            footer="Use /mod automod status to view settings",
             client=interaction.client,
         )
-        
         await interaction.response.send_message(embed=embed, ephemeral=False)

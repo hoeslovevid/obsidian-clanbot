@@ -130,6 +130,8 @@ def setup(bot, group=None):
                 color=discord.Color.blue(),
                 author=interaction.user,
                 fields=fields,
+                thumbnail=interaction.guild.icon.url if interaction.guild and interaction.guild.icon else None,
+                footer=f"Suggestion #{suggestion_id} • Mods can approve/reject via buttons",
                 client=interaction.client,
             )
             
@@ -160,8 +162,9 @@ def setup(bot, group=None):
             "✅ Suggestion Submitted",
             "",
             color=discord.Color.green(),
+            thumbnail=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
             fields=fields,
+            footer=f"Suggestion #{suggestion_id} • Use /manage_suggestions to review",
             client=interaction.client,
         )
-        
         await interaction.followup.send(embed=embed, ephemeral=True)

@@ -528,13 +528,19 @@ def setup(bot, group=None):
             ticket_db_id = (await cur.fetchone())[0]
         
         # Send welcome message in ticket channel
+        fields = [
+            ("Subject", subject, True),
+            ("Status", "Open", True),
+            ("Created By", interaction.user.mention, True),
+        ]
         embed = obsidian_embed(
             f"Ticket #{ticket_id}",
-            f"**Subject:** {subject}\n\n"
-            f"**Created by:** {interaction.user.mention}\n"
-            f"**Status:** Open\n\n"
-            f"Staff will respond shortly. Use `/ticket close` to close this ticket.",
+            "Staff will respond shortly. Use `/ticket close` to close this ticket.",
             color=discord.Color.green(),
+            fields=fields,
+            author=interaction.user,
+            thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
+            footer=f"Ticket ID: {ticket_id}",
             client=interaction.client,
         )
         await channel.send(embed=embed)
@@ -563,15 +569,15 @@ def setup(bot, group=None):
 
         await channel.send(f"{interaction.user.mention}, your ticket has been created!")
         
-        await interaction.followup.send(
-            embed=obsidian_embed(
-                "✅ Ticket Created",
-                f"Your ticket has been created: {channel.mention}\n**Ticket ID:** `{ticket_id}`",
-                color=discord.Color.green(),
-                client=interaction.client,
-            ),
-            ephemeral=True
+        embed = obsidian_embed(
+            "✅ Ticket Created",
+            f"Your ticket has been created: {channel.mention}\n**Ticket ID:** `{ticket_id}`",
+            color=discord.Color.green(),
+            thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
+            footer=f"Ticket ID: {ticket_id} • Use /ticket_close in the channel to close",
+            client=interaction.client,
         )
+        await interaction.followup.send(embed=embed, ephemeral=True)
     
     command_decorator = group.command(name="ticket_close", description="Close a support ticket (moderators only).") if group else bot.tree.command(name="ticket_close", description="Close a support ticket (moderators only).")
     

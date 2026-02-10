@@ -46,7 +46,7 @@ class RoleMenuView(View):
         if not role:
             return await interaction.response.send_message("Role not found.", ephemeral=True)
         
-        # Check max roles limit
+        max_roles = None
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute("""
                 SELECT max_roles FROM role_menus WHERE id=?
@@ -55,12 +55,6 @@ class RoleMenuView(View):
             max_roles = row[0] if row and row[0] else None
         
         if max_roles:
-            # Count user's roles from this menu
-            cur = await db.execute("""
-                SELECT COUNT(*) FROM role_menu_options
-                WHERE menu_id=? AND role_id IN (SELECT role_id FROM role_menu_options WHERE menu_id=?)
-            """, (self.menu_id, self.menu_id))
-            # Actually, let's just count roles the user has from this menu
             user_menu_roles = [r for r in interaction.user.roles if r.id in [opt['role_id'] for opt in self.options]]
             if len(user_menu_roles) >= max_roles and role not in user_menu_roles:
                 return await interaction.response.send_message(
@@ -271,15 +265,15 @@ def setup(bot, group=None):
             await message.edit(view=view)
             bot.add_view(view)
             
-            await interaction.followup.send(
-                embed=obsidian_embed(
-                    "✅ Role Added",
-                    f"{role.mention} has been added to the role menu.",
-                    color=discord.Color.green(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
+            embed = obsidian_embed(
+                "✅ Role Added",
+                f"{role.mention} has been added to the role menu.",
+                color=discord.Color.green(),
+                thumbnail=interaction.guild.icon.url if interaction.guild and interaction.guild.icon else None,
+                footer=f"Menu ID: {menu_id}",
+                client=interaction.client,
             )
+            await interaction.followup.send(embed=embed, ephemeral=True)
         except discord.NotFound:
             await interaction.followup.send(
                 embed=obsidian_embed(

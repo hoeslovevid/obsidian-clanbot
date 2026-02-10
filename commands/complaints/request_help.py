@@ -53,15 +53,21 @@ def setup(bot, group=None):
                     ephemeral=True
                 )
 
-            return await interaction.response.send_message(
-                embed=obsidian_embed(
-                    f"📋 Case Status • {case_id}",
-                    f"**Status:** {display_case_status(status)}\n**Last Update (UTC):** {last_update_at}",
-                    color=discord.Color.blurple(),
-                    client=interaction.client,
-                ),
-                ephemeral=True,
+            fields = [
+                ("Status", display_case_status(status), True),
+                ("Last Update (UTC)", last_update_at, True),
+                ("Case ID", case_id, False),
+            ]
+            embed = obsidian_embed(
+                f"📋 Case Status • {case_id}",
+                "",
+                color=discord.Color.blurple(),
+                fields=fields,
+                thumbnail=interaction.guild.icon.url if interaction.guild and interaction.guild.icon else None,
+                footer="Use /request_help with case_id to check status again",
+                client=interaction.client,
             )
+            return await interaction.response.send_message(embed=embed, ephemeral=True)
         
         # Create new help request (case_id not provided)
         if not category or not details:
@@ -123,8 +129,15 @@ def setup(bot, group=None):
         if evidence and evidence.strip():
             desc += f"\n\n**Evidence:** {evidence}"
         
-        embed = obsidian_embed(f"Docket Entry • {case_id}", desc, color=discord.Color.red())
-        embed.set_footer(text=f"Filed by: {interaction.user} • {interaction.user.id}")
+        embed = obsidian_embed(
+            f"Docket Entry • {case_id}",
+            desc,
+            color=discord.Color.red(),
+            author=interaction.user,
+            thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
+            footer=f"Filed by: {interaction.user} • Case: {case_id}",
+            client=interaction.client,
+        )
         
         view = ComplaintModView(case_id)
         msg = await ch.send(content=mention, embed=embed, view=view)
@@ -166,12 +179,12 @@ def setup(bot, group=None):
         
         await log_complaint_action(guild, case_id, interaction.user.id, "FILED")
         
-        await interaction.followup.send(
-            embed=obsidian_embed(
-                "✅ Docket Sealed",
-                f"Your help request has been sealed as **`{case_id}`**.\n\nYou'll receive DM updates as it progresses.",
-                color=discord.Color.green(),
-                client=interaction.client,
-            ),
-            ephemeral=True,
+        embed = obsidian_embed(
+            "✅ Docket Sealed",
+            f"Your help request has been sealed as **`{case_id}`**.\n\nYou'll receive DM updates as it progresses.",
+            color=discord.Color.green(),
+            thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
+            footer=f"Case: {case_id} • Save this ID to check status",
+            client=interaction.client,
         )
+        await interaction.followup.send(embed=embed, ephemeral=True)

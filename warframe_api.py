@@ -143,19 +143,22 @@ async def fetch_invasions() -> Optional[list]:
 
 
 async def fetch_archon_hunt_data() -> Optional[Dict[str, Any]]:
-    """Fetch Archon Hunt data from Warframe World State API."""
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get("https://api.warframestat.us/pc/archonHunt?language=en", timeout=aiohttp.ClientTimeout(total=10)) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    return data
-                else:
+    """Fetch Archon Hunt data from Warframe World State API. Cached for 60s."""
+    from cache_utils import get_cached
+
+    async def _fetch():
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get("https://api.warframestat.us/pc/archonHunt?language=en", timeout=aiohttp.ClientTimeout(total=10)) as response:
+                    if response.status == 200:
+                        return await response.json()
                     logger.warning(f"Warframe API returned status {response.status} for archon hunt")
                     return None
-    except Exception as e:
-        logger.error(f"Error fetching archon hunt data: {e}")
-        return None
+        except Exception as e:
+            logger.error(f"Error fetching archon hunt data: {e}")
+            return None
+
+    return await get_cached("warframe:archon", 60, _fetch)
 
 
 async def fetch_events_data() -> Optional[List[Dict[str, Any]]]:
@@ -327,37 +330,42 @@ async def search_warframe_market_item(item_name: str, platform: str = "pc") -> O
 
 
 async def fetch_duviri_circuit() -> Optional[Dict[str, Any]]:
-    """Fetch Duviri Circuit data from Warframe World State API."""
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get("https://api.warframestat.us/pc/duviriCycle", timeout=aiohttp.ClientTimeout(total=10)) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    return data
-                else:
+    """Fetch Duviri Circuit data from Warframe World State API. Cached for 60s."""
+    from cache_utils import get_cached
+
+    async def _fetch():
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get("https://api.warframestat.us/pc/duviriCycle", timeout=aiohttp.ClientTimeout(total=10)) as response:
+                    if response.status == 200:
+                        return await response.json()
                     logger.warning(f"Warframe API returned status {response.status} for duviri circuit")
                     return None
-    except Exception as e:
-        logger.error(f"Error fetching Duviri Circuit data: {e}")
-        return None
+        except Exception as e:
+            logger.error(f"Error fetching Duviri Circuit data: {e}")
+            return None
+
+    return await get_cached("warframe:duviri", 60, _fetch)
 
 
 async def fetch_alerts() -> Optional[List[Dict[str, Any]]]:
-    """Fetch active alerts from Warframe World State API."""
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get("https://api.warframestat.us/pc/alerts", timeout=aiohttp.ClientTimeout(total=10)) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    # Filter for active alerts only
-                    active_alerts = [alert for alert in data if alert.get("expired", False) == False]
-                    return active_alerts
-                else:
+    """Fetch active alerts from Warframe World State API. Cached for 60s."""
+    from cache_utils import get_cached
+
+    async def _fetch():
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get("https://api.warframestat.us/pc/alerts", timeout=aiohttp.ClientTimeout(total=10)) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        return [alert for alert in data if alert.get("expired", False) == False]
                     logger.warning(f"Warframe API returned status {response.status} for alerts")
                     return None
-    except Exception as e:
-        logger.error(f"Error fetching alerts data: {e}")
-        return None
+        except Exception as e:
+            logger.error(f"Error fetching alerts data: {e}")
+            return None
+
+    return await get_cached("warframe:alerts", 60, _fetch)
 
 
 # Warframe Steam App ID (for playtime lookup)

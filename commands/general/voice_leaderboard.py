@@ -83,34 +83,35 @@ def setup(bot, group=None):
                 )
             )
         
-        # Build leaderboard text
         leaderboard_text = ""
         medals = ["🥇", "🥈", "🥉"]
-        
         for i, (user_id, score) in enumerate(leaderboard):
             user = interaction.guild.get_member(user_id)
             username = user.display_name if user else f"User {user_id}"
-            
-            medal = medals[i] if i < 3 else f"{i+1}."
-            
+            medal = medals[i] if i < 3 else f"`{i+1}.`"
             if period == "all_time":
                 hours = score // 60
                 minutes = score % 60
                 score_text = f"{hours}h {minutes}m"
-            elif period == "weekly" or period == "monthly":
-                score_text = f"{score} points"
+            elif period in ("weekly", "monthly"):
+                score_text = f"{score:,} pts"
             else:
                 score_text = str(score)
-            
-            leaderboard_text += f"{medal} **{username}** - {score_text}\n"
+            leaderboard_text += f"{medal} **{username}** — {score_text}\n"
         
         period_name = period.replace("_", " ").title()
+        thumb_url = None
+        if leaderboard:
+            top_user = interaction.guild.get_member(leaderboard[0][0])
+            if top_user and top_user.display_avatar:
+                thumb_url = top_user.display_avatar.url
         
         embed = obsidian_embed(
-            f"🎤 Voice Activity Leaderboard - {period_name}",
-            leaderboard_text,
+            f"🎤 Voice Leaderboard - {period_name}",
+            leaderboard_text.strip(),
             color=discord.Color.blue(),
+            thumbnail=thumb_url,
+            footer=f"{interaction.guild.name} • Top {len(leaderboard)} voice users",
             client=interaction.client,
         )
-        
         await interaction.followup.send(embed=embed)

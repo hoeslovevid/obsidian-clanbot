@@ -90,6 +90,7 @@ def setup(bot, group=None):
                 author=user,
                 thumbnail=user.display_avatar.url if user.display_avatar else None,
                 fields=fields,
+                footer=f"Level {current_level} → {new_level}",
                 client=interaction.client,
             )
         else:
@@ -134,6 +135,7 @@ def setup(bot, group=None):
                 author=user,
                 thumbnail=user.display_avatar.url if user.display_avatar else None,
                 fields=fields,
+                footer=f"Level {current_level} → {new_level}",
                 client=interaction.client,
             )
         

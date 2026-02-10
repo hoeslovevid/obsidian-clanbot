@@ -80,6 +80,7 @@ def setup(bot, group=None):
             author=interaction.user,
             thumbnail=interaction.user.display_avatar.url if hasattr(interaction.user, 'display_avatar') else interaction.user.avatar.url if interaction.user.avatar else None,
             fields=fields,
+            footer="Use /daily to claim your daily reward",
             client=interaction.client,
         )
         
