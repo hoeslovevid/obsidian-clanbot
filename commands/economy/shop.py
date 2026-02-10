@@ -128,7 +128,7 @@ def setup(bot, group=None):
             return await interaction.followup.send(
                 embed=obsidian_embed(
                     "❌ Item Not Found",
-                    f"No item found matching '{item_name}'. Use `/shop` to see available items.",
+                    f"No item found matching '{item_name}'. Use `/economy store shop` to see available items.",
                     color=discord.Color.red(),
                     client=interaction.client,
                 ),

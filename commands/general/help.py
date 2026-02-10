@@ -6,6 +6,22 @@ from typing import Optional
 from utils import obsidian_embed, is_mod, ECONOMY_ENABLED, COINS_PER_MESSAGE, COINS_DAILY_REWARD, MESSAGE_COOLDOWN_SECONDS, COINS_PER_MINUTE_VOICE
 
 
+def _collect_group_commands(group: app_commands.Group, prefix: list[str]) -> list[tuple[str, str]]:
+    """Recursively collect (path_str, description) for all commands in group and subgroups."""
+    result = []
+    for cmd in group.commands:
+        path = prefix + [cmd.name]
+        path_str = " ".join(path)
+        if isinstance(cmd, app_commands.Command):
+            desc = cmd.description or "No description"
+            if len(desc) > 80:
+                desc = desc[:77] + "..."
+            result.append((path_str, desc))
+        elif isinstance(cmd, app_commands.Group):
+            result.extend(_collect_group_commands(cmd, path))
+    return result
+
+
 class PageButton(discord.ui.Button):
     """Button for pagination."""
     
@@ -19,7 +35,8 @@ class PageButton(discord.ui.Button):
         if not view.current_group:
             return await interaction.response.send_message("No group selected.", ephemeral=True)
         
-        total_commands = len(view.current_group.commands)
+        collected = _collect_group_commands(view.current_group, [view.current_group.name])
+        total_commands = len(collected)
         total_pages = (total_commands + view.commands_per_page - 1) // view.commands_per_page
         
         if self.action == "prev" and view.current_page > 0:
@@ -97,7 +114,8 @@ class HelpSelectView(discord.ui.View):
         
         # Only add pagination if we have a group with multiple pages
         if self.current_group:
-            total_commands = len(self.current_group.commands)
+            collected = _collect_group_commands(self.current_group, [self.current_group.name])
+            total_commands = len(collected)
             total_pages = (total_commands + self.commands_per_page - 1) // self.commands_per_page
             
             if total_pages > 1:
@@ -135,7 +153,7 @@ class HelpSelect(discord.ui.Select):
         group_definitions = {
             "general": ("General", "General bot commands", "📋"),
             "economy": ("Economy", "Economy and coin management", "💰"),
-            "tools": ("Tools", "Invest, prestige, schedule, coinflip", "🔧"),
+            "tools": ("Tools", "Coinflip and utilities", "🔧"),
             "warframe": ("Warframe", "Warframe game information", "🎮"),
             "community": ("Community", "Community features", "👥"),
             "trading": ("Trading", "Trading commands", "💼"),
@@ -200,21 +218,9 @@ class HelpSelect(discord.ui.Select):
     
     async def update_embed(self, interaction: discord.Interaction, group: app_commands.Group, page: int):
         """Update the embed with commands for the specified page."""
-        # Build command list for this group
-        commands_list = []
-        for cmd in group.commands:
-            if isinstance(cmd, app_commands.Command):
-                # Get command description
-                desc = cmd.description or "No description"
-                # Truncate description if too long (keep command name + description under reasonable length)
-                if len(desc) > 80:
-                    desc = desc[:77] + "..."
-                # Format: command name - description
-                cmd_text = f"• `/{group.name} {cmd.name}` - {desc}"
-                commands_list.append(cmd_text)
-            elif isinstance(cmd, app_commands.Group):
-                # Nested group (shouldn't happen, but handle it)
-                commands_list.append(f"• `/{group.name} {cmd.name}` - {cmd.description or 'Group'}")
+        # Build command list (including nested subgroups)
+        collected = _collect_group_commands(group, [group.name])
+        commands_list = [f"• `/{path}` - {desc}" for path, desc in collected]
         
         if not commands_list:
             commands_text = "No commands available in this group."
@@ -275,8 +281,8 @@ class HelpSelect(discord.ui.Select):
             client=interaction.client,
         )
         
-        # Add footer with command count
-        footer_text = f"{len(group.commands)} command(s) in this group"
+        # Add footer with command count (includes nested subgroup commands)
+        footer_text = f"{len(collected)} command(s) in this group"
         if total_pages > 1:
             footer_text += f" • Page {page + 1}/{total_pages}"
         embed.set_footer(text=footer_text)
@@ -313,24 +319,32 @@ def setup(bot, group=None):
             # Parse command (e.g., "economy balance" or "warframe baro")
             parts = command.lower().strip().split()
             
-            # Find the command
+            # Find the command (supports 1–3 levels: economy, economy balance, economy pets pet_shop)
             found_command = None
-            if len(parts) == 1:
-                # Top-level command or group
-                for cmd in bot.tree.get_commands(guild=interaction.guild):
-                    if cmd.name == parts[0]:
-                        found_command = cmd
+            commands_source = bot.tree.get_commands(guild=interaction.guild)
+            for cmd in commands_source:
+                if cmd.name != parts[0]:
+                    continue
+                if len(parts) == 1:
+                    found_command = cmd
+                    break
+                if not isinstance(cmd, app_commands.Group):
+                    continue
+                # parts >= 2: drill into subgroups
+                current = cmd
+                for i in range(1, len(parts)):
+                    sub = next((c for c in current.commands if c.name == parts[i]), None)
+                    if not sub:
                         break
-            elif len(parts) == 2:
-                # Group command (e.g., "economy balance")
-                for cmd in bot.tree.get_commands(guild=interaction.guild):
-                    if isinstance(cmd, app_commands.Group) and cmd.name == parts[0]:
-                        for subcmd in cmd.commands:
-                            if subcmd.name == parts[1]:
-                                found_command = subcmd
-                                break
-                        if found_command:
-                            break
+                    if i == len(parts) - 1:
+                        found_command = sub
+                        break
+                    if isinstance(sub, app_commands.Group):
+                        current = sub
+                    else:
+                        break
+                if found_command:
+                    break
             
             if found_command:
                 # Build help for specific command
@@ -346,11 +360,9 @@ def setup(bot, group=None):
                             required = "Required" if param.required else "Optional"
                             params_text += f"• `{param.name}` ({required}) - {param_desc}\n"
                     
-                    # Add usage example
-                    if isinstance(found_command.parent, app_commands.Group):
-                        usage = f"/{found_command.parent.name} {found_command.name}"
-                    else:
-                        usage = f"/{found_command.name}"
+                    # Add usage example (build full path for nested groups)
+                    path_parts = parts
+                    usage = "/" + " ".join(path_parts)
                     
                     embed = obsidian_embed(
                         f"📖 Help: `{usage}`",
@@ -394,7 +406,7 @@ def setup(bot, group=None):
         group_info = {
             "general": ("📋 General", "General bot commands"),
             "economy": ("💰 Economy", "Economy and coin management"),
-            "tools": ("🔧 Tools", "Invest, prestige, schedule, coinflip"),
+            "tools": ("🔧 Tools", "Coinflip and utilities"),
             "warframe": ("🎮 Warframe", "Warframe game information"),
             "community": ("👥 Community", "Community features"),
             "trading": ("💼 Trading", "Trading commands"),
@@ -407,7 +419,8 @@ def setup(bot, group=None):
         for group in groups:
             if group.name in group_info:
                 emoji_name, group_desc = group_info[group.name]
-                desc += f"{emoji_name} **{group.name.title()}** - {len(group.commands)} command(s)\n"
+                total = len(_collect_group_commands(group, [group.name]))
+                desc += f"{emoji_name} **{group.name.title()}** - {total} command(s)\n"
         
         # Add feature info
         desc += "\n**💬 Features:**\n"

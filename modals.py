@@ -13,6 +13,56 @@ from database import DB_PATH, now_utc
 logger = logging.getLogger(__name__)
 
 
+# --- Context menu modals (Transfer, Warn, Give Rep) ---
+
+class TransferCoinsModal(discord.ui.Modal, title="Transfer Coins"):
+    amount = discord.ui.TextInput(label="Amount", placeholder="e.g. 100", max_length=12)
+
+    def __init__(self, member: discord.Member):
+        super().__init__(timeout=300)
+        self.target_member = member
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            amount = int(self.amount.value.strip())
+        except ValueError:
+            return await interaction.response.send_message(
+                embed=obsidian_embed("❌ Invalid Amount", "Please enter a valid number.", color=discord.Color.red(), client=interaction.client),
+                ephemeral=True,
+            )
+        if amount <= 0:
+            return await interaction.response.send_message(
+                embed=obsidian_embed("❌ Invalid Amount", "Amount must be greater than 0.", color=discord.Color.red(), client=interaction.client),
+                ephemeral=True,
+            )
+        from commands.economy.transfer import run_transfer_with_modal
+        await run_transfer_with_modal(interaction, self.target_member, amount)
+
+
+class WarnUserModal(discord.ui.Modal, title="Warn User"):
+    reason = discord.ui.TextInput(label="Reason", placeholder="Reason for the warning", max_length=500)
+
+    def __init__(self, member: discord.Member):
+        super().__init__(timeout=300)
+        self.target_member = member
+
+    async def on_submit(self, interaction: discord.Interaction):
+        from commands.moderation.warn import execute_warn
+        await execute_warn(interaction, self.target_member, self.reason.value or "No reason provided")
+
+
+class GiveRepModal(discord.ui.Modal, title="Give Reputation"):
+    reason = discord.ui.TextInput(label="Reason (optional)", placeholder="Why are you giving rep?", required=False, max_length=200)
+
+    def __init__(self, member: discord.Member):
+        super().__init__(timeout=300)
+        self.target_member = member
+
+    async def on_submit(self, interaction: discord.Interaction):
+        from commands.general.reputation import execute_give_rep
+        await execute_give_rep(interaction, self.target_member, self.reason.value or None)
+
+
 class RenameVCModal(discord.ui.Modal, title="Recalibrate Comms Node"):  # type: ignore
     new_name = discord.ui.TextInput(label="New designation", max_length=80)
 

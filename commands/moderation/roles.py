@@ -38,7 +38,7 @@ def setup(bot, group=None):
                 return await interaction.followup.send(
                     embed=obsidian_embed(
                         "📋 Self-Assignable Roles",
-                        "No self-assignable roles have been configured.\n\nModerators can add roles using `/roles add`.",
+                        "No self-assignable roles have been configured.\n\nModerators can add roles using `/mod role_tools roles add`.",
                         color=discord.Color.orange(),
                         client=interaction.client,
                     ),

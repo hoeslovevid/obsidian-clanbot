@@ -14,12 +14,30 @@ def load_all_commands(bot):
     warframe_group = app_commands.Group(name="warframe", description="🎮 Baro, cycles, alerts, LFG, builds, and more")
     moderation_group = app_commands.Group(name="mod", description="🛡️ Purge, lock, warn, automod, logging, and moderation tools")
     general_group = app_commands.Group(name="general", description="📋 Help, about, setup, profiles, and server tools")
-    tools_group = app_commands.Group(name="tools", description="🔧 Invest, prestige, schedule, coinflip, and utilities")
+    tools_group = app_commands.Group(name="tools", description="🔧 Coinflip and utilities")
     community_group = app_commands.Group(name="community", description="👥 Events, tickets, suggestions, applications, and community features")
     music_group = app_commands.Group(name="music", description="🎵 Play, pause, skip, and manage music in voice channels")
     updates_group = app_commands.Group(name="updates", description="📝 Update log and version management")
     giveaways_group = app_commands.Group(name="giveaways", description="🎁 Create, manage, and enter giveaways")
     trading_group = app_commands.Group(name="trading", description="💼 Trading post, prices, and Warframe market lookup")
+
+    # Economy subgroups (stays under 25 items: commands + subgroups)
+    economy_pets = app_commands.Group(name="pets", description="Pet shop, care, battles, evolutions, and trading")
+    economy_shop = app_commands.Group(name="store", description="Buy items and manage shop (mods)")
+    economy_xp = app_commands.Group(name="xp", description="XP, leaderboard, and XP settings")
+    economy_group.add_command(economy_pets)
+    economy_group.add_command(economy_shop)
+    economy_group.add_command(economy_xp)
+
+    # Moderation subgroups
+    mod_lock = app_commands.Group(name="lock", description="Lock and unlock channels")
+    mod_warn = app_commands.Group(name="warn", description="Warn users and view warnings")
+    mod_automod = app_commands.Group(name="automod", description="Auto-moderation configuration")
+    mod_role_tools = app_commands.Group(name="role_tools", description="Reaction roles, role menus, level roles, self-assignable")
+    moderation_group.add_command(mod_lock)
+    moderation_group.add_command(mod_warn)
+    moderation_group.add_command(mod_automod)
+    moderation_group.add_command(mod_role_tools)
 
     bot.tree.add_command(economy_group)
     bot.tree.add_command(warframe_group)
@@ -90,7 +108,6 @@ def load_all_commands(bot):
         "commands.economy.balance",
         "commands.economy.transactions",
         "commands.economy.leaderboard",
-        "commands.economy.transfer",
         "commands.economy.daily",
         "commands.economy.xp",
         "commands.economy.xpleaderboard",
@@ -145,19 +162,18 @@ def load_all_commands(bot):
         "commands.economy.balance": economy_group,
         "commands.economy.transactions": economy_group,
         "commands.economy.leaderboard": economy_group,
-        "commands.economy.transfer": economy_group,
         "commands.economy.daily": economy_group,
-        "commands.economy.xp": economy_group,
-        "commands.economy.xpleaderboard": economy_group,
         "commands.economy.add_coins": economy_group,
-        "commands.economy.manage_xp": economy_group,
-        "commands.economy.xp_settings": economy_group,
-        "commands.economy.invest": tools_group,  # Moved: economy at 25 limit
-        "commands.economy.shop": economy_group,
-        "commands.economy.shop_manage": economy_group,
         "commands.economy.gambling": economy_group,
-        "commands.economy.pets": economy_group,
-        "commands.economy.prestige": tools_group,  # Moved: economy at 25 limit
+        "commands.economy.invest": economy_group,
+        "commands.economy.prestige": economy_group,
+        "commands.economy.xp": economy_xp,
+        "commands.economy.xpleaderboard": economy_xp,
+        "commands.economy.manage_xp": economy_xp,
+        "commands.economy.xp_settings": economy_xp,
+        "commands.economy.shop": economy_shop,
+        "commands.economy.shop_manage": economy_shop,
+        "commands.economy.pets": economy_pets,
         "commands.warframe.baro": warframe_group,
         "commands.warframe.baro_notify": warframe_group,
         "commands.warframe.lfg": warframe_group,
@@ -178,24 +194,24 @@ def load_all_commands(bot):
         "commands.warframe.warframe_link": warframe_group,
         "commands.warframe.warframe_roles": warframe_group,
         "commands.moderation.purge": moderation_group,
-        "commands.moderation.reaction_roles": moderation_group,
-        "commands.moderation.automod_setup": moderation_group,
-        "commands.moderation.automod_status": moderation_group,
-        "commands.moderation.roles": moderation_group,
-        "commands.moderation.level_roles": moderation_group,
         "commands.moderation.logging": moderation_group,
         "commands.moderation.snipe": moderation_group,
-        "commands.moderation.warn": moderation_group,
         "commands.moderation.starboard": moderation_group,
-        "commands.moderation.role_menu": moderation_group,
         "commands.moderation.backup": moderation_group,
         "commands.moderation.data_retention": moderation_group,
         "commands.moderation.incident_mode": moderation_group,
         "commands.moderation.kpis": moderation_group,
         "commands.moderation.raid_protection": moderation_group,
         "commands.moderation.embed_builder": moderation_group,
-        "commands.moderation.lock": moderation_group,
-        "commands.moderation.schedule": tools_group,  # Moved: mod at 25 limit
+        "commands.moderation.schedule": moderation_group,
+        "commands.moderation.reaction_roles": mod_role_tools,
+        "commands.moderation.automod_setup": mod_automod,
+        "commands.moderation.automod_status": mod_automod,
+        "commands.moderation.roles": mod_role_tools,
+        "commands.moderation.level_roles": mod_role_tools,
+        "commands.moderation.role_menu": mod_role_tools,
+        "commands.moderation.warn": mod_warn,
+        "commands.moderation.lock": mod_lock,
         "commands.general.help": general_group,
         "commands.general.about": general_group,
         "commands.general.ping": community_group,

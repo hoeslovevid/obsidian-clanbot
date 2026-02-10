@@ -2,7 +2,7 @@
 import discord
 from discord import app_commands
 
-from utils import obsidian_embed, error_embed, ECONOMY_ENABLED
+from utils import obsidian_embed, error_embed, ECONOMY_ENABLED, is_mod
 
 
 def setup(bot, group=None):
@@ -89,6 +89,80 @@ def setup(bot, group=None):
             client=interaction.client,
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @bot.tree.context_menu(name="Transfer Coins")
+    async def transfer_coins_context(interaction: discord.Interaction, member: discord.Member):
+        """Right-click user → Transfer Coins (opens modal for amount)."""
+        from modals import TransferCoinsModal
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=error_embed("Invalid Context", "This can only be used in a server.", client=interaction.client),
+                ephemeral=True,
+            )
+        if not ECONOMY_ENABLED:
+            return await interaction.response.send_message(
+                embed=error_embed("Economy Disabled", "The economy system is currently disabled.", client=interaction.client),
+                ephemeral=True,
+            )
+        if member.bot:
+            return await interaction.response.send_message(
+                embed=error_embed("Invalid Recipient", "You cannot transfer coins to bots.", client=interaction.client),
+                ephemeral=True,
+            )
+        if member.id == interaction.user.id:
+            return await interaction.response.send_message(
+                embed=error_embed("Invalid Recipient", "You cannot transfer coins to yourself.", client=interaction.client),
+                ephemeral=True,
+            )
+        await interaction.response.send_modal(TransferCoinsModal(member))
+
+    @bot.tree.context_menu(name="Warn User")
+    async def warn_user_context(interaction: discord.Interaction, member: discord.Member):
+        """Right-click user → Warn (mod only, opens modal for reason)."""
+        from modals import WarnUserModal
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=error_embed("Invalid Context", "This can only be used in a server.", client=interaction.client),
+                ephemeral=True,
+            )
+        if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
+            return await interaction.response.send_message(
+                embed=error_embed("Permission Denied", "Only administrators can warn users.", client=interaction.client),
+                ephemeral=True,
+            )
+        if member.bot:
+            return await interaction.response.send_message(
+                embed=error_embed("Invalid User", "You cannot warn bots.", client=interaction.client),
+                ephemeral=True,
+            )
+        await interaction.response.send_modal(WarnUserModal(member))
+
+    @bot.tree.context_menu(name="Give Reputation")
+    async def give_rep_context(interaction: discord.Interaction, member: discord.Member):
+        """Right-click user → Give Reputation (opens modal for optional reason)."""
+        from modals import GiveRepModal
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=error_embed("Invalid Context", "This can only be used in a server.", client=interaction.client),
+                ephemeral=True,
+            )
+        if member.bot:
+            return await interaction.response.send_message(
+                embed=error_embed("Invalid User", "You cannot give reputation to bots.", client=interaction.client),
+                ephemeral=True,
+            )
+        if member.id == interaction.user.id:
+            return await interaction.response.send_message(
+                embed=error_embed("Invalid User", "You cannot give reputation to yourself.", client=interaction.client),
+                ephemeral=True,
+            )
+        await interaction.response.send_modal(GiveRepModal(member))
+
+    @bot.tree.context_menu(name="View Reputation")
+    async def view_rep_context(interaction: discord.Interaction, member: discord.Member):
+        """Right-click user → View Reputation."""
+        from commands.general.reputation import execute_view_rep
+        await execute_view_rep(interaction, member)
 
     @bot.tree.context_menu(name="Create LFG")
     async def create_lfg_context(interaction: discord.Interaction, message: discord.Message):

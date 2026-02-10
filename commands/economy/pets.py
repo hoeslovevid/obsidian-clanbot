@@ -77,7 +77,7 @@ class PetShopView(discord.ui.View):
             lines.append(f"**{pet_type}** • {price:,} coins • Max Lv.{max_level}\n{desc}")
 
         desc = "Browse pets below. Use the buttons to change pages.\n\n" + "\n\n".join(lines)
-        footer = f"Page {self.page + 1}/{self.total_pages} • Use /pet_buy to purchase"
+        footer = f"Page {self.page + 1}/{self.total_pages} • Use /economy pets pet_buy to purchase"
         return obsidian_embed(
             "🐾 Pet Shop",
             desc,
@@ -473,7 +473,7 @@ def setup(bot, group=None):
                 return await interaction.followup.send(
                     embed=obsidian_embed(
                         "❌ Invalid Pet Type",
-                        f"Pet type '{pet_type}' not found. Use `/pet_shop` to see available pets.",
+                        f"Pet type '{pet_type}' not found. Use `/economy pets pet_shop` to see available pets.",
                         color=discord.Color.red(),
                         client=interaction.client,
                     )
@@ -548,7 +548,7 @@ def setup(bot, group=None):
             return await interaction.followup.send(
                 embed=obsidian_embed(
                     "🐾 No Pet",
-                    "You don't have a pet yet! Use `/pet_shop` to see available pets and `/pet_buy` to buy one.",
+                    "You don't have a pet yet! Use `/economy pets pet_shop` to see available pets and `/economy pets pet_buy` to buy one.",
                     color=discord.Color.blue(),
                     client=interaction.client,
                 )
