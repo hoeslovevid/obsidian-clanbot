@@ -77,7 +77,7 @@ class PetShopView(discord.ui.View):
             lines.append(f"**{pet_type}** • {price:,} coins • Max Lv.{max_level}\n{desc}")
 
         desc = "Browse pets below. Use the buttons to change pages.\n\n" + "\n\n".join(lines)
-        footer = f"Page {self.page + 1}/{self.total_pages} • Use /economy pets pet_buy to purchase"
+        footer = f"Page {self.page + 1}/{self.total_pages} • Use /economy pets buy to purchase"
         return obsidian_embed(
             "🐾 Pet Shop",
             desc,
@@ -354,7 +354,7 @@ class PetBattleChallengeView(discord.ui.View):
 def setup(bot, group=None):
     """Register pet commands."""
     
-    command_decorator = group.command(name="pet_shop", description="View available pets to buy.") if group else bot.tree.command(name="pet_shop", description="View available pets to buy.")
+    command_decorator = group.command(name="shop", description="View available pets to buy.") if group else bot.tree.command(name="shop", description="View available pets to buy.")
     
     @command_decorator
     async def pet_shop(interaction: discord.Interaction):
@@ -428,7 +428,7 @@ def setup(bot, group=None):
             matches = (exact + start + contains)[:AUTOCOMPLETE_MAX_CHOICES]
         return [app_commands.Choice(name=m, value=m) for m in matches]
 
-    command_decorator = group.command(name="pet_buy", description="Buy a pet.") if group else bot.tree.command(name="pet_buy", description="Buy a pet.")
+    command_decorator = group.command(name="buy", description="Buy a pet.") if group else bot.tree.command(name="buy", description="Buy a pet.")
     
     @command_decorator
     @app_commands.describe(pet_type="Type of pet to buy", pet_name="Name for your pet")
@@ -473,7 +473,7 @@ def setup(bot, group=None):
                 return await interaction.followup.send(
                     embed=obsidian_embed(
                         "❌ Invalid Pet Type",
-                        f"Pet type '{pet_type}' not found. Use `/economy pets pet_shop` to see available pets.",
+                        f"Pet type '{pet_type}' not found. Use `/economy pets shop` to see available pets.",
                         color=discord.Color.red(),
                         client=interaction.client,
                     )
@@ -516,7 +516,7 @@ def setup(bot, group=None):
             )
         )
     
-    command_decorator = group.command(name="pet", description="View your pet.") if group else bot.tree.command(name="pet", description="View your pet.")
+    command_decorator = group.command(name="view", description="View your pet.") if group else bot.tree.command(name="view", description="View your pet.")
     
     @command_decorator
     async def pet(interaction: discord.Interaction):
@@ -548,7 +548,7 @@ def setup(bot, group=None):
             return await interaction.followup.send(
                 embed=obsidian_embed(
                     "🐾 No Pet",
-                    "You don't have a pet yet! Use `/economy pets pet_shop` to see available pets and `/economy pets pet_buy` to buy one.",
+                    "You don't have a pet yet! Use `/economy pets shop` to see available pets and `/economy pets buy` to buy one.",
                     color=discord.Color.blue(),
                     client=interaction.client,
                 )
@@ -584,7 +584,7 @@ def setup(bot, group=None):
             )
         )
     
-    command_decorator = group.command(name="pet_feed", description="Feed your pet (costs 10 coins).") if group else bot.tree.command(name="pet_feed", description="Feed your pet (costs 10 coins).")
+    command_decorator = group.command(name="feed", description="Feed your pet (costs 10 coins).") if group else bot.tree.command(name="feed", description="Feed your pet (costs 10 coins).")
     
     @command_decorator
     async def pet_feed(interaction: discord.Interaction):
@@ -628,7 +628,7 @@ def setup(bot, group=None):
                 return await interaction.followup.send(
                     embed=obsidian_embed(
                         "❌ No Pet",
-                        "You don't have a pet! Use `/pet_buy` to buy one.",
+                        "You don't have a pet! Use `/economy pets buy` to buy one.",
                         color=discord.Color.red(),
                         client=interaction.client,
                     )
@@ -667,7 +667,7 @@ def setup(bot, group=None):
             )
         )
     
-    command_decorator = group.command(name="pet_care", description="Feed and play with your pet in one go (costs 15 coins).") if group else bot.tree.command(name="pet_care", description="Feed and play with your pet in one go (costs 15 coins).")
+    command_decorator = group.command(name="care", description="Feed and play with your pet in one go (costs 15 coins).") if group else bot.tree.command(name="care", description="Feed and play with your pet in one go (costs 15 coins).")
 
     @command_decorator
     async def pet_care(interaction: discord.Interaction):
@@ -711,7 +711,7 @@ def setup(bot, group=None):
                 return await interaction.followup.send(
                     embed=obsidian_embed(
                         "❌ No Pet",
-                        "You don't have a pet! Use `/pet_buy` to buy one.",
+                        "You don't have a pet! Use `/economy pets buy` to buy one.",
                         color=discord.Color.red(),
                         client=interaction.client,
                     )
@@ -753,7 +753,7 @@ def setup(bot, group=None):
             )
         )
 
-    command_decorator = group.command(name="pet_play", description="Play with your pet (costs 5 coins).") if group else bot.tree.command(name="pet_play", description="Play with your pet (costs 5 coins).")
+    command_decorator = group.command(name="play", description="Play with your pet (costs 5 coins).") if group else bot.tree.command(name="play", description="Play with your pet (costs 5 coins).")
     
     @command_decorator
     async def pet_play(interaction: discord.Interaction):
@@ -797,7 +797,7 @@ def setup(bot, group=None):
                 return await interaction.followup.send(
                     embed=obsidian_embed(
                         "❌ No Pet",
-                        "You don't have a pet! Use `/pet_buy` to buy one.",
+                        "You don't have a pet! Use `/economy pets buy` to buy one.",
                         color=discord.Color.red(),
                         client=interaction.client,
                     )
@@ -838,7 +838,7 @@ def setup(bot, group=None):
             )
         )
 
-    command_decorator = group.command(name="pet_rename", description="Rename your pet.") if group else bot.tree.command(name="pet_rename", description="Rename your pet.")
+    command_decorator = group.command(name="rename", description="Rename your pet.") if group else bot.tree.command(name="rename", description="Rename your pet.")
     
     @command_decorator
     @app_commands.describe(new_name="New name for your pet (2-32 characters)")
@@ -870,7 +870,7 @@ def setup(bot, group=None):
                 return await interaction.response.send_message(
                     embed=obsidian_embed(
                         "❌ No Pet",
-                        "You don't have a pet! Use `/pet_buy` to buy one.",
+                        "You don't have a pet! Use `/economy pets buy` to buy one.",
                         color=discord.Color.red(),
                         client=interaction.client,
                     ),
@@ -892,7 +892,7 @@ def setup(bot, group=None):
             ephemeral=True
         )
 
-    command_decorator = group.command(name="pet_battle", description="Challenge another user's pet to a battle!") if group else bot.tree.command(name="pet_battle", description="Challenge another user's pet to a battle!")
+    command_decorator = group.command(name="battle", description="Challenge another user's pet to a battle!") if group else bot.tree.command(name="battle", description="Challenge another user's pet to a battle!")
 
     @command_decorator
     @app_commands.describe(opponent="The user whose pet you want to challenge")
@@ -919,7 +919,7 @@ def setup(bot, group=None):
             row1 = await cur.fetchone()
             if not row1:
                 return await interaction.followup.send(
-                    embed=obsidian_embed("❌ No Pet", "You need a pet to battle! Use `/pet_buy` to get one.", color=discord.Color.red(), client=interaction.client),
+                    embed=obsidian_embed("❌ No Pet", "You need a pet to battle! Use `/economy pets buy` to get one.", color=discord.Color.red(), client=interaction.client),
                 )
             # Check defender has pet
             cur = await db.execute("""
@@ -981,7 +981,7 @@ def setup(bot, group=None):
         view.message = msg
 
     # Pet evolve
-    command_decorator = group.command(name="pet_evolve", description="Evolve your pet when it reaches the required level.") if group else bot.tree.command(name="pet_evolve", description="Evolve your pet when it reaches the required level.")
+    command_decorator = group.command(name="evolve", description="Evolve your pet when it reaches the required level.") if group else bot.tree.command(name="evolve", description="Evolve your pet when it reaches the required level.")
     @command_decorator
     async def pet_evolve(interaction: discord.Interaction):
         """Evolve pet to next tier."""
@@ -1038,7 +1038,7 @@ def setup(bot, group=None):
         )
 
     # Pet list (for sale)
-    command_decorator = group.command(name="pet_list", description="List your pet for sale on the marketplace.") if group else bot.tree.command(name="pet_list", description="List your pet for sale on the marketplace.")
+    command_decorator = group.command(name="list", description="List your pet for sale on the marketplace.") if group else bot.tree.command(name="list", description="List your pet for sale on the marketplace.")
     @command_decorator
     @app_commands.describe(price="Asking price in coins")
     async def pet_list(interaction: discord.Interaction, price: int):
@@ -1066,11 +1066,11 @@ def setup(bot, group=None):
             )
             await db.commit()
         await interaction.followup.send(
-            embed=obsidian_embed("✅ Pet Listed", f"**{pet_name}** ({pet_type}) Lv.{level} listed for {price:,} coins. Use `/pet_marketplace` to browse.", color=discord.Color.green(), client=interaction.client),
+            embed=obsidian_embed("✅ Pet Listed", f"**{pet_name}** ({pet_type}) Lv.{level} listed for {price:,} coins. Use `/economy pets marketplace` to browse.", color=discord.Color.green(), client=interaction.client),
         )
 
     # Pet marketplace (browse and buy)
-    command_decorator = group.command(name="pet_marketplace", description="Browse and buy pets listed for sale.") if group else bot.tree.command(name="pet_marketplace", description="Browse and buy pets listed for sale.")
+    command_decorator = group.command(name="marketplace", description="Browse and buy pets listed for sale.") if group else bot.tree.command(name="marketplace", description="Browse and buy pets listed for sale.")
     @command_decorator
     async def pet_marketplace(interaction: discord.Interaction):
         """Browse pet marketplace."""
@@ -1092,21 +1092,21 @@ def setup(bot, group=None):
             rows = await cur.fetchall()
         if not rows:
             return await interaction.followup.send(
-                embed=obsidian_embed("📦 Pet Marketplace", "No pets are listed for sale. Use `/pet_list` to list yours!", color=discord.Color.blue(), client=interaction.client),
+                embed=obsidian_embed("📦 Pet Marketplace", "No pets are listed for sale. Use `/economy pets list` to list yours!", color=discord.Color.blue(), client=interaction.client),
             )
         fields = []
         for listing_id, pet_id, seller_id, price, pet_name, pet_type, level in rows:
             seller = interaction.guild.get_member(seller_id)
             seller_name = seller.display_name if seller else f"User {seller_id}"
-            fields.append((f"#{listing_id} {pet_name} ({pet_type}) Lv.{level}", f"💰 {price:,} coins\n👤 Seller: {seller_name}\n`/pet_buy_listed {listing_id}`", True))
+            fields.append((f"#{listing_id} {pet_name} ({pet_type}) Lv.{level}", f"💰 {price:,} coins\n👤 Seller: {seller_name}\n`/economy pets buy_listed {listing_id}`", True))
         await interaction.followup.send(
-            embed=obsidian_embed("📦 Pet Marketplace", "Pets for sale. Use `/pet_buy_listed listing_id:N` to purchase.", color=discord.Color.gold(), fields=fields, client=interaction.client),
+            embed=obsidian_embed("📦 Pet Marketplace", "Pets for sale. Use `/economy pets buy_listed listing_id:N` to purchase.", color=discord.Color.gold(), fields=fields, client=interaction.client),
         )
 
     # Pet buy listed
-    command_decorator = group.command(name="pet_buy_listed", description="Buy a pet from the marketplace.") if group else bot.tree.command(name="pet_buy_listed", description="Buy a pet from the marketplace.")
+    command_decorator = group.command(name="buy_listed", description="Buy a pet from the marketplace.") if group else bot.tree.command(name="buy_listed", description="Buy a pet from the marketplace.")
     @command_decorator
-    @app_commands.describe(listing_id="The listing ID from /pet_marketplace")
+    @app_commands.describe(listing_id="The listing ID from /economy pets marketplace")
     async def pet_buy_listed(interaction: discord.Interaction, listing_id: int):
         """Buy a listed pet."""
         if not interaction.guild:

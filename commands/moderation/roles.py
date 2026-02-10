@@ -10,7 +10,7 @@ from database import get_self_assignable_roles, get_self_assignable_categories, 
 def setup(bot, group=None):
     """Register the roles commands."""
     
-    command_decorator = group.command(name="roles", description="View and manage self-assignable roles.") if group else bot.tree.command(name="roles", description="View and manage self-assignable roles.")
+    command_decorator = group.command(name="list", description="View and manage self-assignable roles.") if group else bot.tree.command(name="list", description="View and manage self-assignable roles.")
     
     @command_decorator
     @app_commands.describe(action="Action to perform", role="Role to add/remove", category="Category name")
@@ -38,7 +38,7 @@ def setup(bot, group=None):
                 return await interaction.followup.send(
                     embed=obsidian_embed(
                         "📋 Self-Assignable Roles",
-                        "No self-assignable roles have been configured.\n\nModerators can add roles using `/mod role_tools roles add`.",
+                        "No self-assignable roles have been configured.\n\nModerators can add roles using `/mod role_tools list add`.",
                         color=discord.Color.orange(),
                         client=interaction.client,
                     ),
@@ -167,7 +167,7 @@ def setup(bot, group=None):
                 ephemeral=True
             )
     
-    command_decorator = group.command(name="role", description="Assign or remove a self-assignable role.") if group else bot.tree.command(name="role", description="Assign or remove a self-assignable role.")
+    command_decorator = group.command(name="assign", description="Assign or remove a self-assignable role.") if group else bot.tree.command(name="assign", description="Assign or remove a self-assignable role.")
     
     @command_decorator
     @app_commands.describe(action="Assign or remove the role", role="The role to assign/remove")

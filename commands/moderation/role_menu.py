@@ -86,7 +86,7 @@ class RoleMenuView(View):
 def setup(bot, group=None):
     """Register role menu commands."""
     
-    command_decorator = group.command(name="role_menu", description="Create an interactive role selection menu (moderators only).") if group else bot.tree.command(name="role_menu", description="Create an interactive role selection menu (moderators only).")
+    command_decorator = group.command(name="menu", description="Create an interactive role selection menu (moderators only).") if group else bot.tree.command(name="menu", description="Create an interactive role selection menu (moderators only).")
     
     @command_decorator
     @app_commands.describe(
@@ -121,7 +121,7 @@ def setup(bot, group=None):
         await interaction.response.send_message(
             embed=obsidian_embed(
                 "✅ Role Menu Created",
-                "The role menu has been created. Use `/role_menu_add` to add roles to it.",
+                "The role menu has been created. Use `/mod role_tools add` to add roles to it.",
                 color=discord.Color.green(),
                 client=interaction.client,
             ),
@@ -163,7 +163,7 @@ def setup(bot, group=None):
         await message.edit(view=view)
         bot.add_view(view)
     
-    command_decorator = group.command(name="role_menu_add", description="Add a role to a role menu (moderators only).") if group else bot.tree.command(name="role_menu_add", description="Add a role to a role menu (moderators only).")
+    command_decorator = group.command(name="add", description="Add a role to a role menu (moderators only).") if group else bot.tree.command(name="add", description="Add a role to a role menu (moderators only).")
     
     @command_decorator
     @app_commands.describe(

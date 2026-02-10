@@ -8,7 +8,7 @@ from database import get_auto_mod_settings
 
 def setup(bot, group=None):
     """Register the automod_status command."""
-    command_decorator = group.command(name="automod_status", description="View current auto-moderation settings.") if group else bot.tree.command(name="automod_status", description="View current auto-moderation settings.")
+    command_decorator = group.command(name="status", description="View current auto-moderation settings.") if group else bot.tree.command(name="status", description="View current auto-moderation settings.")
     
     @command_decorator
     async def automod_status(interaction: discord.Interaction):
@@ -30,7 +30,7 @@ def setup(bot, group=None):
             return await interaction.response.send_message(
                 embed=obsidian_embed(
                     "⚠️ Auto-Moderation Not Configured",
-                    "Auto-moderation is not yet configured. Use `/automod_setup` to configure it.",
+                    "Auto-moderation is not yet configured. Use `/mod automod setup` to configure it.",
                     color=discord.Color.orange(),
                     client=interaction.client,
                 ),

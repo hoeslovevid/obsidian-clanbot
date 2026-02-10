@@ -158,12 +158,6 @@ def setup(bot, group=None):
             )
         await interaction.response.send_modal(GiveRepModal(member))
 
-    @bot.tree.context_menu(name="View Reputation")
-    async def view_rep_context(interaction: discord.Interaction, member: discord.Member):
-        """Right-click user → View Reputation."""
-        from commands.general.reputation import execute_view_rep
-        await execute_view_rep(interaction, member)
-
     @bot.tree.context_menu(name="Create LFG")
     async def create_lfg_context(interaction: discord.Interaction, message: discord.Message):
         """Quick LFG: create an LFG post in this channel with default settings."""

@@ -8,7 +8,7 @@ from database import get_auto_mod_settings, update_auto_mod_settings
 
 def setup(bot, group=None):
     """Register the automod_setup command."""
-    command_decorator = group.command(name="automod_setup", description="Configure auto-moderation settings (moderators only).") if group else bot.tree.command(name="automod_setup", description="Configure auto-moderation settings (moderators only).")
+    command_decorator = group.command(name="setup", description="Configure auto-moderation settings (moderators only).") if group else bot.tree.command(name="setup", description="Configure auto-moderation settings (moderators only).")
     
     @command_decorator
     @app_commands.describe(

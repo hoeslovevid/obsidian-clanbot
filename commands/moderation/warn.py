@@ -197,7 +197,7 @@ def setup(bot, group=None):
                 ephemeral=True,
             )
 
-    command_decorator = group.command(name="warn_setup", description="Configure warn system (moderators only).") if group else bot.tree.command(name="warn_setup", description="Configure warn system (moderators only).")
+    command_decorator = group.command(name="setup", description="Configure warn system (moderators only).") if group else bot.tree.command(name="setup", description="Configure warn system (moderators only).")
     
     @command_decorator
     @app_commands.describe(max_warnings="Maximum warnings before action", action="Action to take after max warnings", mute_duration="Mute duration in minutes (if action is mute)")

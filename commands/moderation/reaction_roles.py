@@ -57,7 +57,7 @@ async def update_reaction_role_message(guild: discord.Guild, message_id: int, ch
 def setup(bot, group=None):
     """Register reaction role commands."""
     
-    command_decorator = group.command(name="reaction_role", description="Manage reaction roles (moderators only).") if group else bot.tree.command(name="reaction_role", description="Manage reaction roles (moderators only).")
+    command_decorator = group.command(name="reaction", description="Manage reaction roles (moderators only).") if group else bot.tree.command(name="reaction", description="Manage reaction roles (moderators only).")
     
     @command_decorator
     @app_commands.describe(
@@ -166,7 +166,7 @@ def setup(bot, group=None):
                         embed=obsidian_embed(
                             "✅ Reaction Role Message Created",
                             f"Reaction role message created in {channel.mention}.\n\n"
-                            f"Use `/reaction_role action:Add` to add emoji-role pairs to this message.\n"
+                            f"Use `/mod role_tools reaction action:Add` to add emoji-role pairs to this message.\n"
                             f"Message ID: `{message.id}`\n"
                             f"[Jump to message]({message.jump_url})",
                             color=discord.Color.green(),

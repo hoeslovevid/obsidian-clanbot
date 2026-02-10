@@ -104,7 +104,27 @@ async def execute_view_rep(interaction: discord.Interaction, user: discord.Membe
 
 
 def setup(bot, group=None):
-    """Register reputation commands (rep and reputation moved to context menu, keep reputation_leaderboard)."""
+    """Register reputation commands (rep moved to context menu, keep reputation and reputation_leaderboard as slash)."""
+    command_decorator = group.command(name="reputation", description="View a user's reputation.") if group else bot.tree.command(name="reputation", description="View a user's reputation.")
+
+    @command_decorator
+    @app_commands.describe(user="User to check reputation for")
+    async def reputation(interaction: discord.Interaction, user: Optional[discord.Member] = None):
+        """View user reputation."""
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=obsidian_embed("❌ Invalid Context", "This command can only be used in a server.", color=discord.Color.red(), client=interaction.client),
+                ephemeral=True,
+            )
+        if not user:
+            user = interaction.user if isinstance(interaction.user, discord.Member) else None
+        if not user:
+            return await interaction.response.send_message(
+                embed=obsidian_embed("❌ Invalid User", "Please specify a user.", color=discord.Color.red(), client=interaction.client),
+                ephemeral=True,
+            )
+        await execute_view_rep(interaction, user)
+
     command_decorator = group.command(name="reputation_leaderboard", description="View reputation leaderboard.") if group else bot.tree.command(name="reputation_leaderboard", description="View reputation leaderboard.")
     
     @command_decorator

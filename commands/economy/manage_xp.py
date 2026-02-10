@@ -7,7 +7,7 @@ from utils import obsidian_embed, XP_ENABLED, is_mod
 
 def setup(bot, group=None):
     """Register the manage_xp command."""
-    command_decorator = group.command(name="manage_xp", description="Add or remove XP from a user (moderators only).") if group else bot.tree.command(name="manage_xp", description="Add or remove XP from a user (moderators only).")
+    command_decorator = group.command(name="manage", description="Add or remove XP from a user (moderators only).") if group else bot.tree.command(name="manage", description="Add or remove XP from a user (moderators only).")
     
     @command_decorator
     @app_commands.describe(

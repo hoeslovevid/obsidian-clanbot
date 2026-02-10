@@ -7,7 +7,7 @@ from utils import obsidian_embed, XP_ENABLED
 
 def setup(bot, group=None):
     """Register the xpleaderboard command."""
-    command_decorator = group.command(name="xpleaderboard", description="View the top XP earners.") if group else bot.tree.command(name="xpleaderboard", description="View the top XP earners.")
+    command_decorator = group.command(name="leaderboard", description="View the top XP earners.") if group else bot.tree.command(name="leaderboard", description="View the top XP earners.")
     
     @command_decorator
     @app_commands.describe(limit="Number of users to show (default: 10, max: 25)")

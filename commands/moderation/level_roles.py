@@ -10,7 +10,7 @@ from database import add_level_role, remove_level_role, get_level_roles
 def setup(bot, group=None):
     """Register the level_roles command."""
     
-    command_decorator = group.command(name="level_roles", description="Configure roles that are automatically assigned at specific XP levels (mods only).") if group else bot.tree.command(name="level_roles", description="Configure roles that are automatically assigned at specific XP levels (mods only).")
+    command_decorator = group.command(name="levels", description="Configure roles that are automatically assigned at specific XP levels (mods only).") if group else bot.tree.command(name="levels", description="Configure roles that are automatically assigned at specific XP levels (mods only).")
     
     @command_decorator
     @app_commands.describe(

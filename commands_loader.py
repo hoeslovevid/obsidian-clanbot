@@ -30,11 +30,11 @@ def load_all_commands(bot):
     economy_group.add_command(economy_xp)
 
     # Moderation subgroups
-    mod_lock = app_commands.Group(name="lock", description="Lock and unlock channels")
+    mod_channel = app_commands.Group(name="channel", description="Lock and unlock channels")
     mod_warn = app_commands.Group(name="warn", description="Warn users and view warnings")
     mod_automod = app_commands.Group(name="automod", description="Auto-moderation configuration")
     mod_role_tools = app_commands.Group(name="role_tools", description="Reaction roles, role menus, level roles, self-assignable")
-    moderation_group.add_command(mod_lock)
+    moderation_group.add_command(mod_channel)
     moderation_group.add_command(mod_warn)
     moderation_group.add_command(mod_automod)
     moderation_group.add_command(mod_role_tools)
@@ -211,7 +211,7 @@ def load_all_commands(bot):
         "commands.moderation.level_roles": mod_role_tools,
         "commands.moderation.role_menu": mod_role_tools,
         "commands.moderation.warn": mod_warn,
-        "commands.moderation.lock": mod_lock,
+        "commands.moderation.lock": mod_channel,
         "commands.general.help": general_group,
         "commands.general.about": general_group,
         "commands.general.ping": community_group,

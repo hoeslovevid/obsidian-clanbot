@@ -7,7 +7,7 @@ from utils import obsidian_embed, XP_ENABLED, XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPO
 
 def setup(bot, group=None):
     """Register the xp command."""
-    command_decorator = group.command(name="xp", description="Check your XP and level.") if group else bot.tree.command(name="xp", description="Check your XP and level.")
+    command_decorator = group.command(name="check", description="Check your XP and level.") if group else bot.tree.command(name="check", description="Check your XP and level.")
     
     @command_decorator
     @app_commands.describe(user="User to check (default: yourself)")

@@ -10,9 +10,9 @@ from database import get_guild_setting, set_guild_setting
 def setup(bot, group=None):
     """Register the xp_settings command."""
     command_decorator = (
-        group.command(name="xp_settings", description="Configure XP level-up announcements (moderators only).")
+        group.command(name="settings", description="Configure XP level-up announcements (moderators only).")
         if group
-        else bot.tree.command(name="xp_settings", description="Configure XP level-up announcements (moderators only).")
+        else bot.tree.command(name="settings", description="Configure XP level-up announcements (moderators only).")
     )
 
     @command_decorator

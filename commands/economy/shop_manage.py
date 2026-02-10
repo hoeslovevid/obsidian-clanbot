@@ -11,7 +11,7 @@ import aiosqlite  # type: ignore
 def setup(bot, group=None):
     """Register the shop_manage command."""
     
-    command_decorator = group.command(name="shop_manage", description="Manage shop items (moderators only).") if group else bot.tree.command(name="shop_manage", description="Manage shop items (moderators only).")
+    command_decorator = group.command(name="manage", description="Manage shop items (moderators only).") if group else bot.tree.command(name="manage", description="Manage shop items (moderators only).")
     
     @command_decorator
     @app_commands.describe(

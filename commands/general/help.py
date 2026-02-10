@@ -319,7 +319,7 @@ def setup(bot, group=None):
             # Parse command (e.g., "economy balance" or "warframe baro")
             parts = command.lower().strip().split()
             
-            # Find the command (supports 1–3 levels: economy, economy balance, economy pets pet_shop)
+            # Find the command (supports 1–3 levels: economy, economy balance, economy pets shop)
             found_command = None
             commands_source = bot.tree.get_commands(guild=interaction.guild)
             for cmd in commands_source:
