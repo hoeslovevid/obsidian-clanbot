@@ -87,6 +87,7 @@ def load_all_commands(bot):
         "commands.moderation.lock",
         "commands.moderation.schedule",
         "commands.economy.balance",
+        "commands.economy.transactions",
         "commands.economy.leaderboard",
         "commands.economy.transfer",
         "commands.economy.daily",
@@ -141,6 +142,7 @@ def load_all_commands(bot):
 
     group_mapping = {
         "commands.economy.balance": economy_group,
+        "commands.economy.transactions": economy_group,
         "commands.economy.leaderboard": economy_group,
         "commands.economy.transfer": economy_group,
         "commands.economy.daily": economy_group,

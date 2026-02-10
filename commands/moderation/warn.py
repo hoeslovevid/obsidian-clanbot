@@ -39,12 +39,14 @@ def setup(bot, group=None):
         
         await interaction.response.defer()
         
-        # Add warning
+        # Add warning and get case ID
+        case_id = None
         async with aiosqlite.connect(DB_PATH) as db:
-            await db.execute("""
+            cur = await db.execute("""
                 INSERT INTO warnings (guild_id, user_id, moderator_id, reason, created_at)
                 VALUES (?, ?, ?, ?, ?)
             """, (interaction.guild.id, user.id, interaction.user.id, reason, now_utc().isoformat()))
+            case_id = cur.lastrowid
             await db.commit()
             
             # Get warning count
@@ -116,9 +118,10 @@ def setup(bot, group=None):
             log_channel = interaction.guild.get_channel(log_channel_id)
             if log_channel and isinstance(log_channel, discord.TextChannel):
                 jump_url = channel_jump_url(interaction.guild.id, interaction.channel.id)
+                case_ref = f"**Case #** {case_id}\n" if case_id else ""
                 log_embed = obsidian_embed(
                     "⚠️ Member Warned",
-                    f"**User:** {user.mention} ({user.id})\n**Moderator:** {interaction.user.mention}\n**Reason:** {reason}\n**Warnings:** {warning_count}/{max_warnings}",
+                    f"{case_ref}**User:** {user.mention} ({user.id})\n**Moderator:** {interaction.user.mention}\n**Reason:** {reason}\n**Warnings:** {warning_count}/{max_warnings}",
                     color=discord.Color.orange(),
                     client=interaction.client,
                     fields=[("Context", f"[Command run in {interaction.channel.mention}]({jump_url})", False)],
@@ -131,10 +134,11 @@ def setup(bot, group=None):
 
         # Send confirmation
         action_text = f" ({action} executed)" if warning_count >= max_warnings else ""
+        case_ref = f"**Case #** {case_id}\n" if case_id else ""
         await interaction.followup.send(
             embed=obsidian_embed(
                 "✅ User Warned",
-                f"**User:** {user.mention}\n**Reason:** {reason}\n**Warnings:** {warning_count}/{max_warnings}{action_text}",
+                f"{case_ref}**User:** {user.mention}\n**Reason:** {reason}\n**Warnings:** {warning_count}/{max_warnings}{action_text}",
                 color=discord.Color.orange(),
                 client=interaction.client,
             )
@@ -156,10 +160,10 @@ def setup(bot, group=None):
         
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute("""
-                SELECT moderator_id, reason, created_at FROM warnings
+                SELECT id, moderator_id, reason, created_at FROM warnings
                 WHERE guild_id=? AND user_id=? ORDER BY created_at DESC
             """, (interaction.guild.id, user.id))
-            warnings_list = await cur.fetchall()
+            warnings_with_ids = await cur.fetchall()
             
             cur = await db.execute("""
                 SELECT max_warnings FROM warn_settings WHERE guild_id=?
@@ -167,7 +171,7 @@ def setup(bot, group=None):
             settings_row = await cur.fetchone()
             max_warnings = settings_row[0] if settings_row else 3
         
-        if not warnings_list:
+        if not warnings_with_ids:
             return await interaction.followup.send(
                 embed=obsidian_embed(
                     "⚠️ Warnings",
@@ -180,14 +184,14 @@ def setup(bot, group=None):
 
         per_page = 15
         lines = [
-            f"**{i+1}.** {reason} - <t:{int(dateparser.parse(created_at, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True}).timestamp())}:R>"
-            for i, (mod_id, reason, created_at) in enumerate(warnings_list)
+            f"**#{wid}** {reason} - <t:{int(dateparser.parse(created_at, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True}).timestamp())}:R>"
+            for wid, mod_id, reason, created_at in warnings_with_ids
         ]
         if len(lines) <= per_page:
             warnings_text = "\n".join(lines)
             embed = obsidian_embed(
                 f"⚠️ Warnings for {user.display_name}",
-                f"**Total:** {len(warnings_list)}/{max_warnings}\n\n{warnings_text}",
+                f"**Total:** {len(warnings_with_ids)}/{max_warnings}\n\n{warnings_text}",
                 color=discord.Color.orange(),
                 client=interaction.client,
             )
@@ -197,7 +201,7 @@ def setup(bot, group=None):
             for i in range(0, len(lines), per_page):
                 chunk = lines[i:i + per_page]
                 pages.append({
-                    "description": f"**Total:** {len(warnings_list)}/{max_warnings}\n\n" + "\n".join(chunk),
+                    "description": f"**Total:** {len(warnings_with_ids)}/{max_warnings}\n\n" + "\n".join(chunk),
                 })
             view = EmbedPaginator(
                 f"⚠️ Warnings for {user.display_name}",

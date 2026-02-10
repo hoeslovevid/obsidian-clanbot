@@ -49,6 +49,7 @@ def setup(bot, group=None):
         if limit < 1 or limit > 25:
             limit = 10
         order_col = "total_earned" if sort_by and sort_by.value == "total_earned" else "balance"
+        await interaction.response.defer(ephemeral=False)
         sort_label = "total earned" if order_col == "total_earned" else "balance"
 
         async with aiosqlite.connect(DB_PATH) as db:
@@ -87,7 +88,7 @@ def setup(bot, group=None):
                 total_count = (await debug_cur.fetchone())[0]
             
             if total_count == 0:
-                return await interaction.response.send_message(
+                return await interaction.followup.send(
                     embed=obsidian_embed(
                         "📊 Leaderboard Empty",
                         "No users have earned coins yet! Start chatting or use `/daily` to earn coins.",
@@ -97,7 +98,7 @@ def setup(bot, group=None):
                     ephemeral=True
                 )
             else:
-                return await interaction.response.send_message(
+                return await interaction.followup.send(
                     embed=obsidian_embed(
                         "📊 Leaderboard Empty",
                         "No users currently have coins! Users need a balance greater than 0 to appear on the leaderboard.",
@@ -139,4 +140,4 @@ def setup(bot, group=None):
             client=interaction.client,
         )
         
-        await interaction.response.send_message(embed=embed, ephemeral=False)
+        await interaction.followup.send(embed=embed, ephemeral=False)

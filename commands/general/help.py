@@ -135,6 +135,7 @@ class HelpSelect(discord.ui.Select):
         group_definitions = {
             "general": ("General", "General bot commands", "📋"),
             "economy": ("Economy", "Economy and coin management", "💰"),
+            "tools": ("Tools", "Invest, prestige, schedule, coinflip", "🔧"),
             "warframe": ("Warframe", "Warframe game information", "🎮"),
             "community": ("Community", "Community features", "👥"),
             "trading": ("Trading", "Trading commands", "💼"),
@@ -393,6 +394,7 @@ def setup(bot, group=None):
         group_info = {
             "general": ("📋 General", "General bot commands"),
             "economy": ("💰 Economy", "Economy and coin management"),
+            "tools": ("🔧 Tools", "Invest, prestige, schedule, coinflip"),
             "warframe": ("🎮 Warframe", "Warframe game information"),
             "community": ("👥 Community", "Community features"),
             "trading": ("💼 Trading", "Trading commands"),

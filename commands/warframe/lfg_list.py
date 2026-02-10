@@ -44,6 +44,7 @@ def setup(bot, group=None):
                 ),
                 ephemeral=True,
             )
+        await interaction.response.defer(ephemeral=False)
         async with aiosqlite.connect(DB_PATH) as db:
             if mission_type:
                 cur = await db.execute("""
@@ -77,7 +78,7 @@ def setup(bot, group=None):
                     counts_by_id[int(lfg_id)] = int(cnt)
         
         if not posts:
-            return await interaction.response.send_message(
+            return await interaction.followup.send(
                 embed=obsidian_embed(
                     "🔍 No Active Groups",
                     "There are no active LFG posts in this channel.\n\nUse `/lfg` to create one!",
@@ -132,7 +133,7 @@ def setup(bot, group=None):
                 fields=pages[0]["fields"],
                 client=interaction.client,
             )
-            await interaction.response.send_message(embed=embed, ephemeral=False)
+            await interaction.followup.send(embed=embed, ephemeral=False)
         else:
             view = EmbedPaginator("🔍 Active LFG Posts", pages, color=discord.Color.blue(), client=interaction.client)
-            await interaction.response.send_message(embed=view._build_embed(), view=view, ephemeral=False)
+            await interaction.followup.send(embed=view._build_embed(), view=view, ephemeral=False)

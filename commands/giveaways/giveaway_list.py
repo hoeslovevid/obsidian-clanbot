@@ -29,7 +29,7 @@ def setup(bot, group=None):
                 ),
                 ephemeral=True
             )
-        
+        await interaction.response.defer(ephemeral=True)
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute("""
                 SELECT id, channel_id, message_id, title, prize, winner_count, end_time, ended
@@ -40,7 +40,7 @@ def setup(bot, group=None):
             rows = await cur.fetchall()
         
         if not rows:
-            return await interaction.response.send_message(
+            return await interaction.followup.send(
                 embed=obsidian_embed(
                     "📋 No Active Giveaways",
                     "There are currently no active giveaways in this server.\n\nUse `/giveaways giveaway` to create one!",
@@ -101,7 +101,7 @@ def setup(bot, group=None):
             pages.append({"description": description.strip()})
 
         if len(pages) == 1:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 embed=obsidian_embed(
                     "🎉 Active Giveaways",
                     pages[0]["description"],
@@ -112,4 +112,4 @@ def setup(bot, group=None):
             )
         else:
             view = EmbedPaginator("🎉 Active Giveaways", pages, color=discord.Color.gold(), client=interaction.client)
-            await interaction.response.send_message(embed=view._build_embed(), view=view, ephemeral=True)
+            await interaction.followup.send(embed=view._build_embed(), view=view, ephemeral=True)

@@ -32,7 +32,7 @@ def setup(bot, group=None):
                 ),
                 ephemeral=True
             )
-        
+        await interaction.response.defer(ephemeral=True)
         balance = await get_user_balance(interaction.guild.id, interaction.user.id)
         
         fields = [
@@ -54,7 +54,7 @@ def setup(bot, group=None):
             client=interaction.client,
         )
         
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
     command_decorator = group.command(name="balance", description="View your coin balance.") if group else bot.tree.command(name="balance", description="View your coin balance.")
     command_decorator(balance_callback)
