@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from utils import obsidian_embed
 from warframe_api import get_all_cycles
-from views import RetryView
+from views import RetryView, RefreshView
 import dateparser
 
 
@@ -150,7 +150,7 @@ def setup(bot, group=None):
             desc = "No cycle data available."
         else:
             desc = None
-        
+
         embed = obsidian_embed(
             "🌍 Open World Cycles",
             desc or "",
@@ -158,5 +158,24 @@ def setup(bot, group=None):
             fields=fields if fields else None,
             client=interaction.client,
         )
-        
-        await interaction.followup.send(embed=embed, ephemeral=False)
+
+        async def on_refresh(btn_interaction: discord.Interaction):
+            if btn_interaction.user.id != interaction.user.id:
+                return await btn_interaction.response.send_message("Only the person who ran this can refresh.", ephemeral=True)
+            await btn_interaction.response.defer()
+            from cache_utils import invalidate
+            invalidate("warframe:cycles")
+            new_data = await get_all_cycles()
+            new_success = {k: v for k, v in (new_data or {}).items() if v is not None}
+            if not new_success:
+                await btn_interaction.followup.send("Could not fetch fresh data. Try again later.", ephemeral=True)
+                return
+            new_fields = _build_cycle_fields(new_success)
+            new_failed = [k for k in ("cetus", "vallis", "cambion") if k not in new_success]
+            new_desc = "Partial data: " + ", ".join(new_failed) + " unavailable." if new_failed else ""
+            new_emb = obsidian_embed("🌍 Open World Cycles", new_desc or "", color=discord.Color.blue(), fields=new_fields, client=interaction.client)
+            view = RefreshView(on_refresh)
+            await btn_interaction.message.edit(embed=new_emb, view=view)
+
+        view = RefreshView(on_refresh)
+        await interaction.followup.send(embed=embed, view=view, ephemeral=False)

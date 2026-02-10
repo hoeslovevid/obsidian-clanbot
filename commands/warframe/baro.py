@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from utils import obsidian_embed
 from warframe_api import get_baro_status
-from views import RetryView
+from views import RetryView, RefreshView
 from database import DB_PATH
 import aiosqlite
 import dateparser
@@ -185,8 +185,24 @@ def setup(bot, group=None):
             )
         
         embed = build_baro_embed(baro_data, is_active, interaction.client)
-        message = await interaction.followup.send(embed=embed, ephemeral=False)
-        
+
+        async def on_refresh(btn_interaction: discord.Interaction):
+            if btn_interaction.user.id != interaction.user.id:
+                return await btn_interaction.response.send_message("Only the person who ran this can refresh.", ephemeral=True)
+            await btn_interaction.response.defer()
+            from cache_utils import invalidate
+            invalidate("warframe:baro")
+            new_active, new_data = await get_baro_status()
+            if not new_data:
+                await btn_interaction.followup.send("Could not fetch fresh data. Try again later.", ephemeral=True)
+                return
+            new_emb = build_baro_embed(new_data, new_active, interaction.client)
+            view = RefreshView(on_refresh)
+            await btn_interaction.message.edit(embed=new_emb, view=view)
+
+        view = RefreshView(on_refresh)
+        message = await interaction.followup.send(embed=embed, view=view, ephemeral=False)
+
         # If Baro is active, store the message for live updates
         if is_active:
             expiry = baro_data.get("expiry", "")

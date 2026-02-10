@@ -82,6 +82,24 @@ class RetryView(discord.ui.View):
         await self.retry_callback(interaction)
 
 
+class RefreshView(discord.ui.View):
+    """View with Refresh button to invalidate cache and refetch (e.g. cycles, Baro)."""
+
+    def __init__(self, refresh_callback, *, timeout: float = 300):
+        super().__init__(timeout=timeout)
+        self.refresh_callback = refresh_callback
+
+    @discord.ui.button(label="Refresh", style=discord.ButtonStyle.secondary, emoji="🔄")
+    async def refresh_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        for c in self.children:
+            c.disabled = True
+        try:
+            await interaction.response.edit_message(view=self)
+        except Exception:
+            pass
+        await self.refresh_callback(interaction)
+
+
 class ConfirmView(discord.ui.View):
     """Reusable confirmation view with Confirm/Cancel buttons."""
 

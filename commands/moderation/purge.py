@@ -1,5 +1,7 @@
 """Purge command."""
 import asyncio
+import io
+from datetime import datetime, timezone
 import discord  # type: ignore
 from discord import app_commands  # type: ignore
 
@@ -7,15 +9,29 @@ from utils import obsidian_embed, error_embed, is_mod
 from views import ConfirmView
 
 
+def _build_purge_transcript(messages: list) -> str:
+    """Build a text transcript of messages for soft-delete archive."""
+    lines = []
+    for m in reversed(messages):
+        ts = m.created_at.strftime("%Y-%m-%d %H:%M:%S") if m.created_at else "?"
+        author = getattr(m.author, "display_name", str(m.author)) if m.author else "Unknown"
+        content = (m.content or "").replace("\n", " ")[:200]
+        if len((m.content or "")) > 200:
+            content += "..."
+        lines.append(f"[{ts}] {author}: {content}")
+    return "\n".join(lines) or "(no content)"
+
+
 def setup(bot, group=None):
     """Register the purge command."""
     command_decorator = group.command(name="purge", description="Delete messages (1–100 or 'all') from this channel.") if group else bot.tree.command(name="purge", description="Delete messages (1–100 or 'all') from this channel.")
-    
+
     @command_decorator
     @app_commands.describe(
-        amount="Number of messages to delete (1-100), or 'all' to delete all messages in channel"
+        amount="Number of messages to delete (1-100), or 'all' to delete all messages in channel",
+        archive="Save a transcript of purged messages before deleting (soft delete)",
     )
-    async def purge(interaction: discord.Interaction, amount: str):
+    async def purge(interaction: discord.Interaction, amount: str, archive: bool = True):
         # Check if user is a mod
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
             return await interaction.response.send_message(
@@ -32,8 +48,8 @@ def setup(bot, group=None):
 
         # Parse amount
         if amount.lower() == "all":
-            limit = None  # We'll use a high number for "all"
-            delete_count = 9999  # Discord API limits to 100 per call, but we'll loop
+            limit = None
+            delete_count = 9999
         else:
             try:
                 limit = int(amount)
@@ -61,13 +77,14 @@ def setup(bot, group=None):
                 ephemeral=True,
             )
 
-        # Confirmation for large purges
-        needs_confirm = amount.lower() == "all" or (amount.lower() != "all" and int(amount) >= 10)
+        # Always require confirmation
+        needs_confirm = True
         if needs_confirm:
             preview = "all unpinned messages" if amount.lower() == "all" else f"up to {amount} messages"
+            archive_note = " A transcript will be saved." if archive else ""
             embed = obsidian_embed(
                 "⚠️ Confirm Purge",
-                f"Delete **{preview}** from {interaction.channel.mention}?\n\nThis cannot be undone.",
+                f"Delete **{preview}** from {interaction.channel.mention}?{archive_note}\n\nThis cannot be undone.",
                 color=discord.Color.orange(),
                 client=interaction.client,
             )
@@ -79,8 +96,9 @@ def setup(bot, group=None):
                     await btn_interaction.response.send_message("Only the person who started this can confirm.", ephemeral=True)
                     return
                 await btn_interaction.response.defer(ephemeral=True)
-                deleted = 0
+                transcript_file = None
                 try:
+                    deleted_msgs = []
                     if amount.lower() == "all":
                         while True:
                             try:
@@ -90,19 +108,26 @@ def setup(bot, group=None):
                                     await asyncio.sleep(getattr(e, "retry_after", 1))
                                     continue
                                 raise
+                            deleted_msgs.extend(msgs)
                             if not msgs:
                                 break
-                            deleted += len(msgs)
                     else:
-                        msgs = await interaction.channel.purge(limit=int(amount), check=lambda m: not m.pinned)
-                        deleted = len(msgs)
+                        deleted_msgs = await interaction.channel.purge(limit=int(amount), check=lambda m: not m.pinned)
+                    if archive and deleted_msgs:
+                        transcript = _build_purge_transcript(deleted_msgs)
+                        fn = f"purge_{interaction.channel.name}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.txt"
+                        transcript_file = discord.File(io.BytesIO(transcript.encode("utf-8")), filename=fn)
+                    deleted = len(deleted_msgs)
                     if deleted == 0:
                         await btn_interaction.followup.send("No messages were deleted. (Pinned messages are not deleted)", ephemeral=True)
                     else:
-                        await btn_interaction.followup.send(
-                            embed=obsidian_embed("Messages Purged", f"Deleted **{deleted}** message(s) from {interaction.channel.mention}.", color=discord.Color.green(), client=interaction.client),
-                            ephemeral=True,
-                        )
+                        kwargs = {
+                            "embed": obsidian_embed("Messages Purged", f"Deleted **{deleted}** message(s) from {interaction.channel.mention}." + (" Transcript attached." if transcript_file else ""), color=discord.Color.green(), client=interaction.client),
+                            "ephemeral": True,
+                        }
+                        if transcript_file:
+                            kwargs["file"] = transcript_file
+                        await btn_interaction.followup.send(**kwargs)
                 except discord.Forbidden:
                     await btn_interaction.followup.send("I need **Manage Messages** in this channel.", ephemeral=True)
                 except Exception as e:
@@ -110,46 +135,3 @@ def setup(bot, group=None):
 
             view = ConfirmView(on_confirm)
             await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-            return
-
-        # Small purge: no confirmation
-        await interaction.response.defer(ephemeral=True)
-        deleted = 0
-        try:
-            if amount.lower() == "all":
-                # Delete in batches of 100 (Discord API limit)
-                # No manual sleep - discord.py handles rate limits; retry on 429
-                while True:
-                    try:
-                        deleted_messages = await interaction.channel.purge(limit=100, check=lambda m: not m.pinned)
-                    except discord.HTTPException as e:
-                        if e.status == 429:
-                            wait = getattr(e, "retry_after", None) or 1.0
-                            await asyncio.sleep(wait)
-                            continue
-                        raise
-                    if not deleted_messages:
-                        break
-                    deleted += len(deleted_messages)
-            else:
-                # Delete specified amount
-                deleted_messages = await interaction.channel.purge(limit=limit, check=lambda m: not m.pinned)
-                deleted = len(deleted_messages)
-
-            if deleted == 0:
-                await interaction.followup.send("No messages were deleted. (Note: Pinned messages are not deleted)", ephemeral=True)
-            else:
-                await interaction.followup.send(
-                    embed=obsidian_embed(
-                        "Messages Purged",
-                        f"Successfully deleted **{deleted}** message(s) from {interaction.channel.mention}.",
-                        color=discord.Color.green(),
-                    ),
-                    ephemeral=True,
-                )
-        except discord.Forbidden:
-            await interaction.followup.send("I need **Manage Messages** in this channel. Ask an admin to grant it.", ephemeral=True)
-        except discord.HTTPException as e:
-            await interaction.followup.send(f"An error occurred while deleting messages: {e}", ephemeral=True)
-        except Exception as e:
-            await interaction.followup.send(f"Unexpected error: {e}", ephemeral=True)
