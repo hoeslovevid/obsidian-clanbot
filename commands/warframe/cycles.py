@@ -38,11 +38,12 @@ def format_cycle_progress(expiry_time: datetime, cycle_total_seconds: int) -> tu
         return "Just changed", "██████████ 0%"
     if cycle_total_seconds <= 0:
         return format_time_remaining(expiry_time), ""
-    # Elapsed = time until change, so remaining = elapsed. Progress = (total - elapsed) / total
-    remaining_pct = min(100, max(0, int(100 * elapsed / cycle_total_seconds)))
-    filled = int(remaining_pct / 10)
+    # elapsed = time remaining until cycle ends. Progress = (total - remaining) / total
+    time_elapsed = cycle_total_seconds - elapsed
+    progress_pct = min(100, max(0, int(100 * time_elapsed / cycle_total_seconds)))
+    filled = int(progress_pct / 10)
     bar = "█" * filled + "░" * (10 - filled)
-    return format_time_remaining(expiry_time), f"{bar} {remaining_pct}%"
+    return format_time_remaining(expiry_time), f"{bar} {progress_pct}%"
 
 
 def _build_cycle_fields(cycles_data: dict) -> list:
