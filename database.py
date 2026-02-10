@@ -2181,6 +2181,14 @@ async def init_db() -> None:
                 )
             await db.commit()
 
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS pet_evolutions (
+            base_type TEXT NOT NULL,
+            evolved_type TEXT NOT NULL,
+            required_level INTEGER NOT NULL,
+            PRIMARY KEY (base_type)
+        )""")
+
         # Seed pet evolutions (base_type -> evolved_type at required_level)
         cur = await db.execute("SELECT COUNT(*) FROM pet_evolutions")
         if (await cur.fetchone())[0] == 0:
@@ -2223,14 +2231,6 @@ async def init_db() -> None:
             wins INTEGER NOT NULL DEFAULT 0,
             losses INTEGER NOT NULL DEFAULT 0,
             PRIMARY KEY (guild_id, user_id)
-        )""")
-
-        await db.execute("""
-        CREATE TABLE IF NOT EXISTS pet_evolutions (
-            base_type TEXT NOT NULL,
-            evolved_type TEXT NOT NULL,
-            required_level INTEGER NOT NULL,
-            PRIMARY KEY (base_type)
         )""")
 
         await db.execute("""
