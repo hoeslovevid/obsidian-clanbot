@@ -2019,19 +2019,35 @@ async def on_guild_join(guild: discord.Guild):
         print(f"[install] Ensured join-to-create in {guild.name}")
     except Exception as e:
         print(f"[install] Setup failed in {guild.name}: {e}")
+    activity = _update_status_presence()
+    await bot.change_presence(activity=activity, status=discord.Status.online)
+
+
+@bot.event
+async def on_guild_remove(guild: discord.Guild):
+    """Update status when bot leaves a guild."""
+    activity = _update_status_presence()
+    await bot.change_presence(activity=activity, status=discord.Status.online)
+
+
+def _update_status_presence():
+    """Update bot presence with guild and user counts."""
+    guild_count = len(bot.guilds)
+    user_count = len(set(m.id for m in bot.get_all_members()))
+    activity = discord.Activity(
+        type=discord.ActivityType.watching,
+        name=f"{guild_count} servers | {user_count:,} users"
+    )
+    return activity
 
 
 @bot.event
 async def on_ready():
     print(f"[ready] Logged in as {bot.user} ({bot.user.id})")
     
-    # Set custom status
-    activity = discord.Activity(
-        type=discord.ActivityType.watching,
-        name=BOT_STATUS
-    )
+    activity = _update_status_presence()
     await bot.change_presence(activity=activity, status=discord.Status.online)
-    print(f"[ready] Status set: Watching {BOT_STATUS}")
+    print(f"[ready] Status set: Watching {activity.name}")
 
     # Parallelize startup tasks for faster initialization
     async def setup_guild_channels():
