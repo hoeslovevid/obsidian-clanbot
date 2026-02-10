@@ -54,15 +54,15 @@ def setup(bot, group=None):
             level_roles_list = await get_level_roles(interaction.guild.id)
             
             if not level_roles_list:
-            embed = obsidian_embed(
-                "📋 Level Roles",
-                "No level roles have been configured. Use `add` to assign roles at specific XP levels.",
-                color=discord.Color.orange(),
-                thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
-                footer="Use action:add level:N role:Role to add",
-                client=interaction.client,
-            )
-            return await interaction.followup.send(embed=embed, ephemeral=True)
+                embed = obsidian_embed(
+                    "📋 Level Roles",
+                    "No level roles have been configured. Use `add` to assign roles at specific XP levels.",
+                    color=discord.Color.orange(),
+                    thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
+                    footer="Use action:add level:N role:Role to add",
+                    client=interaction.client,
+                )
+                return await interaction.followup.send(embed=embed, ephemeral=True)
             
             desc = ""
             for lr in sorted(level_roles_list, key=lambda x: x["level"]):

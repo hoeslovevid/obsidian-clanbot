@@ -225,15 +225,15 @@ def setup(bot, group=None):
             
             try:
                 await interaction.user.add_roles(role, reason="Self-assigned role")
-            embed = obsidian_embed(
-                "✅ Role Assigned",
-                f"You have been given {role.mention}.",
-                color=discord.Color.green(),
-                thumbnail=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
-                footer=f"Use /mod role_tools assign remove to remove",
-                client=interaction.client,
-            )
-            await interaction.followup.send(embed=embed, ephemeral=True)
+                embed = obsidian_embed(
+                    "✅ Role Assigned",
+                    f"You have been given {role.mention}.",
+                    color=discord.Color.green(),
+                    thumbnail=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
+                    footer="Use /mod role_tools assign remove to remove",
+                    client=interaction.client,
+                )
+                await interaction.followup.send(embed=embed, ephemeral=True)
             except discord.Forbidden:
                 await interaction.followup.send(
                     embed=obsidian_embed(

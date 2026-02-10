@@ -162,17 +162,17 @@ def setup(bot, group=None):
                 try:
                     message = await channel.send(embed=embed)
                     
-                embed = obsidian_embed(
-                    "✅ Reaction Role Message Created",
-                    f"Reaction role message created in {channel.mention}.\n\n"
-                    f"Use `/mod role_tools reaction action:Add` to add emoji-role pairs.\n"
-                    f"Message ID: `{message.id}`\n[Jump to message]({message.jump_url})",
-                    color=discord.Color.green(),
-                    thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
-                    footer=f"Message ID: {message.id}",
-                    client=interaction.client,
-                )
-                await interaction.followup.send(embed=embed, ephemeral=True)
+                    success_embed = obsidian_embed(
+                        "✅ Reaction Role Message Created",
+                        f"Reaction role message created in {channel.mention}.\n\n"
+                        f"Use `/mod role_tools reaction action:Add` to add emoji-role pairs.\n"
+                        f"Message ID: `{message.id}`\n[Jump to message]({message.jump_url})",
+                        color=discord.Color.green(),
+                        thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
+                        footer=f"Message ID: {message.id}",
+                        client=interaction.client,
+                    )
+                    await interaction.followup.send(embed=success_embed, ephemeral=True)
                 except discord.Forbidden:
                     await interaction.followup.send(
                         embed=obsidian_embed(
