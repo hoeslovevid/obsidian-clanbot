@@ -44,7 +44,7 @@ from config import (
     COINS_DAILY_REWARD, MESSAGE_COOLDOWN_SECONDS,
     VOICE_REWARD_INTERVAL_MINUTES, MIN_VOICE_MINUTES_FOR_REWARD,
     EVENT_REMINDER_MINUTES_BEFORE, EVENT_REMINDER_LOOP_MINUTES,
-    AUTO_SETUP,
+    AUTO_SETUP, OPENAI_API_KEY,
 )
 
 # Re-export config for modules that import from bot (backward compat)
@@ -580,14 +580,16 @@ async def on_message(message: discord.Message):
     if message.author.bot or not message.guild:
         return
 
-    # Bot mention for help: when user @mentions the bot, reply with quick help
+    # Bot mention: hybrid response (keywords + optional AI)
     if message.guild.me in message.mentions:
         try:
-            help_text = (
-                "Hi! I'm the Obsidian Clan Bot. Use **`/help`** to explore commands.\n"
-                "Quick links: **`/economy balance`** · **`/warframe cycles`** · **`/general profile`**"
+            from mention_chat import get_mention_reply
+            reply = await get_mention_reply(
+                message.content,
+                message.guild.me.id,
+                OPENAI_API_KEY,
             )
-            await message.reply(help_text, mention_author=False)
+            await message.reply(reply, mention_author=False)
             return  # Don't process economy for mention-only messages
         except discord.Forbidden:
             pass

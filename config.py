@@ -68,3 +68,6 @@ EVENT_REMINDER_LOOP_MINUTES = int(os.getenv("EVENT_REMINDER_LOOP_MINUTES", "1"))
 
 # --- Auto setup ---
 AUTO_SETUP = os.getenv("AUTO_SETUP", "true").lower() in ("1", "true", "yes", "y", "on")
+
+# --- Mention chat (hybrid: keywords + optional AI) ---
+OPENAI_API_KEY = (os.getenv("OPENAI_API_KEY") or "").strip() or None
