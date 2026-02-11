@@ -3,6 +3,7 @@ import discord
 from discord import app_commands
 
 from utils import obsidian_embed, ECONOMY_ENABLED
+from views import EmbedPaginator
 
 
 def setup(bot, group=None):
@@ -11,7 +12,7 @@ def setup(bot, group=None):
     
     @command_decorator
     @app_commands.describe(
-        limit="Number of users to show (default: 10, max: 25)",
+        limit="Number of users per page (default: 10, max: 25)",
         sort_by="Sort order: by current balance or total earned"
     )
     @app_commands.choices(sort_by=[
@@ -61,7 +62,7 @@ def setup(bot, group=None):
                 ORDER BY {order_col} DESC
                 LIMIT ?
                 """,
-                (interaction.guild.id, limit),
+                (interaction.guild.id, 50),
             )
             rows = await cur.fetchall()
 
@@ -117,36 +118,65 @@ def setup(bot, group=None):
                     ephemeral=True
                 )
         
-        # Build leaderboard entries with inline fields for top 3
-        leaderboard_text = ""
-        for i, (user_id, balance, total_earned) in enumerate(rows, 1):
-            user = interaction.guild.get_member(user_id)
-            username = user.display_name if user else f"User {user_id}"
-            medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"`{i}.`"
-            leaderboard_text += f"{medal} **{username}** — 💰 {balance:,} • 📊 {total_earned:,}\n"
+        per_page = min(limit, 15)
+        pages = []
+        for p in range(0, len(rows), per_page):
+            page_rows = rows[p:p + per_page]
+            leaderboard_text = ""
+            for i, (user_id, balance, total_earned) in enumerate(page_rows, p + 1):
+                user = interaction.guild.get_member(user_id)
+                username = user.display_name if user else f"User {user_id}"
+                medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"`{i}.`"
+                leaderboard_text += f"{medal} **{username}** — 💰 {balance:,} • 📊 {total_earned:,}\n"
 
-        # "You're here" when not in top N (urow already fetched above)
-        you_line = ""
-        if not in_top and user_rank is not None and urow and (urow[0] or 0) + (urow[1] or 0) > 0:
-            val = urow[1] if order_col == "total_earned" else urow[0]
-            lbl = "total earned" if order_col == "total_earned" else "coins"
-            you_line = f"\n_You're here: **#{user_rank}** • {val:,} {lbl}_"
+            you_line = ""
+            if not in_top and user_rank is not None and urow and (urow[0] or 0) + (urow[1] or 0) > 0 and p == 0:
+                val = urow[1] if order_col == "total_earned" else urow[0]
+                lbl = "total earned" if order_col == "total_earned" else "coins"
+                you_line = f"\n_You're here: **#{user_rank}** • {val:,} {lbl}_"
 
-        # Use first-place user's avatar as thumbnail if available
-        thumb_url = None
-        if rows:
-            top_user = interaction.guild.get_member(rows[0][0])
-            if top_user and top_user.display_avatar:
-                thumb_url = top_user.display_avatar.url
+            thumb_url = None
+            if page_rows:
+                top_user = interaction.guild.get_member(page_rows[0][0])
+                if top_user and top_user.display_avatar:
+                    thumb_url = top_user.display_avatar.url
 
-        embed = obsidian_embed(
-            "🏆 Coin Leaderboard",
-            f"Top {len(rows)} by {sort_label}{you_line}",
-            color=discord.Color.gold(),
-            thumbnail=thumb_url,
-            fields=[("Rankings", leaderboard_text.strip(), False)],
-            footer=f"{interaction.guild.name} • {total_count} users with economy activity",
-            client=interaction.client,
-        )
-        
-        await interaction.followup.send(embed=embed, ephemeral=False)
+            pages.append({
+                "description": f"Top {len(rows)} by {sort_label}{you_line}",
+                "fields": [("Rankings", leaderboard_text.strip(), False)],
+                "footer": f"{interaction.guild.name} • Page {len(pages) + 1}/{(len(rows) + per_page - 1) // per_page} • {total_count} users",
+                "thumbnail": thumb_url,
+            })
+
+        if len(pages) == 1:
+            p0 = pages[0]
+            embed = obsidian_embed(
+                "🏆 Coin Leaderboard",
+                p0["description"],
+                color=discord.Color.gold(),
+                thumbnail=p0.get("thumbnail"),
+                fields=p0.get("fields"),
+                footer=p0.get("footer"),
+                client=interaction.client,
+            )
+            await interaction.followup.send(embed=embed, ephemeral=False)
+        else:
+            paginator_pages = []
+            for p in pages:
+                paginator_pages.append({
+                    "description": p["description"],
+                    "fields": p["fields"],
+                    "footer": p["footer"],
+                    "thumbnail": p.get("thumbnail"),
+                })
+            paginator = EmbedPaginator("🏆 Coin Leaderboard", paginator_pages, color=discord.Color.gold(), client=interaction.client)
+            first_embed = obsidian_embed(
+                "🏆 Coin Leaderboard",
+                paginator_pages[0]["description"],
+                color=discord.Color.gold(),
+                thumbnail=pages[0].get("thumbnail"),
+                fields=paginator_pages[0]["fields"],
+                footer=paginator_pages[0]["footer"],
+                client=interaction.client,
+            )
+            await interaction.followup.send(embed=first_embed, view=paginator, ephemeral=False)

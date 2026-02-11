@@ -44,6 +44,7 @@ class EmbedPaginator(discord.ui.View):
             color=self.color,
             fields=fields if fields else None,
             footer=footer,
+            thumbnail=p.get("thumbnail"),
             client=self.client,
         )
 

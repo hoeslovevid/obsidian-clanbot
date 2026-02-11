@@ -129,7 +129,7 @@ def setup(bot, group=None):
             desc,
             color=discord.Color.blue(),
             thumbnail=interaction.guild.icon.url if interaction.guild and interaction.guild.icon else None,
-            footer=f"{len(alerts_data)} active • warframestat.us • Refreshes every 60s",
+            footer=f"{len(alerts_data)} active • Last updated <t:{int(datetime.now(timezone.utc).timestamp())}:R> • warframestat.us",
             client=interaction.client,
         )
         await interaction.followup.send(embed=embed, view=RefreshView(on_refresh, timeout=300))

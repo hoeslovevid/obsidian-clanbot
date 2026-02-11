@@ -103,7 +103,7 @@ def build_baro_embed(baro_data: dict, is_active: bool, client) -> discord.Embed:
             color=discord.Color.green(),
             thumbnail="https://vignette.wikia.nocookie.net/warframe/images/4/4a/BaroKiTeer.png/revision/latest?cb=20150213150000",
             fields=fields,
-            footer="PC data • Use Refresh button to update",
+            footer=f"PC data • Last updated <t:{int(datetime.now(timezone.utc).timestamp())}:R> • Use Refresh button",
             client=client,
         )
     else:
@@ -147,7 +147,7 @@ def build_baro_embed(baro_data: dict, is_active: bool, client) -> discord.Embed:
             color=discord.Color.orange(),
             thumbnail="https://vignette.wikia.nocookie.net/warframe/images/4/4a/BaroKiTeer.png/revision/latest?cb=20150213150000",
             fields=fields,
-            footer="PC data • Baro visits every ~2 weeks",
+            footer=f"PC data • Last updated <t:{int(datetime.now(timezone.utc).timestamp())}:R> • Baro visits every ~2 weeks",
             client=client,
         )
     

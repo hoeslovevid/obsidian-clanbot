@@ -2826,6 +2826,23 @@ async def _send_error_reply(interaction: discord.Interaction, message: str, ephe
         pass  # Silently fail if we can't send (e.g. DMs closed)
 
 
+def _find_similar_commands(typed: str, all_commands: list[str], max_suggestions: int = 3) -> list[str]:
+    """Find commands similar to typed (simple prefix/substring match)."""
+    typed_lower = typed.lower().strip()
+    if not typed_lower:
+        return []
+    suggestions = []
+    for c in all_commands:
+        cl = c.lower()
+        if cl == typed_lower:
+            return []  # Exact match, no suggestion needed
+        if cl.startswith(typed_lower) or typed_lower in cl:
+            suggestions.append(c)
+    # Sort by relevance (prefix matches first, then by length)
+    suggestions.sort(key=lambda x: (not x.lower().startswith(typed_lower), len(x)))
+    return suggestions[:max_suggestions]
+
+
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
     """Handle application command errors with user-friendly messages."""
@@ -2837,6 +2854,27 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
         if command_name in moved_commands:
             logger.debug(f"[commands] CommandNotFound for '{command_name}' - Discord cache will update")
             return
+        # Typo suggestions: collect commands and find similar
+        try:
+            all_names = []
+            for cmd in interaction.client.tree.get_commands(guild=interaction.guild):
+                if isinstance(cmd, app_commands.Group):
+                    all_names.append(cmd.name)
+                    for sub in cmd.commands:
+                        if isinstance(sub, app_commands.Group):
+                            for g in sub.commands:
+                                all_names.append(cmd.name + " " + sub.name + " " + g.name)
+                        else:
+                            all_names.append(cmd.name + " " + sub.name)
+                else:
+                    all_names.append(cmd.name)
+            similar = _find_similar_commands(command_name, all_names)
+            if similar:
+                hint = f" Did you mean: **{'** or **'.join(similar[:3])}**?"
+                await _send_error_reply(interaction, f"Unknown command `{command_name}`.{hint}")
+                return
+        except Exception:
+            pass
         logger.debug(f"[commands] CommandNotFound: {error}")
         return
     

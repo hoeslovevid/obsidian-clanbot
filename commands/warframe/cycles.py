@@ -158,7 +158,7 @@ def setup(bot, group=None):
             color=discord.Color.blue(),
             fields=fields if fields else None,
             thumbnail=interaction.guild.icon.url if interaction.guild and interaction.guild.icon else None,
-            footer="Cetus • Fortuna • Deimos • Use Refresh to update",
+            footer=f"Cetus • Fortuna • Deimos • Last updated <t:{int(datetime.now(timezone.utc).timestamp())}:R> • Use Refresh to update",
             client=interaction.client,
         )
 

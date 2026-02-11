@@ -19,9 +19,20 @@ def setup(bot, group=None):
     @command_decorator
     @app_commands.describe(
         limit="Number of transactions to show (default: 15, max: 25)",
-        user="View another user's transactions (moderators only)"
+        user="View another user's transactions (moderators only)",
+        type="Filter by transaction type"
     )
-    async def transactions(interaction: discord.Interaction, limit: int = 15, user: discord.Member = None):
+    @app_commands.choices(type=[
+        app_commands.Choice(name="All", value="all"),
+        app_commands.Choice(name="Daily", value="DAILY"),
+        app_commands.Choice(name="Transfer", value="TRANSFER"),
+        app_commands.Choice(name="Gambling", value="GAMBLING"),
+        app_commands.Choice(name="Investment", value="INVESTMENT"),
+        app_commands.Choice(name="Investment Return", value="INVESTMENT_RETURN"),
+        app_commands.Choice(name="Shop Purchase", value="SHOP_PURCHASE"),
+        app_commands.Choice(name="Mod Add/Remove", value="mod"),
+    ])
+    async def transactions(interaction: discord.Interaction, limit: int = 15, user: discord.Member = None, type: app_commands.Choice[str] = None):
         """Display recent coin transactions."""
         await interaction.response.defer(ephemeral=True)
 
@@ -46,6 +57,7 @@ def setup(bot, group=None):
             )
 
         limit = max(1, min(25, limit))
+        txn_filter = type.value if type and type.value != "all" else None
 
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute(
@@ -54,13 +66,31 @@ def setup(bot, group=None):
             )
             bal_row = await cur.fetchone()
             current_balance = bal_row[0] or 0 if bal_row else 0
-            cur = await db.execute("""
-                SELECT amount, transaction_type, description, created_at
-                FROM economy_transactions
-                WHERE guild_id=? AND user_id=?
-                ORDER BY created_at DESC
-                LIMIT ?
-            """, (interaction.guild.id, target.id, limit))
+            if txn_filter:
+                if txn_filter == "mod":
+                    cur = await db.execute("""
+                        SELECT amount, transaction_type, description, created_at
+                        FROM economy_transactions
+                        WHERE guild_id=? AND user_id=? AND transaction_type IN ('MOD_ADD','MOD_REMOVE')
+                        ORDER BY created_at DESC
+                        LIMIT ?
+                    """, (interaction.guild.id, target.id, limit))
+                else:
+                    cur = await db.execute("""
+                        SELECT amount, transaction_type, description, created_at
+                        FROM economy_transactions
+                        WHERE guild_id=? AND user_id=? AND transaction_type=?
+                        ORDER BY created_at DESC
+                        LIMIT ?
+                    """, (interaction.guild.id, target.id, txn_filter, limit))
+            else:
+                cur = await db.execute("""
+                    SELECT amount, transaction_type, description, created_at
+                    FROM economy_transactions
+                    WHERE guild_id=? AND user_id=?
+                    ORDER BY created_at DESC
+                    LIMIT ?
+                """, (interaction.guild.id, target.id, limit))
             rows = await cur.fetchall()
 
         if not rows:
@@ -97,7 +127,7 @@ def setup(bot, group=None):
             color=discord.Color.gold(),
             author=target,
             thumbnail=target.display_avatar.url if target.display_avatar else None,
-            footer=f"Balance: {current_balance:,} coins • Showing last {len(rows)} • Use limit:N for more",
+            footer=f"Balance: {current_balance:,} coins • Showing last {len(rows)}{f' ({txn_filter})' if txn_filter else ''} • Use type: to filter",
             client=interaction.client,
         )
         await interaction.followup.send(embed=embed, ephemeral=True)

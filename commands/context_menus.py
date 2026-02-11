@@ -158,6 +158,43 @@ def setup(bot, group=None):
             )
         await interaction.response.send_modal(GiveRepModal(member))
 
+    @bot.tree.context_menu(name="Check Price")
+    async def check_price_context(interaction: discord.Interaction, message: discord.Message):
+        """Right-click message → Check Warframe Market price for text in message."""
+        from warframe_api import search_warframe_market_item, get_warframe_market_price
+        from commands.trading.trade_price import _build_trade_embed
+        content = (message.content or "").strip()
+        # Try to extract item-like text: words with potential item names (e.g. "Mesa Prime Set", "Primed Continuity")
+        import re
+        # Look for quoted text first, then camel-case/space-separated phrases
+        quoted = re.findall(r'"([^"]+)"', content)
+        if quoted:
+            search_term = quoted[0][:80]
+        else:
+            # Take first line or first 60 chars
+            first_line = content.split("\n")[0].strip()[:80]
+            search_term = first_line if len(first_line) >= 2 else None
+        if not search_term or len(search_term) < 2:
+            return await interaction.response.send_message(
+                embed=error_embed("No Search Term", "Message has no usable text for price check. Try right-clicking a message that mentions an item (e.g. 'Mesa Prime Set').", client=interaction.client),
+                ephemeral=True
+            )
+        await interaction.response.defer(ephemeral=True)
+        item_data = await search_warframe_market_item(search_term, "pc")
+        if not item_data:
+            return await interaction.followup.send(
+                embed=error_embed("Item Not Found", f"Could not find '{search_term[:50]}' on Warframe Market.", client=interaction.client),
+                ephemeral=True
+            )
+        price_data = await get_warframe_market_price(item_data.get("url_name", ""), "pc")
+        if not price_data:
+            return await interaction.followup.send(
+                embed=error_embed("Price Unavailable", f"Could not fetch prices for {item_data.get('item_name', search_term)}.", client=interaction.client),
+                ephemeral=True
+            )
+        embed = _build_trade_embed(item_data, price_data, "pc", interaction.client, author=interaction.user)
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
     @bot.tree.context_menu(name="Create LFG")
     async def create_lfg_context(interaction: discord.Interaction, message: discord.Message):
         """Quick LFG: create an LFG post in this channel with default settings."""

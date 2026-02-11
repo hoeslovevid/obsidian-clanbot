@@ -43,12 +43,13 @@ def setup(bot, group=None):
                 return await interaction.followup.send(
                     embed=obsidian_embed(
                         "❌ Insufficient Funds",
-                        f"You need {cost} coins to play slots. You have {balance} coins.",
+                        f"You need {cost} coins to play slots. You have **{balance}** coins.\n\nUse `/daily` or send messages to earn more!",
                         color=discord.Color.red(),
                         footer="Use /daily or /economy balance to earn more",
                         client=interaction.client,
                     )
                 )
+            low_balance_warning = (balance - cost) < 100
             
             await remove_coins(interaction.guild.id, interaction.user.id, cost, "GAMBLING", "Slots spin")
             
@@ -80,10 +81,11 @@ def setup(bot, group=None):
             nb = (await cur.fetchone())[0] or 0
             await db.commit()
         
+        low_warn = "\n\n⚠️ **Low balance!** Consider saving for your daily." if low_balance_warning and nb < 100 else ""
         footer = f"Bet: {cost} coins • {'Jackpot! Try again?' if winnings > 0 else 'Play again with /economy gambling slots'}"
         embed = obsidian_embed(
             "🎰 Slots",
-            f"**{reel1} | {reel2} | {reel3}**\n\n{result_pre}\n**New Balance:** {nb:,} coins",
+            f"**{reel1} | {reel2} | {reel3}**\n\n{result_pre}\n**New Balance:** {nb:,} coins{low_warn}",
             color=color,
             thumbnail=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
             footer=footer,
@@ -133,12 +135,13 @@ def setup(bot, group=None):
                 return await interaction.followup.send(
                     embed=obsidian_embed(
                         "❌ Insufficient Funds",
-                        f"You need {bet} coins to play. You have {balance} coins.",
+                        f"You need {bet} coins to play dice. You have **{balance}** coins.\n\nUse `/daily` or send messages to earn more!",
                         color=discord.Color.red(),
                         footer="Use /daily or /economy balance to earn more",
                         client=interaction.client,
                     )
                 )
+            low_balance_warning_dice = (balance - bet) < 100
             
             await remove_coins(interaction.guild.id, interaction.user.id, bet, "GAMBLING", "Dice roll")
             user_roll = random.randint(1, 6)
@@ -175,10 +178,11 @@ def setup(bot, group=None):
             new_balance = (await cur.fetchone())[0] or 0
             await db.commit()
         
+        low_warn_d = "\n\n⚠️ **Low balance!** Consider saving for your daily." if low_balance_warning_dice and new_balance < 100 else ""
         footer = f"Bet: {bet} coins • {'Roll again?' if user_roll > bot_roll else 'Try again with /economy gambling dice'}"
         embed = obsidian_embed(
             "🎲 Dice",
-            f"{result}\n**New Balance:** {new_balance:,} coins",
+            f"{result}\n**New Balance:** {new_balance:,} coins{low_warn_d}",
             color=color,
             thumbnail=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
             footer=footer,
@@ -233,12 +237,13 @@ def setup(bot, group=None):
                 return await interaction.followup.send(
                     embed=obsidian_embed(
                         "❌ Insufficient Funds",
-                        f"You need {bet} coins to play. You have {balance} coins.",
+                        f"You need {bet} coins to play roulette. You have **{balance}** coins.\n\nUse `/daily` or send messages to earn more!",
                         color=discord.Color.red(),
                         footer="Use /daily or /economy balance to earn more",
                         client=interaction.client,
                     )
                 )
+            low_balance_warning_roulette = (balance - bet) < 100
             
             await remove_coins(interaction.guild.id, interaction.user.id, bet, "GAMBLING", "Roulette bet")
         
@@ -282,10 +287,11 @@ def setup(bot, group=None):
             new_balance = (await cur.fetchone())[0] or 0
             await db.commit()
         
+        low_warn_r = "\n\n⚠️ **Low balance!** Consider saving for your daily." if low_balance_warning_roulette and new_balance < 100 else ""
         footer = f"Bet: {bet} coins • Landed on {landed_color.capitalize()} • {'Spin again?' if color == landed_color else 'Try red, black, or green'}"
         embed = obsidian_embed(
             "🎰 Roulette",
-            f"{result}\n**New Balance:** {new_balance:,} coins",
+            f"{result}\n**New Balance:** {new_balance:,} coins{low_warn_r}",
             color=color_emoji,
             thumbnail=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
             footer=footer,
