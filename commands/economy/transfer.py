@@ -66,9 +66,9 @@ async def run_transfer_with_modal(interaction: discord.Interaction, user: discor
         )
         async def on_confirm(btn_interaction: discord.Interaction, confirmed: bool):
             if btn_interaction.user.id != interaction.user.id:
-                return await btn_interaction.response.send_message("Only the sender can confirm.", ephemeral=True)
+                return await btn_interaction.followup.send("Only the sender can confirm.", ephemeral=True)
             if not confirmed:
-                return await btn_interaction.response.send_message("Transfer cancelled.", ephemeral=True)
+                return await btn_interaction.followup.send("Transfer cancelled.", ephemeral=True)
             result = await do_transfer()
             await btn_interaction.followup.send(embed=result, ephemeral=True)
         view = ConfirmView(on_confirm)

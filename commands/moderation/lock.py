@@ -46,10 +46,10 @@ def setup(bot, group=None):
         )
         async def on_confirm(btn_interaction: discord.Interaction, confirmed: bool):
             if not confirmed:
-                await btn_interaction.response.send_message("Cancelled.", ephemeral=True)
+                await btn_interaction.followup.send("Cancelled.", ephemeral=True)
                 return
             if btn_interaction.user.id != interaction.user.id:
-                await btn_interaction.response.send_message("Only the person who started this can confirm.", ephemeral=True)
+                await btn_interaction.followup.send("Only the person who started this can confirm.", ephemeral=True)
                 return
             overwrites = dict(interaction.channel.overwrites)
             default_role = interaction.guild.default_role
@@ -57,7 +57,7 @@ def setup(bot, group=None):
             current.send_messages = False
             overwrites[default_role] = current
             await interaction.channel.edit(overwrites=overwrites, reason=f"Channel locked by {interaction.user}")
-            await btn_interaction.response.send_message(
+            await btn_interaction.followup.send(
                 embed=obsidian_embed("🔒 Channel Locked", "Only members with overwrites can send messages. Use `/unlock` to restore.", color=discord.Color.green(), client=interaction.client),
             )
         view = ConfirmView(on_confirm)
@@ -151,12 +151,11 @@ def setup(bot, group=None):
 
         async def on_confirm(btn_interaction: discord.Interaction, confirmed: bool):
             if not confirmed:
-                await btn_interaction.response.send_message("Cancelled.", ephemeral=True)
+                await btn_interaction.followup.send("Cancelled.", ephemeral=True)
                 return
             if btn_interaction.user.id != interaction.user.id:
-                await btn_interaction.response.send_message("Only the person who started this can confirm.", ephemeral=True)
+                await btn_interaction.followup.send("Only the person who started this can confirm.", ephemeral=True)
                 return
-            await btn_interaction.response.defer(ephemeral=True)
             locked = 0
             failed = []
             default_role = interaction.guild.default_role

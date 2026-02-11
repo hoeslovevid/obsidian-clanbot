@@ -90,12 +90,11 @@ def setup(bot, group=None):
             )
             async def on_confirm(btn_interaction: discord.Interaction, confirmed: bool):
                 if not confirmed:
-                    await btn_interaction.response.send_message("Cancelled.", ephemeral=True)
+                    await btn_interaction.followup.send("Cancelled.", ephemeral=True)
                     return
                 if btn_interaction.user.id != interaction.user.id:
-                    await btn_interaction.response.send_message("Only the person who started this can confirm.", ephemeral=True)
+                    await btn_interaction.followup.send("Only the person who started this can confirm.", ephemeral=True)
                     return
-                await btn_interaction.response.defer(ephemeral=True)
                 transcript_file = None
                 try:
                     deleted_msgs = []
