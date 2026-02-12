@@ -143,8 +143,7 @@ def setup(bot, group=None):
         else bot.tree.command(name="status", description="Baro + Alerts + Cycles in one embed")
     )
 
-    @command_decorator
-    async def status(interaction: discord.Interaction):
+    async def _status_impl(interaction: discord.Interaction):
         """Display Baro, alerts, and cycles in one embed."""
         await interaction.response.defer(ephemeral=False)
 
@@ -194,3 +193,17 @@ def setup(bot, group=None):
 
         view = RefreshView(on_refresh)
         await interaction.edit_original_response(embed=embed, view=view)
+
+    @command_decorator
+    async def status(interaction: discord.Interaction):
+        await _status_impl(interaction)
+
+    # Alias: /warframe wf
+    wf_decorator = (
+        group.command(name="wf", description="Baro + Alerts + Cycles (alias for status)")
+        if group
+        else bot.tree.command(name="wf", description="Baro + Alerts + Cycles (alias for status)")
+    )
+    @wf_decorator
+    async def wf(interaction: discord.Interaction):
+        await _status_impl(interaction)

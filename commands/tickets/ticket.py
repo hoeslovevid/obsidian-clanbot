@@ -7,7 +7,7 @@ import asyncio
 import re
 import io
 
-from utils import obsidian_embed, is_mod
+from utils import obsidian_embed, is_mod, format_timestamp_readable
 from database import DB_PATH, now_utc, get_guild_setting
 from views import ConfirmView
 import aiosqlite
@@ -54,11 +54,12 @@ async def _get_ticket_row_by_id(ticket_db_id: int) -> Optional[aiosqlite.Row]:
 
 
 def _format_dt_iso(iso_str: Optional[str]) -> str:
+    """Format ISO datetime as readable Discord timestamp (full date + relative)."""
     if not iso_str:
         return "—"
     try:
         dt = datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
-        return f"<t:{int(dt.replace(tzinfo=timezone.utc).timestamp())}:R>"
+        return format_timestamp_readable(dt)
     except Exception:
         return iso_str
 

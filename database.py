@@ -1026,6 +1026,107 @@ async def initialize_achievement_definitions():
         await db.commit()
 
 
+async def get_all_title_definitions() -> list:
+    """Get all title definitions."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("""
+            SELECT id, name, description, unlock_type, unlock_value, cost_coins
+            FROM title_definitions ORDER BY cost_coins ASC, name ASC
+        """)
+        return await cur.fetchall()
+
+
+async def get_user_unlocked_titles(guild_id: int, user_id: int) -> set:
+    """Get set of title IDs unlocked by user."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("""
+            SELECT title_id FROM user_unlocked_titles
+            WHERE guild_id=? AND user_id=?
+        """, (guild_id, user_id))
+        rows = await cur.fetchall()
+        return {r[0] for r in rows}
+
+
+async def unlock_title_for_user(guild_id: int, user_id: int, title_id: str):
+    """Record that user unlocked a title."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            INSERT OR IGNORE INTO user_unlocked_titles (guild_id, user_id, title_id, unlocked_at)
+            VALUES (?, ?, ?, ?)
+        """, (guild_id, user_id, title_id, now_utc().isoformat()))
+        await db.commit()
+
+
+async def check_and_unlock_eligible_titles(guild_id: int, user_id: int) -> list:
+    """
+    Check if user meets criteria for any locked titles and unlock them.
+    Returns list of newly unlocked title IDs.
+    """
+    from config import ECONOMY_ENABLED
+    newly_unlocked = []
+    definitions = await get_all_title_definitions()
+    unlocked = await get_user_unlocked_titles(guild_id, user_id)
+
+    for tid, name, desc, u_type, u_val, cost in definitions:
+        if tid in unlocked or u_type == "purchase":
+            continue
+        try:
+            met = False
+            if u_type == "balance" and ECONOMY_ENABLED and u_val:
+                bal = await get_user_balance(guild_id, user_id)
+                met = bal >= int(u_val)
+            elif u_type == "months" and u_val:
+                months_needed = int(u_val)
+                if months_needed <= 6:
+                    async with aiosqlite.connect(DB_PATH) as db:
+                        cur = await db.execute("""
+                            SELECT 1 FROM achievements WHERE guild_id=? AND user_id=? AND achievement_id=?
+                        """, (guild_id, user_id, f"months_{months_needed}"))
+                        met = (await cur.fetchone()) is not None
+                else:
+                    async with aiosqlite.connect(DB_PATH) as db:
+                        cur = await db.execute("""
+                            SELECT 1 FROM member_milestones
+                            WHERE guild_id=? AND user_id=? AND milestone_type='join_anniversary' AND milestone_value>=?
+                        """, (guild_id, user_id, months_needed // 12))
+                        met = (await cur.fetchone()) is not None
+            elif u_type == "messages" and u_val:
+                async with aiosqlite.connect(DB_PATH) as db:
+                    cur = await db.execute("""
+                        SELECT messages_sent FROM activity_stats WHERE guild_id=? AND user_id=?
+                    """, (guild_id, user_id))
+                    row = await cur.fetchone()
+                    met = (row and row[0] and row[0] >= int(u_val))
+            if met:
+                await unlock_title_for_user(guild_id, user_id, tid)
+                newly_unlocked.append(tid)
+        except Exception as e:
+            logger.warning(f"[titles] Error checking title {tid}: {e}")
+    return newly_unlocked
+
+
+async def initialize_title_definitions():
+    """Initialize default title definitions (cosmetic titles)."""
+    default_titles = [
+        # id, name, description, unlock_type, unlock_value, cost_coins
+        ("millionaire", "Millionaire", "Reach 1,000,000 coins", "balance", "1000000", 0),
+        ("tycoon", "Tycoon", "Reach 10,000,000 coins", "balance", "10000000", 0),
+        ("veteran", "Veteran", "Be in the server 6+ months", "months", "6", 0),
+        ("early_bird", "Early Bird", "Be in the server 1+ year", "months", "12", 0),
+        ("chatterbox", "Chatterbox", "Send 10,000 messages", "messages", "10000", 0),
+        ("diamond", "Diamond", "Exclusive cosmetic title", "purchase", None, 50000),
+        ("obsidian", "Obsidian", "Premium server title", "purchase", None, 100000),
+        ("founder", "Founder", "Support the server", "purchase", None, 250000),
+    ]
+    async with aiosqlite.connect(DB_PATH) as db:
+        for tid, name, desc, u_type, u_val, cost in default_titles:
+            await db.execute("""
+                INSERT OR IGNORE INTO title_definitions (id, name, description, unlock_type, unlock_value, cost_coins)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (tid, name, desc, u_type, u_val or "", cost))
+        await db.commit()
+
+
 async def initialize_badge_definitions():
     """Initialize default badge definitions (achievement-linked badges)."""
     default_badges = [
@@ -2413,6 +2514,25 @@ async def init_db() -> None:
             user_id INTEGER NOT NULL,
             title TEXT,
             PRIMARY KEY (guild_id, user_id)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS title_definitions (
+            id TEXT NOT NULL PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            unlock_type TEXT NOT NULL DEFAULT 'purchase',
+            unlock_value TEXT,
+            cost_coins INTEGER NOT NULL DEFAULT 0
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS user_unlocked_titles (
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            title_id TEXT NOT NULL,
+            unlocked_at TEXT NOT NULL,
+            PRIMARY KEY (guild_id, user_id, title_id)
         )""")
 
         await db.execute("""

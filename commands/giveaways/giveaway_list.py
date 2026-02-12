@@ -75,22 +75,24 @@ def setup(bot, group=None):
                 try:
                     end_time = datetime.fromisoformat(end_time_str.replace('Z', '+00:00'))
                     time_remaining = end_time - datetime.now(timezone.utc)
+                    ts = int(end_time.replace(tzinfo=timezone.utc).timestamp())
 
                     if time_remaining.total_seconds() <= 0:
-                        time_str = "Ended"
+                        time_str = f"Ended (<t:{ts}:R>)"
                     else:
                         days = time_remaining.days
                         hours, remainder = divmod(time_remaining.seconds, 3600)
                         minutes, _ = divmod(remainder, 60)
-                        time_str = ""
+                        countdown = ""
                         if days > 0:
-                            time_str += f"{days}d "
+                            countdown += f"{days}d "
                         if hours > 0:
-                            time_str += f"{hours}h "
+                            countdown += f"{hours}h "
                         if minutes > 0:
-                            time_str += f"{minutes}m"
-                        if not time_str:
-                            time_str = "Less than 1m"
+                            countdown += f"{minutes}m"
+                        if not countdown:
+                            countdown = "Less than 1m"
+                        time_str = f"<t:{ts}:R> ({countdown.strip()})"
                 except Exception:
                     time_str = "Unknown"
 

@@ -4,7 +4,16 @@ from discord import app_commands
 from typing import Optional
 
 from utils import obsidian_embed, is_mod
-from database import DB_PATH, now_utc
+from database import (
+    DB_PATH, now_utc,
+    get_all_title_definitions,
+    get_user_unlocked_titles,
+    unlock_title_for_user,
+    check_and_unlock_eligible_titles,
+    get_user_balance,
+    remove_coins,
+)
+from config import ECONOMY_ENABLED
 import aiosqlite
 
 
@@ -365,3 +374,117 @@ def setup(bot, group=None):
                     embed=obsidian_embed("✅ Showcase Set", f"Slot {slot}: **{badge_name}**", color=discord.Color.green(), client=interaction.client),
                     ephemeral=True
                 )
+
+    # Title shop: browse, unlock (purchase), equip preset titles
+    title_shop_decorator = group.command(name="title_shop", description="Browse and equip unlockable titles.") if group else bot.tree.command(name="title_shop", description="Browse and equip unlockable titles.")
+    @title_shop_decorator
+    @app_commands.describe(action="Action to perform", title_id="Title ID (from browse)")
+    @app_commands.choices(action=[
+        app_commands.Choice(name="Browse", value="browse"),
+        app_commands.Choice(name="Equip", value="equip"),
+        app_commands.Choice(name="Unlock (purchase)", value="unlock"),
+    ])
+    async def title_shop(interaction: discord.Interaction, action: str, title_id: Optional[str] = None):
+        """Browse, unlock, and equip preset titles."""
+        if not interaction.guild:
+            return await interaction.response.send_message("Server only.", ephemeral=True)
+        await interaction.response.defer(ephemeral=True)
+
+        # Check and unlock any newly eligible titles (balance, months, messages)
+        await check_and_unlock_eligible_titles(interaction.guild.id, interaction.user.id)
+
+        definitions = await get_all_title_definitions()
+        unlocked = await get_user_unlocked_titles(interaction.guild.id, interaction.user.id)
+        current_title = await get_user_title(interaction.guild.id, interaction.user.id)
+
+        if action == "browse":
+            lines = []
+            for tid, name, desc, u_type, u_val, cost in definitions:
+                status = "✅" if tid in unlocked else "🔒"
+                req = ""
+                if u_type == "purchase" and cost > 0:
+                    req = f" — {cost:,} coins"
+                elif u_type == "balance" and u_val:
+                    req = f" — Reach {int(u_val):,} coins"
+                elif u_type == "months" and u_val:
+                    req = f" — {u_val} months in server"
+                elif u_type == "messages" and u_val:
+                    req = f" — {int(u_val):,} messages"
+                lines.append(f"{status} **{name}** ({tid}){req}\n   _{desc}_")
+            embed = obsidian_embed(
+                "👑 Title Shop",
+                "Unlock titles by meeting requirements or purchasing. Use `/community title_shop` action:Equip to wear one.\n\n" + "\n\n".join(lines[:15]),
+                color=discord.Color.gold(),
+                author=interaction.user,
+                client=interaction.client,
+            )
+            if current_title:
+                embed.add_field(name="Current Title", value=current_title, inline=False)
+            return await interaction.followup.send(embed=embed, ephemeral=True)
+
+        if action == "equip":
+            if not title_id:
+                return await interaction.followup.send(
+                    embed=obsidian_embed("❌ Missing Title", "Provide title_id from browse (e.g. millionaire).", color=discord.Color.red(), client=interaction.client),
+                    ephemeral=True
+                )
+            title_id = title_id.lower().strip()
+            if title_id not in unlocked:
+                return await interaction.followup.send(
+                    embed=obsidian_embed("❌ Locked", f"You haven't unlocked **{title_id}**. Meet the requirement or purchase it first.", color=discord.Color.red(), client=interaction.client),
+                    ephemeral=True
+                )
+            title_name = next((d[1] for d in definitions if d[0] == title_id), title_id)
+            await set_user_title(interaction.guild.id, interaction.user.id, title_name)
+            return await interaction.followup.send(
+                embed=obsidian_embed("✅ Title Equipped", f"You are now: **{title_name}**", color=discord.Color.green(), client=interaction.client),
+                ephemeral=True
+            )
+
+        if action == "unlock":
+            if not title_id:
+                return await interaction.followup.send(
+                    embed=obsidian_embed("❌ Missing Title", "Provide title_id to purchase.", color=discord.Color.red(), client=interaction.client),
+                    ephemeral=True
+                )
+            if not ECONOMY_ENABLED:
+                return await interaction.followup.send(
+                    embed=obsidian_embed("❌ Economy Disabled", "Purchasing titles is disabled.", color=discord.Color.red(), client=interaction.client),
+                    ephemeral=True
+                )
+            title_id = title_id.lower().strip()
+            defn = next((d for d in definitions if d[0] == title_id), None)
+            if not defn:
+                return await interaction.followup.send(
+                    embed=obsidian_embed("❌ Unknown Title", f"No title **{title_id}** found.", color=discord.Color.red(), client=interaction.client),
+                    ephemeral=True
+                )
+            tid, name, desc, u_type, cost = defn[0], defn[1], defn[2], defn[3], defn[5]
+            if u_type != "purchase" or cost <= 0:
+                return await interaction.followup.send(
+                    embed=obsidian_embed("ℹ️ Not Purchasable", f"**{name}** is unlocked by meeting requirements, not by purchase.", color=discord.Color.blue(), client=interaction.client),
+                    ephemeral=True
+                )
+            if tid in unlocked:
+                return await interaction.followup.send(
+                    embed=obsidian_embed("✅ Already Owned", f"You already have **{name}**. Use equip to wear it.", color=discord.Color.green(), client=interaction.client),
+                    ephemeral=True
+                )
+            balance = await get_user_balance(interaction.guild.id, interaction.user.id)
+            if balance < cost:
+                return await interaction.followup.send(
+                    embed=obsidian_embed("❌ Insufficient Coins", f"**{name}** costs {cost:,} coins. You have {balance:,}.", color=discord.Color.red(), client=interaction.client),
+                    ephemeral=True
+                )
+            ok = await remove_coins(interaction.guild.id, interaction.user.id, cost, "TITLE_PURCHASE", f"Purchased title: {name}")
+            if not ok:
+                return await interaction.followup.send(
+                    embed=obsidian_embed("❌ Error", "Could not deduct coins.", color=discord.Color.red(), client=interaction.client),
+                    ephemeral=True
+                )
+            await unlock_title_for_user(interaction.guild.id, interaction.user.id, tid)
+            await set_user_title(interaction.guild.id, interaction.user.id, name)
+            return await interaction.followup.send(
+                embed=obsidian_embed("✅ Title Purchased", f"You bought and equipped **{name}** for {cost:,} coins!", color=discord.Color.green(), client=interaction.client),
+                ephemeral=True
+            )

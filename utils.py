@@ -80,6 +80,27 @@ def discord_timestamp(dt: datetime, style: str = "R") -> str:
     return f"<t:{int(dt.timestamp())}:{style}>"
 
 
+def format_timestamp_readable(dt, *, include_relative: bool = True) -> str:
+    """
+    Format datetime for readable display: full date + optional relative (e.g. "in 2 hours").
+    Returns Discord timestamp format so it displays in user's locale.
+    Accepts datetime or ISO string.
+    """
+    if dt is None:
+        return "—"
+    try:
+        if hasattr(dt, "timestamp"):
+            ts = int(dt.timestamp())
+        else:
+            parsed = datetime.fromisoformat(str(dt).replace("Z", "+00:00"))
+            ts = int(parsed.timestamp())
+        if include_relative:
+            return f"<t:{ts}:f> (<t:{ts}:R>)"
+        return f"<t:{ts}:f>"
+    except Exception:
+        return str(dt)
+
+
 def now_utc() -> datetime:
     """Get current UTC datetime."""
     return datetime.now(timezone.utc)
