@@ -316,7 +316,7 @@ def setup(bot, group=None):
                     return await interaction.followup.send(
                         embed=obsidian_embed(
                             "⭐ Badge Showcase",
-                            "No badges in showcase. Use `/community badge_showcase` action:Set to add up to 5 badges.",
+                            "No badges in showcase. Use `/tools badge_showcase` action:Set to add up to 5 badges.",
                             color=discord.Color.blue(),
                             client=interaction.client,
                         ),
@@ -413,7 +413,7 @@ def setup(bot, group=None):
                 lines.append(f"{status} **{name}** ({tid}){req}\n   _{desc}_")
             embed = obsidian_embed(
                 "👑 Title Shop",
-                "Unlock titles by meeting requirements or purchasing. Use `/community title_shop` action:Equip to wear one.\n\n" + "\n\n".join(lines[:15]),
+                "Unlock titles by meeting requirements or purchasing. Use `/tools title_shop` action:Equip to wear one.\n\n" + "\n\n".join(lines[:15]),
                 color=discord.Color.gold(),
                 author=interaction.user,
                 client=interaction.client,

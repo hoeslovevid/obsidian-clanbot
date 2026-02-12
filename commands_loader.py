@@ -236,10 +236,10 @@ def load_all_commands(bot):
         "commands.general.reputation": community_group,
         "commands.general.twitch": community_group,
         "commands.general.afk": community_group,
-        "commands.general.server_stats": community_group,
+        "commands.general.server_stats": tools_group,   # Moved: community at 25 limit
         "commands.general.profile": general_group,
         "commands.general.bot_status": general_group,
-        "commands.general.badges": community_group,  # Moved: general at 25 limit
+        "commands.general.badges": tools_group,        # Moved: community at 25 limit
         "commands.general.announcements": general_group,
         "commands.general.cross_server": general_group,
         "commands.general.voice_leaderboard": general_group,
