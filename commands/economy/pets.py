@@ -961,60 +961,6 @@ def setup(bot, group=None):
             )
         )
 
-    command_decorator = group.command(name="rename", description="Rename your pet.") if group else bot.tree.command(name="rename", description="Rename your pet.")
-    
-    @command_decorator
-    @app_commands.describe(new_name="New name for your pet (2-32 characters)")
-    async def pet_rename(interaction: discord.Interaction, new_name: str):
-        """Rename your pet."""
-        if not interaction.guild:
-            return await interaction.response.send_message(
-                embed=obsidian_embed(
-                    "❌ Invalid Context",
-                    "This command can only be used in a server.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
-            )
-        new_name = (new_name or "").strip()
-        if len(new_name) < 2 or len(new_name) > 32:
-            return await interaction.response.send_message(
-                "Pet name must be 2-32 characters.",
-                ephemeral=True
-            )
-        async with aiosqlite.connect(DB_PATH) as db:
-            cur = await db.execute(
-                "SELECT pet_name FROM pets WHERE guild_id=? AND user_id=?",
-                (interaction.guild.id, interaction.user.id)
-            )
-            row = await cur.fetchone()
-            if not row:
-                return await interaction.response.send_message(
-                    embed=obsidian_embed(
-                        "❌ No Pet",
-                        "You don't have a pet! Use `/economy pets buy` to buy one.",
-                        color=discord.Color.red(),
-                        client=interaction.client,
-                    ),
-                    ephemeral=True
-                )
-            old_name = row[0]
-            await db.execute(
-                "UPDATE pets SET pet_name=? WHERE guild_id=? AND user_id=?",
-                (new_name[:32], interaction.guild.id, interaction.user.id)
-            )
-            await db.commit()
-        await interaction.response.send_message(
-            embed=obsidian_embed(
-                "✅ Pet Renamed",
-                f"Your pet **{old_name}** is now named **{new_name}**!",
-                color=discord.Color.green(),
-                client=interaction.client,
-            ),
-            ephemeral=True
-        )
-
     command_decorator = group.command(name="battle", description="Challenge another user's pet to a battle!") if group else bot.tree.command(name="battle", description="Challenge another user's pet to a battle!")
 
     @command_decorator

@@ -307,7 +307,7 @@ def setup(bot, group=None):
                     return await interaction.followup.send(
                         embed=obsidian_embed(
                             "⭐ Badge Showcase",
-                            "No badges in showcase. Use `/badge_showcase` action:Set to add up to 5 badges.",
+                            "No badges in showcase. Use `/community badge_showcase` action:Set to add up to 5 badges.",
                             color=discord.Color.blue(),
                             client=interaction.client,
                         ),
