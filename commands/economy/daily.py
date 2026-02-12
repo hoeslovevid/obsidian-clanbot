@@ -131,6 +131,23 @@ def setup(bot, group=None):
                     await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "daily_streak_10", None)
                 except Exception:
                     pass
+            try:
+                from database import check_and_unlock_achievement, get_user_balance
+                bal = await get_user_balance(interaction.guild.id, interaction.user.id)
+                if bal >= 1_000_000:
+                    await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "first_million", None)
+            except Exception:
+                pass
+            # Member milestone (months in server)
+            try:
+                from database import check_and_unlock_achievement
+                if isinstance(interaction.user, discord.Member) and interaction.user.joined_at:
+                    days_in = (datetime.now(timezone.utc) - interaction.user.joined_at.replace(tzinfo=timezone.utc)).days
+                    for months, ach_id in [(3, "months_3"), (6, "months_6")]:
+                        if days_in >= months * 30:
+                            await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, ach_id, None)
+            except Exception:
+                pass
 
         # Success message with streak visualization and next claim time
         streak_fire = "🔥" * min(new_streak, 10) + (f" +{new_streak - 10}" if new_streak > 10 else "")

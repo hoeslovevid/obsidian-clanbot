@@ -267,3 +267,101 @@ def setup(bot, group=None):
             ),
             ephemeral=True
         )
+
+    # Badge showcase (feature up to 5 badges on profile)
+    showcase_decorator = group.command(name="badge_showcase", description="Set or view badge showcase (featured on profile).") if group else bot.tree.command(name="badge_showcase", description="Set or view badge showcase (featured on profile).")
+    @showcase_decorator
+    @app_commands.describe(
+        action="Set, clear, or view showcase",
+        slot="Slot 1-5 (for set/clear)",
+        badge_id="Badge to feature (for set)"
+    )
+    @app_commands.choices(action=[
+        app_commands.Choice(name="Set", value="set"),
+        app_commands.Choice(name="Clear", value="clear"),
+        app_commands.Choice(name="View", value="view"),
+    ])
+    async def showcase(
+        interaction: discord.Interaction,
+        action: str,
+        slot: Optional[int] = None,
+        badge_id: Optional[str] = None,
+    ):
+        """Manage badge showcase slots (1-5) displayed on profile."""
+        if not interaction.guild:
+            return await interaction.response.send_message("Server only.", ephemeral=True)
+
+        await interaction.response.defer(ephemeral=True)
+
+        async with aiosqlite.connect(DB_PATH) as db:
+            if action == "view":
+                cur = await db.execute("""
+                    SELECT ubs.slot, ubs.badge_id, bd.name, bd.icon_emoji
+                    FROM user_badge_showcase ubs
+                    LEFT JOIN badge_definitions bd ON ubs.badge_id = bd.badge_id
+                    WHERE ubs.guild_id=? AND ubs.user_id=?
+                    ORDER BY ubs.slot
+                """, (interaction.guild.id, interaction.user.id))
+                rows = await cur.fetchall()
+                if not rows:
+                    return await interaction.followup.send(
+                        embed=obsidian_embed(
+                            "⭐ Badge Showcase",
+                            "No badges in showcase. Use `/badge_showcase` action:Set to add up to 5 badges.",
+                            color=discord.Color.blue(),
+                            client=interaction.client,
+                        ),
+                        ephemeral=True
+                    )
+                lines = [f"**Slot {s}:** {e or '🏆'} **{n or bid}**" for s, bid, n, e in rows]
+                return await interaction.followup.send(
+                    embed=obsidian_embed(
+                        "⭐ Badge Showcase",
+                        "\n".join(lines),
+                        color=discord.Color.gold(),
+                        client=interaction.client,
+                    ),
+                    ephemeral=True
+                )
+
+            if slot is None or slot < 1 or slot > 5:
+                return await interaction.followup.send(
+                    embed=obsidian_embed("❌ Invalid Slot", "Slot must be 1-5.", color=discord.Color.red(), client=interaction.client),
+                    ephemeral=True
+                )
+
+            if action == "clear":
+                await db.execute(
+                    "DELETE FROM user_badge_showcase WHERE guild_id=? AND user_id=? AND slot=?",
+                    (interaction.guild.id, interaction.user.id, slot),
+                )
+                await db.commit()
+                return await interaction.followup.send(
+                    embed=obsidian_embed("✅ Cleared", f"Slot {slot} cleared.", color=discord.Color.green(), client=interaction.client),
+                    ephemeral=True
+                )
+
+            if action == "set":
+                if not badge_id:
+                    return await interaction.followup.send(
+                        embed=obsidian_embed("❌ Missing Badge", "Provide badge_id to set.", color=discord.Color.red(), client=interaction.client),
+                        ephemeral=True
+                    )
+                badges_list = await get_user_badges(interaction.guild.id, interaction.user.id)
+                user_badge_ids = [b[0] for b in badges_list]
+                if badge_id not in user_badge_ids:
+                    return await interaction.followup.send(
+                        embed=obsidian_embed("❌ Badge Not Found", "You don't have this badge.", color=discord.Color.red(), client=interaction.client),
+                        ephemeral=True
+                    )
+                await db.execute("""
+                    INSERT INTO user_badge_showcase (guild_id, user_id, slot, badge_id)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(guild_id, user_id, slot) DO UPDATE SET badge_id=excluded.badge_id
+                """, (interaction.guild.id, interaction.user.id, slot, badge_id))
+                await db.commit()
+                badge_name = next((b[3] or b[0] for b in badges_list if b[0] == badge_id), badge_id)
+                return await interaction.followup.send(
+                    embed=obsidian_embed("✅ Showcase Set", f"Slot {slot}: **{badge_name}**", color=discord.Color.green(), client=interaction.client),
+                    ephemeral=True
+                )

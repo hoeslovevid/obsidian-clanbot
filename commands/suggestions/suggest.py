@@ -78,7 +78,13 @@ def setup(bot, group=None):
                 VALUES (?, ?, ?, ?, 'PENDING', ?)
             """, (interaction.guild.id, interaction.user.id, suggestion, category_val, created_at))
             await db.commit()
-            
+
+            try:
+                from database import check_and_unlock_achievement
+                await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "suggestion_first", None)
+            except Exception:
+                pass
+
             # Get the suggestion ID
             cur = await db.execute("SELECT last_insert_rowid()")
             suggestion_id = (await cur.fetchone())[0]

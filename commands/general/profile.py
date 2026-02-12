@@ -99,6 +99,15 @@ async def get_user_profile_data(guild_id: int, user_id: int) -> dict:
             data["equipped_badge"] = (brow[0], brow[1])
 
         cur = await db.execute("""
+            SELECT ubs.slot, bd.icon_emoji, bd.name
+            FROM user_badge_showcase ubs
+            LEFT JOIN badge_definitions bd ON ubs.badge_id = bd.badge_id
+            WHERE ubs.guild_id=? AND ubs.user_id=?
+            ORDER BY ubs.slot
+        """, (g, u))
+        data["showcase_badges"] = await cur.fetchall()
+
+        cur = await db.execute("""
             SELECT pet_name, pet_type, hunger, happiness, last_fed_at, last_played_at, created_at
             FROM pets WHERE guild_id=? AND user_id=?
         """, (g, u))
@@ -120,7 +129,7 @@ async def get_user_profile_data(guild_id: int, user_id: int) -> dict:
             data["applications"] = {"total": row[0] or 0, "approved": row[1] or 0, "pending": row[2] or 0}
 
         cur = await db.execute("""
-            SELECT COUNT(*), COALESCE(SUM(CASE WHEN status='ACCEPTED' THEN 1 ELSE 0 END),0)
+            SELECT COUNT(*), COALESCE(SUM(CASE WHEN status IN ('APPROVED','IMPLEMENTED') THEN 1 ELSE 0 END),0)
             FROM suggestions WHERE guild_id=? AND user_id=?
         """, (g, u))
         row = await cur.fetchone()
@@ -288,6 +297,10 @@ def setup(bot, group=None):
             badge_emoji = emoji or "🏆"
             badge_name = name or "Badge"
             desc += f"\n**Equipped Badge:** {badge_emoji} {badge_name}"
+        if profile_data.get("showcase_badges"):
+            showcase = profile_data["showcase_badges"]
+            parts = [f"{(e or '🏆')} {n or 'Badge'}" for _, e, n in showcase[:5]]
+            desc += f"\n**Showcase:** {' '.join(parts)}"
         if target_user.id == interaction.user.id:
             desc += "\n*This is your profile!*"
         

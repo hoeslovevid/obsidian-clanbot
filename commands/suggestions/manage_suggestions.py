@@ -21,6 +21,10 @@ class SuggestionView(discord.ui.View):
                     item.custom_id = f"suggestion:{suggestion_id}:approve"
                 elif item.label == "❌ Reject":
                     item.custom_id = f"suggestion:{suggestion_id}:reject"
+                elif item.label == "📋 Under Review":
+                    item.custom_id = f"suggestion:{suggestion_id}:under_review"
+                elif item.label == "📌 Planned":
+                    item.custom_id = f"suggestion:{suggestion_id}:planned"
                 elif item.label == "✅ Implemented":
                     item.custom_id = f"suggestion:{suggestion_id}:implemented"
     
@@ -34,6 +38,16 @@ class SuggestionView(discord.ui.View):
         """Reject the suggestion."""
         await self._handle_status(interaction, "REJECTED", "❌ Rejected")
     
+    @discord.ui.button(label="📋 Under Review", style=discord.ButtonStyle.secondary)
+    async def under_review(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Mark suggestion as under review."""
+        await self._handle_status(interaction, "UNDER_REVIEW", "📋 Under Review")
+
+    @discord.ui.button(label="📌 Planned", style=discord.ButtonStyle.secondary)
+    async def planned(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Mark suggestion as planned."""
+        await self._handle_status(interaction, "PLANNED", "📌 Planned")
+
     @discord.ui.button(label="✅ Implemented", style=discord.ButtonStyle.primary)
     async def implemented(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Mark suggestion as implemented."""
@@ -95,6 +109,10 @@ class SuggestionView(discord.ui.View):
                         embed.color = discord.Color.red()
                     elif status == "IMPLEMENTED":
                         embed.color = discord.Color.blue()
+                    elif status == "UNDER_REVIEW":
+                        embed.color = discord.Color.blue()
+                    elif status == "PLANNED":
+                        embed.color = discord.Color.gold()
                     
                     # Disable buttons
                     for item in self.children:
@@ -114,7 +132,9 @@ class SuggestionView(discord.ui.View):
                 status_messages = {
                     "APPROVED": "Your suggestion has been **approved** by the moderators!",
                     "REJECTED": "Your suggestion has been **rejected** by the moderators.",
-                    "IMPLEMENTED": "Your suggestion has been **implemented**! Thank you for your contribution!"
+                    "IMPLEMENTED": "Your suggestion has been **implemented**! Thank you for your contribution!",
+                    "UNDER_REVIEW": "Your suggestion is now **under review** by the team.",
+                    "PLANNED": "Your suggestion has been added to the **planned** list!"
                 }
                 
                 message_text = status_messages.get(status, f"Your suggestion status has been updated to: {status}")
@@ -146,18 +166,29 @@ def setup(bot, group=None):
     @command_decorator
     @app_commands.describe(
         status="Filter by status (default: all)",
+        category="Filter by category (default: all)",
         limit="Number of suggestions to show (default: 10, max: 25)"
     )
     @app_commands.choices(status=[
         app_commands.Choice(name="All", value="all"),
         app_commands.Choice(name="Pending", value="PENDING"),
+        app_commands.Choice(name="Under Review", value="UNDER_REVIEW"),
+        app_commands.Choice(name="Planned", value="PLANNED"),
         app_commands.Choice(name="Approved", value="APPROVED"),
         app_commands.Choice(name="Rejected", value="REJECTED"),
         app_commands.Choice(name="Implemented", value="IMPLEMENTED"),
     ])
+    @app_commands.choices(category=[
+        app_commands.Choice(name="All", value="all"),
+        app_commands.Choice(name="Feature", value="feature"),
+        app_commands.Choice(name="Bug", value="bug"),
+        app_commands.Choice(name="Improvement", value="improvement"),
+        app_commands.Choice(name="Other", value="other"),
+    ])
     async def suggestions(
         interaction: discord.Interaction,
         status: app_commands.Choice[str] = None,
+        category: app_commands.Choice[str] = None,
         limit: int = 10
     ):
         """View and manage suggestions."""
@@ -170,28 +201,30 @@ def setup(bot, group=None):
         await interaction.response.defer(ephemeral=True)
         
         status_filter = status.value if status and status.value != "all" else None
+        category_filter = category.value if category and category.value != "all" else None
         
         if limit < 1 or limit > 25:
             limit = 10
         
         # Get suggestions from database
         async with aiosqlite.connect(DB_PATH) as db:
+            params = [interaction.guild.id]
+            where_clauses = ["guild_id=?"]
             if status_filter:
-                cur = await db.execute("""
-                    SELECT id, user_id, suggestion_text, status, created_at, reviewed_by
-                    FROM suggestions
-                    WHERE guild_id=? AND status=?
-                    ORDER BY created_at DESC
-                    LIMIT ?
-                """, (interaction.guild.id, status_filter, limit))
-            else:
-                cur = await db.execute("""
-                    SELECT id, user_id, suggestion_text, status, created_at, reviewed_by
-                    FROM suggestions
-                    WHERE guild_id=?
-                    ORDER BY created_at DESC
-                    LIMIT ?
-                """, (interaction.guild.id, limit))
+                where_clauses.append("status=?")
+                params.append(status_filter)
+            if category_filter:
+                where_clauses.append("category=?")
+                params.append(category_filter)
+            params.append(limit)
+            where_sql = " AND ".join(where_clauses)
+            cur = await db.execute(f"""
+                SELECT id, user_id, suggestion_text, status, category, created_at, reviewed_by
+                FROM suggestions
+                WHERE {where_sql}
+                ORDER BY created_at DESC
+                LIMIT ?
+            """, params)
             
             rows = await cur.fetchall()
         
@@ -209,18 +242,25 @@ def setup(bot, group=None):
         
         # Build embed with suggestions
         fields = []
-        for suggestion_id, user_id, suggestion_text, suggestion_status, created_at, reviewed_by in rows:
+        for row in rows:
+            suggestion_id, user_id, suggestion_text, suggestion_status = row[0], row[1], row[2], row[3]
+            suggestion_category = row[4] if len(row) > 4 else "other"
+            created_at = row[5] if len(row) > 5 else None
+            reviewed_by = row[6] if len(row) > 6 else None
             user = interaction.guild.get_member(user_id)
             username = user.display_name if user else f"User {user_id}"
             
             status_emoji = {
                 "PENDING": "⏳",
+                "UNDER_REVIEW": "📋",
+                "PLANNED": "📌",
                 "APPROVED": "✅",
                 "REJECTED": "❌",
                 "IMPLEMENTED": "✅"
             }.get(suggestion_status, "❓")
             
             value = f"**Status:** {status_emoji} {suggestion_status}\n"
+            value += f"**Category:** {suggestion_category.title()}\n"
             value += f"**By:** {username}\n"
             value += f"**Suggestion:** {suggestion_text[:200]}{'...' if len(suggestion_text) > 200 else ''}\n"
             value += f"**ID:** #{suggestion_id}"
@@ -228,15 +268,16 @@ def setup(bot, group=None):
             fields.append((f"Suggestion #{suggestion_id}", value, False))
         
         status_display = status_filter if status_filter else "All"
-        status_colors = {"PENDING": discord.Color.orange(), "APPROVED": discord.Color.green(), "REJECTED": discord.Color.red(), "IMPLEMENTED": discord.Color.blue()}
+        cat_display = f" • {category_filter}" if category_filter else ""
+        status_colors = {"PENDING": discord.Color.orange(), "UNDER_REVIEW": discord.Color.blue(), "PLANNED": discord.Color.gold(), "APPROVED": discord.Color.green(), "REJECTED": discord.Color.red(), "IMPLEMENTED": discord.Color.blue()}
         color = status_colors.get(status_filter, discord.Color.blue()) if status_filter else discord.Color.blue()
         embed = obsidian_embed(
-            f"💡 Suggestions ({status_display})",
+            f"💡 Suggestions ({status_display}{cat_display})",
             f"Showing {len(rows)} suggestion(s). Use buttons on individual suggestion messages to manage them.",
             color=color,
             fields=fields,
             thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
-            footer=f"{len(rows)} suggestion(s) • Filter: {status_display}",
+            footer=f"{len(rows)} suggestion(s) • Filter: {status_display}{cat_display}",
             client=interaction.client,
         )
         await interaction.followup.send(embed=embed, ephemeral=True)

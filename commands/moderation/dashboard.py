@@ -32,12 +32,12 @@ def setup(bot, group=None):
         await interaction.response.defer(ephemeral=True)
 
         async with aiosqlite.connect(DB_PATH) as db:
-            # Open tickets
+            # Open tickets (urgent first, then escalated, then by activity)
             cur = await db.execute("""
-                SELECT ticket_id, subject, user_id, created_at, last_activity_at, tag
+                SELECT ticket_id, subject, user_id, created_at, last_activity_at, tag, priority, escalated
                 FROM tickets
                 WHERE guild_id=? AND status='open'
-                ORDER BY last_activity_at ASC
+                ORDER BY CASE WHEN COALESCE(priority,'normal')='urgent' THEN 0 ELSE 1 END, COALESCE(escalated,0) DESC, last_activity_at ASC
                 LIMIT 10
             """, (interaction.guild.id,))
             tickets = await cur.fetchall()
@@ -67,11 +67,21 @@ def setup(bot, group=None):
         # Open tickets section
         if tickets:
             lines = []
-            for ticket_id, subject, uid, created, last_at, tag in tickets:
+            for row in tickets:
+                ticket_id = row[0]
+                subject = row[1]
+                uid = row[2]
+                created = row[3]
+                last_at = row[4]
+                tag = row[5] if len(row) > 5 else None
+                priority = row[6] if len(row) > 6 else None
                 user = interaction.guild.get_member(uid)
                 uname = user.display_name if user else f"User {uid}"
                 tag_str = f" [{tag}]" if tag else ""
-                lines.append(f"• **{ticket_id}**{tag_str} — {uname}\n  _{subject[:50]}{'…' if len(subject or '') > 50 else ''}_")
+                urgent_str = " 🔴" if priority == "urgent" else ""
+                escalated = row[7] if len(row) > 7 else 0
+                esc_str = " ⚠️" if escalated else ""
+                lines.append(f"• **{ticket_id}**{tag_str}{urgent_str}{esc_str} — {uname}\n  _{subject[:50]}{'…' if len(subject or '') > 50 else ''}_")
             fields.append(("🎫 Open Tickets", "\n".join(lines) or "None", False))
         else:
             fields.append(("🎫 Open Tickets", "No open tickets.", False))

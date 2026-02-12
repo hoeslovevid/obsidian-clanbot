@@ -8,7 +8,7 @@ import re
 import io
 
 from utils import obsidian_embed, is_mod
-from database import DB_PATH, now_utc
+from database import DB_PATH, now_utc, get_guild_setting
 from views import ConfirmView
 import aiosqlite
 
@@ -110,6 +110,10 @@ async def _send_transcript_to_log(
         return None, None
 
     f = discord.File(fp=io.BytesIO(transcript_bytes), filename=file_name)
+    try:
+        priority_str = f"\n**Priority:** {(ticket_row['priority'] or 'normal').capitalize()}"
+    except (KeyError, IndexError, TypeError):
+        priority_str = ""
     embed = obsidian_embed(
         "🧾 Ticket Transcript",
         f"**Ticket:** `{ticket_row['ticket_id']}`\n"
@@ -117,7 +121,7 @@ async def _send_transcript_to_log(
         f"**User:** <@{ticket_row['user_id']}>\n"
         f"**Channel:** <#{ticket_row['channel_id']}>\n"
         f"**Created:** {_format_dt_iso(ticket_row['created_at'])}\n"
-        f"**Closed:** {_format_dt_iso(ticket_row['closed_at'])}",
+        f"**Closed:** {_format_dt_iso(ticket_row['closed_at'])}{priority_str}",
         color=discord.Color.dark_grey(),
         client=None,
     )
@@ -257,6 +261,15 @@ class TicketControlView(discord.ui.View):
         transcript_btn.callback = self._transcript  # type: ignore
         self.add_item(transcript_btn)
 
+        escalate_btn = discord.ui.Button(
+            label="Escalate",
+            style=discord.ButtonStyle.danger,
+            emoji="🔴",
+            custom_id=f"ticket:escalate:{ticket_db_id}",
+        )
+        escalate_btn.callback = self._escalate  # type: ignore
+        self.add_item(escalate_btn)
+
         close_btn = discord.ui.Button(
             label="Close",
             style=discord.ButtonStyle.danger,
@@ -330,6 +343,57 @@ class TicketControlView(discord.ui.View):
             await db.commit()
 
         await interaction.followup.send("Transcript generated.", ephemeral=True)
+
+    async def _escalate(self, interaction: discord.Interaction):
+        if not interaction.guild or not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
+            return await interaction.response.send_message("Mods only.", ephemeral=True)
+
+        await interaction.response.defer(ephemeral=True)
+
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT escalated FROM tickets WHERE id=?",
+                (self.ticket_db_id,),
+            )
+            row = await cur.fetchone()
+            if row and row[0]:
+                return await interaction.followup.send("This ticket is already escalated.", ephemeral=True)
+
+            now_iso = now_utc().isoformat()
+            await db.execute(
+                "UPDATE tickets SET escalated=1, escalated_at=?, escalated_by=?, last_activity_at=? WHERE id=?",
+                (now_iso, interaction.user.id, now_iso, self.ticket_db_id),
+            )
+            await db.commit()
+
+        ticket_row = await _get_ticket_row_by_id(self.ticket_db_id)
+        channel = interaction.guild.get_channel(int(ticket_row["channel_id"])) if ticket_row else None
+
+        role_id_str = await get_guild_setting(interaction.guild.id, "ticket_escalation_role_id")
+        ping_content = None
+        if role_id_str:
+            try:
+                role = interaction.guild.get_role(int(role_id_str))
+                if role:
+                    ping_content = f"{role.mention} — **Ticket escalated** by {interaction.user.mention}"
+            except (ValueError, TypeError):
+                pass
+
+        if channel and isinstance(channel, discord.TextChannel):
+            try:
+                await channel.send(
+                    content=ping_content or f"🔴 **Ticket escalated** by {interaction.user.mention}",
+                    embed=obsidian_embed(
+                        "🔴 Escalated",
+                        "This ticket has been marked as escalated and requires senior staff attention.",
+                        color=discord.Color.red(),
+                        client=interaction.client,
+                    ),
+                )
+            except discord.Forbidden:
+                pass
+
+        await interaction.followup.send("Ticket escalated.", ephemeral=True)
 
     async def _close(self, interaction: discord.Interaction):
         if not interaction.guild or not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
@@ -457,7 +521,8 @@ def setup(bot, group=None):
     @command_decorator
     @app_commands.describe(
         subject="Subject of your ticket",
-        tag="Category/tag for the ticket (optional)"
+        tag="Category/tag for the ticket (optional)",
+        priority="Priority level (optional)"
     )
     @app_commands.choices(tag=[
         app_commands.Choice(name="General", value="General"),
@@ -465,7 +530,11 @@ def setup(bot, group=None):
         app_commands.Choice(name="Question", value="Question"),
         app_commands.Choice(name="Other", value="Other"),
     ])
-    async def ticket(interaction: discord.Interaction, subject: str, tag: app_commands.Choice[str] = None):
+    @app_commands.choices(priority=[
+        app_commands.Choice(name="Normal", value="normal"),
+        app_commands.Choice(name="Urgent", value="urgent"),
+    ])
+    async def ticket(interaction: discord.Interaction, subject: str, tag: app_commands.Choice[str] = None, priority: app_commands.Choice[str] = None):
         """Create a support ticket."""
         if not interaction.guild:
             return await interaction.response.send_message(
@@ -526,13 +595,20 @@ def setup(bot, group=None):
             )
         
         tag_val = tag.value if tag else None
+        priority_val = (priority.value if priority else "normal").lower()
         # Store ticket in database
         async with aiosqlite.connect(DB_PATH) as db:
             await db.execute("""
-                INSERT INTO tickets (guild_id, user_id, channel_id, ticket_id, subject, status, created_at, last_activity_at, tag)
-                VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?)
-            """, (interaction.guild.id, interaction.user.id, channel.id, ticket_id, subject, now_utc().isoformat(), now_utc().isoformat(), tag_val))
+                INSERT INTO tickets (guild_id, user_id, channel_id, ticket_id, subject, status, created_at, last_activity_at, tag, priority)
+                VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?, ?)
+            """, (interaction.guild.id, interaction.user.id, channel.id, ticket_id, subject, now_utc().isoformat(), now_utc().isoformat(), tag_val, priority_val))
             await db.commit()
+
+            try:
+                from database import check_and_unlock_achievement
+                await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "ticket_creator", getattr(interaction.client, "bot", interaction.client))
+            except Exception:
+                pass
 
             cur = await db.execute("SELECT last_insert_rowid()")
             ticket_db_id = (await cur.fetchone())[0]
@@ -541,6 +617,7 @@ def setup(bot, group=None):
         fields = [
             ("Subject", subject, True),
             ("Status", "Open", True),
+            ("Priority", priority_val.capitalize(), True),
             ("Created By", interaction.user.mention, True),
         ]
         if tag_val:

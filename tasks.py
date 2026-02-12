@@ -253,6 +253,87 @@ def setup_tasks(bot):
     async def before_event_reminder_loop():
         await bot.wait_until_ready()
 
+    @tasks.loop(hours=1)
+    async def recurring_event_loop():
+        """Create events from recurring templates when scheduled time matches."""
+        try:
+            from bot import ensure_core_channels
+            from views import RSVPView
+            now = now_utc()
+            current_week = now.strftime("%Y-W%V")
+            current_weekday = now.weekday()
+            current_hour = now.hour
+
+            for guild in bot.guilds:
+                try:
+                    await ensure_core_channels(guild)
+                    events_id = await resolve_channel_id(guild, "events_channel_id", EVENTS_CHANNEL_ID, EVENTS_CHANNEL_NAME)
+                    ch = guild.get_channel(events_id) if events_id else None
+                    if not isinstance(ch, discord.TextChannel):
+                        continue
+
+                    async with aiosqlite.connect(DB_PATH) as db:
+                        cur = await db.execute("""
+                            SELECT id, title, description, day_of_week, hour_utc, duration_hours, role_id, created_by, last_created_week
+                            FROM recurring_event_templates
+                            WHERE guild_id=? AND is_active=1
+                        """, (guild.id,))
+                        templates = await cur.fetchall()
+
+                    for tid, title, desc, dow, hour, dur, role_id, creator_id, last_week in templates:
+                        if dow != current_weekday or hour != current_hour:
+                            continue
+                        if last_week == current_week:
+                            continue
+
+                        ts = int(now.replace(minute=0, second=0, microsecond=0).timestamp())
+                        end_ts = ts + (dur * 3600)
+                        mention = ""
+                        if int(role_id or 0):
+                            role = guild.get_role(int(role_id))
+                            if role:
+                                mention = role.mention
+
+                        embed = obsidian_embed(
+                            f"🜂 Ops Order • {title}",
+                            f"**When:** <t:{ts}:F>  _( <t:{ts}:R> )_\n\n"
+                            f"**Ends:** <t:{end_ts}:t>  _( <t:{end_ts}:R> )_\n\n"
+                            f"**Briefing:**\n{desc or '—'}",
+                            color=discord.Color.dark_grey(),
+                            client=bot,
+                        )
+                        embed.set_footer(text="✅ 0  |  ❔ 0  |  ❌ 0")
+
+                        try:
+                            msg = await ch.send(content=mention or None, embed=embed, view=RSVPView())
+                            thread_id = 0
+                            try:
+                                thread = await msg.create_thread(name=f"{title} • Ops Thread", auto_archive_duration=1440)
+                                thread_id = thread.id
+                            except Exception:
+                                pass
+
+                            async with aiosqlite.connect(DB_PATH) as db:
+                                await db.execute("""
+                                    INSERT INTO events(guild_id,message_id,creator_id,title,start_ts,end_ts,description,role_id,created_at,reminder_sent,ended,recap_posted,recap_message_id,thread_id)
+                                    VALUES(?,?,?,?,?,?,?,?,?,0,0,0,0,?)
+                                """, (guild.id, msg.id, creator_id, title, ts, end_ts, desc or "", role_id or 0, now.isoformat(), thread_id))
+                                await db.execute(
+                                    "UPDATE recurring_event_templates SET last_created_week=? WHERE id=?",
+                                    (current_week, tid),
+                                )
+                                await db.commit()
+                        except Exception as e:
+                            logger.error(f"[recurring_event] Error creating event for guild {guild.id} template {tid}: {e}")
+                except Exception as e:
+                    logger.error(f"[recurring_event] Error for guild {guild.id}: {e}", exc_info=True)
+        except Exception as e:
+            logger.error(f"[recurring_event] Error in recurring_event_loop: {e}", exc_info=True)
+
+    @recurring_event_loop.before_loop
+    async def before_recurring_event_loop():
+        await bot.wait_until_ready()
+
     @tasks.loop(minutes=5)
     async def event_end_loop():
         """Post end-of-event recaps and mark events ended."""
@@ -1845,6 +1926,7 @@ def setup_tasks(bot):
     tasks_to_start = [
         ('temp_vc_cleanup', temp_vc_cleanup),
         ('event_reminder_loop', event_reminder_loop),
+        ('recurring_event_loop', recurring_event_loop),
         ('event_end_loop', event_end_loop),
         ('voice_reward_loop', voice_reward_loop),
         ('baro_check_loop', baro_check_loop),

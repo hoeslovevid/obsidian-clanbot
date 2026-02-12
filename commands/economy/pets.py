@@ -7,6 +7,7 @@ import random
 
 from utils import obsidian_embed
 from database import DB_PATH, now_utc, get_user_balance, remove_coins, add_coins
+from views import ConfirmView
 import aiosqlite
 import dateparser
 
@@ -25,6 +26,7 @@ DEFAULT_BONUS = (1.0, 1.0)
 BATTLE_COOLDOWN_MINUTES = 5
 MIN_HUNGER_TO_BATTLE = 20
 MIN_HAPPINESS_TO_BATTLE = 20
+ABANDONMENT_COOLDOWN_HOURS = 24
 BATTLE_WINNER_COINS_BASE = 15
 BATTLE_LOSER_COINS = 5
 BATTLE_XP_WINNER = 20
@@ -462,6 +464,28 @@ def setup(bot, group=None):
                         client=interaction.client,
                     )
                 )
+            # Check abandonment cooldown
+            cur = await db.execute("""
+                SELECT abandoned_at FROM pet_abandonments WHERE guild_id=? AND user_id=?
+            """, (interaction.guild.id, interaction.user.id))
+            abandon_row = await cur.fetchone()
+            if abandon_row:
+                try:
+                    abandoned_at = dateparser.parse(abandon_row[0], settings={"TIMEZONE": "UTC", "RETURN_AS_TIMEZONE_AWARE": True})
+                    if abandoned_at:
+                        hours_since = (datetime.now(timezone.utc) - abandoned_at).total_seconds() / 3600
+                        if hours_since < ABANDONMENT_COOLDOWN_HOURS:
+                            remaining = ABANDONMENT_COOLDOWN_HOURS - hours_since
+                            return await interaction.followup.send(
+                                embed=obsidian_embed(
+                                    "⏳ Adoption Cooldown",
+                                    f"You released a pet recently. Wait **{remaining:.1f} hours** before adopting again.",
+                                    color=discord.Color.orange(),
+                                    client=interaction.client,
+                                )
+                            )
+                except Exception:
+                    pass
             
             # Get pet type info
             cur = await db.execute("""
@@ -585,7 +609,104 @@ def setup(bot, group=None):
             client=interaction.client,
         )
         await interaction.followup.send(embed=embed)
-    
+
+    command_decorator = group.command(name="rename", description="Rename your pet.") if group else bot.tree.command(name="rename", description="Rename your pet.")
+    @command_decorator
+    @app_commands.describe(new_name="New name for your pet")
+    async def pet_rename(interaction: discord.Interaction, new_name: str):
+        """Rename your pet."""
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=obsidian_embed("❌ Invalid Context", "This command can only be used in a server.", color=discord.Color.red(), client=interaction.client),
+                ephemeral=True
+            )
+        new_name = (new_name or "").strip()
+        if not new_name or len(new_name) > 50:
+            return await interaction.response.send_message(
+                embed=obsidian_embed("❌ Invalid Name", "Name must be 1–50 characters.", color=discord.Color.red(), client=interaction.client),
+                ephemeral=True
+            )
+        await interaction.response.defer()
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT pet_name FROM pets WHERE guild_id=? AND user_id=?",
+                (interaction.guild.id, interaction.user.id),
+            )
+            row = await cur.fetchone()
+            if not row:
+                return await interaction.followup.send(
+                    embed=obsidian_embed("❌ No Pet", "You don't have a pet! Use `/economy pets buy` to buy one.", color=discord.Color.red(), client=interaction.client),
+                )
+            await db.execute(
+                "UPDATE pets SET pet_name=? WHERE guild_id=? AND user_id=?",
+                (new_name, interaction.guild.id, interaction.user.id),
+            )
+            await db.commit()
+        await interaction.followup.send(
+            embed=obsidian_embed(
+                "✅ Pet Renamed",
+                f"Your pet is now called **{new_name}**.",
+                color=discord.Color.green(),
+                client=interaction.client,
+            ),
+        )
+
+    command_decorator = group.command(name="abandon", description="Release your pet. You must wait 24h before adopting again.") if group else bot.tree.command(name="abandon", description="Release your pet. You must wait 24h before adopting again.")
+    @command_decorator
+    async def pet_abandon(interaction: discord.Interaction):
+        """Abandon your pet. Cooldown applies before adopting again."""
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=obsidian_embed("❌ Invalid Context", "This command can only be used in a server.", color=discord.Color.red(), client=interaction.client),
+                ephemeral=True
+            )
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT pet_name, pet_type FROM pets WHERE guild_id=? AND user_id=?",
+                (interaction.guild.id, interaction.user.id),
+            )
+            row = await cur.fetchone()
+            if not row:
+                return await interaction.response.send_message(
+                    embed=obsidian_embed("❌ No Pet", "You don't have a pet to abandon.", color=discord.Color.red(), client=interaction.client),
+                    ephemeral=True
+                )
+            pet_name, pet_type = row
+
+        embed = obsidian_embed(
+            "⚠️ Confirm Abandon",
+            f"Release **{pet_name}** ({pet_type})? You cannot adopt a new pet for 24 hours.",
+            color=discord.Color.orange(),
+            client=interaction.client,
+        )
+
+        async def on_confirm(btn_interaction: discord.Interaction, confirmed: bool):
+            if not confirmed:
+                await btn_interaction.followup.send("Cancelled.", ephemeral=True)
+                return
+            if btn_interaction.user.id != interaction.user.id:
+                await btn_interaction.followup.send("Only you can confirm abandoning your pet.", ephemeral=True)
+                return
+            async with aiosqlite.connect(DB_PATH) as db:
+                await db.execute("DELETE FROM pets WHERE guild_id=? AND user_id=?", (interaction.guild.id, interaction.user.id))
+                await db.execute(
+                    "INSERT OR REPLACE INTO pet_abandonments (guild_id, user_id, abandoned_at) VALUES (?, ?, ?)",
+                    (interaction.guild.id, interaction.user.id, now_utc().isoformat()),
+                )
+                await db.commit()
+            await btn_interaction.followup.send(
+                embed=obsidian_embed(
+                    "💔 Pet Released",
+                    f"**{pet_name}** ({pet_type}) has been released. You can adopt a new pet in **24 hours**.",
+                    color=discord.Color.orange(),
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+
+        view = ConfirmView(on_confirm)
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
     command_decorator = group.command(name="feed", description="Feed your pet (costs 10 coins).") if group else bot.tree.command(name="feed", description="Feed your pet (costs 10 coins).")
     
     @command_decorator

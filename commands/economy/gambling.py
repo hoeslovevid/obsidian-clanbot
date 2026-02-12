@@ -64,6 +64,16 @@ def setup(bot, group=None):
             
             if winnings > 0:
                 await add_coins(interaction.guild.id, interaction.user.id, winnings, "GAMBLING", "Slots winnings")
+                try:
+                    from database import check_and_unlock_achievement, get_user_balance
+                    await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "gambling_first_win", None)
+                    if winnings >= 1000:
+                        await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "gambling_jackpot", None)
+                    nb_check = await get_user_balance(interaction.guild.id, interaction.user.id)
+                    if nb_check >= 1_000_000:
+                        await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "first_million", None)
+                except Exception:
+                    pass
                 result_pre = f"**🎉 You won {winnings} coins!**"
                 color = discord.Color.gold()
             else:
@@ -150,6 +160,11 @@ def setup(bot, group=None):
         if user_roll > bot_roll:
             winnings = bet * 2
             await add_coins(interaction.guild.id, interaction.user.id, winnings, "GAMBLING", "Dice winnings")
+            try:
+                from database import check_and_unlock_achievement
+                await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "gambling_first_win", None)
+            except Exception:
+                pass
             result = f"**🎉 You won!**\n**Your roll:** {user_roll}\n**Bot roll:** {bot_roll}\n**Winnings:** {winnings} coins"
             color = discord.Color.green()
             win_amount = winnings
@@ -265,6 +280,11 @@ def setup(bot, group=None):
             else:
                 winnings = bet * 2  # Red/Black pays 2:1
             await add_coins(interaction.guild.id, interaction.user.id, winnings, "GAMBLING", "Roulette winnings")
+            try:
+                from database import check_and_unlock_achievement
+                await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "gambling_first_win", None)
+            except Exception:
+                pass
             result = f"**🎉 You won!**\n**Landed on:** {landed_color.capitalize()} ({number})\n**Winnings:** {winnings} coins"
             color_emoji = discord.Color.green()
             win_amount = winnings

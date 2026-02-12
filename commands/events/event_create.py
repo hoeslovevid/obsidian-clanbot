@@ -1,8 +1,13 @@
 """Event create command."""
 import discord
 from discord import app_commands
+from datetime import datetime, timezone
 
-from utils import obsidian_embed, parse_time_natural, extract_id, now_utc
+from utils import obsidian_embed, parse_time_natural, extract_id, now_utc, is_mod
+from database import DB_PATH
+import aiosqlite
+
+DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 
 def setup(bot, group=None):
@@ -98,3 +103,104 @@ def setup(bot, group=None):
             await db.commit()
 
         await interaction.followup.send("Ops event posted.", ephemeral=True)
+
+    # Recurring event templates (mods only)
+    recurring_add_decorator = (
+        group.command(name="recurring_add", description="Add a recurring event template (mods only).")
+        if group else bot.tree.command(name="recurring_add", description="Add a recurring event template (mods only).")
+    )
+
+    @recurring_add_decorator
+    @app_commands.describe(
+        title="Event title",
+        description="Event description",
+        day="Day of week (0=Mon, 6=Sun)",
+        hour_utc="Hour in UTC (0-23)",
+        duration_hours="Event duration (default 2)",
+        role_ping="Optional role to ping"
+    )
+    @app_commands.choices(day=[app_commands.Choice(name=DAY_NAMES[i], value=str(i)) for i in range(7)])
+    async def recurring_add(
+        interaction: discord.Interaction,
+        title: str,
+        description: str,
+        day: app_commands.Choice[str],
+        hour_utc: int = 18,
+        duration_hours: int = 2,
+        role_ping: str = "",
+    ):
+        """Add a recurring event template."""
+        if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
+            return await interaction.response.send_message("Mods only.", ephemeral=True)
+        if not interaction.guild:
+            return await interaction.response.send_message("Server only.", ephemeral=True)
+        if hour_utc < 0 or hour_utc > 23:
+            hour_utc = 18
+
+        day_num = int(day.value)
+        role_id = extract_id(role_ping) if role_ping else None
+
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute("""
+                INSERT INTO recurring_event_templates
+                (guild_id, title, description, day_of_week, hour_utc, minute_utc, duration_hours, role_id, created_by, created_at, is_active)
+                VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, 1)
+            """, (interaction.guild.id, title, description, day_num, hour_utc, duration_hours, role_id or 0, interaction.user.id, now_utc().isoformat()))
+            await db.commit()
+
+        await interaction.response.send_message(
+            embed=obsidian_embed(
+                "✅ Recurring Event Added",
+                f"**{title}** will auto-post every **{DAY_NAMES[day_num]}** at **{hour_utc:02d}:00 UTC**.",
+                color=discord.Color.green(),
+                client=interaction.client,
+            ),
+            ephemeral=True
+        )
+
+    recurring_list_decorator = (
+        group.command(name="recurring_list", description="List recurring event templates.")
+        if group else bot.tree.command(name="recurring_list", description="List recurring event templates.")
+    )
+
+    @recurring_list_decorator
+    async def recurring_list(interaction: discord.Interaction):
+        """List recurring event templates."""
+        if not interaction.guild:
+            return await interaction.response.send_message("Server only.", ephemeral=True)
+
+        await interaction.response.defer(ephemeral=True)
+
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute("""
+                SELECT id, title, day_of_week, hour_utc, duration_hours, is_active
+                FROM recurring_event_templates
+                WHERE guild_id=? ORDER BY day_of_week, hour_utc
+            """, (interaction.guild.id,))
+            rows = await cur.fetchall()
+
+        if not rows:
+            return await interaction.followup.send(
+                embed=obsidian_embed(
+                    "📅 No Recurring Events",
+                    "No recurring event templates. Mods can add with `/event recurring_add`.",
+                    color=discord.Color.blue(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
+
+        lines = []
+        for tid, ttitle, dow, hour, dur, active in rows:
+            status = "✅" if active else "❌"
+            lines.append(f"{status} **{ttitle}** — {DAY_NAMES[dow]} {hour:02d}:00 UTC ({dur}h) [ID:{tid}]")
+
+        await interaction.followup.send(
+            embed=obsidian_embed(
+                "📅 Recurring Events",
+                "\n".join(lines),
+                color=discord.Color.blue(),
+                client=interaction.client,
+            ),
+            ephemeral=True
+        )

@@ -380,8 +380,23 @@ async def track_event_attendance(guild_id: int, user_id: int):
             INSERT INTO activity_log (guild_id, user_id, activity_type, activity_date, points)
             VALUES (?, ?, 'event', ?, 10)
         """, (guild_id, user_id, now.isoformat()))
-        
+
+        cur = await db.execute(
+            "SELECT events_attended FROM activity_stats WHERE guild_id=? AND user_id=?",
+            (guild_id, user_id),
+        )
+        row = await cur.fetchone()
+        events_count = row[0] if row else 1
+
         await db.commit()
+
+        # Event attendance achievements
+        try:
+            for n, ach_id in [(1, "event_first"), (10, "event_10"), (50, "event_50")]:
+                if events_count >= n:
+                    await check_and_unlock_achievement(guild_id, user_id, ach_id, None)
+        except Exception:
+            pass
 
 
 async def update_activity_voice_minutes(guild_id: int, user_id: int, minutes: int):
@@ -988,6 +1003,17 @@ async def initialize_achievement_definitions():
         ("pet_level_25", "Pet Trainer", "Level your pet to 25", "pets", "Pet reaches level 25", 150, 75),
         ("pet_evolved", "Pet Evolver", "Evolve your pet", "pets", "Evolve a pet", 250, 125),
         ("daily_streak_10", "Dedicated", "10-day daily streak", "economy", "10 day streak", 200, 100),
+        ("first_transfer", "Trader", "Complete your first coin transfer", "economy", "Transfer coins once", 25, 10),
+        ("first_million", "Millionaire", "Reach 1,000,000 coins", "economy", "Balance reaches 1M", 500, 250),
+        ("gambling_first_win", "Lucky", "Win your first gambling game", "economy", "Win slots or dice once", 50, 25),
+        ("gambling_jackpot", "High Roller", "Hit a slots jackpot (1000 coins)", "economy", "Slots jackpot", 100, 50),
+        ("event_first", "First Ops", "RSVP to your first event", "milestone", "RSVP GOING to 1 event", 50, 25),
+        ("event_10", "Regular", "RSVP to 10 events", "milestone", "RSVP to 10 events", 150, 75),
+        ("event_50", "Veteran Attendee", "RSVP to 50 events", "milestone", "RSVP to 50 events", 500, 250),
+        ("months_3", "Three Months", "3 months in the server", "milestone", "3 month anniversary", 100, 50),
+        ("months_6", "Half Year", "6 months in the server", "milestone", "6 month anniversary", 200, 100),
+        ("ticket_creator", "Ticket Opener", "Create your first support ticket", "social", "Open 1 ticket", 25, 10),
+        ("suggestion_first", "Idea Person", "Submit your first suggestion", "social", "Submit 1 suggestion", 25, 10),
     ]
     
     async with aiosqlite.connect(DB_PATH) as db:
@@ -1012,6 +1038,17 @@ async def initialize_badge_definitions():
         ("first_message", "First Message", "Send your first message", "💬", "common"),
         ("level_10", "Rising Star", "Reach level 10", "⭐", "common"),
         ("level_50", "Master", "Reach level 50", "🌟", "epic"),
+        ("first_transfer", "Trader", "Complete your first transfer", "💰", "common"),
+        ("first_million", "Millionaire", "Reach 1M coins", "💎", "epic"),
+        ("gambling_first_win", "Lucky", "Win first gambling game", "🍀", "common"),
+        ("gambling_jackpot", "High Roller", "Slots jackpot", "🎰", "rare"),
+        ("event_first", "First Ops", "RSVP to first event", "📅", "common"),
+        ("event_10", "Regular", "RSVP to 10 events", "🎯", "rare"),
+        ("event_50", "Veteran Attendee", "RSVP to 50 events", "🏅", "epic"),
+        ("months_3", "Three Months", "3 months in server", "📆", "common"),
+        ("months_6", "Half Year", "6 months in server", "⏱️", "rare"),
+        ("ticket_creator", "Ticket Opener", "Create first ticket", "🎫", "common"),
+        ("suggestion_first", "Idea Person", "Submit first suggestion", "💡", "common"),
     ]
     async with aiosqlite.connect(DB_PATH) as db:
         for badge_id, name, description, icon_emoji, rarity in default_badges:
@@ -1913,6 +1950,14 @@ async def init_db() -> None:
                 await db.execute("ALTER TABLE tickets ADD COLUMN tag TEXT")
             if "stale_reminder_sent" not in column_names:
                 await db.execute("ALTER TABLE tickets ADD COLUMN stale_reminder_sent INTEGER DEFAULT 0")
+            if "priority" not in column_names:
+                await db.execute("ALTER TABLE tickets ADD COLUMN priority TEXT DEFAULT 'normal'")
+            if "escalated" not in column_names:
+                await db.execute("ALTER TABLE tickets ADD COLUMN escalated INTEGER DEFAULT 0")
+            if "escalated_at" not in column_names:
+                await db.execute("ALTER TABLE tickets ADD COLUMN escalated_at TEXT")
+            if "escalated_by" not in column_names:
+                await db.execute("ALTER TABLE tickets ADD COLUMN escalated_by INTEGER")
 
             await db.commit()
         except Exception as e:
@@ -2269,6 +2314,14 @@ async def init_db() -> None:
             FOREIGN KEY (pet_id) REFERENCES pets(id)
         )""")
 
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS pet_abandonments (
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            abandoned_at TEXT NOT NULL,
+            PRIMARY KEY (guild_id, user_id)
+        )""")
+
         # Add evolution_tier to pets if missing
         try:
             cur = await db.execute("PRAGMA table_info(pets)")
@@ -2360,6 +2413,32 @@ async def init_db() -> None:
             user_id INTEGER NOT NULL,
             title TEXT,
             PRIMARY KEY (guild_id, user_id)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS user_badge_showcase (
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            slot INTEGER NOT NULL CHECK (slot >= 1 AND slot <= 5),
+            badge_id TEXT NOT NULL,
+            PRIMARY KEY (guild_id, user_id, slot)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS recurring_event_templates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            day_of_week INTEGER NOT NULL,
+            hour_utc INTEGER NOT NULL,
+            minute_utc INTEGER NOT NULL DEFAULT 0,
+            duration_hours INTEGER NOT NULL DEFAULT 2,
+            role_id INTEGER,
+            created_by INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            last_created_week TEXT
         )""")
 
         # Scheduled announcements tables

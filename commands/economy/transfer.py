@@ -32,6 +32,15 @@ async def run_transfer_with_modal(interaction: discord.Interaction, user: discor
     async def do_transfer():
         success = await transfer_coins(interaction.guild.id, interaction.user.id, user.id, amount)
         if success:
+            try:
+                from database import check_and_unlock_achievement, get_user_balance
+                await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "first_transfer", getattr(interaction.client, "bot", interaction.client))
+                # Check first_million for receiver
+                recv_bal = await get_user_balance(interaction.guild.id, user.id)
+                if recv_bal >= 1_000_000:
+                    await check_and_unlock_achievement(interaction.guild.id, user.id, "first_million", getattr(interaction.client, "bot", interaction.client))
+            except Exception:
+                pass
             sender_balance = await get_user_balance(interaction.guild.id, interaction.user.id)
             receiver_balance = await get_user_balance(interaction.guild.id, user.id)
             fields = [
