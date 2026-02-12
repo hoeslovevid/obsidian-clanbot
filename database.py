@@ -1909,6 +1909,10 @@ async def init_db() -> None:
                 await db.execute("ALTER TABLE tickets ADD COLUMN transcript_channel_id INTEGER")
             if "transcript_message_id" not in column_names:
                 await db.execute("ALTER TABLE tickets ADD COLUMN transcript_message_id INTEGER")
+            if "tag" not in column_names:
+                await db.execute("ALTER TABLE tickets ADD COLUMN tag TEXT")
+            if "stale_reminder_sent" not in column_names:
+                await db.execute("ALTER TABLE tickets ADD COLUMN stale_reminder_sent INTEGER DEFAULT 0")
 
             await db.commit()
         except Exception as e:

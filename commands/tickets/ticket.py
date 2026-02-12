@@ -455,8 +455,17 @@ def setup(bot, group=None):
     command_decorator = group.command(name="ticket", description="Create a support ticket.") if group else bot.tree.command(name="ticket", description="Create a support ticket.")
     
     @command_decorator
-    @app_commands.describe(subject="Subject of your ticket")
-    async def ticket(interaction: discord.Interaction, subject: str):
+    @app_commands.describe(
+        subject="Subject of your ticket",
+        tag="Category/tag for the ticket (optional)"
+    )
+    @app_commands.choices(tag=[
+        app_commands.Choice(name="General", value="General"),
+        app_commands.Choice(name="Bug Report", value="Bug Report"),
+        app_commands.Choice(name="Question", value="Question"),
+        app_commands.Choice(name="Other", value="Other"),
+    ])
+    async def ticket(interaction: discord.Interaction, subject: str, tag: app_commands.Choice[str] = None):
         """Create a support ticket."""
         if not interaction.guild:
             return await interaction.response.send_message(
@@ -516,12 +525,13 @@ def setup(bot, group=None):
                 ephemeral=True
             )
         
+        tag_val = tag.value if tag else None
         # Store ticket in database
         async with aiosqlite.connect(DB_PATH) as db:
             await db.execute("""
-                INSERT INTO tickets (guild_id, user_id, channel_id, ticket_id, subject, status, created_at, last_activity_at)
-                VALUES (?, ?, ?, ?, ?, 'open', ?, ?)
-            """, (interaction.guild.id, interaction.user.id, channel.id, ticket_id, subject, now_utc().isoformat(), now_utc().isoformat()))
+                INSERT INTO tickets (guild_id, user_id, channel_id, ticket_id, subject, status, created_at, last_activity_at, tag)
+                VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?)
+            """, (interaction.guild.id, interaction.user.id, channel.id, ticket_id, subject, now_utc().isoformat(), now_utc().isoformat(), tag_val))
             await db.commit()
 
             cur = await db.execute("SELECT last_insert_rowid()")
@@ -533,6 +543,8 @@ def setup(bot, group=None):
             ("Status", "Open", True),
             ("Created By", interaction.user.mention, True),
         ]
+        if tag_val:
+            fields.insert(1, ("Tag", tag_val, True))
         embed = obsidian_embed(
             f"Ticket #{ticket_id}",
             "Staff will respond shortly. Use `/ticket close` to close this ticket.",

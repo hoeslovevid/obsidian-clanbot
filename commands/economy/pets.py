@@ -110,8 +110,8 @@ EXP_FEED = 8
 EXP_PLAY = 15
 
 # Decay: hunger and happiness decrease over time when not tended
-HUNGER_DECAY_PER_HOUR = 5
-HAPPINESS_DECAY_PER_HOUR = 3
+HUNGER_DECAY_PER_HOUR = 2
+HAPPINESS_DECAY_PER_HOUR = 1
 
 
 def _exp_needed_for_level(level: int) -> int:

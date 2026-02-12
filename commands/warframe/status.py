@@ -167,7 +167,7 @@ def setup(bot, group=None):
                 ia, bd = br
                 emb = build_status_embed(ia, bd, ar, cr, interaction.client)
                 await btn_interaction.message.edit(embed=emb, view=None)
-            return await interaction.followup.send(
+            return await interaction.edit_original_response(
                 embed=obsidian_embed(
                     "❌ Error",
                     "Could not fetch Warframe data. Please try again later.",
@@ -175,7 +175,6 @@ def setup(bot, group=None):
                     client=interaction.client,
                 ),
                 view=RetryView(on_retry),
-                ephemeral=True,
             )
 
         embed = build_status_embed(is_active, baro_data or {}, alerts_data or [], cycles_data or {}, interaction.client)
@@ -194,4 +193,4 @@ def setup(bot, group=None):
             await btn_interaction.message.edit(embed=new_emb, view=view)
 
         view = RefreshView(on_refresh)
-        await interaction.followup.send(embed=embed, view=view, ephemeral=False)
+        await interaction.edit_original_response(embed=embed, view=view)

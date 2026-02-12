@@ -7,9 +7,14 @@ import os
 from typing import Optional, Dict, Any, Tuple, List
 import aiohttp  # type: ignore
 
-# Optional proxy for Warframe Market API (e.g. when server IP gets 404)
+# Optional proxy for Warframe APIs (e.g. when datacenter IP gets 404)
 def _market_proxy() -> Optional[str]:
     return os.environ.get("WARFRAME_MARKET_PROXY") or os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY") or None
+
+
+def _api_proxy() -> Optional[str]:
+    """Proxy for api.warframestat.us - reuse same env vars as Warframe Market."""
+    return os.environ.get("WARFRAME_STAT_PROXY") or _market_proxy()
 import dateparser  # type: ignore
 from datetime import datetime, timezone, timedelta
 
@@ -22,8 +27,9 @@ async def fetch_baro_data() -> Optional[Dict[str, Any]]:
 
     async def _fetch():
         try:
+            proxy = _api_proxy()
             async with aiohttp.ClientSession() as session:
-                async with session.get("https://api.warframestat.us/pc/voidTrader", timeout=aiohttp.ClientTimeout(total=10)) as response:
+                async with session.get("https://api.warframestat.us/pc/voidTrader", timeout=aiohttp.ClientTimeout(total=10), proxy=proxy) as response:
                     if response.status == 200:
                         return await response.json()
                     logger.warning(f"Warframe API returned status {response.status}")
@@ -54,8 +60,9 @@ async def fetch_cycle_data(cycle_type: str) -> Optional[Dict[str, Any]]:
         return None
     
     try:
+        proxy = _api_proxy()
         async with aiohttp.ClientSession() as session:
-            async with session.get(endpoints[cycle_type], timeout=aiohttp.ClientTimeout(total=10)) as response:
+            async with session.get(endpoints[cycle_type], timeout=aiohttp.ClientTimeout(total=10), proxy=proxy) as response:
                 if response.status == 200:
                     data = await response.json()
                     return data
@@ -128,8 +135,9 @@ async def fetch_invasions() -> Optional[list]:
 
     async def _fetch():
         try:
+            proxy = _api_proxy()
             async with aiohttp.ClientSession() as session:
-                async with session.get("https://api.warframestat.us/pc/invasions", timeout=aiohttp.ClientTimeout(total=10)) as response:
+                async with session.get("https://api.warframestat.us/pc/invasions", timeout=aiohttp.ClientTimeout(total=10), proxy=proxy) as response:
                     if response.status == 200:
                         data = await response.json()
                         return [inv for inv in data if inv.get("completed", False) == False]
@@ -148,8 +156,9 @@ async def fetch_archon_hunt_data() -> Optional[Dict[str, Any]]:
 
     async def _fetch():
         try:
+            proxy = _api_proxy()
             async with aiohttp.ClientSession() as session:
-                async with session.get("https://api.warframestat.us/pc/archonHunt?language=en", timeout=aiohttp.ClientTimeout(total=10)) as response:
+                async with session.get("https://api.warframestat.us/pc/archonHunt?language=en", timeout=aiohttp.ClientTimeout(total=10), proxy=proxy) as response:
                     if response.status == 200:
                         return await response.json()
                     logger.warning(f"Warframe API returned status {response.status} for archon hunt")
@@ -164,8 +173,9 @@ async def fetch_archon_hunt_data() -> Optional[Dict[str, Any]]:
 async def fetch_events_data() -> Optional[List[Dict[str, Any]]]:
     """Fetch active events data from Warframe World State API."""
     try:
+        proxy = _api_proxy()
         async with aiohttp.ClientSession() as session:
-            async with session.get("https://api.warframestat.us/pc/events", timeout=aiohttp.ClientTimeout(total=10)) as response:
+            async with session.get("https://api.warframestat.us/pc/events", timeout=aiohttp.ClientTimeout(total=10), proxy=proxy) as response:
                 if response.status == 200:
                     data = await response.json()
                     # Filter for active events only
@@ -335,8 +345,9 @@ async def fetch_duviri_circuit() -> Optional[Dict[str, Any]]:
 
     async def _fetch():
         try:
+            proxy = _api_proxy()
             async with aiohttp.ClientSession() as session:
-                async with session.get("https://api.warframestat.us/pc/duviriCycle", timeout=aiohttp.ClientTimeout(total=10)) as response:
+                async with session.get("https://api.warframestat.us/pc/duviriCycle", timeout=aiohttp.ClientTimeout(total=10), proxy=proxy) as response:
                     if response.status == 200:
                         return await response.json()
                     logger.warning(f"Warframe API returned status {response.status} for duviri circuit")
@@ -354,8 +365,9 @@ async def fetch_alerts() -> Optional[List[Dict[str, Any]]]:
 
     async def _fetch():
         try:
+            proxy = _api_proxy()
             async with aiohttp.ClientSession() as session:
-                async with session.get("https://api.warframestat.us/pc/alerts", timeout=aiohttp.ClientTimeout(total=10)) as response:
+                async with session.get("https://api.warframestat.us/pc/alerts", timeout=aiohttp.ClientTimeout(total=10), proxy=proxy) as response:
                     if response.status == 200:
                         data = await response.json()
                         return [alert for alert in data if alert.get("expired", False) == False]

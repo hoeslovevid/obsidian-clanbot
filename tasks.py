@@ -1767,6 +1767,65 @@ def setup_tasks(bot):
     async def before_twitch_check_loop():
         await bot.wait_until_ready()
 
+    @tasks.loop(hours=6)
+    async def stale_ticket_reminder_loop():
+        """Remind staff about open tickets with no activity for X days."""
+        try:
+            from utils import get_mod_role
+            stale_days = 3
+            cutoff = now_utc() - timedelta(days=stale_days)
+            cutoff_iso = cutoff.isoformat()
+            for guild in bot.guilds:
+                try:
+                    days_setting = await get_guild_setting(guild.id, "stale_ticket_days")
+                    if days_setting and days_setting.isdigit():
+                        stale_days = int(days_setting)
+                        cutoff = now_utc() - timedelta(days=stale_days)
+                        cutoff_iso = cutoff.isoformat()
+                    async with aiosqlite.connect(DB_PATH) as db:
+                        cur = await db.execute("""
+                            SELECT id, channel_id, ticket_id, subject, last_activity_at, stale_reminder_sent
+                            FROM tickets
+                            WHERE guild_id=? AND status='open' AND (stale_reminder_sent IS NULL OR stale_reminder_sent=0)
+                            AND (last_activity_at IS NULL OR last_activity_at < ?)
+                        """, (guild.id, cutoff_iso))
+                        rows = await cur.fetchall()
+                    for row in rows:
+                        tid, ch_id, ticket_id, subject, last_at, _ = row
+                        channel = guild.get_channel(int(ch_id))
+                        if not isinstance(channel, discord.TextChannel):
+                            continue
+                        mod_role = get_mod_role(guild)
+                        mention = mod_role.mention if mod_role else ""
+                        try:
+                            await channel.send(
+                                content=mention,
+                                embed=obsidian_embed(
+                                    "⏰ Stale Ticket Reminder",
+                                    f"This ticket has had no activity for **{stale_days}+ days**.\n"
+                                    f"**Last activity:** {last_at[:19] if last_at else '—'}\n\n"
+                                    "Staff: please respond or close this ticket.",
+                                    color=discord.Color.orange(),
+                                    client=bot,
+                                ),
+                            )
+                            async with aiosqlite.connect(DB_PATH) as db:
+                                await db.execute(
+                                    "UPDATE tickets SET stale_reminder_sent=1 WHERE id=?",
+                                    (tid,),
+                                )
+                                await db.commit()
+                        except Exception as e:
+                            logger.warning(f"[stale_ticket] Could not send reminder for ticket {ticket_id}: {e}")
+                except Exception as e:
+                    logger.error(f"[stale_ticket] Error for guild {guild.id}: {e}", exc_info=True)
+        except Exception as e:
+            logger.error(f"[stale_ticket] Error in stale_ticket_reminder_loop: {e}", exc_info=True)
+
+    @stale_ticket_reminder_loop.before_loop
+    async def before_stale_ticket_reminder_loop():
+        await bot.wait_until_ready()
+
     @tasks.loop(minutes=1)  # Check every minute for ended giveaways
     async def giveaway_check_loop():
         """Check for ended giveaways and select winners."""
@@ -1803,6 +1862,7 @@ def setup_tasks(bot):
         ('reminder_check_loop', reminder_check_loop),
         ('scheduled_messages_loop', scheduled_messages_loop),
         ('twitch_check_loop', twitch_check_loop),
+        ('stale_ticket_reminder_loop', stale_ticket_reminder_loop),
     ]
     
     started_tasks = {}
