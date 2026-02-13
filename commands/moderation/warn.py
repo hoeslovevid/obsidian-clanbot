@@ -4,7 +4,7 @@ from discord import app_commands
 from typing import Optional
 import dateparser
 
-from utils import obsidian_embed, error_embed, is_mod, channel_jump_url
+from utils import obsidian_embed, error_embed, is_mod, channel_jump_url, copy_friendly_id, format_number, pluralize, EMBED_COLORS
 from database import DB_PATH, now_utc, get_log_channel_id
 from views import EmbedPaginator
 import aiosqlite
@@ -132,7 +132,7 @@ async def execute_warn(interaction: discord.Interaction, user: discord.Member, r
         ("Reason", reason[:1024], False),
         ("Warning Count", warn_bar + action_text, True),
     ]
-    footer = f"Case #{case_id} • Contact mods to appeal" if case_id else "Contact moderators to appeal warnings"
+    footer = f"Case {copy_friendly_id(case_id)} • Contact mods to appeal" if case_id else "Contact moderators to appeal warnings"
     await interaction.followup.send(
         embed=obsidian_embed(
             "✅ User Warned",
@@ -189,15 +189,16 @@ def setup(bot, group=None):
 
         per_page = 15
         lines = [
-            f"**#{wid}** {reason} - <t:{int(dateparser.parse(created_at, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True}).timestamp())}:R>"
+            f"{copy_friendly_id(wid)} {reason} - <t:{int(dateparser.parse(created_at, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True}).timestamp())}:R>"
             for wid, mod_id, reason, created_at in warnings_with_ids
         ]
         if len(lines) <= per_page:
             warnings_text = "\n".join(lines)
             embed = obsidian_embed(
                 f"⚠️ Warnings for {user.display_name}",
-                f"**Total:** {len(warnings_with_ids)}/{max_warnings}\n\n{warnings_text}",
-                color=discord.Color.orange(),
+                f"**Total:** {format_number(len(warnings_with_ids))}/{max_warnings} {pluralize(len(warnings_with_ids), 'warning')}\n\n{warnings_text}",
+                color=EMBED_COLORS["moderation"],
+                footer="Mod only • See also: /mod purge",
                 client=interaction.client,
             )
             await interaction.followup.send(embed=embed, ephemeral=True)
@@ -211,7 +212,7 @@ def setup(bot, group=None):
             view = EmbedPaginator(
                 f"⚠️ Warnings for {user.display_name}",
                 pages,
-                color=discord.Color.orange(),
+                color=EMBED_COLORS["moderation"],
                 client=interaction.client,
             )
             await interaction.followup.send(

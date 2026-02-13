@@ -60,6 +60,13 @@ class EmbedPaginator(discord.ui.View):
     async def on_timeout(self):
         for c in self.children:
             c.disabled = True
+        try:
+            if self.message:
+                emb = self._build_embed()
+                emb.set_footer(text=(emb.footer.text or "") + " • ⏰ Session expired")
+                await self.message.edit(embed=emb, view=self)
+        except Exception:
+            pass
 
     @discord.ui.button(label="◀ Prev", style=discord.ButtonStyle.secondary, custom_id="paginator_prev")
     async def prev_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -86,7 +93,10 @@ class RetryView(discord.ui.View):
             c.disabled = True
         try:
             if self.message:
-                await self.message.edit(view=self)
+                emb = self.message.embeds[0] if self.message.embeds else None
+                if emb and emb.footer and emb.footer.text:
+                    emb.set_footer(text=emb.footer.text + " • ⏰ Expired")
+                await self.message.edit(embed=emb, view=self)
         except Exception:
             pass
 
@@ -113,7 +123,10 @@ class RefreshView(discord.ui.View):
             c.disabled = True
         try:
             if self.message:
-                await self.message.edit(view=self)
+                emb = self.message.embeds[0] if self.message.embeds else None
+                if emb and emb.footer and emb.footer.text:
+                    emb.set_footer(text=emb.footer.text + " • ⏰ Expired")
+                await self.message.edit(embed=emb, view=self)
         except Exception:
             pass
 

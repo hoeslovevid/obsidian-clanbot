@@ -2034,12 +2034,11 @@ async def on_guild_remove(guild: discord.Guild):
 
 
 def _update_status_presence():
-    """Update bot presence with guild and user counts."""
+    """Update bot presence with /help hint and guild count."""
     guild_count = len(bot.guilds)
-    user_count = len(set(m.id for m in bot.get_all_members()))
     activity = discord.Activity(
-        type=discord.ActivityType.watching,
-        name=f"{guild_count} servers | {user_count:,} users"
+        type=discord.ActivityType.playing,
+        name=f"/help • {guild_count} server{'s' if guild_count != 1 else ''}"
     )
     return activity
 
@@ -2944,7 +2943,11 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
         orig_name = type(orig).__name__
         if orig_name in ("Forbidden", "HTTPException"):
             err_msg = str(orig)
-            if "Missing Access" in err_msg or "50013" in err_msg:
+            status = getattr(orig, "status", None)
+            if status == 429 or "429" in err_msg or "rate limit" in err_msg.lower():
+                retry_after = getattr(orig, "retry_after", 60)
+                await _send_error_reply(interaction, f"Discord is rate limiting. Wait **{int(retry_after)}s** and try again.", action_hint="This usually resolves quickly.")
+            elif "Missing Access" in err_msg or "50013" in err_msg:
                 await _send_error_reply(interaction, "I need additional permissions (e.g. **Manage Messages**, **Send Messages**). Ask an admin to grant them for this channel.")
             elif "Unknown Channel" in err_msg:
                 await _send_error_reply(interaction, "That channel no longer exists.")

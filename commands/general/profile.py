@@ -156,12 +156,9 @@ async def get_user_profile_data(guild_id: int, user_id: int) -> dict:
 
 
 def setup(bot, group=None):
-    """Register the profile command."""
-    command_decorator = group.command(name="profile", description="View your or another user's profile and statistics.") if group else bot.tree.command(name="profile", description="View your or another user's profile and statistics.")
-    
-    @command_decorator
+    """Register the profile command under general and as top-level /profile shortcut."""
     @app_commands.describe(user="The user to view the profile of (defaults to yourself)")
-    async def profile(interaction: discord.Interaction, user: Optional[discord.Member] = None):
+    async def profile_callback(interaction: discord.Interaction, user: Optional[discord.Member] = None):
         """Display a comprehensive user profile."""
         await interaction.response.defer(ephemeral=False)
         
@@ -332,3 +329,7 @@ def setup(bot, group=None):
         embed.set_thumbnail(url=target_user.display_avatar.url)
 
         await interaction.followup.send(embed=embed, ephemeral=ephemeral)
+
+    group.command(name="profile", description="View your or another user's profile and statistics.")(profile_callback)
+    shortcut = app_commands.Command(name="profile", description="View profile (shortcut for /general profile)", callback=profile_callback)
+    bot.tree.add_command(shortcut)

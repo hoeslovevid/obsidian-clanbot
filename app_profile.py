@@ -11,8 +11,8 @@ logger = logging.getLogger(__name__)
 
 # Description shown on the bot's profile (max 4000 chars for application description)
 APP_DESCRIPTION = (
-    "Warframe clan bot with voice channels, events, economy, moderation, and more. "
-    "Try /help • /warframe status • /economy balance • /general profile"
+    "Warframe clan bot: voice channels, events, economy, moderation, and more. "
+    "Quick commands: /help • /daily • /balance • /profile • /leaderboard • /warframe status"
 )
 
 # Tags for discovery (max 5, 20 chars each) - shown on profile / App Directory

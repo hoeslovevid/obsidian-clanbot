@@ -11,16 +11,20 @@ logger = logging.getLogger(__name__)
 
 # Canned responses for common phrases (case-insensitive partial match)
 KEYWORD_RESPONSES = [
-    (r"\b(hi|hey|hello|sup|yo)\b", "Hey! 👋 Use **`/help`** to explore commands. Quick links: **`/economy balance`** · **`/warframe status`**"),
-    (r"\bhelp\b", "Use **`/help`** to see all commands! Quick links: **`/economy balance`** · **`/warframe status`** · **`/general profile`**"),
-    (r"\bbaro\b", "Check Baro's visit with **`/warframe baro`** or **`/warframe status`** for Baro + Alerts + Cycles in one view."),
-    (r"\b(alert|alerts)\b", "View active alerts with **`/warframe alerts`** or **`/warframe status`**."),
-    (r"\b(cycle|cycles|cetus|fortuna|deimos)\b", "Check open world cycles with **`/warframe cycles`** or **`/warframe status`**."),
-    (r"\b(daily|claim)\b", "Claim your daily coins with **`/economy daily`**!"),
-    (r"\b(balance|bal|coins)\b", "Check your balance with **`/economy balance`** or **`/economy transactions`**."),
+    (r"\b(hi|hey|hello|sup|yo)\b", "Hey! 👋 Use **`/help`** to explore. Quick: **`/balance`** · **`/daily`** · **`/warframe status`**"),
+    (r"\bhelp\b", "Use **`/help`** to see all commands! Quick: **`/balance`** · **`/profile`** · **`/warframe status`**"),
+    (r"\bbaro\b", "Check Baro with **`/warframe baro`** or **`/warframe status`** for Baro + Alerts + Cycles."),
+    (r"\b(alert|alerts)\b", "View alerts with **`/warframe alerts`** or **`/warframe status`**."),
+    (r"\b(cycle|cycles|cetus|fortuna|deimos)\b", "Check cycles with **`/warframe cycles`** or **`/warframe status`**."),
+    (r"\b(daily|claim)\b", "Claim daily coins with **`/daily`** or **`/economy daily`**!"),
+    (r"\b(balance|bal|coins)\b", "Check balance with **`/balance`** or **`/economy transactions`**."),
+    (r"\b(leaderboard|leader|rank)\b", "View rankings with **`/leaderboard`** or **`/economy leaderboard`**."),
+    (r"\b(profile|stats)\b", "View your profile with **`/profile`** or **`/general profile`**."),
     (r"\b(lfg|looking for group)\b", "Create an LFG post with **`/warframe lfg`** or right-click a message → Create LFG."),
-    (r"\b(price|plat|market)\b", "Check market prices with **`/trading trade_price`** or right-click a message → Check Price."),
-    (r"\bwho are you\b", "I'm the **Obsidian Clan Bot** – your Warframe clan assistant! Use **`/help`** to explore what I can do."),
+    (r"\b(price|plat|market)\b", "Check prices with **`/trading trade_price`** or right-click a message → Check Price."),
+    (r"\b(invasion|invasions)\b", "View invasions with **`/warframe invasions`**."),
+    (r"\b(duviri|circuit)\b", "Check Duviri Circuit with **`/warframe duviri`**."),
+    (r"\bwho are you\b", "I'm the **Obsidian Clan Bot** – your Warframe clan assistant! Use **`/help`** to explore."),
 ]
 
 
@@ -75,10 +79,10 @@ async def get_mention_reply(content: str, bot_id: int, openai_api_key: Optional[
     """
     query = _strip_mention(content, bot_id)
     if not query:
-        return (
-            "Hi! I'm the Obsidian Clan Bot. Use **`/help`** to explore commands.\n"
-            "Quick links: **`/economy balance`** · **`/warframe status`** · **`/general profile`**"
-        )
+    return (
+        "Hi! I'm the Obsidian Clan Bot. Use **`/help`** to explore.\n"
+        "Quick: **`/balance`** · **`/daily`** · **`/profile`** · **`/warframe status`**"
+    )
     canned = _match_keyword(query)
     if canned:
         return canned
@@ -87,6 +91,6 @@ async def get_mention_reply(content: str, bot_id: int, openai_api_key: Optional[
         if ai_reply:
             return ai_reply
     return (
-        f"I'm not sure how to help with that. Use **`/help`** to explore commands, "
-        "or try asking about Baro, alerts, cycles, daily, or balance!"
+        f"I'm not sure how to help with that. Use **`/help`** to explore, "
+        "or try: Baro, alerts, cycles, daily, balance, or profile!"
     )

@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import discord  # type: ignore
 from discord import app_commands  # type: ignore
 
-from utils import obsidian_embed, error_embed, is_mod
+from utils import obsidian_embed, error_embed, is_mod, format_number, pluralize, permission_hint_embed
 from views import ConfirmView
 
 
@@ -94,6 +94,7 @@ def setup(bot, group=None):
                 "⚠️ Confirm Purge",
                 f"Delete **{preview}** from {interaction.channel.mention}?{archive_note}\n\nThis cannot be undone.",
                 color=discord.Color.orange(),
+                footer="Mod only • See also: /mod warn, /mod data_retention",
                 client=interaction.client,
             )
             async def on_confirm(btn_interaction: discord.Interaction, confirmed: bool):
@@ -103,6 +104,8 @@ def setup(bot, group=None):
                 if btn_interaction.user.id != interaction.user.id:
                     await btn_interaction.followup.send("Only the person who started this can confirm.", ephemeral=True)
                     return
+                # Show "Processing..." for long purge ops
+                await btn_interaction.response.defer(ephemeral=True, thinking=True)
                 transcript_file = None
                 try:
                     deleted_msgs = []
@@ -128,8 +131,9 @@ def setup(bot, group=None):
                     if deleted == 0:
                         await btn_interaction.followup.send("No messages were deleted. (Pinned messages are not deleted)", ephemeral=True)
                     else:
+                        summary = f"Deleted **{format_number(deleted)}** {pluralize(deleted, 'message')} from {interaction.channel.mention}." + (" Transcript attached." if transcript_file else "")
                         kwargs = {
-                            "embed": obsidian_embed("Messages Purged", f"Deleted **{deleted}** message(s) from {interaction.channel.mention}." + (" Transcript attached." if transcript_file else ""), color=discord.Color.green(), client=interaction.client),
+                            "embed": obsidian_embed("Messages Purged", summary, color=discord.Color.green(), footer="See also: /mod warn, /mod data_retention", client=interaction.client),
                             "ephemeral": True,
                         }
                         if transcript_file:
@@ -141,7 +145,7 @@ def setup(bot, group=None):
                     except Exception:
                         pass
                 except discord.Forbidden:
-                    await btn_interaction.followup.send("I need **Manage Messages** in this channel.", ephemeral=True)
+                    await btn_interaction.followup.send(embed=permission_hint_embed("Manage Messages", client=interaction.client), ephemeral=True)
                 except Exception as e:
                     await btn_interaction.followup.send(f"Error: {e}", ephemeral=True)
 

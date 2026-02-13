@@ -104,6 +104,14 @@ class HelpSelectView(discord.ui.View):
         """Disable the view when it times out."""
         for item in self.children:
             item.disabled = True
+        try:
+            if self.message and self.message.embeds:
+                emb = self.message.embeds[0]
+                if emb.footer and emb.footer.text:
+                    emb.set_footer(text=emb.footer.text + " • ⏰ Expired")
+                await self.message.edit(embed=emb, view=self)
+        except Exception:
+            pass
     
     def update_pagination_buttons(self):
         """Update pagination buttons based on current state."""
@@ -357,6 +365,17 @@ def setup(bot, group=None):
                 if found_command:
                     break
             
+            # Short examples for common commands
+            HELP_EXAMPLES = {
+                "economy balance": ["/economy balance", "/bal"],
+                "economy daily": ["/economy daily", "/daily"],
+                "economy shop": ["/economy shop buy item_name:Orokin Catalyst"],
+                "warframe baro": ["/warframe baro"],
+                "warframe cycles": ["/warframe cycles"],
+                "community event_create": ["/community event_create name:Sortie Run when:tomorrow 7pm"],
+                "mod purge": ["/mod purge amount:50 archive:True"],
+                "mod warn": ["/mod warn user:@User reason:Spam"],
+            }
             if found_command:
                 # Build help for specific command
                 if isinstance(found_command, app_commands.Command):
@@ -374,10 +393,15 @@ def setup(bot, group=None):
                     # Add usage example (build full path for nested groups)
                     path_parts = parts
                     usage = "/" + " ".join(path_parts)
+                    path_key = " ".join(path_parts)
+                    examples_text = ""
+                    if path_key in HELP_EXAMPLES:
+                        ex = HELP_EXAMPLES[path_key]
+                        examples_text = "\n\n**Examples:**\n" + "\n".join(f"• `{e}`" for e in ex[:2])
                     
                     embed = obsidian_embed(
                         f"📖 Help: `{usage}`",
-                        desc + params_text + f"\n**Usage:** `{usage}`",
+                        desc + params_text + f"\n**Usage:** `{usage}`" + examples_text,
                         color=discord.Color.blurple(),
                         client=interaction.client,
                     )
@@ -392,10 +416,27 @@ def setup(bot, group=None):
                 
                 await interaction.followup.send(embed=embed, ephemeral=True)
             else:
+                # Typo hint: suggest similar commands
+                from difflib import get_close_matches
+                def _all_paths(commands, prefix=""):
+                    paths = []
+                    for c in commands:
+                        p = f"{prefix} {c.name}".strip() if prefix else c.name
+                        if isinstance(c, app_commands.Group):
+                            paths.extend(_all_paths(c.commands, p))
+                        else:
+                            paths.append(p)
+                    return paths
+                all_paths = _all_paths(bot.tree.get_commands(guild=None))
+                query = " ".join(parts)
+                suggestions = get_close_matches(query, all_paths, n=3, cutoff=0.5)
+                hint = ""
+                if suggestions:
+                    hint = f"\n\n_Did you mean: " + ", ".join(f"`/{s}`" for s in suggestions) + "?_"
                 await interaction.followup.send(
                     embed=obsidian_embed(
                         "❌ Command Not Found",
-                        f"Could not find command: `{command}`\n\nUse `/help` without arguments to browse all commands.",
+                        f"Could not find command: `{command}`.{hint}\n\nUse `/help` without arguments to browse all commands.",
                         color=discord.Color.red(),
                         client=interaction.client,
                     ),

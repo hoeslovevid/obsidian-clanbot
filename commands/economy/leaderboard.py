@@ -7,10 +7,7 @@ from views import EmbedPaginator
 
 
 def setup(bot, group=None):
-    """Register the leaderboard command."""
-    command_decorator = group.command(name="leaderboard", description="View the top coin earners.") if group else bot.tree.command(name="leaderboard", description="View the top coin earners.")
-    
-    @command_decorator
+    """Register the leaderboard command under economy and as top-level /leaderboard shortcut."""
     @app_commands.describe(
         limit="Number of users per page (default: 10, max: 25)",
         sort_by="Sort order: by current balance or total earned"
@@ -19,7 +16,7 @@ def setup(bot, group=None):
         app_commands.Choice(name="Balance (current)", value="balance"),
         app_commands.Choice(name="Total Earned", value="total_earned"),
     ])
-    async def leaderboard(interaction: discord.Interaction, limit: int = 10, sort_by: app_commands.Choice[str] = None):
+    async def leaderboard_callback(interaction: discord.Interaction, limit: int = 10, sort_by: app_commands.Choice[str] = None):
         """Display the top coin earners."""
         # Import bot-specific functions inside to avoid circular imports
         from bot import DB_PATH
@@ -96,8 +93,9 @@ def setup(bot, group=None):
                 return await interaction.followup.send(
                     embed=obsidian_embed(
                         "📊 Leaderboard Empty",
-                        "No users have earned coins yet!\n\n_→ Start chatting or use `/economy daily` to earn coins._",
+                        "No users have earned coins yet!\n\n_→ Start chatting or use `/daily` to earn coins._",
                         color=discord.Color.orange(),
+                        footer="Use /balance to check your coins • /help for all commands",
                         client=interaction.client,
                     ),
                     ephemeral=True
@@ -106,8 +104,9 @@ def setup(bot, group=None):
                 return await interaction.followup.send(
                     embed=obsidian_embed(
                         "📊 Leaderboard Empty",
-                        "No users currently have coins.\n\n_→ Chat or use `/economy daily` to earn coins and appear on the leaderboard._",
+                        "No users currently have coins.\n\n_→ Chat or use `/daily` to earn coins and appear on the leaderboard._",
                         color=discord.Color.orange(),
+                        footer="Use /balance to check your coins • /help for all commands",
                         client=interaction.client,
                     ),
                     ephemeral=True
@@ -175,3 +174,7 @@ def setup(bot, group=None):
                 client=interaction.client,
             )
             await interaction.followup.send(embed=first_embed, view=paginator, ephemeral=False)
+
+    group.command(name="leaderboard", description="View the top coin earners.")(leaderboard_callback)
+    shortcut = app_commands.Command(name="leaderboard", description="View top coin earners (shortcut for /economy leaderboard)", callback=leaderboard_callback)
+    bot.tree.add_command(shortcut)

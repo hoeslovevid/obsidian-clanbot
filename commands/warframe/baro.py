@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from datetime import datetime, timezone
 
-from utils import obsidian_embed
+from utils import obsidian_embed, format_number, EMBED_COLORS
 from warframe_api import get_baro_status
 from views import RetryView, RefreshView
 from database import DB_PATH
@@ -81,7 +81,7 @@ def build_baro_embed(baro_data: dict, is_active: bool, client) -> discord.Embed:
                 total_ducats += ducats
                 total_credits += credits
                 inventory_list += f"`{item_name}`\n"
-                inventory_list += f"💎 {ducats} ducats • 💰 {credits:,} credits\n\n"
+                inventory_list += f"💎 {format_number(ducats)} ducats • 💰 {format_number(credits)} credits\n\n"
             
             if len(inventory) > 15:
                 inventory_list += f"_...and {len(inventory) - 15} more items_"
@@ -95,15 +95,15 @@ def build_baro_embed(baro_data: dict, is_active: bool, client) -> discord.Embed:
         ]
         
         if inventory:
-            fields.append(("💰 Total Cost", f"💎 **{total_ducats} ducats**\n💰 **{total_credits:,} credits**", True))
+            fields.append(("💰 Total Cost", f"💎 **{format_number(total_ducats)} ducats**\n💰 **{format_number(total_credits)} credits**", True))
         
         embed = obsidian_embed(
             "🛒 Baro Ki'Teer",
             "🟢 **Currently Active**",
-            color=discord.Color.green(),
+            color=EMBED_COLORS["warframe"],
             thumbnail="https://vignette.wikia.nocookie.net/warframe/images/4/4a/BaroKiTeer.png/revision/latest?cb=20150213150000",
             fields=fields,
-            footer=f"PC data • Last updated <t:{int(datetime.now(timezone.utc).timestamp())}:R> • Use Refresh button",
+            footer=f"PC data • Use Refresh • See also: /warframe cycles, /warframe alerts",
             client=client,
         )
     else:
@@ -144,7 +144,7 @@ def build_baro_embed(baro_data: dict, is_active: bool, client) -> discord.Embed:
         embed = obsidian_embed(
             "🛒 Baro Ki'Teer",
             "🔴 **Not Currently Active**\n\nPrepare your ducats for the next visit!" + countdown_line,
-            color=discord.Color.orange(),
+            color=EMBED_COLORS["warframe"],
             thumbnail="https://vignette.wikia.nocookie.net/warframe/images/4/4a/BaroKiTeer.png/revision/latest?cb=20150213150000",
             fields=fields,
             footer=f"PC data • Last updated <t:{int(datetime.now(timezone.utc).timestamp())}:R> • Baro visits every ~2 weeks",

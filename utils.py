@@ -134,6 +134,39 @@ def bullet_list(items: list[str], bullet: str = "•") -> str:
     return "\n".join(f"{bullet} {item}" for item in items if item)
 
 
+def format_number(n: int) -> str:
+    """Format number with commas (e.g. 1,234,567)."""
+    return f"{n:,}"
+
+
+def pluralize(n: int, singular: str, plural: str = None) -> str:
+    """Return singular or plural form. plural defaults to singular + 's'."""
+    if plural is None:
+        plural = singular + "s"
+    return singular if n == 1 else plural
+
+
+def format_duration_friendly(seconds: float) -> str:
+    """Format seconds as friendly duration (e.g. '4h 23m', '12m 5s')."""
+    if seconds <= 0:
+        return "now"
+    total = int(seconds)
+    days = total // 86400
+    hours = (total % 86400) // 3600
+    mins = (total % 3600) // 60
+    secs = total % 60
+    parts = []
+    if days:
+        parts.append(f"{days}d")
+    if hours:
+        parts.append(f"{hours}h")
+    if mins or (days or hours):
+        parts.append(f"{mins}m")
+    elif secs:
+        parts.append(f"{secs}s")
+    return " ".join(parts) if parts else "< 1m"
+
+
 def error_embed(title: str, message: str, *, action_hint: Optional[str] = None, client=None) -> discord.Embed:
     """Consistent error embed format with optional actionable next step."""
     desc = truncate_desc(str(message))
@@ -244,9 +277,13 @@ def obsidian_embed(
     elif author_name:
         e.set_author(name=author_name, icon_url=author_icon)
     
-    # Set thumbnail
+    # Set thumbnail (default to bot avatar for help/success when client provided)
     if thumbnail:
         e.set_thumbnail(url=thumbnail)
+    elif client and client.user:
+        bot_avatar = client.user.display_avatar.url if hasattr(client.user, "display_avatar") else (client.user.avatar.url if client.user.avatar else None)
+        if bot_avatar:
+            e.set_thumbnail(url=bot_avatar)
     
     # Set image
     if image:
@@ -322,6 +359,32 @@ def extract_id(text: str) -> Optional[int]:
     """Extract a Discord ID from text."""
     m = re.search(r"(\d{15,25})", text or "")
     return int(m.group(1)) if m else None
+
+
+def copy_friendly_id(raw_id: int) -> str:
+    """Format ID for easy copy-paste (backtick-wrapped, no spaces)."""
+    return f"`{raw_id}`"
+
+
+def permission_hint_embed(missing: str, *, client=None) -> discord.Embed:
+    """Actionable embed when bot lacks a permission."""
+    hints = {
+        "manage_messages": "Ask an admin to grant **Manage Messages** in this channel.",
+        "manage_channels": "Ask an admin to grant **Manage Channels**.",
+        "send_messages": "Ask an admin to allow **Send Messages** here.",
+        "manage_roles": "Ask an admin to place my role above the target role.",
+        "kick_members": "Ask an admin to grant **Kick Members**.",
+        "ban_members": "Ask an admin to grant **Ban Members**.",
+    }
+    hint = hints.get(missing.lower().replace(" ", "_"), "Ask an administrator to grant the required permission.")
+    return error_embed("Missing Permission", f"I need **{missing.replace('_', ' ').title()}** to do that.", action_hint=hint, client=client)
+
+
+def see_also_footer(*commands: str) -> str:
+    """Build 'See also' footer hint from command paths."""
+    if not commands:
+        return ""
+    return f"See also: " + ", ".join(f"`/{c}`" for c in commands)
 
 
 async def send_levelup_announcement(

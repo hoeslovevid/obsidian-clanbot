@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from datetime import datetime, timezone
 
-from utils import obsidian_embed
+from utils import obsidian_embed, EMBED_COLORS
 from warframe_api import get_all_cycles
 from views import RetryView, RefreshView
 import dateparser
@@ -138,7 +138,7 @@ def setup(bot, group=None):
                     return
                 fields = _build_cycle_fields(new_success)
                 desc = "Partial data (some cycles unavailable)." if len(new_success) < 3 else ""
-                emb = obsidian_embed("🌍 Open World Cycles", desc, color=discord.Color.blue(), fields=fields, client=interaction.client)
+                emb = obsidian_embed("🌍 Open World Cycles", desc, color=EMBED_COLORS["warframe"], fields=fields, client=interaction.client)
                 await btn_interaction.message.edit(embed=emb, view=None)
 
             view = RetryView(on_retry)
@@ -155,10 +155,10 @@ def setup(bot, group=None):
         embed = obsidian_embed(
             "🌍 Open World Cycles",
             desc or "",
-            color=discord.Color.blue(),
+            color=EMBED_COLORS["warframe"],
             fields=fields if fields else None,
             thumbnail=interaction.guild.icon.url if interaction.guild and interaction.guild.icon else None,
-            footer=f"Cetus • Fortuna • Deimos • Last updated <t:{int(datetime.now(timezone.utc).timestamp())}:R> • Use Refresh to update",
+            footer=f"See also: /warframe baro, /warframe alerts • Use Refresh to update",
             client=interaction.client,
         )
 
@@ -177,7 +177,7 @@ def setup(bot, group=None):
             new_failed = [k for k in ("cetus", "vallis", "cambion") if k not in new_success]
             new_desc = "Partial data: " + ", ".join(new_failed) + " unavailable." if new_failed else ""
             ts = int(datetime.now(timezone.utc).timestamp())
-            new_emb = obsidian_embed("🌍 Open World Cycles", new_desc or "", color=discord.Color.blue(), fields=new_fields, footer=f"Cetus • Fortuna • Deimos • Last updated <t:{ts}:R> • Use Refresh to update", client=interaction.client)
+            new_emb = obsidian_embed("🌍 Open World Cycles", new_desc or "", color=EMBED_COLORS["warframe"], fields=new_fields, footer=f"See also: /warframe baro, /warframe alerts • Use Refresh to update", client=interaction.client)
             view = RefreshView(on_refresh)
             await btn_interaction.message.edit(embed=new_emb, view=view)
 

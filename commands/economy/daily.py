@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from datetime import datetime, timezone
 
-from utils import obsidian_embed, feature_off_embed, ECONOMY_ENABLED, COINS_DAILY_REWARD
+from utils import obsidian_embed, feature_off_embed, ECONOMY_ENABLED, COINS_DAILY_REWARD, format_number, pluralize, EMBED_COLORS
 
 
 def setup(bot, group=None):
@@ -154,8 +154,8 @@ async def _run_daily(interaction: discord.Interaction):
     next_line = f"Next daily: <t:{next_ts}:R>"
 
     fields = [
-        ("💰 Reward", f"**{COINS_DAILY_REWARD:,}** coins", True),
-        ("🔥 Streak", f"{streak_fire}\n{new_streak} day(s)", True),
+        ("💰 Reward", f"**{format_number(COINS_DAILY_REWARD)}** {pluralize(COINS_DAILY_REWARD, 'coin')}", True),
+        ("🔥 Streak", f"{streak_fire}\n{new_streak} {pluralize(new_streak, 'day')}", True),
         ("⏰ Next Claim", next_line, True),
     ]
     if used_freeze:
@@ -176,7 +176,7 @@ async def _run_daily(interaction: discord.Interaction):
         color=color,
         fields=fields,
         thumbnail=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
-        footer="Use /daily tomorrow • Streak resets if you miss a day",
+        footer="What's next? /economy shop or /economy gamble • Streak resets if you miss a day",
         client=interaction.client,
     )
     await interaction.followup.send(embed=embed, ephemeral=True)

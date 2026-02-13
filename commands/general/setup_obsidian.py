@@ -140,7 +140,8 @@ class SetupObsidianView(discord.ui.View):
                 "• Voice Panel: VC control panels appear here when users create temp channels\n"
                 "• Events: Use `/community event_create` to post events here\n"
                 "• Complaints: Use `/general setup_docket` to post the complaint panel\n"
-                "• Temp VC: Join-to-create voice channels in this category",
+                "• Temp VC: Join-to-create voice channels in this category\n\n"
+                "**Next steps:** Try `/community event_create`, `/daily`, and `/warframe status`",
                 color=discord.Color.green(),
                 client=interaction.client,
             )
@@ -169,7 +170,11 @@ class SetupObsidianView(discord.ui.View):
             c.disabled = True
         try:
             if self.message:
-                await self.message.edit(content="⏰ Setup timed out. Run /general setup_obsidian again.", view=self)
+                await self.message.edit(
+                    content="⏰ Session expired. Run `/general setup` again to configure channels.",
+                    embed=None,
+                    view=self,
+                )
         except Exception:
             pass
 
