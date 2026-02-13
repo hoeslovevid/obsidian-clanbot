@@ -2393,6 +2393,17 @@ async def on_member_join(member: discord.Member):
     channel = member.guild.get_channel(channel_id)
     if not isinstance(channel, discord.TextChannel):
         return
+
+    # Optional: send welcome DM if configured
+    try:
+        dm_enabled = await get_guild_setting(member.guild.id, "welcome_dm_enabled")
+        dm_msg = await get_guild_setting(member.guild.id, "welcome_dm_message")
+        if dm_enabled == "1" and dm_msg:
+            dm_text = dm_msg.replace("{user}", str(member)).replace("{server}", member.guild.name)
+            dm_text = dm_text.replace("{member_count}", str(member.guild.member_count or 0))
+            await member.send(dm_text[:2000])
+    except (discord.Forbidden, discord.HTTPException):
+        pass  # User may have DMs disabled
     
     # Format message
     formatted_message = message_template.replace("{user}", member.mention)

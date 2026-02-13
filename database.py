@@ -1850,6 +1850,15 @@ async def init_db() -> None:
         )""")
 
         await db.execute("""
+        CREATE TABLE IF NOT EXISTS user_stash (
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            stashed INTEGER NOT NULL DEFAULT 0,
+            last_interest_at TEXT,
+            PRIMARY KEY (guild_id, user_id)
+        )""")
+
+        await db.execute("""
         CREATE TABLE IF NOT EXISTS log_channels (
             guild_id INTEGER NOT NULL,
             log_type TEXT NOT NULL,
@@ -2232,6 +2241,30 @@ async def init_db() -> None:
             send_at TEXT NOT NULL,
             created_at TEXT NOT NULL,
             sent INTEGER NOT NULL DEFAULT 0
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS mod_notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            target_user_id INTEGER NOT NULL,
+            moderator_id INTEGER NOT NULL,
+            note TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS economy_bounties (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            bounty_type TEXT NOT NULL,
+            progress INTEGER NOT NULL DEFAULT 0,
+            target INTEGER NOT NULL,
+            reward INTEGER NOT NULL,
+            claimed INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            UNIQUE(guild_id, user_id, bounty_type)
         )""")
 
         # Starboard tables

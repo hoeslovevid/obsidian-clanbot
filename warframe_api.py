@@ -129,6 +129,92 @@ async def get_baro_status() -> Tuple[bool, Optional[Dict[str, Any]]]:
         return (False, data)
 
 
+async def fetch_fissures() -> Optional[List[Dict[str, Any]]]:
+    """Fetch active Void Fissure missions. Cached 60s."""
+    from cache_utils import get_cached
+    async def _fetch():
+        try:
+            proxy = _api_proxy()
+            async with aiohttp.ClientSession() as session:
+                async with session.get("https://api.warframestat.us/pc/fissures", timeout=aiohttp.ClientTimeout(total=10), proxy=proxy) as r:
+                    if r.status == 200:
+                        data = await r.json()
+                        return [f for f in data if not f.get("expired", False)]
+                    return None
+        except Exception as e:
+            logger.error(f"Error fetching fissures: {e}")
+            return None
+    return await get_cached("warframe:fissures", 60, _fetch)
+
+
+async def fetch_sortie() -> Optional[Dict[str, Any]]:
+    """Fetch today's Sortie. Cached 60s."""
+    from cache_utils import get_cached
+    async def _fetch():
+        try:
+            proxy = _api_proxy()
+            async with aiohttp.ClientSession() as session:
+                async with session.get("https://api.warframestat.us/pc/sortie", timeout=aiohttp.ClientTimeout(total=10), proxy=proxy) as r:
+                    if r.status == 200:
+                        return await r.json()
+                    return None
+        except Exception as e:
+            logger.error(f"Error fetching sortie: {e}")
+            return None
+    return await get_cached("warframe:sortie", 60, _fetch)
+
+
+async def fetch_steel_path() -> Optional[Dict[str, Any]]:
+    """Fetch Steel Path data (current missions). Cached 60s."""
+    from cache_utils import get_cached
+    async def _fetch():
+        try:
+            proxy = _api_proxy()
+            async with aiohttp.ClientSession() as session:
+                async with session.get("https://api.warframestat.us/pc/steelPath", timeout=aiohttp.ClientTimeout(total=10), proxy=proxy) as r:
+                    if r.status == 200:
+                        return await r.json()
+                    return None
+        except Exception as e:
+            logger.error(f"Error fetching steel path: {e}")
+            return None
+    return await get_cached("warframe:steelPath", 60, _fetch)
+
+
+async def fetch_arbitration() -> Optional[Dict[str, Any]]:
+    """Fetch current Arbitration. Cached 60s."""
+    from cache_utils import get_cached
+    async def _fetch():
+        try:
+            proxy = _api_proxy()
+            async with aiohttp.ClientSession() as session:
+                async with session.get("https://api.warframestat.us/pc/arbitration", timeout=aiohttp.ClientTimeout(total=10), proxy=proxy) as r:
+                    if r.status == 200:
+                        return await r.json()
+                    return None
+        except Exception as e:
+            logger.error(f"Error fetching arbitration: {e}")
+            return None
+    return await get_cached("warframe:arbitration", 60, _fetch)
+
+
+async def fetch_nightwave() -> Optional[Dict[str, Any]]:
+    """Fetch Nightwave challenges. Cached 300s (updates daily)."""
+    from cache_utils import get_cached
+    async def _fetch():
+        try:
+            proxy = _api_proxy()
+            async with aiohttp.ClientSession() as session:
+                async with session.get("https://api.warframestat.us/pc/nightwave", timeout=aiohttp.ClientTimeout(total=10), proxy=proxy) as r:
+                    if r.status == 200:
+                        return await r.json()
+                    return None
+        except Exception as e:
+            logger.error(f"Error fetching nightwave: {e}")
+            return None
+    return await get_cached("warframe:nightwave", 300, _fetch)
+
+
 async def fetch_invasions() -> Optional[list]:
     """Fetch invasion data from Warframe World State API. Cached for 60s."""
     from cache_utils import get_cached

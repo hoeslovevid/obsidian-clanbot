@@ -4,7 +4,7 @@ from discord import app_commands
 from typing import Optional
 
 from utils import obsidian_embed, is_mod
-from database import DB_PATH
+from database import DB_PATH, get_guild_setting, set_guild_setting
 import aiosqlite
 
 
@@ -71,6 +71,22 @@ def setup(bot, group=None):
             ephemeral=True,
         )
     
+    dm_cmd = group.command(name="welcome_dm", description="Enable/disable welcome DMs (mods only).") if group else bot.tree.command(name="welcome_dm", description="Enable welcome DMs.")
+    
+    @dm_cmd
+    @app_commands.describe(enabled="Send DM to new members on join", message="DM text. Use {user}, {server}, {member_count}")
+    async def welcome_dm(interaction: discord.Interaction, enabled: bool = True, message: Optional[str] = None):
+        if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
+            return await interaction.response.send_message("Mods only.", ephemeral=True)
+        await set_guild_setting(interaction.guild.id, "welcome_dm_enabled", "1" if enabled else "0")
+        if message is not None:
+            await set_guild_setting(interaction.guild.id, "welcome_dm_message", message[:1000])
+        current = await get_guild_setting(interaction.guild.id, "welcome_dm_message") or "Welcome to {server}, {user}!"
+        await interaction.response.send_message(
+            embed=obsidian_embed("Welcome DM", f"**Enabled:** {enabled}\n**Message:** {current}\n\nVariables: {{user}}, {{server}}, {{member_count}}", color=discord.Color.green(), client=interaction.client),
+            ephemeral=True,
+        )
+
     command_decorator = group.command(name="leave_setup", description="Set up leave messages (mods only).") if group else bot.tree.command(name="leave_setup", description="Set up leave messages (mods only).")
     
     @command_decorator

@@ -10,6 +10,17 @@ import aiosqlite
 
 DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
+EVENT_TEMPLATES = {
+    "sortie": ("Sortie Run", "Running today's sortie. Bring your A-game!"),
+    "eidolon": ("Eidolon Hunt", "Eidolon cap. Cetus night cycle. Bring amp & frame."),
+    "railjack": ("Railjack Mission", "Railjack run. Crew positions open."),
+    "arbitration": ("Arbitration", "Arbitration endurance. Stay as long as you can."),
+    "steel_path": ("Steel Path", "Steel Path missions. High-level content."),
+    "duviri": ("Duviri Circuit", "Duviri Circuit run. Weekly rewards."),
+    "baro": ("Baro Run", "Heading to Baro. Bring ducats!"),
+    "fissure": ("Void Fissure", "Cracking relics. Bring relics to open."),
+}
+
 
 async def time_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
     """Autocomplete for natural time strings."""
@@ -83,19 +94,26 @@ def setup(bot, group=None):
     
     @command_decorator
     @app_commands.autocomplete(when=time_autocomplete)
+    @app_commands.choices(template=[app_commands.Choice(name=t[0], value=k) for k, t in EVENT_TEMPLATES.items()])
     @app_commands.describe(
-        title="Event title",
+        title="Event title (or use template to override)",
         when="Natural time: 'tomorrow 8pm', 'in 2 hours', 'Jan 14 7:30pm'",
-        description="What are we running?",
+        description="What are we running? (ignored if template used)",
+        template="Quick fill: Sortie, Eidolon, Railjack, Fissure, etc.",
         role_ping="Optional role to ping when event is posted",
         duration_hours="How long the event runs (default: 2)"
     )
-    async def event_create(interaction: discord.Interaction, title: str, when: str, description: str, role_ping: Optional[discord.Role] = None, duration_hours: int = 2):
+    async def event_create(interaction: discord.Interaction, when: str, title: str = "Ops Event", description: str = "Coordinate in the thread below.", template: Optional[app_commands.Choice[str]] = None, role_ping: Optional[discord.Role] = None, duration_hours: int = 2):
         # Import bot-specific functions inside to avoid circular imports
         from bot import resolve_channel_id, RSVPView
         from bot import EVENTS_CHANNEL_ID, EVENTS_CHANNEL_NAME, DB_PATH
         from database import get_configured_channel_id
         import aiosqlite
+
+        if template and template.value in EVENT_TEMPLATES:
+            t_title, t_desc = EVENT_TEMPLATES[template.value]
+            title = t_title
+            description = t_desc
         
         dt = parse_time_natural(when)
         if not dt:

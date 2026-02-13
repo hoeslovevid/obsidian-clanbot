@@ -24,6 +24,11 @@ KEYWORD_RESPONSES = [
     (r"\b(price|plat|market)\b", "Check prices with **`/trading trade_price`** or right-click a message → Check Price."),
     (r"\b(invasion|invasions)\b", "View invasions with **`/warframe invasions`**."),
     (r"\b(duviri|circuit)\b", "Check Duviri Circuit with **`/warframe duviri`**."),
+    (r"\b(fissure|fissures)\b", "View fissures with **`/warframe fissures`**."),
+    (r"\b(sortie)\b", "Check today's sortie with **`/warframe sortie`**."),
+    (r"\b(links?|wiki|market)\b", "Quick links: **`/general links`** – Wiki, Market, Drop Tables."),
+    (r"\b(drop|drops?|where.*drop)\b", "Find where items drop: **`/warframe drop`** – links to Wiki drop tables."),
+    (r"\b(bount(y|ies))\b", "Daily bounties for bonus coins: **`/economy bounties`**."),
     (r"\bwho are you\b", "I'm the **Obsidian Clan Bot** – your Warframe clan assistant! Use **`/help`** to explore."),
 ]
 
