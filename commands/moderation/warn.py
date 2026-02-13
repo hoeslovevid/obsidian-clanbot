@@ -28,7 +28,8 @@ async def execute_warn(interaction: discord.Interaction, user: discord.Member, r
             ephemeral=True,
         )
 
-    await interaction.response.defer()
+    if not interaction.response.is_done():
+        await interaction.response.defer()
 
     case_id = None
     async with aiosqlite.connect(DB_PATH) as db:

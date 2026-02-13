@@ -48,7 +48,25 @@ class WarnUserModal(discord.ui.Modal, title="Warn User"):
 
     async def on_submit(self, interaction: discord.Interaction):
         from commands.moderation.warn import execute_warn
-        await execute_warn(interaction, self.target_member, self.reason.value or "No reason provided")
+        from views import ConfirmView
+
+        reason = self.reason.value or "No reason provided"
+        embed = obsidian_embed(
+            "⚠️ Confirm Warn",
+            f"Warn **{self.target_member.display_name}** for:\n\n_{reason}_\n\nThis will be recorded on their profile.",
+            color=discord.Color.orange(),
+            client=interaction.client,
+        )
+
+        async def on_confirm(btn_interaction: discord.Interaction, confirmed: bool):
+            if btn_interaction.user.id != interaction.user.id:
+                return await btn_interaction.followup.send("Only the person who started this can confirm.", ephemeral=True)
+            if not confirmed:
+                return await btn_interaction.followup.send("Warn cancelled.", ephemeral=True)
+            await execute_warn(btn_interaction, self.target_member, reason)
+
+        view = ConfirmView(on_confirm)
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
 
 class GiveRepModal(discord.ui.Modal, title="Give Reputation"):
@@ -205,6 +223,111 @@ class TransferOwnerModal(discord.ui.Modal, title="Pass Command"):  # type: ignor
             await db.commit()
 
         await interaction.response.send_message(f"Ownership transferred to {new_owner.mention}.", ephemeral=True)
+
+
+class ReportUserModal(discord.ui.Modal, title="Report User"):  # type: ignore
+    """Pre-filled complaint modal for reporting a user (reuses complaint_modal flow)."""
+    def __init__(self, member: discord.Member):
+        super().__init__(timeout=300, custom_id="complaint_modal")
+        ctx = f"Reported user: {member.mention} (ID: {member.id})\n\n"
+        self.category = discord.ui.TextInput(
+            label="Category",
+            placeholder="harassment / spam / voice conduct / etc.",
+            max_length=60,
+            default="User Report",
+            custom_id="category"
+        )
+        self.details = discord.ui.TextInput(
+            label="Details",
+            style=discord.TextStyle.paragraph,
+            max_length=1000,
+            default=ctx + "[Please describe what happened]",
+            custom_id="details"
+        )
+        self.evidence = discord.ui.TextInput(
+            label="Evidence (optional link)",
+            required=False,
+            max_length=200,
+            custom_id="evidence"
+        )
+        self.add_item(self.category)
+        self.add_item(self.details)
+        self.add_item(self.evidence)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            await interaction.response.defer(ephemeral=True)
+        except Exception:
+            pass
+
+
+class ReportMessageModal(discord.ui.Modal, title="Report Message"):  # type: ignore
+    """Pre-filled complaint modal for reporting a message (reuses complaint_modal flow)."""
+    def __init__(self, message: discord.Message):
+        super().__init__(timeout=300, custom_id="complaint_modal")
+        content = (message.content or "[no text]")[:300]
+        if len((message.content or "")) > 300:
+            content += "..."
+        ctx = f"Reported message: {message.jump_url}\nAuthor: {message.author.mention}\nContent: {content}\n\n"
+        self.category = discord.ui.TextInput(
+            label="Category",
+            placeholder="spam / harassment / rule violation / etc.",
+            max_length=60,
+            default="Message Report",
+            custom_id="category"
+        )
+        self.details = discord.ui.TextInput(
+            label="Details",
+            style=discord.TextStyle.paragraph,
+            max_length=1000,
+            default=ctx + "[Please describe why you're reporting]",
+            custom_id="details"
+        )
+        self.evidence = discord.ui.TextInput(
+            label="Evidence (optional link)",
+            required=False,
+            max_length=200,
+            custom_id="evidence"
+        )
+        self.add_item(self.category)
+        self.add_item(self.details)
+        self.add_item(self.evidence)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            await interaction.response.defer(ephemeral=True)
+        except Exception:
+            pass
+
+
+class AddToSuggestionModal(discord.ui.Modal, title="Add to Suggestions"):  # type: ignore
+    """Modal to turn a message into a suggestion (from message context menu)."""
+    def __init__(self, message: discord.Message):
+        super().__init__(timeout=300, custom_id="add_to_suggestion_modal")
+        default = (message.content or "").strip()[:1900] or "[Add your suggestion here]"
+        self.suggestion = discord.ui.TextInput(
+            label="Suggestion text",
+            style=discord.TextStyle.paragraph,
+            default=default,
+            max_length=2000,
+            custom_id="suggestion"
+        )
+        self.category = discord.ui.TextInput(
+            label="Category",
+            placeholder="feature / bug / improvement / other",
+            default="other",
+            max_length=20,
+            custom_id="category"
+        )
+        self.add_item(self.suggestion)
+        self.add_item(self.category)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        from commands.suggestions.suggest import create_suggestion_from_modal
+        text = (self.suggestion.value or "").strip()
+        cat = (self.category.value or "other").strip().lower() or "other"
+        await create_suggestion_from_modal(interaction, text, cat)
 
 
 class ComplaintModal(discord.ui.Modal, title="File Complaint"):  # type: ignore

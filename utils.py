@@ -40,6 +40,21 @@ EMBED_FIELD_NAME_MAX = 256
 EMBED_TITLE_MAX = 256
 AUTOCOMPLETE_MAX_CHOICES = 25
 
+# Consistent footer for embeds
+EMBED_FOOTER_DEFAULT = "Use /help for commands"
+
+# Stable colors by category (for consistency across the bot)
+EMBED_COLORS = {
+    "economy": discord.Color.gold(),
+    "warframe": discord.Color.blue(),
+    "moderation": discord.Color.dark_red(),
+    "community": discord.Color.green(),
+    "general": discord.Color.blurple(),
+    "success": discord.Color.green(),
+    "warning": discord.Color.orange(),
+    "error": discord.Color.red(),
+}
+
 
 def truncate_field(value: str, max_len: int = EMBED_FIELD_VALUE_MAX) -> str:
     """Truncate field value to Discord limit, with ellipsis."""
@@ -55,14 +70,19 @@ def truncate_desc(desc: str, max_len: int = EMBED_DESC_MAX) -> str:
     return desc[: max_len - 3] + "..."
 
 
-def error_embed(title: str, message: str, *, client=None) -> discord.Embed:
-    """Consistent error embed format across all commands."""
-    return obsidian_embed(
+def error_embed(title: str, message: str, *, action_hint: Optional[str] = None, client=None) -> discord.Embed:
+    """Consistent error embed format with optional actionable next step."""
+    desc = truncate_desc(str(message))
+    if action_hint:
+        desc += f"\n\n_→ {action_hint}_"
+    emb = obsidian_embed(
         f"❌ {title}" if not title.startswith("❌") else title,
-        truncate_desc(str(message)),
-        color=discord.Color.red(),
+        desc,
+        color=EMBED_COLORS["error"],
+        footer=EMBED_FOOTER_DEFAULT,
         client=client,
     )
+    return emb
 
 
 def message_jump_url(guild_id: int, channel_id: int, message_id: int) -> str:
@@ -180,18 +200,16 @@ def obsidian_embed(
             value = truncate_field(str(value), EMBED_FIELD_VALUE_MAX)
             e.add_field(name=name, value=value, inline=inline)
     
-    # Set footer (default to bot name with icon if not specified)
+    # Set footer: use provided, else default helpful footer
     if footer:
-        e.set_footer(text=footer, icon_url=footer_icon)
+        e.set_footer(text=footer[:2048], icon_url=footer_icon)
     else:
-        # Use bot's actual name and avatar if client is provided
+        footer_text = EMBED_FOOTER_DEFAULT
         if client and client.user:
-            bot_name = client.user.display_name or client.user.name
             bot_avatar = client.user.display_avatar.url if hasattr(client.user, 'display_avatar') else client.user.avatar.url if client.user.avatar else None
-            e.set_footer(text=bot_name, icon_url=bot_avatar)
+            e.set_footer(text=footer_text, icon_url=bot_avatar)
         else:
-            # Fallback to default if no client provided
-            e.set_footer(text="Bot", icon_url=None)
+            e.set_footer(text=footer_text, icon_url=None)
     
     return e
 

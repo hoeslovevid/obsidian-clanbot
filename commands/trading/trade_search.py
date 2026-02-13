@@ -98,7 +98,7 @@ def setup(bot, group=None):
             return await interaction.followup.send(
                 embed=obsidian_embed(
                     "💼 No Listings Found",
-                    f"No active listings found{filter_text}.",
+                    f"No active listings found{filter_text}.\n\n_→ Use `/trading list` to create a listing, or try different filters._",
                     color=discord.Color.orange(),
                     client=interaction.client,
                 ),

@@ -64,10 +64,11 @@ def setup(bot, group=None):
         
         if not rows:
             status_text = f" with status '{status_filter}'" if status_filter else ""
+            desc = f"No applications{status_text} found.\n\n_→ Applicants can use `/community apply` to submit. Try a different status filter if needed._"
             return await interaction.followup.send(
                 embed=obsidian_embed(
                     "📝 No Applications Found",
-                    f"No applications{status_text} found.",
+                    desc,
                     color=discord.Color.orange(),
                     client=interaction.client,
                 ),

@@ -82,7 +82,7 @@ def setup(bot, group=None):
                 return await interaction.followup.send(
                     embed=obsidian_embed(
                         "⭐ Leaderboard Empty",
-                        "No users have earned XP yet! Start using commands and chatting to earn XP.",
+                        "No users have earned XP yet!\n\n_→ Start using commands and chatting to earn XP._",
                         color=discord.Color.orange(),
                         client=interaction.client,
                     ),
@@ -91,7 +91,7 @@ def setup(bot, group=None):
             return await interaction.followup.send(
                 embed=obsidian_embed(
                     "⭐ Leaderboard Empty",
-                    "No users with XP yet.",
+                    "No users with XP yet.\n\n_→ Chat and use commands to earn XP and appear on the leaderboard._",
                     color=discord.Color.orange(),
                     client=interaction.client,
                 ),

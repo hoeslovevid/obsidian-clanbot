@@ -101,7 +101,7 @@ def setup(bot, group=None):
                 return await interaction.followup.send(
                     embed=obsidian_embed(
                         "📊 Leaderboard Empty",
-                        "No users have earned coins yet! Start chatting or use `/daily` to earn coins.",
+                        "No users have earned coins yet!\n\n_→ Start chatting or use `/economy daily` to earn coins._",
                         color=discord.Color.orange(),
                         client=interaction.client,
                     ),
@@ -111,7 +111,7 @@ def setup(bot, group=None):
                 return await interaction.followup.send(
                     embed=obsidian_embed(
                         "📊 Leaderboard Empty",
-                        "No users currently have coins! Users need a balance greater than 0 to appear on the leaderboard.",
+                        "No users currently have coins.\n\n_→ Chat or use `/economy daily` to earn coins and appear on the leaderboard._",
                         color=discord.Color.orange(),
                         client=interaction.client,
                     ),

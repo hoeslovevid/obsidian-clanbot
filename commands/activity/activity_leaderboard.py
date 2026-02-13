@@ -74,7 +74,7 @@ def setup(bot, group=None):
             return await interaction.followup.send(
                 embed=obsidian_embed(
                     "📊 Activity Leaderboard",
-                    "No activity data found yet. Start using commands and participating in events!",
+                    "No activity data found yet.\n\n_→ Use commands, join voice, and participate in events to appear on the leaderboard._",
                     color=discord.Color.orange(),
                     client=interaction.client,
                 )

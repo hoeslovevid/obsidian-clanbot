@@ -4,7 +4,7 @@ from discord import app_commands
 from typing import Optional
 from datetime import datetime, timezone
 
-from utils import obsidian_embed, is_mod
+from utils import obsidian_embed, is_mod, format_timestamp_readable, EMBED_FOOTER_DEFAULT
 from database import (
     DB_PATH, now_utc, get_user_balance, get_user_xp, 
     calculate_level, xp_for_next_level
@@ -189,12 +189,12 @@ def setup(bot, group=None):
         voice_mins = profile_data["voice_minutes"] % 60
         voice_time = f"{voice_hours}h {voice_mins}m" if voice_hours > 0 else f"{voice_mins}m"
         
-        # Format join date
+        # Format join date (Discord timestamp for user's locale)
         join_date_str = "Unknown"
         if target_user.joined_at:
             join_date = target_user.joined_at.replace(tzinfo=timezone.utc)
-            days_in_server = (now_utc() - join_date).days
-            join_date_str = f"{days_in_server} days ago"
+            join_date_str = format_timestamp_readable(join_date, include_relative=True)
+            join_date_ts = int(target_user.joined_at.timestamp())
         
         # Build embed
         fields = []
@@ -275,8 +275,6 @@ def setup(bot, group=None):
         # Moderation section (only if warnings > 0 or user is mod viewing)
         if profile_data["warnings"] > 0 or (is_mod(interaction.user) and target_user.id != interaction.user.id):
             mod_text = f"**Warnings:** {profile_data['warnings']}"
-            if is_mod(interaction.user) and target_user.id != interaction.user.id:
-                mod_text += f"\n**Member Since:** {join_date_str}"
             fields.append(("🛡️ Moderation", mod_text, True))
         
         # Activity scores
@@ -288,21 +286,24 @@ def setup(bot, group=None):
                 True
             ))
         
-        # Build description
-        desc = f"Comprehensive profile for {target_user.mention}\n"
+        # Build description: Member since, title and badges prominent
+        desc_parts = [f"Profile for {target_user.mention}"]
+        if target_user.joined_at:
+            desc_parts.append(f"\n**Member since:** {join_date_str}")
         if profile_data.get("title"):
-            desc += f"\n**Title:** {profile_data['title']}"
+            desc_parts.append(f"\n**Title:** {profile_data['title']}")
         if profile_data.get("equipped_badge"):
             emoji, name = profile_data["equipped_badge"]
             badge_emoji = emoji or "🏆"
             badge_name = name or "Badge"
-            desc += f"\n**Equipped Badge:** {badge_emoji} {badge_name}"
+            desc_parts.append(f"\n**Equipped Badge:** {badge_emoji} {badge_name}")
         if profile_data.get("showcase_badges"):
             showcase = profile_data["showcase_badges"]
             parts = [f"{(e or '🏆')} {n or 'Badge'}" for _, e, n in showcase[:5]]
-            desc += f"\n**Showcase:** {' '.join(parts)}"
+            desc_parts.append(f"\n**Showcase:** {' '.join(parts)}")
         if target_user.id == interaction.user.id:
-            desc += "\n*This is your profile!*"
+            desc_parts.append("\n_This is your profile!_")
+        desc = "".join(desc_parts)
         
         embed = obsidian_embed(
             f"👤 {target_user.display_name}'s Profile",
@@ -316,18 +317,18 @@ def setup(bot, group=None):
         # Ephemeral when viewing own profile (private)
         ephemeral = target_user.id == interaction.user.id
 
-        # Add footer
-        footer_text = f"User ID: {target_user.id}"
+        # Consistent footer
+        footer_parts = [EMBED_FOOTER_DEFAULT]
         if profile_data["last_activity"]:
             try:
                 last_activity = datetime.fromisoformat(profile_data["last_activity"])
                 days_ago = (now_utc() - last_activity.replace(tzinfo=timezone.utc)).days
-                footer_text += f" • Last active: {days_ago} day(s) ago"
+                footer_parts.append(f"Last active: {days_ago}d ago")
             except Exception:
                 pass
         if profile_data["achievements_count"] > 0:
-            footer_text += " • /achievements for full list"
-        embed.set_footer(text=footer_text)
+            footer_parts.append("/achievements for full list")
+        embed.set_footer(text=" • ".join(footer_parts))
         embed.set_thumbnail(url=target_user.display_avatar.url)
 
         await interaction.followup.send(embed=embed, ephemeral=ephemeral)

@@ -2,7 +2,7 @@
 import discord
 from discord import app_commands
 
-from utils import obsidian_embed, error_embed, ECONOMY_ENABLED, is_mod
+from utils import obsidian_embed, error_embed, ECONOMY_ENABLED, is_mod, format_timestamp_readable, EMBED_FOOTER_DEFAULT
 
 
 def setup(bot, group=None):
@@ -40,9 +40,20 @@ def setup(bot, group=None):
             bar = "█" * (progress_percent // 5) + "░" * (20 - progress_percent // 5)
             fields.append(("Leveling", f"Level {current_level} | {bar} {progress_percent}%", True))
         fields.append(("Activity", f"Messages: {profile_data['messages_sent']:,} | Voice: {voice_time}", True))
-        desc = f"Profile for {target_user.mention}"
+        desc_parts = [f"Profile for {target_user.mention}"]
+        if target_user.joined_at:
+            desc_parts.append(f"\n**Member since:** {format_timestamp_readable(target_user.joined_at, include_relative=True)}")
+        if profile_data.get("title"):
+            desc_parts.append(f"\n**Title:** {profile_data['title']}")
+        if profile_data.get("equipped_badge"):
+            e, n = profile_data["equipped_badge"]
+            desc_parts.append(f"\n**Badge:** {(e or '🏆')} {n or 'Badge'}")
+        if profile_data.get("showcase_badges"):
+            parts = [f"{(x or '🏆')} {y or 'Badge'}" for _, x, y in profile_data["showcase_badges"][:3]]
+            desc_parts.append(f"\n**Showcase:** {' '.join(parts)}")
+        desc = "".join(desc_parts)
         embed = obsidian_embed(
-            f"{target_user.display_name}'s Profile",
+            f"👤 {target_user.display_name}'s Profile",
             desc,
             color=target_user.color if target_user.color.value != 0 else discord.Color.blurple(),
             author=target_user,
@@ -50,6 +61,7 @@ def setup(bot, group=None):
             client=interaction.client,
         )
         embed.set_thumbnail(url=target_user.display_avatar.url)
+        embed.set_footer(text=EMBED_FOOTER_DEFAULT)
         await interaction.followup.send(embed=embed, ephemeral=True)
 
     @bot.tree.context_menu(name="View Balance")
@@ -206,3 +218,52 @@ def setup(bot, group=None):
                 ephemeral=True,
             )
         await create_lfg_post(bot, interaction, "Other", 4, 24, "", None)
+
+    @bot.tree.context_menu(name="Report User")
+    async def report_user_context(interaction: discord.Interaction, member: discord.Member):
+        """Right-click user → Report (opens complaint modal pre-filled with user)."""
+        from modals import ReportUserModal
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=error_embed("Invalid Context", "This can only be used in a server.", client=interaction.client),
+                ephemeral=True,
+            )
+        if member.bot:
+            return await interaction.response.send_message(
+                embed=error_embed("Invalid Target", "You cannot report bots.", client=interaction.client),
+                ephemeral=True,
+            )
+        if member.id == interaction.user.id:
+            return await interaction.response.send_message(
+                embed=error_embed("Invalid Target", "You cannot report yourself.", client=interaction.client),
+                ephemeral=True,
+            )
+        await interaction.response.send_modal(ReportUserModal(member))
+
+    @bot.tree.context_menu(name="Report Message")
+    async def report_message_context(interaction: discord.Interaction, message: discord.Message):
+        """Right-click message → Report (opens complaint modal pre-filled with message link)."""
+        from modals import ReportMessageModal
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=error_embed("Invalid Context", "This can only be used in a server.", client=interaction.client),
+                ephemeral=True,
+            )
+        await interaction.response.send_modal(ReportMessageModal(message))
+
+    @bot.tree.context_menu(name="Add to Suggestions")
+    async def add_to_suggestions_context(interaction: discord.Interaction, message: discord.Message):
+        """Right-click message → Add to Suggestions (turns message content into a suggestion)."""
+        from modals import AddToSuggestionModal
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=error_embed("Invalid Context", "This can only be used in a server.", client=interaction.client),
+                ephemeral=True,
+            )
+        content = (message.content or "").strip()
+        if not content or len(content) < 3:
+            return await interaction.response.send_message(
+                embed=error_embed("No Content", "This message has no usable text. Try a message with more content.", action_hint="Use /community suggest to submit a suggestion manually.", client=interaction.client),
+                ephemeral=True,
+            )
+        await interaction.response.send_modal(AddToSuggestionModal(message))

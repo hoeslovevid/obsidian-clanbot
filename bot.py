@@ -2829,13 +2829,15 @@ async def on_member_ban(guild: discord.Guild, user: discord.User):
                 logger.error(f"[logging] Error logging member ban: {e}")
 
 
-async def _send_error_reply(interaction: discord.Interaction, message: str, ephemeral: bool = True):
-    """Send an error reply, using followup if response was already sent."""
+async def _send_error_reply(interaction: discord.Interaction, message: str, ephemeral: bool = True, action_hint: Optional[str] = None):
+    """Send an error reply with consistent embed, using followup if response was already sent."""
+    from utils import error_embed
+    emb = error_embed("Error", message, action_hint=action_hint, client=interaction.client)
     try:
         if interaction.response.is_done():
-            await interaction.followup.send(message, ephemeral=ephemeral)
+            await interaction.followup.send(embed=emb, ephemeral=ephemeral)
         else:
-            await interaction.response.send_message(message, ephemeral=ephemeral)
+            await interaction.response.send_message(embed=emb, ephemeral=ephemeral)
     except Exception:
         pass  # Silently fail if we can't send (e.g. DMs closed)
 
@@ -2897,10 +2899,22 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
         return
     
     # User-friendly messages for common errors
-    if error_type_name in ("CheckFailure", "MissingRole", "MissingAnyRole"):
-        await _send_error_reply(interaction, "You don't have permission to use this command.")
+    # Friendlier rate limit (cooldown) messages
+    if error_type_name == "CommandOnCooldown":
+        retry_after = getattr(error, "retry_after", None) or 0
+        if retry_after >= 60:
+            msg = f"You can use this again in **{int(retry_after // 60)} minute(s)**."
+        elif retry_after >= 1:
+            msg = f"You can use this again in **{int(retry_after)} second(s)**."
+        else:
+            msg = "Please wait a moment before trying again."
+        await _send_error_reply(interaction, msg, action_hint="Use /help to explore other commands.")
         return
-    
+
+    if error_type_name in ("CheckFailure", "MissingRole", "MissingAnyRole"):
+        await _send_error_reply(interaction, "You don't have permission to use this command.", action_hint="Ask an administrator if you need access.")
+        return
+
     if error_type_name == "MissingPermissions":
         # User lacks permissions - show which ones if available
         perms = getattr(error, "missing_permissions", None) or []
@@ -2913,7 +2927,9 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
 
     if error_type_name in ("Forbidden", "HTTPException"):
         err_msg = str(error)
-        if "Missing Access" in err_msg or "50013" in err_msg:
+        if "429" in err_msg or "rate limit" in err_msg.lower():
+            await _send_error_reply(interaction, "Discord is rate limiting requests. Please wait a minute and try again.", action_hint="This usually resolves quickly.")
+        elif "Missing Access" in err_msg or "50013" in err_msg:
             await _send_error_reply(interaction, "I need additional permissions (e.g. **Manage Messages**, **Send Messages**). Ask an admin to grant them for this channel.")
         elif "Unknown Channel" in err_msg:
             await _send_error_reply(interaction, "That channel no longer exists.")

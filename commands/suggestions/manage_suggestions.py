@@ -230,10 +230,11 @@ def setup(bot, group=None):
         
         if not rows:
             status_text = f" with status '{status_filter}'" if status_filter else ""
+            desc = f"No suggestions{status_text} found.\n\n_→ Use `/community suggest` to submit a suggestion, or try a different status/category filter._"
             return await interaction.followup.send(
                 embed=obsidian_embed(
                     "💡 No Suggestions Found",
-                    f"No suggestions{status_text} found.",
+                    desc,
                     color=discord.Color.orange(),
                     client=interaction.client,
                 ),
