@@ -1,10 +1,17 @@
 """Transfer command - available via context menu (right-click user → Transfer Coins)."""
 import discord
 
-from utils import obsidian_embed, ECONOMY_ENABLED
+from utils import obsidian_embed, feature_off_embed, ECONOMY_ENABLED
 from views import ConfirmView
 
-TRANSFER_CONFIRM_THRESHOLD = 1000
+
+async def get_transfer_confirm_threshold(guild_id: int) -> int:
+    """Get configurable transfer confirmation threshold (default 1000)."""
+    from database import get_guild_setting
+    val = await get_guild_setting(guild_id, "transfer_confirm_threshold")
+    if val and str(val).isdigit():
+        return max(0, int(val))
+    return 1000
 
 
 async def run_transfer_with_modal(interaction: discord.Interaction, user: discord.Member, amount: int):
@@ -13,7 +20,7 @@ async def run_transfer_with_modal(interaction: discord.Interaction, user: discor
 
     if not ECONOMY_ENABLED:
         return await interaction.response.send_message(
-            embed=obsidian_embed("❌ Economy Disabled", "The economy system is currently disabled.", color=discord.Color.red(), client=interaction.client),
+            embed=feature_off_embed("Economy", "Ask a moderator to enable it in the bot config.", client=interaction.client),
             ephemeral=True,
         )
     if not interaction.guild:
@@ -66,7 +73,8 @@ async def run_transfer_with_modal(interaction: discord.Interaction, user: discor
             client=interaction.client,
         )
 
-    if amount >= TRANSFER_CONFIRM_THRESHOLD:
+    threshold = await get_transfer_confirm_threshold(interaction.guild.id)
+    if amount >= threshold:
         embed = obsidian_embed(
             "⚠️ Confirm Transfer",
             f"Transfer **{amount:,}** coins to {user.mention}?\n\nThis cannot be undone.",

@@ -93,6 +93,13 @@ async def execute_warn(interaction: discord.Interaction, user: discord.Member, r
     except Exception:
         pass
 
+    try:
+        from audit import log_audit
+        bot_ref = getattr(interaction.client, "bot", interaction.client) or interaction.client
+        await log_audit(interaction.guild.id, "warn", interaction.user.id, target_id=user.id, target_type="user", details=reason[:200], bot=bot_ref)
+    except Exception:
+        pass
+
     log_channel_id = await get_log_channel_id(interaction.guild.id, "member_warn")
     if log_channel_id and interaction.channel:
         log_channel = interaction.guild.get_channel(log_channel_id)

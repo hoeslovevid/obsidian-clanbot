@@ -330,6 +330,37 @@ class AddToSuggestionModal(discord.ui.Modal, title="Add to Suggestions"):  # typ
         await create_suggestion_from_modal(interaction, text, cat)
 
 
+class AddAsEventModal(discord.ui.Modal, title="Add as Event"):  # type: ignore
+    """Modal to create event from message content (context menu)."""
+    def __init__(self, message: discord.Message):
+        super().__init__(timeout=300, custom_id="add_as_event_modal")
+        content = (message.content or "").strip()[:200]
+        first_line = content.split("\n")[0][:80] if content else "Event"
+        self.title_input = discord.ui.TextInput(label="Event title", default=first_line, max_length=100, custom_id="title")
+        self.when_input = discord.ui.TextInput(label="When", default="tomorrow 8pm", max_length=60, custom_id="when")
+        self.desc_input = discord.ui.TextInput(label="Description", style=discord.TextStyle.paragraph, default=content[:1000], max_length=1000, custom_id="desc")
+        self.add_item(self.title_input)
+        self.add_item(self.when_input)
+        self.add_item(self.desc_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        from commands.events.event_create import create_event_from_modal
+        await create_event_from_modal(interaction, self.title_input.value, self.when_input.value, self.desc_input.value)
+
+
+class CreateTicketForUserModal(discord.ui.Modal, title="Create Ticket for User"):  # type: ignore
+    """Modal for mods to create a ticket on behalf of a user."""
+    def __init__(self, member: discord.Member):
+        super().__init__(timeout=300, custom_id="create_ticket_for_user_modal")
+        self.target_member = member
+        self.subject = discord.ui.TextInput(label="Subject", placeholder="e.g. Help with application", max_length=100, custom_id="subject")
+        self.add_item(self.subject)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        from commands.tickets.ticket import create_ticket_for_user
+        await create_ticket_for_user(interaction, self.target_member, self.subject.value or "Support")
+
+
 class ComplaintModal(discord.ui.Modal, title="File Complaint"):  # type: ignore
     def __init__(self):
         super().__init__(timeout=300, custom_id="complaint_modal")

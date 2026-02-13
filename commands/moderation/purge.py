@@ -27,11 +27,18 @@ def setup(bot, group=None):
     command_decorator = group.command(name="purge", description="Delete messages (1–100 or 'all') from this channel.") if group else bot.tree.command(name="purge", description="Delete messages (1–100 or 'all') from this channel.")
 
     @command_decorator
+    @app_commands.choices(amount=[
+        app_commands.Choice(name="10 messages", value="10"),
+        app_commands.Choice(name="25 messages", value="25"),
+        app_commands.Choice(name="50 messages", value="50"),
+        app_commands.Choice(name="100 messages", value="100"),
+        app_commands.Choice(name="All (unpinned)", value="all"),
+    ])
     @app_commands.describe(
-        amount="Number of messages to delete (1-100), or 'all' to delete all messages in channel",
-        archive="Save a transcript of purged messages before deleting (soft delete)",
+        amount="Number of messages to delete, or all",
+        archive="Save a transcript before deleting (default: yes)",
     )
-    async def purge(interaction: discord.Interaction, amount: str, archive: bool = True):
+    async def purge(interaction: discord.Interaction, amount: app_commands.Choice[str], archive: bool = True):
         # Check if user is a mod
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
             return await interaction.response.send_message(
@@ -47,12 +54,13 @@ def setup(bot, group=None):
             )
 
         # Parse amount
-        if amount.lower() == "all":
+        amount_val = amount.value if hasattr(amount, "value") else str(amount)
+        if amount_val.lower() == "all":
             limit = None
             delete_count = 9999
         else:
             try:
-                limit = int(amount)
+                limit = int(amount_val)
                 if limit < 1:
                     return await interaction.response.send_message(
                         embed=error_embed("Invalid Amount", "Amount must be at least 1.", client=interaction.client),
@@ -80,7 +88,7 @@ def setup(bot, group=None):
         # Always require confirmation
         needs_confirm = True
         if needs_confirm:
-            preview = "all unpinned messages" if amount.lower() == "all" else f"up to {amount} messages"
+            preview = "all unpinned messages" if amount_val.lower() == "all" else f"up to {amount_val} messages"
             archive_note = " A transcript will be saved." if archive else ""
             embed = obsidian_embed(
                 "⚠️ Confirm Purge",
@@ -98,7 +106,7 @@ def setup(bot, group=None):
                 transcript_file = None
                 try:
                     deleted_msgs = []
-                    if amount.lower() == "all":
+                    if amount_val.lower() == "all":
                         while True:
                             try:
                                 msgs = await interaction.channel.purge(limit=100, check=lambda m: not m.pinned)
@@ -111,7 +119,7 @@ def setup(bot, group=None):
                             if not msgs:
                                 break
                     else:
-                        deleted_msgs = await interaction.channel.purge(limit=int(amount), check=lambda m: not m.pinned)
+                        deleted_msgs = await interaction.channel.purge(limit=int(amount_val), check=lambda m: not m.pinned)
                     if archive and deleted_msgs:
                         transcript = _build_purge_transcript(deleted_msgs)
                         fn = f"purge_{interaction.channel.name}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.txt"
@@ -127,6 +135,11 @@ def setup(bot, group=None):
                         if transcript_file:
                             kwargs["file"] = transcript_file
                         await btn_interaction.followup.send(**kwargs)
+                    try:
+                        from audit import log_audit
+                        await log_audit(interaction.guild.id, "purge", interaction.user.id, details=f"{deleted} msgs in #{interaction.channel.name}", bot=interaction.client)
+                    except Exception:
+                        pass
                 except discord.Forbidden:
                     await btn_interaction.followup.send("I need **Manage Messages** in this channel.", ephemeral=True)
                 except Exception as e:

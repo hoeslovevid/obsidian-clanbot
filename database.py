@@ -62,6 +62,27 @@ async def set_guild_setting(guild_id: int, key: str, value: str):
         await db.commit()
 
 
+async def get_user_timezone(guild_id: int, user_id: int) -> Optional[str]:
+    """Get a user's timezone preference (e.g. America/New_York). Uses guild_settings key 'user_tz:{user_id}'."""
+    return await get_guild_setting(guild_id, f"user_tz:{user_id}")
+
+
+async def set_user_timezone(guild_id: int, user_id: int, timezone: str) -> None:
+    """Set a user's timezone preference."""
+    await set_guild_setting(guild_id, f"user_tz:{user_id}", timezone)
+
+
+async def get_quieter_mode(guild_id: int) -> bool:
+    """Whether the guild has quieter mode enabled (mutes non-essential pings)."""
+    val = await get_guild_setting(guild_id, "quieter_mode")
+    return val == "1"
+
+
+async def set_quieter_mode(guild_id: int, enabled: bool) -> None:
+    """Enable or disable quieter mode for the guild."""
+    await set_guild_setting(guild_id, "quieter_mode", "1" if enabled else "0")
+
+
 async def get_log_channel_id(guild_id: int, log_type: str) -> Optional[int]:
     """Get the channel ID for a log type, or None if not configured."""
     async with aiosqlite.connect(DB_PATH) as db:

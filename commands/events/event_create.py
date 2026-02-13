@@ -3,7 +3,8 @@ import discord
 from discord import app_commands
 from datetime import datetime, timezone
 
-from utils import obsidian_embed, parse_time_natural, extract_id, now_utc, is_mod, EMBED_COLORS, TIME_AUTOCOMPLETE_CHOICES
+from typing import Optional
+from utils import obsidian_embed, success_embed, parse_time_natural, now_utc, is_mod, EMBED_COLORS, TIME_AUTOCOMPLETE_CHOICES
 from database import DB_PATH
 import aiosqlite
 
@@ -18,6 +19,56 @@ async def time_autocomplete(interaction: discord.Interaction, current: str) -> l
         if not current_lower or current_lower in value.lower():
             choices.append(app_commands.Choice(name=label, value=value))
     return choices[:25]
+
+
+async def create_event_from_modal(interaction: discord.Interaction, title: str, when_str: str, description: str, duration_hours: int = 2):
+    """Create event from modal (Add as Event context menu)."""
+    from bot import resolve_channel_id, RSVPView
+    from bot import EVENTS_CHANNEL_ID, EVENTS_CHANNEL_NAME
+    from database import get_configured_channel_id
+    await interaction.response.defer(ephemeral=True)
+    dt = parse_time_natural(when_str)
+    if not dt:
+        return await interaction.followup.send(
+            embed=obsidian_embed("❌ Invalid Time", f"Couldn't parse '{when_str}'. Try: tomorrow 8pm, in 2 hours", color=discord.Color.red(), client=interaction.client),
+            ephemeral=True,
+        )
+    events_id = await get_configured_channel_id(interaction.guild.id, "events_channel_id")
+    if not events_id:
+        events_id = await resolve_channel_id(interaction.guild, "events_channel_id", EVENTS_CHANNEL_ID, EVENTS_CHANNEL_NAME)
+    ch = interaction.guild.get_channel(events_id) if events_id else None
+    if not isinstance(ch, discord.TextChannel):
+        return await interaction.followup.send("Events channel not configured. Use /general setup_obsidian.", ephemeral=True)
+    ts = int(dt.timestamp())
+    if duration_hours < 1 or duration_hours > 24:
+        duration_hours = 2
+    end_ts = ts + (duration_hours * 3600)
+    embed = obsidian_embed(
+        f"🜂 Ops Order • {title}",
+        f"**When:** <t:{ts}:F>  _( <t:{ts}:R> )_\n\n**Ends:** <t:{end_ts}:t>\n\n**Briefing:**\n{description}",
+        color=discord.Color.dark_grey(),
+    )
+    embed.set_author(name=f"Filed by {interaction.user}", icon_url=interaction.user.display_avatar.url)
+    embed.set_footer(text="✅ 0  |  ❔ 0  |  ❌ 0")
+    msg = await ch.send(embed=embed, view=RSVPView())
+    thread_id = None
+    try:
+        thread = await msg.create_thread(name=f"{title} • Ops Thread", auto_archive_duration=1440)
+        thread_id = thread.id
+        await thread.send(embed=obsidian_embed("Ops Thread", "Coordinate here. Keep it clean, keep it sharp."))
+    except Exception:
+        pass
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO events(guild_id,message_id,creator_id,title,start_ts,end_ts,description,role_id,created_at,reminder_sent,ended,recap_posted,recap_message_id,thread_id) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (interaction.guild.id, msg.id, interaction.user.id, title, ts, end_ts, description, 0, now_utc().isoformat(), 0, 0, 0, 0, thread_id or 0),
+        )
+        await db.commit()
+    await interaction.followup.send(
+        embed=obsidian_embed("✅ Ops Event Posted", f"**{title}** has been posted.", color=EMBED_COLORS["success"], client=interaction.client),
+        ephemeral=True,
+    )
 
 
 def setup(bot, group=None):
@@ -36,10 +87,10 @@ def setup(bot, group=None):
         title="Event title",
         when="Natural time: 'tomorrow 8pm', 'in 2 hours', 'Jan 14 7:30pm'",
         description="What are we running?",
-        role_ping="Optional role @mention or role ID to ping",
+        role_ping="Optional role to ping when event is posted",
         duration_hours="How long the event runs (default: 2)"
     )
-    async def event_create(interaction: discord.Interaction, title: str, when: str, description: str, role_ping: str = "", duration_hours: int = 2):
+    async def event_create(interaction: discord.Interaction, title: str, when: str, description: str, role_ping: Optional[discord.Role] = None, duration_hours: int = 2):
         # Import bot-specific functions inside to avoid circular imports
         from bot import resolve_channel_id, RSVPView
         from bot import EVENTS_CHANNEL_ID, EVENTS_CHANNEL_NAME, DB_PATH
@@ -70,12 +121,8 @@ def setup(bot, group=None):
         if duration_hours < 1 or duration_hours > 24:
             duration_hours = 2
         end_ts = ts + (duration_hours * 3600)
-        role_id = extract_id(role_ping) if role_ping else None
-        mention = ""
-        if role_id:
-            role = interaction.guild.get_role(role_id)
-            if role:
-                mention = role.mention
+        mention = role_ping.mention if role_ping else ""
+        role_id = role_ping.id if role_ping else None
 
         embed = obsidian_embed(
             f"🜂 Ops Order • {title}",
@@ -122,10 +169,10 @@ def setup(bot, group=None):
             await db.commit()
 
         await interaction.followup.send(
-            embed=obsidian_embed(
-                "✅ Ops Event Posted",
-                f"**{title}** has been posted to the events channel.\n\n_→ Members can use the ✅/❔/❌ buttons to RSVP._",
-                color=EMBED_COLORS["success"],
+            embed=success_embed(
+                "Ops Event Posted",
+                f"**{title}** has been posted to the events channel.",
+                flair="Members can use the ✅/❔/❌ buttons to RSVP.",
                 client=interaction.client,
             ),
             ephemeral=True
@@ -144,7 +191,7 @@ def setup(bot, group=None):
         day="Day of week (0=Mon, 6=Sun)",
         hour_utc="Hour in UTC (0-23)",
         duration_hours="Event duration (default 2)",
-        role_ping="Optional role to ping"
+        role_ping="Optional role to ping when event is posted"
     )
     @app_commands.choices(day=[app_commands.Choice(name=DAY_NAMES[i], value=str(i)) for i in range(7)])
     async def recurring_add(
@@ -154,7 +201,7 @@ def setup(bot, group=None):
         day: app_commands.Choice[str],
         hour_utc: int = 18,
         duration_hours: int = 2,
-        role_ping: str = "",
+        role_ping: Optional[discord.Role] = None,
     ):
         """Add a recurring event template."""
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
@@ -165,7 +212,7 @@ def setup(bot, group=None):
             hour_utc = 18
 
         day_num = int(day.value)
-        role_id = extract_id(role_ping) if role_ping else None
+        role_id = role_ping.id if role_ping else None
 
         async with aiosqlite.connect(DB_PATH) as db:
             await db.execute("""

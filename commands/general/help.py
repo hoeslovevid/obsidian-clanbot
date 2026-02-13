@@ -151,16 +151,16 @@ class HelpSelect(discord.ui.Select):
         
         # Define all possible groups with their emojis and descriptions
         group_definitions = {
-            "general": ("General", "General bot commands", "📋"),
-            "economy": ("Economy", "Economy and coin management", "💰"),
-            "tools": ("Tools", "Coinflip and utilities", "🔧"),
-            "warframe": ("Warframe", "Warframe game information", "🎮"),
-            "community": ("Community", "Community features", "👥"),
-            "trading": ("Trading", "Trading commands", "💼"),
-            "mod": ("Moderation", "Moderation and server management", "🛡️"),
-            "giveaways": ("Giveaways", "Giveaway commands", "🎁"),
-            "updates": ("Updates", "Update log commands", "📝"),
-            "music": ("Music", "Music commands", "🎵"),
+            "general": ("General", "Help, profile, preferences, and setup", "📋"),
+            "economy": ("Economy", "Coins, daily, shop, gambling, pets", "💰"),
+            "tools": ("Tools", "Coinflip, server stats, utilities", "🔧"),
+            "warframe": ("Warframe", "Baro, cycles, alerts, builds, LFG", "🎮"),
+            "community": ("Community", "Events, tickets, reminders, suggestions", "👥"),
+            "trading": ("Trading", "Market prices and trading post", "💼"),
+            "mod": ("Moderation", "Purge, warn, logging, automod, roles", "🛡️"),
+            "giveaways": ("Giveaways", "Create and manage giveaways", "🎁"),
+            "updates": ("Updates", "Update log and version management", "📝"),
+            "music": ("Music", "Play music in voice channels", "🎵"),
         }
         
         # Only add options for groups that actually exist

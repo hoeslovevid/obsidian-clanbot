@@ -2,7 +2,7 @@
 import discord
 from discord import app_commands
 
-from utils import obsidian_embed, ECONOMY_ENABLED, is_mod
+from utils import obsidian_embed, feature_off_embed, ECONOMY_ENABLED, is_mod
 
 
 def setup(bot, group=None):
@@ -30,7 +30,7 @@ def setup(bot, group=None):
         from bot import add_coins, remove_coins, get_user_balance
         
         if not ECONOMY_ENABLED:
-            return await interaction.response.send_message("Economy system is disabled.", ephemeral=True)
+            return await interaction.response.send_message(embed=feature_off_embed("Economy", "Ask a moderator to enable it in the bot config.", client=interaction.client), ephemeral=True)
         
         # Check if user is a moderator
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):

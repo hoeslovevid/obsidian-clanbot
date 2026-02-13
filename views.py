@@ -81,6 +81,15 @@ class RetryView(discord.ui.View):
         super().__init__(timeout=timeout)
         self.retry_callback = retry_callback
 
+    async def on_timeout(self):
+        for c in self.children:
+            c.disabled = True
+        try:
+            if self.message:
+                await self.message.edit(view=self)
+        except Exception:
+            pass
+
     @discord.ui.button(label="Retry", style=discord.ButtonStyle.primary, emoji="🔄")
     async def retry_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         for c in self.children:
@@ -98,6 +107,15 @@ class RefreshView(discord.ui.View):
     def __init__(self, refresh_callback, *, timeout: float = 300):
         super().__init__(timeout=timeout)
         self.refresh_callback = refresh_callback
+
+    async def on_timeout(self):
+        for c in self.children:
+            c.disabled = True
+        try:
+            if self.message:
+                await self.message.edit(view=self)
+        except Exception:
+            pass
 
     @discord.ui.button(label="Refresh", style=discord.ButtonStyle.secondary, emoji="🔄")
     async def refresh_btn(self, interaction: discord.Interaction, button: discord.ui.Button):

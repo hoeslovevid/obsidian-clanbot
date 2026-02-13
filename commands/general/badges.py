@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from typing import Optional
 
-from utils import obsidian_embed, is_mod
+from utils import obsidian_embed, feature_off_embed, is_mod
 from database import (
     DB_PATH, now_utc,
     get_all_title_definitions,
@@ -449,7 +449,7 @@ def setup(bot, group=None):
                 )
             if not ECONOMY_ENABLED:
                 return await interaction.followup.send(
-                    embed=obsidian_embed("❌ Economy Disabled", "Purchasing titles is disabled.", color=discord.Color.red(), client=interaction.client),
+                    embed=feature_off_embed("Economy", "Ask a moderator to enable economy to purchase titles.", client=interaction.client),
                     ephemeral=True
                 )
             title_id = title_id.lower().strip()

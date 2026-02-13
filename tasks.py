@@ -10,7 +10,7 @@ import dateparser  # type: ignore
 import discord
 from discord.ext import tasks  # type: ignore
 
-from database import DB_PATH, now_utc, get_guild_setting, set_guild_setting, add_coins, add_xp, get_user_xp
+from database import DB_PATH, now_utc, get_guild_setting, set_guild_setting, get_quieter_mode, add_coins, add_xp, get_user_xp
 from channels import resolve_channel_id, delete_temp_vc_and_panel
 from warframe_api import get_baro_status, get_all_cycles, fetch_invasions, fetch_archon_hunt_data, fetch_events_data, fetch_alerts, fetch_duviri_circuit
 from utils import obsidian_embed, ECONOMY_ENABLED, COINS_PER_MINUTE_VOICE, MIN_VOICE_MINUTES_FOR_REWARD, XP_ENABLED, XP_PER_MINUTE_VOICE
@@ -225,7 +225,8 @@ def setup_tasks(bot):
 
             for message_id, title, start_ts, role_id in rows:
                 mention = ""
-                if int(role_id or 0):
+                quieter = await get_quieter_mode(guild.id)
+                if not quieter and int(role_id or 0):
                     role = guild.get_role(int(role_id))
                     if role:
                         mention = role.mention
@@ -289,7 +290,7 @@ def setup_tasks(bot):
                         ts = int(now.replace(minute=0, second=0, microsecond=0).timestamp())
                         end_ts = ts + (dur * 3600)
                         mention = ""
-                        if int(role_id or 0):
+                        if not await get_quieter_mode(guild.id) and int(role_id or 0):
                             role = guild.get_role(int(role_id))
                             if role:
                                 mention = role.mention
@@ -378,7 +379,7 @@ def setup_tasks(bot):
                             going_users = [int(x[0]) for x in await cur.fetchall()]
 
                         mention = ""
-                        if int(role_id or 0):
+                        if not await get_quieter_mode(guild.id) and int(role_id or 0):
                             role = guild.get_role(int(role_id))
                             if role:
                                 mention = role.mention
@@ -1670,6 +1671,8 @@ def setup_tasks(bot):
                     
                     channel = guild.get_channel(channel_id) if channel_id else None
                     prefer_dm = (await get_guild_setting(guild_id, "reminders_prefer_dm") or "").lower() in ("1", "true", "yes")
+                    if await get_quieter_mode(guild_id):
+                        prefer_dm = True  # Quieter mode: prefer DM to avoid channel pings
                     sent = False
                     if prefer_dm or not channel or not isinstance(channel, discord.TextChannel):
                         try:
@@ -1878,10 +1881,12 @@ def setup_tasks(bot):
                         if not isinstance(channel, discord.TextChannel):
                             continue
                         mod_role = get_mod_role(guild)
-                        mention = mod_role.mention if mod_role else ""
+                        mention = ""
+                        if not await get_quieter_mode(guild.id) and mod_role:
+                            mention = mod_role.mention
                         try:
                             await channel.send(
-                                content=mention,
+                                content=mention or None,
                                 embed=obsidian_embed(
                                     "⏰ Stale Ticket Reminder",
                                     f"This ticket has had no activity for **{stale_days}+ days**.\n"

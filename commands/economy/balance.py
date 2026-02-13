@@ -2,7 +2,7 @@
 import discord
 import aiosqlite
 
-from utils import obsidian_embed, try_dm_then_ephemeral, ECONOMY_ENABLED, COINS_PER_MESSAGE, MESSAGE_COOLDOWN_SECONDS, COINS_PER_MINUTE_VOICE, COINS_DAILY_REWARD, EMBED_COLORS
+from utils import obsidian_embed, try_dm_then_ephemeral, feature_off_embed, ECONOMY_ENABLED, COINS_PER_MESSAGE, MESSAGE_COOLDOWN_SECONDS, COINS_PER_MINUTE_VOICE, COINS_DAILY_REWARD, EMBED_COLORS, bullet_list
 from database import DB_PATH
 
 
@@ -12,12 +12,7 @@ def setup(bot, group=None):
         """Display the user's current coin balance."""
         if not ECONOMY_ENABLED:
             return await interaction.response.send_message(
-                embed=obsidian_embed(
-                    "❌ Economy Disabled",
-                    "The economy system is currently disabled.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
+                embed=feature_off_embed("Economy", "Ask a moderator to enable it in the bot config.", client=interaction.client),
                 ephemeral=True
             )
         
@@ -57,13 +52,14 @@ def setup(bot, group=None):
         filled = int(bar_len * pct / 100)
         bar_str = "█" * filled + "░" * (bar_len - filled)
 
+        earning_items = [
+            f"`/economy daily` – {COINS_DAILY_REWARD:,} coins/day",
+            f"Messages – {COINS_PER_MESSAGE} coins ({MESSAGE_COOLDOWN_SECONDS}s cooldown)",
+            f"Voice – {COINS_PER_MINUTE_VOICE} coins/minute",
+        ]
         fields = [
             ("💰 Balance", f"**{balance:,}** coins\n`[{bar_str}]` {pct}%", True),
-            ("📊 Earning Methods",
-             f"• `/daily` - {COINS_DAILY_REWARD:,} coins/day\n"
-             f"• Messages - {COINS_PER_MESSAGE} coins ({MESSAGE_COOLDOWN_SECONDS}s cooldown)\n"
-             f"• Voice - {COINS_PER_MINUTE_VOICE} coins/minute",
-             False)
+            ("📊 Earning Methods", bullet_list(earning_items), False)
         ]
 
         if pet_row:
@@ -80,7 +76,7 @@ def setup(bot, group=None):
             author=interaction.user,
             thumbnail=interaction.user.display_avatar.url if hasattr(interaction.user, 'display_avatar') else interaction.user.avatar.url if interaction.user.avatar else None,
             fields=fields,
-            footer="Use /economy daily to claim your daily reward",
+            footer="Use /economy daily • Try /economy leaderboard to see rankings",
             client=interaction.client,
         )
         await try_dm_then_ephemeral(interaction.user, embed, interaction, ephemeral_message="I couldn't DM you. Here's your balance:")

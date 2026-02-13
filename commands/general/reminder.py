@@ -7,7 +7,7 @@ import dateparser
 
 from config import TIMEZONE
 from utils import obsidian_embed, TIME_AUTOCOMPLETE_CHOICES, EMBED_COLORS
-from database import DB_PATH, now_utc
+from database import DB_PATH, now_utc, get_user_timezone
 import aiosqlite
 
 
@@ -43,9 +43,11 @@ def setup(bot, group=None):
             )
         
         await interaction.response.defer(ephemeral=True)
-        
-        # Parse when (use configured timezone)
-        remind_time = dateparser.parse(when, settings={'TIMEZONE': TIMEZONE, 'RETURN_AS_TIMEZONE_AWARE': True, 'TO_TIMEZONE': 'UTC'}, relative_base=datetime.now(timezone.utc))
+
+        # Parse when (use user timezone if set, else server default)
+        user_tz = await get_user_timezone(interaction.guild.id, interaction.user.id)
+        tz_for_parse = user_tz or TIMEZONE
+        remind_time = dateparser.parse(when, settings={'TIMEZONE': tz_for_parse, 'RETURN_AS_TIMEZONE_AWARE': True, 'TO_TIMEZONE': 'UTC'}, relative_base=datetime.now(timezone.utc))
         
         if not remind_time:
             return await interaction.followup.send(

@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from datetime import datetime
 
-from utils import obsidian_embed, error_embed, ECONOMY_ENABLED
+from utils import obsidian_embed, error_embed, feature_off_embed, ECONOMY_ENABLED
 from database import DB_PATH
 import aiosqlite
 
@@ -38,7 +38,7 @@ def setup(bot, group=None):
 
         if not ECONOMY_ENABLED:
             return await interaction.followup.send(
-                embed=error_embed("Economy Disabled", "The economy system is currently disabled.", client=interaction.client),
+                embed=feature_off_embed("Economy", "Ask a moderator to enable it in the bot config.", client=interaction.client),
                 ephemeral=True
             )
 

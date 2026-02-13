@@ -175,15 +175,19 @@ class SetupObsidianView(discord.ui.View):
 
 
 def setup(bot, group=None):
-    """Register the setup_obsidian command."""
+    """Register the setup_obsidian and setup (wizard) commands."""
     command_decorator = (
         group.command(name="setup_obsidian", description="Configure voice, events, complaints, and core channels (mods only).")
         if group
         else bot.tree.command(name="setup_obsidian", description="Configure voice, events, complaints, and core channels (mods only).")
     )
+    setup_wizard_decorator = (
+        group.command(name="setup", description="First-time setup wizard – configure channels step-by-step.")
+        if group
+        else bot.tree.command(name="setup", description="First-time setup wizard – configure channels step-by-step.")
+    )
 
-    @command_decorator
-    async def setup_obsidian(interaction: discord.Interaction):
+    async def _run_setup(interaction: discord.Interaction):
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
             return await interaction.response.send_message("Sorry, but you are not a moderator in this server.", ephemeral=True)
 
@@ -207,6 +211,14 @@ def setup(bot, group=None):
             view.message = msg
         finally:
             asyncio.create_task(_clear_setup_flag(interaction_key))
+
+    @command_decorator
+    async def setup_obsidian(interaction: discord.Interaction):
+        await _run_setup(interaction)
+
+    @setup_wizard_decorator
+    async def setup_wizard(interaction: discord.Interaction):
+        await _run_setup(interaction)
 
 
 async def _clear_setup_flag(key: str):

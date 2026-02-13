@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from typing import Optional
 
-from utils import obsidian_embed, ECONOMY_ENABLED
+from utils import obsidian_embed, feature_off_embed, bullet_list, ECONOMY_ENABLED
 from database import DB_PATH, remove_coins, add_coins
 import aiosqlite  # type: ignore
 
@@ -18,15 +18,10 @@ def setup(bot, group=None):
         """View shop items."""
         if not ECONOMY_ENABLED:
             return await interaction.response.send_message(
-                embed=obsidian_embed(
-                    "❌ Economy Disabled",
-                    "The economy system is currently disabled.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
+                embed=feature_off_embed("Economy", "Ask a moderator to enable it in the bot config.", client=interaction.client),
                 ephemeral=True
             )
-        
+
         if not interaction.guild:
             return await interaction.response.send_message(
                 embed=obsidian_embed(
@@ -67,15 +62,15 @@ def setup(bot, group=None):
             )
         
         item_type_emoji = {"role": "🎭", "coins": "💰", "xp": "⭐", "custom": "🎁"}
-        fields = []
-        items_text = ""
+        items = []
         for item_id, item_name, description, price, item_type, item_value, stock in rows[:15]:
             stock_text = f"({stock} left)" if stock >= 0 else "(Unlimited)"
             emoji = item_type_emoji.get(item_type, "📦")
-            items_text += f"{emoji} **{item_name}** — {price:,} coins {stock_text}\n"
-            items_text += f"   _{description[:80]}{'...' if len(description) > 80 else ''}_\n\n"
+            desc_short = description[:80] + ("..." if len(description) > 80 else "")
+            items.append(f"{emoji} **{item_name}** — {price:,} coins {stock_text}\n   _{desc_short}_")
+        items_text = bullet_list(items)
         if len(rows) > 15:
-            items_text += f"_...and {len(rows) - 15} more_"
+            items_text += f"\n_...and {len(rows) - 15} more_"
         
         bar_max = 100_000
         pct = min(100, int(100 * balance / bar_max)) if bar_max > 0 else 0
@@ -107,15 +102,10 @@ def setup(bot, group=None):
         """Buy an item from the shop."""
         if not ECONOMY_ENABLED:
             return await interaction.response.send_message(
-                embed=obsidian_embed(
-                    "❌ Economy Disabled",
-                    "The economy system is currently disabled.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
+                embed=feature_off_embed("Economy", "Ask a moderator to enable it in the bot config.", client=interaction.client),
                 ephemeral=True
             )
-        
+
         if not interaction.guild:
             return await interaction.response.send_message(
                 embed=obsidian_embed(

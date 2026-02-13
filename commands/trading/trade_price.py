@@ -30,7 +30,7 @@ async def item_autocomplete(interaction: discord.Interaction, current: str):
     return [app_commands.Choice(name=m, value=m) for m in matches]
 
 
-def _build_trade_embed(item_data: dict, price_data: dict, platform_val: str, client, author=None) -> discord.Embed:
+def _build_trade_embed(item_data: dict, price_data: dict, platform_val: str, client, author=None, fetched_at=None) -> discord.Embed:
     """Build the trade price embed from item and price data."""
     item_name = item_data.get("item_name", "Unknown")
     item_url_name = item_data.get("url_name", "")
@@ -56,6 +56,10 @@ def _build_trade_embed(item_data: dict, price_data: dict, platform_val: str, cli
     fields.append(("Platform", platform_val.upper(), True))
     market_url = f"https://warframe.market/items/{item_url_name}"
     thumb = f"https://warframe.market/static/assets/icons/en/{item_url_name}.png" if item_url_name else None
+    from datetime import datetime, timezone
+    now = fetched_at or datetime.now(timezone.utc)
+    ts = int(now.timestamp())
+    footer = f"Platform: {platform_val.upper()} • Last updated <t:{ts}:R>"
     return obsidian_embed(
         f"💎 Market Prices: {item_name}",
         f"[View on Warframe Market]({market_url})",
@@ -63,7 +67,7 @@ def _build_trade_embed(item_data: dict, price_data: dict, platform_val: str, cli
         thumbnail=thumb,
         fields=fields,
         author=author,
-        footer=f"Platform: {platform_val.upper()} • Prices refresh every 90s",
+        footer=footer,
         client=client,
     )
 
@@ -113,7 +117,7 @@ def setup(bot, group=None):
                 new_price = await get_warframe_market_price(new_item.get("url_name", ""), platform_val)
                 if not new_price:
                     return await btn_interaction.followup.send("Found item but could not fetch prices. Try again later.", ephemeral=True)
-                emb = _build_trade_embed(new_item, new_price, platform_val, interaction.client, author=interaction.user)
+                emb = _build_trade_embed(new_item, new_price, platform_val, interaction.client, author=interaction.user, fetched_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc))
                 await btn_interaction.message.edit(embed=emb, view=None)
 
             return await interaction.followup.send(
@@ -141,7 +145,7 @@ def setup(bot, group=None):
                 new_price = await get_warframe_market_price(item_url_name, platform_val)
                 if not new_price:
                     return await btn_interaction.followup.send("Still unable to fetch prices. Try again later.", ephemeral=True)
-                emb = _build_trade_embed(item_data, new_price, platform_val, interaction.client, author=interaction.user)
+                emb = _build_trade_embed(item_data, new_price, platform_val, interaction.client, author=interaction.user, fetched_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc))
                 await btn_interaction.message.edit(embed=emb, view=None)
 
             return await interaction.followup.send(
@@ -155,17 +159,21 @@ def setup(bot, group=None):
                 ephemeral=True,
             )
         
-        embed = _build_trade_embed(item_data, price_data, platform_val, interaction.client, author=interaction.user)
+        from datetime import datetime, timezone
+        fetched_at = datetime.now(timezone.utc)
+        embed = _build_trade_embed(item_data, price_data, platform_val, interaction.client, author=interaction.user, fetched_at=fetched_at)
         market_url = f"https://warframe.market/items/{item_url_name}"
 
         async def on_refresh(btn_interaction: discord.Interaction):
             if btn_interaction.user.id != interaction.user.id:
-                return await btn_interaction.followup.send("Only the person who ran this can refresh.", ephemeral=True)
+                return await btn_interaction.response.send_message("Only the person who ran this can refresh.", ephemeral=True)
+            await btn_interaction.response.defer()
             invalidate(f"warframe_market:price:{item_url_name}:{platform_val}")
             new_price = await get_warframe_market_price(item_url_name, platform_val)
             if not new_price:
                 return await btn_interaction.followup.send("Could not fetch fresh prices. Try again later.", ephemeral=True)
-            new_emb = _build_trade_embed(item_data, new_price, platform_val, interaction.client, author=interaction.user)
+            from datetime import datetime, timezone
+            new_emb = _build_trade_embed(item_data, new_price, platform_val, interaction.client, author=interaction.user, fetched_at=datetime.now(timezone.utc))
             v2 = RefreshView(on_refresh, timeout=300)
             v2.add_item(discord.ui.Button(label="View on Warframe Market", url=market_url, style=discord.ButtonStyle.link, emoji="🔗"))
             await btn_interaction.message.edit(embed=new_emb, view=v2)

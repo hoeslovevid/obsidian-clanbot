@@ -2,7 +2,7 @@
 import discord
 from discord import app_commands
 
-from utils import obsidian_embed, error_embed, ECONOMY_ENABLED, is_mod, format_timestamp_readable, EMBED_FOOTER_DEFAULT
+from utils import obsidian_embed, error_embed, feature_off_embed, ECONOMY_ENABLED, is_mod, format_timestamp_readable, EMBED_FOOTER_DEFAULT
 
 
 def setup(bot, group=None):
@@ -72,7 +72,7 @@ def setup(bot, group=None):
 
         if not ECONOMY_ENABLED:
             return await interaction.response.send_message(
-                embed=error_embed("Economy Disabled", "The economy system is currently disabled.", client=interaction.client),
+                embed=feature_off_embed("Economy", "Ask a moderator to enable it in the bot config.", client=interaction.client),
                 ephemeral=True
             )
         if not interaction.guild:
@@ -113,7 +113,7 @@ def setup(bot, group=None):
             )
         if not ECONOMY_ENABLED:
             return await interaction.response.send_message(
-                embed=error_embed("Economy Disabled", "The economy system is currently disabled.", client=interaction.client),
+                embed=feature_off_embed("Economy", "Ask a moderator to enable it in the bot config.", client=interaction.client),
                 ephemeral=True,
             )
         if member.bot:
@@ -267,3 +267,41 @@ def setup(bot, group=None):
                 ephemeral=True,
             )
         await interaction.response.send_modal(AddToSuggestionModal(message))
+
+    @bot.tree.context_menu(name="Add as Event")
+    async def add_as_event_context(interaction: discord.Interaction, message: discord.Message):
+        """Right-click message → Create event from message content (pre-filled)."""
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=error_embed("Invalid Context", "This can only be used in a server.", client=interaction.client),
+                ephemeral=True,
+            )
+        content = (message.content or "").strip()
+        if not content or len(content) < 3:
+            return await interaction.response.send_message(
+                embed=error_embed("No Content", "Message has no usable text. Try a message with a title or description.", action_hint="Use /community event_create to create an event manually.", client=interaction.client),
+                ephemeral=True,
+            )
+        from modals import AddAsEventModal
+        await interaction.response.send_modal(AddAsEventModal(message))
+
+    @bot.tree.context_menu(name="Create Ticket for User")
+    async def create_ticket_for_user_context(interaction: discord.Interaction, member: discord.Member):
+        """Right-click user → Create a support ticket for them (mod only)."""
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=error_embed("Invalid Context", "This can only be used in a server.", client=interaction.client),
+                ephemeral=True,
+            )
+        if not is_mod(interaction.user):
+            return await interaction.response.send_message(
+                embed=error_embed("Permission Denied", "Only moderators can create tickets for other users.", client=interaction.client),
+                ephemeral=True,
+            )
+        if member.bot:
+            return await interaction.response.send_message(
+                embed=error_embed("Invalid Target", "You cannot create tickets for bots.", client=interaction.client),
+                ephemeral=True,
+            )
+        from modals import CreateTicketForUserModal
+        await interaction.response.send_modal(CreateTicketForUserModal(member))

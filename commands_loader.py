@@ -66,6 +66,7 @@ def load_all_commands(bot):
         "commands.general.rules",
         "commands.general.polls",
         "commands.general.reminder",
+        "commands.general.preferences",
         "commands.general.reputation",
         "commands.general.twitch",
         "commands.music.music",
@@ -108,6 +109,7 @@ def load_all_commands(bot):
         "commands.moderation.dashboard",
         "commands.moderation.ticket_config",
         "commands.economy.balance",
+        "commands.economy.config",
         "commands.economy.transactions",
         "commands.economy.leaderboard",
         "commands.economy.daily",
@@ -163,6 +165,7 @@ def load_all_commands(bot):
 
     group_mapping = {
         "commands.economy.balance": economy_group,
+        "commands.economy.config": economy_group,
         "commands.economy.transactions": economy_group,
         "commands.economy.leaderboard": economy_group,
         "commands.economy.daily": economy_group,
@@ -233,6 +236,7 @@ def load_all_commands(bot):
         "commands.general.rules": general_group,
         "commands.general.polls": general_group,
         "commands.general.reminder": community_group,
+        "commands.general.preferences": general_group,
         "commands.general.reputation": community_group,
         "commands.general.twitch": community_group,
         "commands.general.afk": community_group,

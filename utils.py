@@ -123,6 +123,17 @@ async def try_dm_then_ephemeral(
         return False
 
 
+def feature_off_embed(feature: str, action_hint: Optional[str] = None, client=None) -> discord.Embed:
+    """Consistent embed when a feature is disabled."""
+    msg = f"**{feature}** is currently disabled."
+    return error_embed("Feature Disabled", msg, action_hint=(action_hint or "Ask a moderator to enable it."), client=client)
+
+
+def bullet_list(items: list[str], bullet: str = "•") -> str:
+    """Format items as a bullet list (mobile-friendly)."""
+    return "\n".join(f"{bullet} {item}" for item in items if item)
+
+
 def error_embed(title: str, message: str, *, action_hint: Optional[str] = None, client=None) -> discord.Embed:
     """Consistent error embed format with optional actionable next step."""
     desc = truncate_desc(str(message))

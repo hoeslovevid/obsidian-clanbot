@@ -176,7 +176,8 @@ def setup(bot, group=None):
             new_fields = _build_cycle_fields(new_success)
             new_failed = [k for k in ("cetus", "vallis", "cambion") if k not in new_success]
             new_desc = "Partial data: " + ", ".join(new_failed) + " unavailable." if new_failed else ""
-            new_emb = obsidian_embed("🌍 Open World Cycles", new_desc or "", color=discord.Color.blue(), fields=new_fields, client=interaction.client)
+            ts = int(datetime.now(timezone.utc).timestamp())
+            new_emb = obsidian_embed("🌍 Open World Cycles", new_desc or "", color=discord.Color.blue(), fields=new_fields, footer=f"Cetus • Fortuna • Deimos • Last updated <t:{ts}:R> • Use Refresh to update", client=interaction.client)
             view = RefreshView(on_refresh)
             await btn_interaction.message.edit(embed=new_emb, view=view)
 

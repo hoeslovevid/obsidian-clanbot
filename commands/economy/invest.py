@@ -4,7 +4,7 @@ from discord import app_commands
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from utils import obsidian_embed, ECONOMY_ENABLED
+from utils import obsidian_embed, feature_off_embed, ECONOMY_ENABLED
 from database import DB_PATH, remove_coins, add_coins
 import aiosqlite  # type: ignore
 
@@ -170,12 +170,7 @@ def setup(bot, group=None):
         """Check investment status."""
         if not ECONOMY_ENABLED:
             return await interaction.response.send_message(
-                embed=obsidian_embed(
-                    "❌ Economy Disabled",
-                    "The economy system is currently disabled.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
+                embed=feature_off_embed("Economy", "Ask a moderator to enable it in the bot config.", client=interaction.client),
                 ephemeral=True
             )
         
@@ -258,12 +253,7 @@ def setup(bot, group=None):
         """Collect investment returns."""
         if not ECONOMY_ENABLED:
             return await interaction.response.send_message(
-                embed=obsidian_embed(
-                    "❌ Economy Disabled",
-                    "The economy system is currently disabled.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
+                embed=feature_off_embed("Economy", "Ask a moderator to enable it in the bot config.", client=interaction.client),
                 ephemeral=True
             )
         

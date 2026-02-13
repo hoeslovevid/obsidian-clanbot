@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from typing import Optional
 
-from utils import obsidian_embed, error_embed, is_mod
+from utils import obsidian_embed, error_embed, success_embed, is_mod
 from database import get_guild_setting, set_guild_setting, DB_PATH
 import aiosqlite  # type: ignore
 
@@ -30,6 +30,7 @@ def setup(bot, group=None):
         app_commands.Choice(name="Role Changes", value="role_change"),
         app_commands.Choice(name="Channel Updates", value="channel_update"),
         app_commands.Choice(name="Ticket Transcripts", value="ticket_transcript"),
+        app_commands.Choice(name="Audit Log", value="audit"),
     ])
     async def logging(
         interaction: discord.Interaction,
@@ -94,15 +95,14 @@ def setup(bot, group=None):
             }
             
             await interaction.followup.send(
-                embed=obsidian_embed(
-                    "✅ Logging Configured",
+                embed=success_embed(
+                    "Logging Configured",
                     f"{log_type_names.get(log_type.value, log_type.value)} will be logged to {channel.mention}.",
-                    color=discord.Color.green(),
                     client=interaction.client,
                 ),
                 ephemeral=True
             )
-        
+
         elif action.lower() == "remove":
             async with aiosqlite.connect(DB_PATH) as db:
                 await db.execute("""
@@ -112,10 +112,9 @@ def setup(bot, group=None):
                 await db.commit()
             
             await interaction.followup.send(
-                embed=obsidian_embed(
-                    "✅ Logging Disabled",
+                embed=success_embed(
+                    "Logging Disabled",
                     f"Logging for {log_type.value} has been disabled.",
-                    color=discord.Color.green(),
                     client=interaction.client,
                 ),
                 ephemeral=True

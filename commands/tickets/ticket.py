@@ -7,7 +7,7 @@ import asyncio
 import re
 import io
 
-from utils import obsidian_embed, is_mod, format_timestamp_readable, EMBED_COLORS
+from utils import obsidian_embed, success_embed, is_mod, format_timestamp_readable, EMBED_COLORS
 from database import DB_PATH, now_utc, get_guild_setting
 from views import ConfirmView
 import aiosqlite
@@ -437,6 +437,14 @@ async def close_ticket(
         )
         await db.commit()
 
+    try:
+        from audit import log_audit
+        bot_ref = getattr(interaction.client, "bot", interaction.client) or interaction.client
+        await log_audit(interaction.guild.id, "ticket_close", closer_id, target_id=int(ticket_row["user_id"]), target_type="user",
+            details=f"Ticket {ticket_row['ticket_id']}: {reason or 'No reason'}", bot=bot_ref)
+    except Exception:
+        pass
+
     # Notify in channel
     close_embed = obsidian_embed(
         f"Ticket `{ticket_row['ticket_id']}` Closed",
@@ -472,6 +480,60 @@ async def close_ticket(
         await channel.delete(reason=f"Ticket closed by {closer_id}")
     except discord.Forbidden:
         pass
+
+
+async def create_ticket_for_user(interaction: discord.Interaction, target_member: discord.Member, subject: str):
+    """Create a ticket for another user (mod action)."""
+    from utils import obsidian_embed, EMBED_COLORS
+    await interaction.response.defer(ephemeral=True)
+    if not interaction.guild or not isinstance(interaction.user, discord.Member):
+        return await interaction.followup.send("Invalid context.", ephemeral=True)
+    username = target_member.display_name or target_member.name
+    ticket_id = generate_ticket_id(username, subject)
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("SELECT 1 FROM tickets WHERE guild_id=? AND ticket_id=?", (interaction.guild.id, ticket_id))
+        counter = 1
+        original_ticket_id = ticket_id
+        while await cur.fetchone():
+            ticket_id = f"{original_ticket_id}-{counter}"
+            if len(ticket_id) > 50:
+                max_base_len = 50 - len(str(counter)) - 1
+                ticket_id = f"{original_ticket_id[:max_base_len]}-{counter}"
+            cur = await db.execute("SELECT 1 FROM tickets WHERE guild_id=? AND ticket_id=?", (interaction.guild.id, ticket_id))
+            counter += 1
+    channel = await create_ticket_channel(interaction.guild, target_member, ticket_id, subject)
+    if not channel:
+        return await interaction.followup.send(
+            embed=obsidian_embed("❌ Permission Error", "I don't have permission to create channels.", color=discord.Color.red(), client=interaction.client),
+            ephemeral=True,
+        )
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            INSERT INTO tickets (guild_id, user_id, channel_id, ticket_id, subject, status, created_at, last_activity_at, tag, priority)
+            VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?, ?)
+        """, (interaction.guild.id, target_member.id, channel.id, ticket_id, subject, now_utc().isoformat(), now_utc().isoformat(), None, "normal"))
+        await db.commit()
+        cur = await db.execute("SELECT last_insert_rowid()")
+        ticket_db_id = (await cur.fetchone())[0]
+    fields = [("Subject", subject, True), ("Status", "Open", True), ("Created For", target_member.mention, True), ("Created By", interaction.user.mention, True)]
+    embed = obsidian_embed(
+        f"Ticket #{ticket_id}",
+        f"Ticket created for {target_member.mention} by {interaction.user.mention}.\n\nStaff will respond shortly.",
+        color=EMBED_COLORS["success"], fields=fields, author=interaction.user,
+        thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
+        footer=f"Ticket ID: {ticket_id}", client=interaction.client,
+    )
+    await channel.send(embed=embed)
+    controls = TicketControlView(int(ticket_db_id), ticket_id)
+    ctrl_msg = await channel.send(embed=obsidian_embed("🎫 Ticket Controls", "Staff controls: claim, add note, transcript, close.", color=discord.Color.blurple(), client=interaction.client), view=controls)
+    bot_ref = getattr(interaction.client, "bot", interaction.client) or interaction.client
+    if hasattr(bot_ref, "add_view"):
+        bot_ref.add_view(controls, message_id=ctrl_msg.id)
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("UPDATE tickets SET control_message_id=? WHERE id=?", (ctrl_msg.id, ticket_db_id))
+        await db.commit()
+    await channel.send(f"{target_member.mention}, a ticket has been created for you.")
+    await interaction.followup.send(embed=obsidian_embed("✅ Ticket Created", f"Ticket for {target_member.mention}: {channel.mention}", color=EMBED_COLORS["success"], client=interaction.client), ephemeral=True)
 
 
 async def create_ticket_channel(guild: discord.Guild, user: discord.Member, ticket_id: str, subject: str) -> Optional[discord.TextChannel]:
@@ -659,14 +721,15 @@ def setup(bot, group=None):
 
         await channel.send(f"{interaction.user.mention}, your ticket has been created!")
         
-        embed = obsidian_embed(
-            "✅ Ticket Created",
-            f"Your ticket has been created: {channel.mention}\n**Ticket ID:** `{ticket_id}`\n\n_→ Use `/community ticket message` in the ticket channel to add more info._",
-            color=EMBED_COLORS["success"],
-            thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
-            footer=f"Ticket ID: {ticket_id} • Use /community ticket close in the channel to close",
+        embed = success_embed(
+            "Ticket Created",
+            f"Your ticket has been created: {channel.mention}\n**Ticket ID:** `{ticket_id}`",
+            flair="Use `/community ticket message` in the channel to add info, `/community ticket close` when done.",
             client=interaction.client,
         )
+        if interaction.guild.icon:
+            embed.set_thumbnail(url=interaction.guild.icon.url)
+        embed.set_footer(text=f"Ticket ID: {ticket_id}")
         await interaction.followup.send(embed=embed, ephemeral=True)
     
     command_decorator = group.command(name="ticket_close", description="Close a support ticket (moderators only).") if group else bot.tree.command(name="ticket_close", description="Close a support ticket (moderators only).")
