@@ -55,6 +55,17 @@ EMBED_COLORS = {
     "error": discord.Color.red(),
 }
 
+# Common time phrases for autocomplete (event_create, reminder, etc.)
+TIME_AUTOCOMPLETE_CHOICES = [
+    ("in 1 hour", "1 hour from now"),
+    ("in 2 hours", "2 hours from now"),
+    ("in 30 minutes", "30 min from now"),
+    ("tomorrow 8pm", "Tomorrow at 8 PM"),
+    ("tomorrow 9am", "Tomorrow at 9 AM"),
+    ("next Monday 7pm", "Next Monday 7 PM"),
+    ("in 1 day", "1 day from now"),
+]
+
 
 def truncate_field(value: str, max_len: int = EMBED_FIELD_VALUE_MAX) -> str:
     """Truncate field value to Discord limit, with ellipsis."""
@@ -68,6 +79,48 @@ def truncate_desc(desc: str, max_len: int = EMBED_DESC_MAX) -> str:
     if not desc or len(desc) <= max_len:
         return desc or ""
     return desc[: max_len - 3] + "..."
+
+
+def success_embed(title: str, message: str, *, flair: Optional[str] = None, client=None, **kwargs) -> discord.Embed:
+    """Consistent success embed with optional celebratory flair."""
+    desc = truncate_desc(str(message))
+    if flair:
+        desc += f"\n\n_{flair}_"
+    return obsidian_embed(
+        f"✅ {title}" if not title.startswith("✅") else title,
+        desc,
+        color=EMBED_COLORS["success"],
+        footer=EMBED_FOOTER_DEFAULT,
+        client=client,
+        **kwargs
+    )
+
+
+async def try_dm_then_ephemeral(
+    user: discord.User,
+    embed: discord.Embed,
+    interaction: discord.Interaction,
+    ephemeral_message: str = "I couldn't DM you (DMs may be closed). Here's the info:",
+) -> bool:
+    """Try to DM the user; if that fails, send ephemeral reply with original embed. Returns True if DMed, False if ephemeral fallback."""
+    try:
+        await user.send(embed=embed)
+        if not interaction.response.is_done():
+            await interaction.response.send_message("Check your DMs!", ephemeral=True)
+        else:
+            await interaction.followup.send("Check your DMs!", ephemeral=True)
+        return True
+    except (discord.Forbidden, discord.HTTPException):
+        fallback = embed.copy()
+        if fallback.description:
+            fallback.description = f"{ephemeral_message}\n\n{fallback.description}"
+        else:
+            fallback.description = ephemeral_message
+        if not interaction.response.is_done():
+            await interaction.response.send_message(embed=fallback, ephemeral=True)
+        else:
+            await interaction.followup.send(embed=fallback, ephemeral=True)
+        return False
 
 
 def error_embed(title: str, message: str, *, action_hint: Optional[str] = None, client=None) -> discord.Embed:

@@ -3,14 +3,36 @@ import discord
 from discord import app_commands
 
 from utils import obsidian_embed
+from database import DB_PATH
+import aiosqlite
+
+
+async def case_id_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+    """Autocomplete case IDs for the current user's open complaints."""
+    if not interaction.guild:
+        return []
+    current_lower = (current or "").lower()
+    choices = []
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            "SELECT case_id FROM complaints WHERE guild_id=? AND user_id=? AND status IN ('OPEN','ACKNOWLEDGED','NEEDS INFO') ORDER BY created_at DESC LIMIT 25",
+            (interaction.guild.id, interaction.user.id),
+        )
+        rows = await cur.fetchall()
+    for (case_id,) in rows:
+        cid = str(case_id)
+        if not current_lower or current_lower in cid.lower():
+            choices.append(app_commands.Choice(name=cid, value=cid))
+    return choices[:25]
 
 
 def setup(bot, group=None):
     """Register the submit_complaint command."""
-    command_decorator = group.command(name="submit_complaint", description="Submit additional information to an existing complaint/help request case.") if group else bot.tree.command(name="submit_complaint", description="Submit additional information to an existing complaint/help request case.")
+    command_decorator = group.command(name="submit_complaint", description="Add info to your complaint/help case. Example: /community submit_complaint case_id:OBS-... details:Screenshot link") if group else bot.tree.command(name="submit_complaint", description="Add info to your complaint/help case. Example: /community submit_complaint case_id:OBS-... details:Screenshot link")
     
     @command_decorator
-    @app_commands.describe(case_id="Your case id (e.g., OBS-...)", details="Additional details / links / screenshots")
+    @app_commands.autocomplete(case_id=case_id_autocomplete)
+    @app_commands.describe(case_id="Your case ID (e.g., OBS-...) — autocompletes your open cases", details="Additional details / links / screenshots")
     async def submit_complaint(interaction: discord.Interaction, case_id: str, details: str):
         # Import bot-specific functions inside to avoid circular imports
         from bot import ensure_core_channels, resolve_channel_id, log_complaint_action

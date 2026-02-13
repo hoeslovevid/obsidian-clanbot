@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class EmbedPaginator(discord.ui.View):
     """Reusable paginated embed view with Prev/Next buttons."""
 
-    def __init__(self, title: str, pages: list, *, color=None, client=None, timeout: float = 120):
+    def __init__(self, title: str, pages: list, *, color=None, client=None, timeout: float = 120, total_items: int = None, per_page: int = 15):
         super().__init__(timeout=timeout)
         self.title = title
         self.pages = pages
@@ -24,6 +24,8 @@ class EmbedPaginator(discord.ui.View):
         self.client = client
         self.page = 0
         self.total_pages = max(1, len(pages))
+        self._total_items = total_items
+        self._per_page = per_page
         self._update_buttons()
 
     def _update_buttons(self):
@@ -37,7 +39,14 @@ class EmbedPaginator(discord.ui.View):
         p = self.pages[self.page]
         desc = p.get("description", "")
         fields = p.get("fields", [])
-        footer = p.get("footer") or f"Page {self.page + 1}/{self.total_pages}"
+        total_items = self._total_items
+        if total_items is not None:
+            per_page = getattr(self, "_per_page", 15)
+            start = self.page * per_page + 1
+            end = min((self.page + 1) * per_page, total_items)
+            footer = f"Page {self.page + 1}/{self.total_pages} • Showing {start}-{end} of {total_items}"
+        else:
+            footer = p.get("footer") or f"Page {self.page + 1}/{self.total_pages}"
         return obsidian_embed(
             self.title,
             desc,

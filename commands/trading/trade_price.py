@@ -2,7 +2,7 @@
 import discord
 from discord import app_commands
 
-from utils import obsidian_embed, error_embed
+from utils import obsidian_embed, error_embed, EMBED_COLORS
 from warframe_api import search_warframe_market_item, get_warframe_market_price
 from views import RetryView, RefreshView
 from cache_utils import invalidate
@@ -59,7 +59,7 @@ def _build_trade_embed(item_data: dict, price_data: dict, platform_val: str, cli
     return obsidian_embed(
         f"💎 Market Prices: {item_name}",
         f"[View on Warframe Market]({market_url})",
-        color=discord.Color.gold(),
+        color=EMBED_COLORS["economy"],
         thumbnail=thumb,
         fields=fields,
         author=author,
@@ -120,6 +120,7 @@ def setup(bot, group=None):
                 embed=error_embed(
                     "Item Not Found",
                     f"Could not find '{item}' on Warframe Market. Please check the spelling and try again.{hint}",
+                    action_hint="Search manually at warframe.market and copy the exact item name.",
                     client=interaction.client,
                 ),
                 view=RetryView(on_retry_search),
@@ -147,6 +148,7 @@ def setup(bot, group=None):
                 embed=error_embed(
                     "Price Data Unavailable",
                     f"Could not fetch price data for '{item_name}'. The item may not be tradeable or have no active listings.",
+                    action_hint="Try again in a moment, or check warframe.market directly.",
                     client=interaction.client,
                 ),
                 view=RetryView(on_retry_price),

@@ -169,7 +169,7 @@ def setup(bot, group=None):
                     "footer": p["footer"],
                     "thumbnail": p.get("thumbnail"),
                 })
-            paginator = EmbedPaginator("🏆 Coin Leaderboard", paginator_pages, color=discord.Color.gold(), client=interaction.client)
+            paginator = EmbedPaginator("🏆 Coin Leaderboard", paginator_pages, color=discord.Color.gold(), client=interaction.client, total_items=total_count, per_page=per_page)
             first_embed = obsidian_embed(
                 "🏆 Coin Leaderboard",
                 paginator_pages[0]["description"],

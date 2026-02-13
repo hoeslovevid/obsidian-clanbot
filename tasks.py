@@ -1669,8 +1669,9 @@ def setup_tasks(bot):
                         continue
                     
                     channel = guild.get_channel(channel_id) if channel_id else None
-                    if not channel or not isinstance(channel, discord.TextChannel):
-                        # Try to DM user instead
+                    prefer_dm = (await get_guild_setting(guild_id, "reminders_prefer_dm") or "").lower() in ("1", "true", "yes")
+                    sent = False
+                    if prefer_dm or not channel or not isinstance(channel, discord.TextChannel):
                         try:
                             embed = obsidian_embed(
                                 "⏰ Reminder",
@@ -1679,10 +1680,10 @@ def setup_tasks(bot):
                                 client=bot,
                             )
                             await user.send(embed=embed)
-                        except:
+                            sent = True
+                        except Exception:
                             pass  # User has DMs disabled
-                    else:
-                        # Send in channel
+                    if not sent and channel and isinstance(channel, discord.TextChannel):
                         embed = obsidian_embed(
                             "⏰ Reminder",
                             f"{user.mention}\n**{reminder_text}**",

@@ -315,10 +315,10 @@ class HelpSelect(discord.ui.Select):
 
 def setup(bot, group=None):
     """Register the help command."""
-    command_decorator = group.command(name="help", description="Browse all commands and get usage help.") if group else bot.tree.command(name="help", description="Browse all commands and get usage help.")
+    command_decorator = group.command(name="help", description="Browse commands or get help for a specific command. Example: /general help command:economy daily") if group else bot.tree.command(name="help", description="Browse commands or get help for a specific command. Example: /general help command:economy daily")
     
     @command_decorator
-    @app_commands.describe(command="Get help for a specific command (e.g., 'economy balance' or 'warframe baro')")
+    @app_commands.describe(command="Optional: get help for a specific command (e.g., 'economy balance', 'community event_create')")
     async def help_command(interaction: discord.Interaction, command: Optional[str] = None):
         """Display an interactive help embed with command groups, or help for a specific command."""
         is_user_mod = isinstance(interaction.user, discord.Member) and is_mod(interaction.user)

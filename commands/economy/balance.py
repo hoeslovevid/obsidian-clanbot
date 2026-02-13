@@ -2,7 +2,7 @@
 import discord
 import aiosqlite
 
-from utils import obsidian_embed, ECONOMY_ENABLED, COINS_PER_MESSAGE, MESSAGE_COOLDOWN_SECONDS, COINS_PER_MINUTE_VOICE, COINS_DAILY_REWARD
+from utils import obsidian_embed, try_dm_then_ephemeral, ECONOMY_ENABLED, COINS_PER_MESSAGE, MESSAGE_COOLDOWN_SECONDS, COINS_PER_MINUTE_VOICE, COINS_DAILY_REWARD, EMBED_COLORS
 from database import DB_PATH
 
 
@@ -76,15 +76,14 @@ def setup(bot, group=None):
         embed = obsidian_embed(
             "💰 Coin Balance",
             "",
-            color=discord.Color.gold(),
+            color=EMBED_COLORS["economy"],
             author=interaction.user,
             thumbnail=interaction.user.display_avatar.url if hasattr(interaction.user, 'display_avatar') else interaction.user.avatar.url if interaction.user.avatar else None,
             fields=fields,
-            footer="Use /daily to claim your daily reward",
+            footer="Use /economy daily to claim your daily reward",
             client=interaction.client,
         )
-        
-        await interaction.followup.send(embed=embed, ephemeral=True)
+        await try_dm_then_ephemeral(interaction.user, embed, interaction, ephemeral_message="I couldn't DM you. Here's your balance:")
 
     command_decorator = group.command(name="balance", description="View your coin balance.") if group else bot.tree.command(name="balance", description="View your coin balance.")
     command_decorator(balance_callback)

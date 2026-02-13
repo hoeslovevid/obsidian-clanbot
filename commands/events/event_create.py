@@ -3,21 +3,38 @@ import discord
 from discord import app_commands
 from datetime import datetime, timezone
 
-from utils import obsidian_embed, parse_time_natural, extract_id, now_utc, is_mod
+from utils import obsidian_embed, parse_time_natural, extract_id, now_utc, is_mod, EMBED_COLORS, TIME_AUTOCOMPLETE_CHOICES
 from database import DB_PATH
 import aiosqlite
 
 DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 
+async def time_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+    """Autocomplete for natural time strings."""
+    current_lower = (current or "").lower()
+    choices = []
+    for value, label in TIME_AUTOCOMPLETE_CHOICES:
+        if not current_lower or current_lower in value.lower():
+            choices.append(app_commands.Choice(name=label, value=value))
+    return choices[:25]
+
+
 def setup(bot, group=None):
     """Register the event_create command."""
-    command_decorator = group.command(name="event_create", description="Create an event with RSVP buttons and reminders.") if group else bot.tree.command(name="event_create", description="Create an event with RSVP buttons and reminders.")
+    command_decorator = group.command(
+        name="event_create",
+        description="Create an event with RSVP buttons and reminders. Example: /community event_create title:'Sortie Run' when:tomorrow 8pm description:Running sorties"
+    ) if group else bot.tree.command(
+        name="event_create",
+        description="Create an event with RSVP buttons and reminders. Example: /community event_create title:'Sortie Run' when:tomorrow 8pm description:Running sorties"
+    )
     
     @command_decorator
+    @app_commands.autocomplete(when=time_autocomplete)
     @app_commands.describe(
         title="Event title",
-        when="Natural time: 'tomorrow 8pm', 'Jan 14 7:30pm', etc.",
+        when="Natural time: 'tomorrow 8pm', 'in 2 hours', 'Jan 14 7:30pm'",
         description="What are we running?",
         role_ping="Optional role @mention or role ID to ping",
         duration_hours="How long the event runs (default: 2)"
@@ -104,7 +121,15 @@ def setup(bot, group=None):
             )
             await db.commit()
 
-        await interaction.followup.send("Ops event posted.", ephemeral=True)
+        await interaction.followup.send(
+            embed=obsidian_embed(
+                "✅ Ops Event Posted",
+                f"**{title}** has been posted to the events channel.\n\n_→ Members can use the ✅/❔/❌ buttons to RSVP._",
+                color=EMBED_COLORS["success"],
+                client=interaction.client,
+            ),
+            ephemeral=True
+        )
 
     # Recurring event templates (mods only)
     recurring_add_decorator = (

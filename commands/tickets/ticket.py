@@ -7,7 +7,7 @@ import asyncio
 import re
 import io
 
-from utils import obsidian_embed, is_mod, format_timestamp_readable
+from utils import obsidian_embed, is_mod, format_timestamp_readable, EMBED_COLORS
 from database import DB_PATH, now_utc, get_guild_setting
 from views import ConfirmView
 import aiosqlite
@@ -661,10 +661,10 @@ def setup(bot, group=None):
         
         embed = obsidian_embed(
             "✅ Ticket Created",
-            f"Your ticket has been created: {channel.mention}\n**Ticket ID:** `{ticket_id}`",
-            color=discord.Color.green(),
+            f"Your ticket has been created: {channel.mention}\n**Ticket ID:** `{ticket_id}`\n\n_→ Use `/community ticket message` in the ticket channel to add more info._",
+            color=EMBED_COLORS["success"],
             thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
-            footer=f"Ticket ID: {ticket_id} • Use /ticket_close in the channel to close",
+            footer=f"Ticket ID: {ticket_id} • Use /community ticket close in the channel to close",
             client=interaction.client,
         )
         await interaction.followup.send(embed=embed, ephemeral=True)
