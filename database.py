@@ -2244,6 +2244,14 @@ async def init_db() -> None:
         )""")
 
         await db.execute("""
+        CREATE TABLE IF NOT EXISTS integration_seen (
+            source TEXT NOT NULL,
+            item_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (source, item_id)
+        )""")
+
+        await db.execute("""
         CREATE TABLE IF NOT EXISTS mod_notes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             guild_id INTEGER NOT NULL,

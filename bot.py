@@ -2408,7 +2408,7 @@ async def on_member_join(member: discord.Member):
     # Format message
     formatted_message = message_template.replace("{user}", member.mention)
     formatted_message = formatted_message.replace("{server}", member.guild.name)
-    formatted_message = formatted_message.replace("{member_count}", str(member.guild.member_count))
+    formatted_message = formatted_message.replace("{member_count}", str(member.guild.member_count or 0))
     
     try:
         await channel.send(formatted_message)
@@ -2475,7 +2475,7 @@ async def on_member_remove(member: discord.Member):
     # Format message
     formatted_message = message_template.replace("{user}", str(member))
     formatted_message = formatted_message.replace("{server}", member.guild.name)
-    formatted_message = formatted_message.replace("{member_count}", str(member.guild.member_count))
+    formatted_message = formatted_message.replace("{member_count}", str(member.guild.member_count or 0))
     
     try:
         await channel.send(formatted_message)

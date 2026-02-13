@@ -57,7 +57,7 @@ async def get_user_profile_data(guild_id: int, user_id: int) -> dict:
             LEFT JOIN reputation rp ON rp.guild_id=p.g AND rp.user_id=p.u
             LEFT JOIN user_titles ut ON ut.guild_id=p.g AND ut.user_id=p.u
             LEFT JOIN daily_claims dc ON dc.guild_id=p.g AND dc.user_id=p.u
-        """, (g, u, g, u))
+        """, (g, u, g, u, g, u))
         row = await cur.fetchone()
         if row:
             data["balance"] = row[0] or 0

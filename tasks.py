@@ -1913,6 +1913,161 @@ def setup_tasks(bot):
     async def before_stale_ticket_reminder_loop():
         await bot.wait_until_ready()
 
+    @tasks.loop(minutes=30)
+    async def forum_check_loop():
+        """Check Warframe forums RSS for new posts."""
+        try:
+            if not bot.is_ready():
+                return
+            import aiohttp
+            import xml.etree.ElementTree as ET
+            url = "https://forums.warframe.com/latest.rss"
+            async with aiohttp.ClientSession() as session:
+                try:
+                    async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as r:
+                        if r.status != 200:
+                            return
+                        text = await r.text()
+                except Exception:
+                    return
+            root = ET.fromstring(text)
+            items = root.findall(".//item")
+            if not items:
+                items = root.findall(".//{http://www.w3.org/2005/Atom}entry")
+            seen = set()
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute("SELECT item_id FROM integration_seen WHERE source='forum'")
+                for row in await cur.fetchall():
+                    seen.add(row[0])
+            for item in items[:5]:
+                link = None
+                title = None
+                guid = None
+                for child in item:
+                    tag = child.tag.split("}")[-1] if "}" in child.tag else child.tag
+                    if tag == "link":
+                        link = child.text or child.get("href", "")
+                    elif tag == "title":
+                        title = (child.text or "").strip()
+                    elif tag in ("id", "guid"):
+                        guid = (child.text or "").strip()
+                for link_el in item.findall(".//{http://www.w3.org/2005/Atom}link"):
+                    if not link:
+                        link = link_el.get("href", "")
+                if not guid:
+                    guid = link or (title or "")[:200] or ""
+                if not guid or guid in seen:
+                    continue
+                async with aiosqlite.connect(DB_PATH) as db:
+                    await db.execute(
+                        "INSERT OR IGNORE INTO integration_seen (source, item_id, created_at) VALUES ('forum', ?, ?)",
+                        (guid[:500], now_utc().isoformat()),
+                    )
+                    await db.commit()
+                for guild in bot.guilds:
+                    ch_id = await get_guild_setting(guild.id, "forum_notify_channel_id")
+                    if not ch_id:
+                        continue
+                    ch = guild.get_channel(int(ch_id))
+                    if not isinstance(ch, discord.TextChannel):
+                        continue
+                    try:
+                        await ch.send(
+                            embed=obsidian_embed(
+                                "New Forum Post",
+                                f"**{title or 'New post'}**\n\n{link or ''}",
+                                color=discord.Color.blue(),
+                                client=bot,
+                            ),
+                        )
+                    except Exception as e:
+                        logger.warning(f"[forum] Error notifying guild {guild.id}: {e}")
+        except Exception as e:
+            logger.error(f"[forum] Error in forum_check_loop: {e}", exc_info=True)
+
+    @forum_check_loop.before_loop
+    async def before_forum_check_loop():
+        await bot.wait_until_ready()
+
+    @tasks.loop(minutes=30)
+    async def youtube_check_loop():
+        """Check Warframe YouTube channel RSS for new videos."""
+        try:
+            if not bot.is_ready():
+                return
+            import aiohttp
+            import xml.etree.ElementTree as ET
+            url = f"https://www.youtube.com/feeds/videos.xml?channel_id=UCZ8h7R8l2LoXzbc-GufOyKw"
+            async with aiohttp.ClientSession() as session:
+                try:
+                    async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as r:
+                        if r.status != 200:
+                            return
+                        text = await r.text()
+                except Exception:
+                    return
+            root = ET.fromstring(text)
+            ns = {"yt": "http://www.youtube.com/xml/schemas/2015", "media": "http://search.yahoo.com/mrss/"}
+            entries = root.findall(".//{http://www.w3.org/2005/Atom}entry")
+            seen = set()
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute("SELECT item_id FROM integration_seen WHERE source='youtube'")
+                for row in await cur.fetchall():
+                    seen.add(row[0])
+            for entry in entries[:3]:
+                vid_id = None
+                title = None
+                link = None
+                vid_el = entry.find("{http://www.youtube.com/xml/schemas/2015}videoId")
+                if vid_el is not None and vid_el.text:
+                    vid_id = vid_el.text.strip()
+                tit_el = entry.find("{http://www.w3.org/2005/Atom}title")
+                if tit_el is not None and tit_el.text:
+                    title = tit_el.text.strip()
+                for link_el in entry.findall("{http://www.w3.org/2005/Atom}link"):
+                    if link_el.get("rel") == "alternate":
+                        link = link_el.get("href", "")
+                        break
+                if not vid_id and link:
+                    if "v=" in link:
+                        vid_id = link.split("v=")[-1].split("&")[0]
+                if not link and vid_id:
+                    link = f"https://www.youtube.com/watch?v={vid_id}"
+                if not vid_id:
+                    vid_id = link or title or ""
+                if not vid_id or vid_id in seen:
+                    continue
+                async with aiosqlite.connect(DB_PATH) as db:
+                    await db.execute(
+                        "INSERT OR IGNORE INTO integration_seen (source, item_id, created_at) VALUES ('youtube', ?, ?)",
+                        (vid_id[:500], now_utc().isoformat()),
+                    )
+                    await db.commit()
+                for guild in bot.guilds:
+                    ch_id = await get_guild_setting(guild.id, "youtube_notify_channel_id")
+                    if not ch_id:
+                        continue
+                    ch = guild.get_channel(int(ch_id))
+                    if not isinstance(ch, discord.TextChannel):
+                        continue
+                    try:
+                        await ch.send(
+                            embed=obsidian_embed(
+                                "New Warframe Video",
+                                f"**{title or 'New upload'}**\n\n{link or ''}",
+                                color=discord.Color.red(),
+                                client=bot,
+                            ),
+                        )
+                    except Exception as e:
+                        logger.warning(f"[youtube] Error notifying guild {guild.id}: {e}")
+        except Exception as e:
+            logger.error(f"[youtube] Error in youtube_check_loop: {e}", exc_info=True)
+
+    @youtube_check_loop.before_loop
+    async def before_youtube_check_loop():
+        await bot.wait_until_ready()
+
     @tasks.loop(minutes=1)  # Check every minute for ended giveaways
     async def giveaway_check_loop():
         """Check for ended giveaways and select winners."""
@@ -1951,6 +2106,8 @@ def setup_tasks(bot):
         ('scheduled_messages_loop', scheduled_messages_loop),
         ('twitch_check_loop', twitch_check_loop),
         ('stale_ticket_reminder_loop', stale_ticket_reminder_loop),
+        ('forum_check_loop', forum_check_loop),
+        ('youtube_check_loop', youtube_check_loop),
     ]
     
     started_tasks = {}
