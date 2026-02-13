@@ -28,7 +28,7 @@ async def case_id_autocomplete(interaction: discord.Interaction, current: str) -
 
 def setup(bot, group=None):
     """Register the submit_complaint command."""
-    command_decorator = group.command(name="submit_complaint", description="Add info to your complaint/help case. Example: /community submit_complaint case_id:OBS-... details:Screenshot link") if group else bot.tree.command(name="submit_complaint", description="Add info to your complaint/help case. Example: /community submit_complaint case_id:OBS-... details:Screenshot link")
+    command_decorator = group.command(name="submit_complaint", description="Add details or links to an existing complaint/help case") if group else bot.tree.command(name="submit_complaint", description="Add details or links to an existing complaint/help case")
     
     @command_decorator
     @app_commands.autocomplete(case_id=case_id_autocomplete)

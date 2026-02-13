@@ -86,10 +86,10 @@ def setup(bot, group=None):
     """Register the event_create command."""
     command_decorator = group.command(
         name="event_create",
-        description="Create an event with RSVP buttons and reminders. Example: /community event_create title:'Sortie Run' when:tomorrow 8pm description:Running sorties"
+        description="Create an event with RSVP buttons and reminders. E.g. title:'Sortie Run' when:tomorrow 8pm"
     ) if group else bot.tree.command(
         name="event_create",
-        description="Create an event with RSVP buttons and reminders. Example: /community event_create title:'Sortie Run' when:tomorrow 8pm description:Running sorties"
+        description="Create an event with RSVP buttons and reminders. E.g. title:'Sortie Run' when:tomorrow 8pm"
     )
     
     @command_decorator

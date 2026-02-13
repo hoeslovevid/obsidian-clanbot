@@ -245,26 +245,7 @@ def setup(bot, group=None):
             )
         await create_lfg_post(bot, interaction, "Other", 4, 24, "", None)
 
-    @bot.tree.context_menu(name="Report User")
-    async def report_user_context(interaction: discord.Interaction, member: discord.Member):
-        """Right-click user → Report (opens complaint modal pre-filled with user)."""
-        from modals import ReportUserModal
-        if not interaction.guild:
-            return await interaction.response.send_message(
-                embed=error_embed("Invalid Context", "This can only be used in a server.", client=interaction.client),
-                ephemeral=True,
-            )
-        if member.bot:
-            return await interaction.response.send_message(
-                embed=error_embed("Invalid Target", "You cannot report bots.", client=interaction.client),
-                ephemeral=True,
-            )
-        if member.id == interaction.user.id:
-            return await interaction.response.send_message(
-                embed=error_embed("Invalid Target", "You cannot report yourself.", client=interaction.client),
-                ephemeral=True,
-            )
-        await interaction.response.send_modal(ReportUserModal(member))
+    # Report User removed: Discord allows max 5 user context menus. Use /community submit_complaint or complaint panel.
 
     @bot.tree.context_menu(name="Report Message")
     async def report_message_context(interaction: discord.Interaction, message: discord.Message):
@@ -311,23 +292,4 @@ def setup(bot, group=None):
         from modals import AddAsEventModal
         await interaction.response.send_modal(AddAsEventModal(message))
 
-    @bot.tree.context_menu(name="Create Ticket for User")
-    async def create_ticket_for_user_context(interaction: discord.Interaction, member: discord.Member):
-        """Right-click user → Create a support ticket for them (mod only)."""
-        if not interaction.guild:
-            return await interaction.response.send_message(
-                embed=error_embed("Invalid Context", "This can only be used in a server.", client=interaction.client),
-                ephemeral=True,
-            )
-        if not is_mod(interaction.user):
-            return await interaction.response.send_message(
-                embed=error_embed("Permission Denied", "Only moderators can create tickets for other users.", client=interaction.client),
-                ephemeral=True,
-            )
-        if member.bot:
-            return await interaction.response.send_message(
-                embed=error_embed("Invalid Target", "You cannot create tickets for bots.", client=interaction.client),
-                ephemeral=True,
-            )
-        from modals import CreateTicketForUserModal
-        await interaction.response.send_modal(CreateTicketForUserModal(member))
+    # Create Ticket for User removed: Discord allows max 5 user context menus. Use /community ticket instead.
