@@ -34,36 +34,27 @@ def setup(bot, group=None):
             # Respond first, then do the work
             await interaction.response.defer(ephemeral=True)
 
-            # Only ensure the complaints channel (not all channels)
-            try:
+            # Get complaints channel (prefer guild_settings from setup_obsidian)
+            from database import get_configured_channel_id
+            complaints_channel_id = await get_configured_channel_id(interaction.guild.id, "complaints_channel_id")
+            if not complaints_channel_id:
                 complaints_channel_id = await resolve_channel_id(interaction.guild, "complaints_channel_id", COMPLAINTS_CHANNEL_ID, COMPLAINTS_CHANNEL_NAME)
-                
-                # Verify the channel was created/found (resolve_channel_id returns 0 if it fails)
-                if not complaints_channel_id or complaints_channel_id == 0:
-                    return await interaction.followup.send(
-                        "Complaints channel could not be created or found.\n\n"
-                        "Please ensure:\n"
-                        "• AUTO_SETUP is enabled, OR\n"
-                        "• COMPLAINTS_CHANNEL_ID is set in environment variables, OR\n"
-                        "• A channel named 'inheritor-docket' exists",
-                        ephemeral=True,
-                    )
-                
-                # Verify the channel exists and is accessible
-                complaints_channel = interaction.guild.get_channel(complaints_channel_id)
-                if not isinstance(complaints_channel, discord.TextChannel):
-                    return await interaction.followup.send(
-                        f"Complaints channel (ID: {complaints_channel_id}) exists but is not a text channel.",
-                        ephemeral=True,
-                    )
-            except Exception as e:
+            
+            if not complaints_channel_id or complaints_channel_id == 0:
                 return await interaction.followup.send(
-                    f"Failed to set up complaints channel: {e}\n\n"
-                    "Please ensure AUTO_SETUP is enabled or set COMPLAINTS_CHANNEL_ID in your environment variables.",
+                    "Complaints channel not configured. Use `/general setup_obsidian` to configure channels, then run this command again.",
+                    ephemeral=True,
+                )
+                
+            # Verify the channel exists and is accessible
+            complaints_channel = interaction.guild.get_channel(complaints_channel_id)
+            if not isinstance(complaints_channel, discord.TextChannel):
+                return await interaction.followup.send(
+                    f"Complaints channel (ID: {complaints_channel_id}) not found or not a text channel. Use `/general setup_obsidian` to reconfigure.",
                     ephemeral=True,
                 )
 
-            # Post the complaints panel
+            # Post the complaints panel (mod runs command in the channel where they want it)
             await interaction.channel.send(
                 embed=obsidian_embed(
                     "Complaints",

@@ -37,6 +37,21 @@ async def get_guild_setting(guild_id: int, key: str) -> Optional[str]:
         return row[0] if row else None
 
 
+async def get_configured_channel_id(guild_id: int, setting_key: str) -> Optional[int]:
+    """
+    Get channel ID from guild_settings only (no env fallback, no auto-create).
+    Returns None if not configured or explicitly skipped (stored as "0").
+    Use this to check if a channel is configured before allowing channel-dependent commands.
+    """
+    val = await get_guild_setting(guild_id, setting_key)
+    if not val or val == "0" or val.lower() == "skipped":
+        return None
+    try:
+        return int(val)
+    except (ValueError, TypeError):
+        return None
+
+
 async def set_guild_setting(guild_id: int, key: str, value: str):
     """Set a guild setting value."""
     async with aiosqlite.connect(DB_PATH) as db:

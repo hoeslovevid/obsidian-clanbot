@@ -24,8 +24,9 @@ def setup(bot, group=None):
     )
     async def event_create(interaction: discord.Interaction, title: str, when: str, description: str, role_ping: str = "", duration_hours: int = 2):
         # Import bot-specific functions inside to avoid circular imports
-        from bot import ensure_core_channels, resolve_channel_id, RSVPView
+        from bot import resolve_channel_id, RSVPView
         from bot import EVENTS_CHANNEL_ID, EVENTS_CHANNEL_NAME, DB_PATH
+        from database import get_configured_channel_id
         import aiosqlite
         
         dt = parse_time_natural(when)
@@ -35,12 +36,13 @@ def setup(bot, group=None):
                 ephemeral=True,
             )
 
-        await ensure_core_channels(interaction.guild)
-        events_id = await resolve_channel_id(interaction.guild, "events_channel_id", EVENTS_CHANNEL_ID, EVENTS_CHANNEL_NAME)
+        events_id = await get_configured_channel_id(interaction.guild.id, "events_channel_id")
+        if not events_id:
+            events_id = await resolve_channel_id(interaction.guild, "events_channel_id", EVENTS_CHANNEL_ID, EVENTS_CHANNEL_NAME)
         ch = interaction.guild.get_channel(events_id) if events_id else None
         if not isinstance(ch, discord.TextChannel):
             return await interaction.response.send_message(
-                "Events channel not configured. Set EVENTS_CHANNEL_ID or enable AUTO_SETUP.",
+                "Events channel not configured. Use `/general setup_obsidian` to configure channels.",
                 ephemeral=True,
             )
 

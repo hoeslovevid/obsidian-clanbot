@@ -82,14 +82,17 @@ def setup(bot, group=None):
                 ephemeral=True,
             )
         
-        await ensure_core_channels(interaction.guild)
-        complaints_id = await resolve_channel_id(interaction.guild, "complaints_channel_id", COMPLAINTS_CHANNEL_ID, COMPLAINTS_CHANNEL_NAME)
+        from database import get_configured_channel_id
+        complaints_id = await get_configured_channel_id(interaction.guild.id, "complaints_channel_id")
+        if not complaints_id:
+            await ensure_core_channels(interaction.guild)
+            complaints_id = await resolve_channel_id(interaction.guild, "complaints_channel_id", COMPLAINTS_CHANNEL_ID, COMPLAINTS_CHANNEL_NAME)
         ch = interaction.guild.get_channel(complaints_id) if complaints_id else None
         if not isinstance(ch, discord.TextChannel):
             return await interaction.response.send_message(
                 embed=obsidian_embed(
                     "❌ Channel Not Configured",
-                    "Complaints channel not configured. Set COMPLAINTS_CHANNEL_ID or enable AUTO_SETUP.",
+                    "Complaints channel not configured. Use `/general setup_obsidian` to configure channels.",
                     color=discord.Color.red(),
                     client=interaction.client,
                 ),

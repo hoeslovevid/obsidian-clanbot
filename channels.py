@@ -38,10 +38,13 @@ async def resolve_channel_id(
     from bot import AUTO_SETUP
     
     saved = await get_guild_setting(guild.id, setting_key)
-    if saved and saved.isdigit():
-        ch = guild.get_channel(int(saved))
-        if isinstance(ch, (discord.TextChannel, discord.VoiceChannel, discord.CategoryChannel)):
-            return ch.id
+    if saved is not None:
+        if saved == "0" or str(saved).lower() == "skipped":
+            return 0  # Moderator explicitly skipped during setup_obsidian
+        if saved.isdigit() and int(saved) != 0:
+            ch = guild.get_channel(int(saved))
+            if isinstance(ch, (discord.TextChannel, discord.VoiceChannel, discord.CategoryChannel)):
+                return ch.id
 
     if env_id:
         ch = guild.get_channel(env_id)
@@ -110,7 +113,17 @@ async def resolve_channel_id(
 async def resolve_temp_vc_category(guild: discord.Guild) -> discord.CategoryChannel:
     """Resolve the Temp VCs category channel."""
     from bot import TEMP_VC_CATEGORY_ID, TEMP_VC_CATEGORY_NAME, AUTO_SETUP
-    
+
+    # 1) guild_settings (from /setup_obsidian)
+    saved = await get_guild_setting(guild.id, "temp_vc_category_id")
+    if saved is not None:
+        if saved == "0" or saved.lower() == "skipped":
+            raise RuntimeError("Temp VC category was skipped during setup. Use /general setup_obsidian to configure.")
+        if saved.isdigit() and int(saved) != 0:
+            cat = guild.get_channel(int(saved))
+            if isinstance(cat, discord.CategoryChannel):
+                return cat
+
     if TEMP_VC_CATEGORY_ID:
         cat = guild.get_channel(TEMP_VC_CATEGORY_ID)
         if isinstance(cat, discord.CategoryChannel):
@@ -121,7 +134,7 @@ async def resolve_temp_vc_category(guild: discord.Guild) -> discord.CategoryChan
         return cat
 
     if not AUTO_SETUP:
-        raise RuntimeError("Temp VC category not found. Set TEMP_VC_CATEGORY_ID or TEMP_VC_CATEGORY_NAME.")
+        raise RuntimeError("Temp VC category not found. Use /general setup_obsidian to configure.")
     return await guild.create_category(name=TEMP_VC_CATEGORY_NAME, reason="Bot auto-setup")
 
 
@@ -129,8 +142,14 @@ async def ensure_join_to_create_channel(guild: discord.Guild) -> int:
     """
     Ensures the join-to-create trigger voice channel exists inside the Temp VCs category.
     Saves it into guild_settings: create_vc_channel_id
+    Returns 0 if Temp VC was skipped during setup.
     """
     from bot import CREATE_VC_NAME
+    
+    # If mod explicitly skipped Temp VC during setup_obsidian, don't create
+    temp_cat_saved = await get_guild_setting(guild.id, "temp_vc_category_id")
+    if temp_cat_saved is not None and (temp_cat_saved == "0" or temp_cat_saved.lower() == "skipped"):
+        return 0
     
     saved = await get_guild_setting(guild.id, "create_vc_channel_id")
     if saved and saved.isdigit():

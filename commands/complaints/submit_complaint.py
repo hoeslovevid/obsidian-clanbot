@@ -30,8 +30,11 @@ def setup(bot, group=None):
         if user_id != interaction.user.id:
             return await interaction.response.send_message("You can only add info to your own case.", ephemeral=True)
 
-        await ensure_core_channels(interaction.guild)
-        complaints_id = await resolve_channel_id(interaction.guild, "complaints_channel_id", COMPLAINTS_CHANNEL_ID, COMPLAINTS_CHANNEL_NAME)
+        from database import get_configured_channel_id
+        complaints_id = await get_configured_channel_id(interaction.guild.id, "complaints_channel_id")
+        if not complaints_id:
+            await ensure_core_channels(interaction.guild)
+            complaints_id = await resolve_channel_id(interaction.guild, "complaints_channel_id", COMPLAINTS_CHANNEL_ID, COMPLAINTS_CHANNEL_NAME)
         ch = interaction.guild.get_channel(complaints_id) if complaints_id else None
 
         embed = obsidian_embed(
