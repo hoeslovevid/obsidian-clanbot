@@ -2247,10 +2247,19 @@ async def on_ready():
         except Exception as e:
             logger.error(f"[ready] Error initializing achievements: {e}", exc_info=True)
     
+    # Update application profile (description, tags) for bot profile display
+    async def update_app_profile():
+        try:
+            from app_profile import update_app_profile_metadata
+            await update_app_profile_metadata()
+        except Exception as e:
+            logger.debug(f"[ready] App profile update skipped: {e}")
+
     # Run verification tasks in parallel
     await asyncio.gather(
         verify_settings(),
         init_achievements(),
+        update_app_profile(),
         return_exceptions=True
     )
     
