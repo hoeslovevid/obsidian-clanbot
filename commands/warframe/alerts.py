@@ -6,7 +6,7 @@ import dateparser  # type: ignore
 
 from utils import obsidian_embed
 from warframe_api import fetch_alerts
-from views import RefreshView
+from views import RetryView, RefreshView
 from cache_utils import invalidate
 
 
@@ -62,17 +62,37 @@ def setup(bot, group=None):
         await interaction.response.defer()
         
         alerts_data = await fetch_alerts()
-        
-        if not alerts_data:
+
+        if alerts_data is None:
+            async def on_retry(btn_interaction: discord.Interaction):
+                if btn_interaction.user.id != interaction.user.id:
+                    return await btn_interaction.response.send_message("Only the person who ran this can retry.", ephemeral=True)
+                await btn_interaction.response.defer()
+                new_data = await fetch_alerts()
+                if new_data is None:
+                    return await btn_interaction.followup.send("Still unable to fetch. Try again later.", ephemeral=True)
+                if not new_data:
+                    emb = obsidian_embed("📢 Active Alerts", "No active alerts at this time.", color=discord.Color.orange(), client=interaction.client)
+                else:
+                    desc = f"**Active Alerts:** {len(new_data)}\n\n"
+                    for i, alert in enumerate(new_data[:10], 1):
+                        mission = alert.get("mission", {})
+                        desc += f"**{i}. {mission.get('node', '?')}** ({mission.get('missionType', '?')})\n• Faction: {mission.get('faction', '?')}\n• Rewards: {format_alert_rewards(alert)}\n• Time: {format_time_remaining(alert.get('expiry', ''))}\n\n"
+                    if len(new_data) > 10:
+                        desc += f"_...and {len(new_data) - 10} more_"
+                    emb = obsidian_embed("📢 Active Alerts", desc, color=discord.Color.blue(), footer=f"{len(new_data)} active • warframestat.us", client=interaction.client)
+                await btn_interaction.message.edit(embed=emb, view=None)
+
             return await interaction.followup.send(
                 embed=obsidian_embed(
                     "❌ Error",
                     "Failed to fetch alerts data. Please try again later.",
                     color=discord.Color.red(),
                     client=interaction.client,
-                )
+                ),
+                view=RetryView(on_retry),
             )
-        
+
         if not alerts_data:
             return await interaction.followup.send(
                 embed=obsidian_embed(

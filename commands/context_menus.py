@@ -3,6 +3,7 @@ import discord
 from discord import app_commands
 
 from utils import obsidian_embed, error_embed, feature_off_embed, ECONOMY_ENABLED, is_mod, format_timestamp_readable, EMBED_FOOTER_DEFAULT
+from views import RetryView
 
 
 def setup(bot, group=None):
@@ -194,14 +195,39 @@ def setup(bot, group=None):
         await interaction.response.defer(ephemeral=True)
         item_data = await search_warframe_market_item(search_term, "pc")
         if not item_data:
+            async def on_retry_search(_btn):
+                if _btn.user.id != interaction.user.id:
+                    return await _btn.response.send_message("Only the person who ran this can retry.", ephemeral=True)
+                await _btn.response.defer()
+                new_item = await search_warframe_market_item(search_term, "pc")
+                if not new_item:
+                    return await _btn.followup.send(embed=error_embed("Item Not Found", f"Still could not find '{search_term[:50]}'. Check spelling.", client=interaction.client), ephemeral=True)
+                new_price = await get_warframe_market_price(new_item.get("url_name", ""), "pc")
+                if not new_price:
+                    return await _btn.followup.send(embed=error_embed("Price Unavailable", f"Found item but could not fetch prices.", client=interaction.client), ephemeral=True)
+                emb = _build_trade_embed(new_item, new_price, "pc", interaction.client, author=interaction.user)
+                await _btn.message.edit(embed=emb, view=None)
             return await interaction.followup.send(
-                embed=error_embed("Item Not Found", f"Could not find '{search_term[:50]}' on Warframe Market.", client=interaction.client),
+                embed=error_embed("Item Not Found", f"Could not find '{search_term[:50]}' on Warframe Market.", action_hint="Check spelling and try again.", client=interaction.client),
+                view=RetryView(on_retry_search),
                 ephemeral=True
             )
         price_data = await get_warframe_market_price(item_data.get("url_name", ""), "pc")
         if not price_data:
+            url_name = item_data.get("url_name", "")
+            item_name = item_data.get("item_name", search_term)
+            async def on_retry_price(_btn):
+                if _btn.user.id != interaction.user.id:
+                    return await _btn.response.send_message("Only the person who ran this can retry.", ephemeral=True)
+                await _btn.response.defer()
+                new_price = await get_warframe_market_price(url_name, "pc")
+                if not new_price:
+                    return await _btn.followup.send(embed=error_embed("Price Unavailable", "Still unable to fetch prices. Try again later.", client=interaction.client), ephemeral=True)
+                emb = _build_trade_embed(item_data, new_price, "pc", interaction.client, author=interaction.user)
+                await _btn.message.edit(embed=emb, view=None)
             return await interaction.followup.send(
-                embed=error_embed("Price Unavailable", f"Could not fetch prices for {item_data.get('item_name', search_term)}.", client=interaction.client),
+                embed=error_embed("Price Unavailable", f"Could not fetch prices for {item_name}.", action_hint="The API may be temporarily unavailable.", client=interaction.client),
+                view=RetryView(on_retry_price),
                 ephemeral=True
             )
         embed = _build_trade_embed(item_data, price_data, "pc", interaction.client, author=interaction.user)

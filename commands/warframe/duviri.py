@@ -6,6 +6,7 @@ import dateparser  # type: ignore
 
 from utils import obsidian_embed
 from warframe_api import fetch_duviri_circuit
+from views import RetryView
 
 
 def format_time_remaining(expiry_str: str) -> str:
@@ -49,15 +50,44 @@ def setup(bot, group=None):
         await interaction.response.defer()
         
         data = await fetch_duviri_circuit()
-        
+
         if not data:
+            async def on_retry(btn_interaction: discord.Interaction):
+                if btn_interaction.user.id != interaction.user.id:
+                    return await btn_interaction.response.send_message("Only the person who ran this can retry.", ephemeral=True)
+                await btn_interaction.response.defer()
+                new_data = await fetch_duviri_circuit()
+                if not new_data:
+                    return await btn_interaction.followup.send("Still unable to fetch. Try again later.", ephemeral=True)
+                state = new_data.get("state", "Unknown")
+                expiry = new_data.get("expiry", "")
+                time_remaining = format_time_remaining(expiry) if expiry else "Unknown"
+                current_rotation = new_data.get("choices", [])
+                desc = f"**Status:** {state.title()}\n**Time Remaining:** {time_remaining}\n\n"
+                if current_rotation:
+                    desc += "**Current Rotation:**\n"
+                    for i, choice in enumerate(current_rotation, 1):
+                        choice_type = choice.get("category", "Unknown")
+                        choice_name = choice.get("choices", [])
+                        if choice_type == "warframe":
+                            desc += f"**Warframe {i}:** {', '.join(choice_name) if choice_name else 'None'}\n"
+                        elif choice_type == "weapon":
+                            desc += f"**Weapon {i}:** {', '.join(choice_name) if choice_name else 'None'}\n"
+                        else:
+                            desc += f"**{choice_type.title()} {i}:** {', '.join(choice_name) if choice_name else 'None'}\n"
+                else:
+                    desc += "No rotation data available."
+                emb = obsidian_embed("🌊 Duviri Circuit", desc, color=discord.Color.blue(), footer="warframestat.us", client=interaction.client)
+                await btn_interaction.message.edit(embed=emb, view=None)
+
             return await interaction.followup.send(
                 embed=obsidian_embed(
                     "❌ Error",
                     "Failed to fetch Duviri Circuit data. Please try again later.",
                     color=discord.Color.red(),
                     client=interaction.client,
-                )
+                ),
+                view=RetryView(on_retry),
             )
         
         # Extract circuit data
