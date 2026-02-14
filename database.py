@@ -2240,6 +2240,14 @@ async def init_db() -> None:
             created_at TEXT NOT NULL,
             sent INTEGER NOT NULL DEFAULT 0
         )""")
+        try:
+            cur = await db.execute("PRAGMA table_info(reminders)")
+            cols = [row[1] for row in await cur.fetchall()]
+            if "recurrence_rule" not in cols:
+                await db.execute("ALTER TABLE reminders ADD COLUMN recurrence_rule TEXT")
+                await db.commit()
+        except Exception as e:
+            logger.warning(f"[db] reminders recurrence_rule migration: {e}")
 
         # Scheduled messages (one-time)
         await db.execute("""

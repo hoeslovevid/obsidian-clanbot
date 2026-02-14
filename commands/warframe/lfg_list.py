@@ -9,7 +9,7 @@ from views import EmbedPaginator
 from commands.warframe.lfg import MISSION_TYPES
 import aiosqlite
 
-ITEMS_PER_PAGE = 5
+ITEMS_PER_PAGE = 15
 
 
 async def mission_type_autocomplete(interaction: discord.Interaction, current: str):
@@ -31,9 +31,13 @@ def setup(bot, group=None):
     command_decorator = group.command(name="lfg_list", description="View active Looking for Group posts.") if group else bot.tree.command(name="lfg_list", description="View active Looking for Group posts.")
     
     @command_decorator
-    @app_commands.describe(mission_type="Filter by mission type (optional)")
+    @app_commands.describe(mission_type="Filter by mission type (optional)", sort="Sort order")
     @app_commands.autocomplete(mission_type=mission_type_autocomplete)
-    async def lfg_list(interaction: discord.Interaction, mission_type: str = None):
+    @app_commands.choices(sort=[
+        app_commands.Choice(name="Newest first", value="newest"),
+        app_commands.Choice(name="Expiring soon", value="expiring_soon"),
+    ])
+    async def lfg_list(interaction: discord.Interaction, mission_type: str = None, sort: app_commands.Choice[str] = None):
         """Display active LFG posts."""
         if mission_type and mission_type not in MISSION_TYPES:
             return await interaction.response.send_message(
@@ -44,22 +48,23 @@ def setup(bot, group=None):
                 ),
                 ephemeral=True,
             )
+        order = "expires_at ASC" if sort and sort.value == "expiring_soon" else "created_at DESC"
         await interaction.response.defer(ephemeral=True)
         async with aiosqlite.connect(DB_PATH) as db:
             if mission_type:
-                cur = await db.execute("""
+                cur = await db.execute(f"""
                     SELECT id, creator_id, mission_type, max_players, description, expires_at, created_at, message_id
                     FROM lfg_posts
                     WHERE guild_id=? AND channel_id=? AND status='OPEN' AND mission_type LIKE ?
-                    ORDER BY created_at DESC
+                    ORDER BY {order}
                     LIMIT 50
                 """, (interaction.guild.id, interaction.channel.id, f"%{mission_type}%"))
             else:
-                cur = await db.execute("""
+                cur = await db.execute(f"""
                     SELECT id, creator_id, mission_type, max_players, description, expires_at, created_at, message_id
                     FROM lfg_posts
                     WHERE guild_id=? AND channel_id=? AND status='OPEN'
-                    ORDER BY created_at DESC
+                    ORDER BY {order}
                     LIMIT 50
                 """, (interaction.guild.id, interaction.channel.id))
             
@@ -135,5 +140,8 @@ def setup(bot, group=None):
             )
             await interaction.followup.send(embed=embed, ephemeral=True)
         else:
-            view = EmbedPaginator("🔍 Active LFG Posts", pages, color=discord.Color.blue(), client=interaction.client)
+            view = EmbedPaginator(
+                "🔍 Active LFG Posts", pages, color=discord.Color.blue(), client=interaction.client,
+                total_items=len(posts), per_page=ITEMS_PER_PAGE
+            )
             await interaction.followup.send(embed=view._build_embed(), view=view, ephemeral=True)

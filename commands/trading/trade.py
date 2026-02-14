@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from utils import obsidian_embed
 from database import DB_PATH, now_utc
 from warframe_api import search_warframe_market_item, get_warframe_market_price
+from commands.trading.trade_price import item_autocomplete
 import aiosqlite  # type: ignore
 
 
@@ -14,6 +15,7 @@ def setup(bot, group=None):
     command_decorator = group.command(name="trade", description="Post a WTS (Want To Sell) or WTB (Want To Buy) listing.") if group else bot.tree.command(name="trade", description="Post a WTS (Want To Sell) or WTB (Want To Buy) listing.")
     
     @command_decorator
+    @app_commands.autocomplete(item=item_autocomplete)
     @app_commands.describe(
         listing_type="Type of listing",
         item="Item name (e.g., 'Mesa Prime Set', 'Primed Continuity')",

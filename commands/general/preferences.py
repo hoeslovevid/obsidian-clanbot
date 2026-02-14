@@ -66,6 +66,7 @@ def setup(bot, group=None):
                 ephemeral=True
             )
 
+        await interaction.response.defer(ephemeral=True)
         lines = []
         updated = []
 
@@ -104,15 +105,15 @@ def setup(bot, group=None):
                 color=EMBED_COLORS["general"],
                 client=interaction.client,
             )
-            return await interaction.response.send_message(embed=embed, ephemeral=True)
+            return await interaction.followup.send(embed=embed, ephemeral=True)
 
         if updated:
-            return await interaction.response.send_message(
+            return await interaction.followup.send(
                 embed=success_embed("Preferences Updated", "\n".join(updated), client=interaction.client),
                 ephemeral=True
             )
 
-        await interaction.response.send_message(
+        await interaction.followup.send(
             embed=obsidian_embed("⚙️ Preferences", "\n".join(lines), color=discord.Color.orange(), client=interaction.client),
             ephemeral=True
         )

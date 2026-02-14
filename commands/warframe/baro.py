@@ -107,9 +107,29 @@ def build_baro_embed(baro_data: dict, is_active: bool, client) -> discord.Embed:
             client=client,
         )
     else:
-        # Baro is not active - show prominent countdown
+        # Baro is not active - show prominent countdown + last visit if available
         fields = []
         countdown_line = ""
+        last_visit_text = ""
+        try:
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute(
+                    "SELECT arrival_time, departure_time, location, inventory_json FROM baro_visits ORDER BY id DESC LIMIT 1"
+                )
+                lv = await cur.fetchone()
+            if lv:
+                arr, dep, loc, inv_json = lv
+                last_visit_text = f"\n\n**Last visit:** {loc} • Left {dep[:10] if dep else '—'}"
+                if inv_json:
+                    import json
+                    try:
+                        inv = json.loads(inv_json)
+                        items = [_parse_baro_item_name(i) for i in inv[:5]]
+                        last_visit_text += f"\n_Items: {', '.join(items)}{'...' if len(inv) > 5 else ''}_"
+                    except Exception:
+                        pass
+        except Exception:
+            pass
         if activation:
             try:
                 activation_time = dateparser.parse(activation, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
@@ -143,7 +163,7 @@ def build_baro_embed(baro_data: dict, is_active: bool, client) -> discord.Embed:
 
         embed = obsidian_embed(
             "🛒 Baro Ki'Teer",
-            "🔴 **Not Currently Active**\n\nPrepare your ducats for the next visit!" + countdown_line,
+            "🔴 **Not Currently Active**\n\nPrepare your ducats for the next visit!" + countdown_line + last_visit_text,
             color=EMBED_COLORS["warframe"],
             thumbnail="https://vignette.wikia.nocookie.net/warframe/images/4/4a/BaroKiTeer.png/revision/latest?cb=20150213150000",
             fields=fields,

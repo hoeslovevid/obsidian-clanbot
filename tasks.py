@@ -243,6 +243,28 @@ def setup_tasks(bot):
                         ),
                     )
 
+                # DM users who RSVP'd GOING or MAYBE
+                async with aiosqlite.connect(DB_PATH) as db:
+                    cur = await db.execute(
+                        "SELECT user_id FROM event_rsvps WHERE guild_id=? AND message_id=? AND response IN ('GOING','MAYBE')",
+                        (guild.id, int(message_id)),
+                    )
+                    rsvp_users = await cur.fetchall()
+                for (user_id,) in rsvp_users:
+                    try:
+                        member = guild.get_member(int(user_id))
+                        if member and not member.bot:
+                            await member.send(
+                                embed=obsidian_embed(
+                                    "⏳ Event Reminder",
+                                    f"**{title}** in {guild.name} begins in ~{EVENT_REMINDER_MINUTES_BEFORE} minutes!\n**Time:** <t:{int(start_ts)}:F>",
+                                    color=discord.Color.orange(),
+                                    client=bot,
+                                ),
+                            )
+                    except (discord.Forbidden, discord.HTTPException):
+                        pass
+
                 async with aiosqlite.connect(DB_PATH) as db:
                     await db.execute(
                         "UPDATE events SET reminder_sent=1 WHERE guild_id=? AND message_id=?",
@@ -809,7 +831,7 @@ def setup_tasks(bot):
                 try:
                     h = _apply_decay(hunger, last_fed, created_at, HUNGER_DECAY_PER_HOUR)
                     hap = _apply_decay(happiness, last_played, created_at, HAPPINESS_DECAY_PER_HOUR)
-                    if h >= 30 and hap >= 30:
+                    if h >= 50 and hap >= 50:
                         continue
 
                     # Check last reminder (max 1 per 12 hours)
@@ -834,9 +856,9 @@ def setup_tasks(bot):
                             continue
 
                     issues = []
-                    if h < 30:
+                    if h < 50:
                         issues.append(f"hunger ({h}/100)")
-                    if hap < 30:
+                    if hap < 50:
                         issues.append(f"happiness ({hap}/100)")
 
                     msg = f"Your pet **{pet_name}** needs attention! Low: {', '.join(issues)}.\n\nUse `/economy pet_feed` and `/economy pet_play` to care for your pet."
@@ -1653,13 +1675,13 @@ def setup_tasks(bot):
             
             async with aiosqlite.connect(DB_PATH) as db:
                 cur = await db.execute("""
-                    SELECT id, guild_id, user_id, channel_id, reminder_text, remind_at
+                    SELECT id, guild_id, user_id, channel_id, reminder_text, remind_at, recurrence_rule
                     FROM reminders
                     WHERE sent = 0 AND datetime(remind_at) <= datetime('now')
                 """)
                 due_reminders = await cur.fetchall()
             
-            for reminder_id, guild_id, user_id, channel_id, reminder_text, remind_at in due_reminders:
+            for reminder_id, guild_id, user_id, channel_id, reminder_text, remind_at, recurrence_rule in due_reminders:
                 try:
                     guild = bot.get_guild(guild_id)
                     if not guild:
@@ -1695,11 +1717,23 @@ def setup_tasks(bot):
                         )
                         await channel.send(embed=embed)
                     
-                    # Mark as sent
+                    # Mark as sent and optionally re-insert recurring reminder
                     async with aiosqlite.connect(DB_PATH) as db:
                         await db.execute("""
                             UPDATE reminders SET sent = 1 WHERE id = ?
                         """, (reminder_id,))
+                        if recurrence_rule:
+                            try:
+                                from commands.general.reminder import _next_recurrence
+                                remind_dt = datetime.fromisoformat(remind_at.replace("Z", "+00:00")) if isinstance(remind_at, str) else remind_at
+                                next_at = _next_recurrence(remind_dt, recurrence_rule)
+                                if next_at:
+                                    await db.execute("""
+                                        INSERT INTO reminders (guild_id, user_id, channel_id, reminder_text, remind_at, created_at, sent, recurrence_rule)
+                                        VALUES (?, ?, ?, ?, ?, ?, 0, ?)
+                                    """, (guild_id, user_id, channel_id, reminder_text, next_at.isoformat(), now_utc().isoformat(), recurrence_rule))
+                            except Exception as re:
+                                logger.debug(f"Recurring reminder re-insert: {re}")
                         await db.commit()
                 except Exception as e:
                     logger.error(f"Error sending reminder {reminder_id}: {e}", exc_info=True)

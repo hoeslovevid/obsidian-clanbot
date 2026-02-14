@@ -8,12 +8,57 @@ from database import DB_PATH
 from views import EmbedPaginator
 import aiosqlite
 
-ITEMS_PER_PAGE = 5
+ITEMS_PER_PAGE = 15
 
 
 def setup(bot, group=None):
-    """Register the giveaway_list command."""
-    
+    """Register the giveaway_list and my_entries commands."""
+
+    my_entries_decorator = group.command(name="my_entries", description="List giveaways you've entered.") if group else None
+    if my_entries_decorator:
+        @my_entries_decorator
+        async def my_entries(interaction: discord.Interaction):
+            """List giveaways the user has entered."""
+            if not interaction.guild:
+                return await interaction.response.send_message(
+                    embed=obsidian_embed("❌ Invalid Context", "Use in a server.", color=discord.Color.red(), client=interaction.client),
+                    ephemeral=True,
+                )
+            await interaction.response.defer(ephemeral=True)
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute("""
+                    SELECT g.id, g.title, g.prize, g.winner_count, g.end_time, g.channel_id, g.message_id
+                    FROM giveaways g
+                    JOIN giveaway_entries e ON g.id = e.giveaway_id
+                    WHERE g.guild_id = ? AND e.user_id = ? AND g.ended = 0
+                    ORDER BY g.end_time ASC
+                    LIMIT 15
+                """, (interaction.guild.id, interaction.user.id))
+                rows = await cur.fetchall()
+            if not rows:
+                return await interaction.followup.send(
+                    embed=obsidian_embed(
+                        "🎉 No Giveaway Entries",
+                        "You haven't entered any active giveaways. Use `/giveaways giveaway_list` to see open giveaways.",
+                        color=discord.Color.blue(),
+                        client=interaction.client,
+                    ),
+                    ephemeral=True,
+                )
+            lines = []
+            for gid, title, prize, winner_count, end_time_str, ch_id, msg_id in rows:
+                try:
+                    end_time = datetime.fromisoformat(end_time_str.replace("Z", "+00:00"))
+                    ts = int(end_time.timestamp())
+                    jump = f" [Jump](https://discord.com/channels/{interaction.guild.id}/{ch_id}/{msg_id})" if ch_id and msg_id else ""
+                    lines.append(f"**{title}** — {prize}\nEnds <t:{ts}:R>{jump}")
+                except Exception:
+                    lines.append(f"**{title}** — {prize}")
+            await interaction.followup.send(
+                embed=obsidian_embed("🎉 My Giveaway Entries", "\n\n".join(lines), color=discord.Color.gold(), client=interaction.client),
+                ephemeral=True,
+            )
+
     command_decorator = group.command(name="giveaway_list", description="List all active giveaways.") if group else bot.tree.command(name="giveaway_list", description="List all active giveaways.")
     
     @command_decorator
@@ -115,5 +160,8 @@ def setup(bot, group=None):
             )
             await interaction.followup.send(embed=embed, ephemeral=True)
         else:
-            view = EmbedPaginator("🎉 Active Giveaways", pages, color=discord.Color.gold(), client=interaction.client)
+            view = EmbedPaginator(
+                "🎉 Active Giveaways", pages, color=discord.Color.gold(), client=interaction.client,
+                total_items=len(rows), per_page=ITEMS_PER_PAGE
+            )
             await interaction.followup.send(embed=view._build_embed(), view=view, ephemeral=True)

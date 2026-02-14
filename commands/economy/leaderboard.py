@@ -9,14 +9,14 @@ from views import EmbedPaginator
 def setup(bot, group=None):
     """Register the leaderboard command under economy and as top-level /leaderboard shortcut."""
     @app_commands.describe(
-        limit="Number of users per page (default: 10, max: 25)",
+        limit="Number of users per page (default: 15, max: 25)",
         sort_by="Sort order: by current balance or total earned"
     )
     @app_commands.choices(sort_by=[
         app_commands.Choice(name="Balance (current)", value="balance"),
         app_commands.Choice(name="Total Earned", value="total_earned"),
     ])
-    async def leaderboard_callback(interaction: discord.Interaction, limit: int = 10, sort_by: app_commands.Choice[str] = None):
+    async def leaderboard_callback(interaction: discord.Interaction, limit: int = 15, sort_by: app_commands.Choice[str] = None):
         """Display the top coin earners."""
         # Import bot-specific functions inside to avoid circular imports
         from bot import DB_PATH
@@ -40,7 +40,7 @@ def setup(bot, group=None):
             )
         
         if limit < 1 or limit > 25:
-            limit = 10
+            limit = 15
         order_col = "total_earned" if sort_by and sort_by.value == "total_earned" else "balance"
         await interaction.response.defer(ephemeral=False)
         sort_label = "total earned" if order_col == "total_earned" else "balance"

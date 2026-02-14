@@ -262,6 +262,52 @@ async def cancel_application(bot, guild_id: int, user_id: int, application_id: i
 
 def setup(bot, group=None):
     """Register the application commands."""
+
+    my_apps_decorator = group.command(name="my_applications", description="List your applications and their status.") if group else None
+    if my_apps_decorator:
+        @my_apps_decorator
+        async def my_applications(interaction: discord.Interaction):
+            """List user's applications."""
+            if not interaction.guild:
+                return await interaction.response.send_message(
+                    embed=obsidian_embed("❌ Invalid Context", "Use in a server.", color=discord.Color.red(), client=interaction.client),
+                    ephemeral=True,
+                )
+            await interaction.response.defer(ephemeral=True)
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute("""
+                    SELECT id, status, created_at, submitted_at, reviewed_at
+                    FROM applications WHERE guild_id=? AND user_id=?
+                    ORDER BY created_at DESC LIMIT 10
+                """, (interaction.guild.id, interaction.user.id))
+                rows = await cur.fetchall()
+            if not rows:
+                return await interaction.followup.send(
+                    embed=obsidian_embed(
+                        "📋 No Applications",
+                        "You haven't submitted any applications. Use `/community application` to apply.",
+                        color=discord.Color.blue(),
+                        client=interaction.client,
+                    ),
+                    ephemeral=True,
+                )
+            status_emoji = {"IN_PROGRESS": "⏳", "PENDING": "⏳", "APPROVED": "✅", "REJECTED": "❌", "CANCELLED": "🚫"}
+            lines = []
+            for app_id, status, created, submitted, reviewed in rows:
+                emoji = status_emoji.get(status, "📋")
+                dt_str = submitted or created
+                try:
+                    from datetime import datetime
+                    dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
+                    ts = int(dt.timestamp())
+                    lines.append(f"{emoji} **#{app_id}** — {status} (<t:{ts}:R>)")
+                except Exception:
+                    lines.append(f"{emoji} **#{app_id}** — {status}")
+            await interaction.followup.send(
+                embed=obsidian_embed("📋 My Applications", "\n".join(lines), color=discord.Color.blue(), client=interaction.client),
+                ephemeral=True,
+            )
+
     # Main application command
     command_decorator = group.command(name="application", description="Start a clan application.") if group else bot.tree.command(name="application", description="Start a clan application.")
     

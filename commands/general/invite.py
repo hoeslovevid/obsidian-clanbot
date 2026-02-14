@@ -29,7 +29,9 @@ def setup(bot, group=None):
         embed = obsidian_embed(
             "🔗 Invite Link",
             f"[**Click here to add me to another server**]({url})\n\n"
-            "You need the *Manage Server* permission to add bots.",
+            "• You need *Manage Server* permission to add bots.\n"
+            "• This link **never expires** — you can bookmark it.\n"
+            "• Permissions are pre-selected for full bot functionality.",
             color=discord.Color.blurple(),
             client=client,
         )

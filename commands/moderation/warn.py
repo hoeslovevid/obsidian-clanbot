@@ -221,6 +221,41 @@ def setup(bot, group=None):
                 ephemeral=True,
             )
 
+    clear_decorator = group.command(name="clear", description="Remove all warnings from a user (moderators only).") if group else None
+    if clear_decorator:
+        @clear_decorator
+        @app_commands.describe(user="User to clear warnings for")
+        async def warn_clear(interaction: discord.Interaction, user: discord.Member):
+            """Clear all warnings for a user."""
+            if not interaction.guild:
+                return await interaction.response.send_message(
+                    embed=error_embed("Invalid Context", "Use in a server.", client=interaction.client),
+                    ephemeral=True,
+                )
+            if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
+                return await interaction.response.send_message(
+                    embed=error_embed("Permission Denied", "Moderators only.", client=interaction.client),
+                    ephemeral=True,
+                )
+            await interaction.response.defer(ephemeral=True)
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute(
+                    "SELECT COUNT(*) FROM warnings WHERE guild_id=? AND user_id=?",
+                    (interaction.guild.id, user.id),
+                )
+                count = (await cur.fetchone())[0]
+                if count == 0:
+                    return await interaction.followup.send(
+                        embed=obsidian_embed("⚠️ No Warnings", f"{user.mention} has no warnings.", color=discord.Color.green(), client=interaction.client),
+                        ephemeral=True,
+                    )
+                await db.execute("DELETE FROM warnings WHERE guild_id=? AND user_id=?", (interaction.guild.id, user.id))
+                await db.commit()
+            await interaction.followup.send(
+                embed=obsidian_embed("✅ Warnings Cleared", f"Removed {count} warning(s) from {user.mention}.", color=discord.Color.green(), client=interaction.client),
+                ephemeral=True,
+            )
+
     command_decorator = group.command(name="setup", description="Configure warn system (moderators only).") if group else bot.tree.command(name="setup", description="Configure warn system (moderators only).")
     
     @command_decorator

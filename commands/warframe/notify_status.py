@@ -26,6 +26,7 @@ def setup(bot, group=None):
         """Display all notify channel settings."""
         if not interaction.guild:
             return await interaction.response.send_message("Use in a server.", ephemeral=True)
+        await interaction.response.defer(ephemeral=True)
 
         lines = []
         guild = interaction.guild
@@ -62,4 +63,4 @@ def setup(bot, group=None):
             footer="Use /warframe notify <type> enable/disable to configure",
             client=interaction.client,
         )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.followup.send(embed=embed, ephemeral=True)

@@ -29,11 +29,12 @@ def setup(bot, group=None):
             )
         await interaction.response.defer(ephemeral=True)
 
-        # Single connection: balance + total_earned + pets + daily_claims in one go
+        # Single connection: balance + total_earned + pets + daily_claims + recent tx in one go
         balance = 0
         total_earned = 0
         pet_row = None
         next_daily_ts = None
+        recent_tx = []
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute(
                 "SELECT balance, total_earned FROM user_balances WHERE guild_id=? AND user_id=?",
@@ -53,6 +54,11 @@ def setup(bot, group=None):
                 (interaction.guild.id, interaction.user.id),
             )
             daily_row = await cur3.fetchone()
+            cur4 = await db.execute(
+                "SELECT amount, transaction_type, description, created_at FROM economy_transactions WHERE guild_id=? AND user_id=? ORDER BY created_at DESC LIMIT 3",
+                (interaction.guild.id, interaction.user.id),
+            )
+            recent_tx = await cur4.fetchall()
         if daily_row:
             from datetime import datetime, timezone, timedelta
             today = datetime.now(timezone.utc).date().isoformat()
@@ -85,7 +91,14 @@ def setup(bot, group=None):
             h = _apply_decay(hunger or 100, last_fed_at, created_at, HUNGER_DECAY_PER_HOUR)
             hp = _apply_decay(happiness or 100, last_played_at, created_at, HAPPINESS_DECAY_PER_HOUR)
             fields.insert(1, ("🐾 Pet", f"{pet_name or pet_type}: Hunger {h}%, Happiness {hp}%", True))
-        
+
+        if recent_tx:
+            tx_lines = []
+            for amt, txn_type, desc, created in recent_tx:
+                sign = "+" if amt > 0 else ""
+                tx_lines.append(f"{sign}{format_number(amt)} — {desc[:30]}{'…' if desc and len(desc) > 30 else ''}")
+            fields.append(("📜 Recent", "\n".join(tx_lines), True))
+
         footer = "Use /daily or /leaderboard • Right-click user → Transfer Coins"
         if is_new:
             footer = "New here? Use /daily to get started! • /help for commands"

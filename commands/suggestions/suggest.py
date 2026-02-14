@@ -120,7 +120,47 @@ SUGGESTION_TEMPLATES = {
 
 
 def setup(bot, group=None):
-    """Register the suggest command."""
+    """Register the suggest and my_suggestions commands."""
+
+    my_suggestions_decorator = group.command(name="my_suggestions", description="List your suggestions and their status.") if group else None
+    if my_suggestions_decorator:
+        @my_suggestions_decorator
+        async def my_suggestions(interaction: discord.Interaction):
+            """List user's suggestions."""
+            if not interaction.guild:
+                return await interaction.response.send_message(
+                    embed=obsidian_embed("❌ Invalid Context", "Use in a server.", color=discord.Color.red(), client=interaction.client),
+                    ephemeral=True,
+                )
+            await interaction.response.defer(ephemeral=True)
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute("""
+                    SELECT id, suggestion_text, category, status, created_at
+                    FROM suggestions WHERE guild_id=? AND user_id=?
+                    ORDER BY created_at DESC LIMIT 10
+                """, (interaction.guild.id, interaction.user.id))
+                rows = await cur.fetchall()
+            if not rows:
+                return await interaction.followup.send(
+                    embed=obsidian_embed(
+                        "💡 No Suggestions",
+                        "You haven't submitted any suggestions. Use `/community suggest` to submit one.",
+                        color=discord.Color.blue(),
+                        client=interaction.client,
+                    ),
+                    ephemeral=True,
+                )
+            status_emoji = {"PENDING": "⏳", "APPROVED": "✅", "REJECTED": "❌", "UNDER_REVIEW": "📋", "PLANNED": "📌", "IMPLEMENTED": "✨"}
+            lines = []
+            for sid, text, category, status, created in rows:
+                emoji = status_emoji.get(status, "📋")
+                preview = (text[:50] + "…") if len(text) > 50 else text
+                lines.append(f"{emoji} **#{sid}** — {status}\n_{preview}_")
+            await interaction.followup.send(
+                embed=obsidian_embed("💡 My Suggestions", "\n\n".join(lines), color=discord.Color.blue(), client=interaction.client),
+                ephemeral=True,
+            )
+
     command_decorator = group.command(name="suggest", description="Submit a suggestion with category and optional template.") if group else bot.tree.command(name="suggest", description="Submit a suggestion with category and optional template.")
     
     @command_decorator

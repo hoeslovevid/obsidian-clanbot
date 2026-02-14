@@ -2,10 +2,14 @@
 import discord
 from discord import app_commands
 from datetime import datetime
+import io
+import csv
 
 from utils import obsidian_embed, error_embed, feature_off_embed, ECONOMY_ENABLED
 from database import DB_PATH
 import aiosqlite
+
+MAX_EXPORT_ROWS = 500
 
 
 def setup(bot, group=None):
@@ -131,3 +135,95 @@ def setup(bot, group=None):
             client=interaction.client,
         )
         await interaction.followup.send(embed=embed, ephemeral=True)
+
+    # Export transactions as CSV
+    export_decorator = (
+        group.command(name="export_transactions", description="Export your transaction history as CSV (DMed to you).")
+        if group
+        else bot.tree.command(name="export_transactions", description="Export your transaction history as CSV.")
+    )
+
+    @export_decorator
+    @app_commands.describe(limit="Max transactions to export (default: 100, max: 500)")
+    async def export_transactions(interaction: discord.Interaction, limit: int = 100):
+        """Export transaction history as CSV file."""
+        await interaction.response.defer(ephemeral=True)
+
+        if not ECONOMY_ENABLED:
+            return await interaction.followup.send(
+                embed=feature_off_embed("Economy", "Ask a moderator to enable it in the bot config.", client=interaction.client),
+                ephemeral=True
+            )
+
+        if not interaction.guild:
+            return await interaction.followup.send(
+                embed=error_embed("Invalid Context", "This command can only be used in a server.", client=interaction.client),
+                ephemeral=True
+            )
+
+        limit = max(1, min(MAX_EXPORT_ROWS, limit))
+        target = interaction.user
+
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute("""
+                SELECT amount, transaction_type, description, created_at
+                FROM economy_transactions
+                WHERE guild_id=? AND user_id=?
+                ORDER BY created_at DESC
+                LIMIT ?
+            """, (interaction.guild.id, target.id, limit))
+            rows = await cur.fetchall()
+
+        if not rows:
+            return await interaction.followup.send(
+                embed=obsidian_embed(
+                    "📜 Export Transactions",
+                    "You have no transactions to export.",
+                    color=discord.Color.orange(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
+
+        buffer = io.StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow(["Date", "Amount", "Type", "Description"])
+        for amount, txn_type, desc, created_at in reversed(rows):
+            writer.writerow([
+                created_at[:19].replace("T", " ") if created_at else "",
+                amount,
+                txn_type or "",
+                (desc or "").replace("\n", " "),
+            ])
+
+        buffer.seek(0)
+        file = discord.File(io.BytesIO(buffer.getvalue().encode("utf-8-sig")), filename=f"transactions_{target.id}.csv")
+
+        try:
+            await target.send(
+                embed=obsidian_embed(
+                    "📜 Transaction Export",
+                    f"Exported {len(rows)} transaction(s) from {interaction.guild.name}.",
+                    color=discord.Color.gold(),
+                    client=interaction.client,
+                ),
+                file=file,
+            )
+            await interaction.followup.send(
+                embed=obsidian_embed(
+                    "✅ Export Sent",
+                    f"CSV with {len(rows)} transaction(s) has been DMed to you.",
+                    color=discord.Color.green(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
+        except discord.Forbidden:
+            await interaction.followup.send(
+                embed=error_embed(
+                    "Cannot DM",
+                    "Enable DMs from server members to receive the export, or use `/economy transactions` to view in-channel.",
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )

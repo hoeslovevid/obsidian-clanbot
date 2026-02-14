@@ -325,8 +325,25 @@ def setup(bot, group=None):
     """Register the help command."""
     command_decorator = group.command(name="help", description="Browse commands or get help for a specific command. Example: /general help command:economy daily") if group else bot.tree.command(name="help", description="Browse commands or get help for a specific command. Example: /general help command:economy daily")
     
+    async def _help_command_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+        """Autocomplete command paths for help."""
+        def _paths(cmds, prefix=""):
+            out = []
+            for c in cmds:
+                p = f"{prefix} {c.name}".strip() if prefix else c.name
+                if isinstance(c, app_commands.Group):
+                    out.extend(_paths(c.commands, p))
+                else:
+                    out.append(p)
+            return out
+        all_paths = _paths(bot.tree.get_commands(guild=interaction.guild))
+        current_lower = (current or "").lower()
+        matches = [p for p in all_paths if not current_lower or current_lower in p.lower()][:25]
+        return [app_commands.Choice(name=m, value=m) for m in matches]
+
     @command_decorator
     @app_commands.describe(command="Optional: get help for a specific command (e.g., 'economy balance', 'community event_create')")
+    @app_commands.autocomplete(command=_help_command_autocomplete)
     async def help_command(interaction: discord.Interaction, command: Optional[str] = None):
         """Display an interactive help embed with command groups, or help for a specific command."""
         is_user_mod = isinstance(interaction.user, discord.Member) and is_mod(interaction.user)
@@ -438,6 +455,12 @@ def setup(bot, group=None):
                 all_paths = _all_paths(bot.tree.get_commands(guild=None))
                 query = " ".join(parts)
                 suggestions = get_close_matches(query, all_paths, n=3, cutoff=0.5)
+                if not suggestions:
+                    suggestions = get_close_matches(query, all_paths, n=3, cutoff=0.35)
+                if not suggestions and len(parts) >= 2:
+                    suggestions = get_close_matches(parts[-1], [p.split()[-1] for p in all_paths if len(p.split()) == len(parts)], n=3, cutoff=0.4)
+                    if suggestions and all_paths:
+                        suggestions = [p for p in all_paths if p.split()[-1] in suggestions][:3]
                 hint = ""
                 if suggestions:
                     hint = f"\n\n_Did you mean: " + ", ".join(f"`/{s}`" for s in suggestions) + "?_"

@@ -8,11 +8,11 @@ import aiosqlite  # type: ignore
 
 
 def setup(bot, group=None):
-    """Register the trade_list command."""
-    command_decorator = group.command(name="trade_list", description="View your active trading listings.") if group else bot.tree.command(name="trade_list", description="View your active trading listings.")
-    
-    @command_decorator
-    async def trade_list(interaction: discord.Interaction):
+    """Register the trade_list and my_listings commands."""
+    trade_decorator = group.command(name="trade_list", description="View your active trading listings.") if group else bot.tree.command(name="trade_list", description="View your active trading listings.")
+    my_listings_decorator = group.command(name="my_listings", description="View your active trading listings (alias for trade_list).") if group else bot.tree.command(name="my_listings", description="View your active trading listings (alias for trade_list).")
+
+    async def _list_listings(interaction: discord.Interaction):
         """List user's active trading posts."""
         if not interaction.guild:
             return await interaction.response.send_message(
@@ -71,3 +71,6 @@ def setup(bot, group=None):
         )
         
         await interaction.followup.send(embed=embed, ephemeral=True)
+
+    trade_decorator(_list_listings)
+    my_listings_decorator(_list_listings)

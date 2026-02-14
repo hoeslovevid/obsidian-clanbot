@@ -53,8 +53,18 @@ async def _apply_interest(guild_id: int, user_id: int) -> int:
 def setup(bot, group=None):
     cmd = group.command(name="stash", description="Store coins for 1% daily interest. Deposit or withdraw.") if group else bot.tree.command(name="stash", description="Store coins for 1% daily interest.")
 
+    async def _stash_amount_autocomplete(interaction: discord.Interaction, current: str) -> list:
+        from discord import app_commands
+        presets = ["100", "500", "1000", "5000", "10000", "all"]
+        if not current or current.strip() == "":
+            return [app_commands.Choice(name=p, value=p) for p in presets[:25]]
+        cur = current.strip().lower()
+        matches = [p for p in presets if cur in p.lower() or (cur.isdigit() and p.isdigit() and cur in p)]
+        return [app_commands.Choice(name=m, value=m) for m in matches[:25]]
+
     @cmd
-    @app_commands.describe(amount="Amount to deposit or withdraw (e.g. 500, all)")
+    @app_commands.describe(amount="Amount to deposit or withdraw (e.g. 500, 1000, all)")
+    @app_commands.autocomplete(amount=_stash_amount_autocomplete)
     @app_commands.choices(action=[
         app_commands.Choice(name="Deposit", value="deposit"),
         app_commands.Choice(name="Withdraw", value="withdraw"),
