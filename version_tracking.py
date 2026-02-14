@@ -7,9 +7,9 @@ import hashlib
 import os
 from datetime import datetime, timezone
 from typing import Tuple, List, Optional
-import aiosqlite
-import discord
-from discord import app_commands
+import aiosqlite  # type: ignore
+import discord  # type: ignore
+from discord import app_commands  # type: ignore
 
 from database import DB_PATH, now_utc
 
