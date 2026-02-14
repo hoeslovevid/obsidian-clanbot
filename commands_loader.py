@@ -260,7 +260,7 @@ def load_all_commands(bot):
         "commands.general.webhooks": general_group,
         "commands.general.rules": general_group,
         "commands.general.polls": general_group,
-        "commands.general.reminder": community_group,
+        "commands.general.reminder": tools_group,  # Moved: community at 25 limit, general full
         "commands.general.preferences": general_group,
         "commands.general.reputation": community_group,
         "commands.general.twitch": community_group,
@@ -281,10 +281,10 @@ def load_all_commands(bot):
         "commands.complaints.request_help": community_group,
         "commands.tickets.ticket": community_group,
         "commands.suggestions.suggest": community_group,
-        "commands.suggestions.manage_suggestions": community_group,
+        "commands.suggestions.manage_suggestions": moderation_group,  # Mod-only, moved from community (25 limit)
         "commands.applications.application": community_group,
-        "commands.applications.application_setup": community_group,
-        "commands.applications.manage_applications": community_group,
+        "commands.applications.application_setup": moderation_group,  # Mod-only, moved from community (25 limit)
+        "commands.applications.manage_applications": moderation_group,  # Mod-only, moved from community (25 limit)
         "commands.trading.trade": trading_group,
         "commands.trading.trade_price": trading_group,
         "commands.trading.trade_search": trading_group,

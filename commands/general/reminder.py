@@ -47,7 +47,7 @@ async def remind_when_autocomplete(interaction: discord.Interaction, current: st
 def setup(bot, group=None):
     """Register reminder commands."""
     
-    command_decorator = group.command(name="remind", description="Set a reminder. Example: /community remind when:in 2 hours reminder:Join voice") if group else bot.tree.command(name="remind", description="Set a reminder. Example: /community remind when:in 2 hours reminder:Join voice")
+    command_decorator = group.command(name="remind", description="Set a reminder. Example: /tools remind when:in 2 hours reminder:Join voice") if group else bot.tree.command(name="remind", description="Set a reminder. Example: /tools remind when:in 2 hours reminder:Join voice")
     
     @command_decorator
     @app_commands.autocomplete(when=remind_when_autocomplete)
@@ -173,7 +173,7 @@ def setup(bot, group=None):
             rows = [(r[0], r[1], r[2], r[3] if len(r) > 3 else None) for r in rows_raw]
         if not rows:
             return await interaction.followup.send(
-                embed=obsidian_embed("📋 No Pending Reminders", "You have no active reminders. Use `/community remind` to set one.", color=discord.Color.blue(), client=interaction.client),
+                embed=obsidian_embed("📋 No Pending Reminders", "You have no active reminders. Use `/tools remind` to set one.", color=discord.Color.blue(), client=interaction.client),
                 ephemeral=True,
             )
         per_page = 15
@@ -192,7 +192,7 @@ def setup(bot, group=None):
                 "📋 Your Reminders",
                 "\n\n".join(lines),
                 color=discord.Color.blue(),
-                footer="To cancel: /community remind_list cancel_id:<id>",
+                footer="To cancel: /tools remind_list cancel_id:<id>",
                 client=interaction.client,
             )
             await interaction.followup.send(embed=embed, ephemeral=True)

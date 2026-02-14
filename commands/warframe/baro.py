@@ -108,28 +108,22 @@ def build_baro_embed(baro_data: dict, is_active: bool, client) -> discord.Embed:
         )
     else:
         # Baro is not active - show prominent countdown + last visit if available
+        # Note: last_visit data must be fetched by caller and passed via baro_data["_last_visit"]
         fields = []
         countdown_line = ""
         last_visit_text = ""
-        try:
-            async with aiosqlite.connect(DB_PATH) as db:
-                cur = await db.execute(
-                    "SELECT arrival_time, departure_time, location, inventory_json FROM baro_visits ORDER BY id DESC LIMIT 1"
-                )
-                lv = await cur.fetchone()
-            if lv:
-                arr, dep, loc, inv_json = lv
-                last_visit_text = f"\n\n**Last visit:** {loc} • Left {dep[:10] if dep else '—'}"
-                if inv_json:
-                    import json
-                    try:
-                        inv = json.loads(inv_json)
-                        items = [_parse_baro_item_name(i) for i in inv[:5]]
-                        last_visit_text += f"\n_Items: {', '.join(items)}{'...' if len(inv) > 5 else ''}_"
-                    except Exception:
-                        pass
-        except Exception:
-            pass
+        lv = baro_data.get("_last_visit")
+        if lv:
+            arr, dep, loc, inv_json = lv
+            last_visit_text = f"\n\n**Last visit:** {loc} • Left {dep[:10] if dep else '—'}"
+            if inv_json:
+                import json
+                try:
+                    inv = json.loads(inv_json)
+                    items = [_parse_baro_item_name(i) for i in inv[:5]]
+                    last_visit_text += f"\n_Items: {', '.join(items)}{'...' if len(inv) > 5 else ''}_"
+                except Exception:
+                    pass
         if activation:
             try:
                 activation_time = dateparser.parse(activation, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
@@ -184,6 +178,12 @@ def setup(bot, group=None):
         await interaction.response.defer(ephemeral=False)
         
         is_active, baro_data = await get_baro_status()
+        if baro_data and not is_active:
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute(
+                    "SELECT arrival_time, departure_time, location, inventory_json FROM baro_visits ORDER BY id DESC LIMIT 1"
+                )
+                baro_data["_last_visit"] = await cur.fetchone()
         
         if not baro_data:
             async def on_retry(btn_interaction: discord.Interaction):
@@ -193,6 +193,12 @@ def setup(bot, group=None):
                 is_active, new_data = await get_baro_status()
                 if not new_data:
                     return await btn_interaction.followup.send("Still unable to fetch. Try again later.", ephemeral=True)
+                if new_data and not is_active:
+                    async with aiosqlite.connect(DB_PATH) as db:
+                        cur = await db.execute(
+                            "SELECT arrival_time, departure_time, location, inventory_json FROM baro_visits ORDER BY id DESC LIMIT 1"
+                        )
+                        new_data["_last_visit"] = await cur.fetchone()
                 emb = build_baro_embed(new_data, is_active, interaction.client)
                 await btn_interaction.message.edit(embed=emb, view=None)
             return await interaction.followup.send(
@@ -218,6 +224,12 @@ def setup(bot, group=None):
             if not new_data:
                 await btn_interaction.followup.send("Could not fetch fresh data. Try again later.", ephemeral=True)
                 return
+            if new_data and not new_active:
+                async with aiosqlite.connect(DB_PATH) as db:
+                    cur = await db.execute(
+                        "SELECT arrival_time, departure_time, location, inventory_json FROM baro_visits ORDER BY id DESC LIMIT 1"
+                    )
+                    new_data["_last_visit"] = await cur.fetchone()
             new_emb = build_baro_embed(new_data, new_active, interaction.client)
             view = RefreshView(on_refresh)
             await btn_interaction.message.edit(embed=new_emb, view=view)
