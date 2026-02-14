@@ -104,8 +104,7 @@ def setup(bot, group=None):
                 if btn_interaction.user.id != interaction.user.id:
                     await btn_interaction.followup.send("Only the person who started this can confirm.", ephemeral=True)
                     return
-                # Show "Processing..." for long purge ops
-                await btn_interaction.response.defer(ephemeral=True, thinking=True)
+                # ConfirmView already responded with edit_message; use followup for results
                 transcript_file = None
                 try:
                     deleted_msgs = []
