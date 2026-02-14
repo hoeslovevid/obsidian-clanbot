@@ -60,7 +60,7 @@ This can happen due to:
 ### Optional:
 - `STEAM_API_KEY` - Steam Web API key for Warframe playtime roles (get at https://steamcommunity.com/dev/apikey)
 - `TIMEZONE` - Timezone for event parsing (default: "America/New_York")
-- `AUTO_SETUP` - Auto-create channels (default: "true")
+- `AUTO_SETUP` - Auto-create channels (default: "false"; run /setup_obsidian to configure)
 - `VOICE_PANEL_CHANNEL_ID` - Voice panel channel ID
 - `COMPLAINTS_CHANNEL_ID` - Complaints channel ID
 - `EVENTS_CHANNEL_ID` - Events channel ID

@@ -38,6 +38,24 @@ async def create_suggestion_from_modal(interaction: discord.Interaction, suggest
     if category_val not in SUGGESTION_CATEGORIES:
         category_val = "other"
 
+    # Check for suggestions channel before creating DB record
+    suggestions_channel = None
+    for channel in interaction.guild.text_channels:
+        if channel.name.lower() in ("suggestions", "suggestion", "💡-suggestions", "💡suggestions"):
+            suggestions_channel = channel
+            break
+
+    if not suggestions_channel:
+        return await interaction.followup.send(
+            embed=obsidian_embed(
+                "❌ No Suggestions Channel",
+                "No suggestions channel found. Ask a moderator to create a #suggestions channel or run `/general setup_obsidian` to configure channels.",
+                color=discord.Color.red(),
+                client=interaction.client,
+            ),
+            ephemeral=True,
+        )
+
     created_at = now_utc().isoformat()
     suggestion_id = None
     async with aiosqlite.connect(DB_PATH) as db:
@@ -59,18 +77,6 @@ async def create_suggestion_from_modal(interaction: discord.Interaction, suggest
             embed=obsidian_embed("❌ Error", "Failed to submit suggestion. Please try again.", color=discord.Color.red(), client=interaction.client),
             ephemeral=True
         )
-
-    suggestions_channel = None
-    for channel in interaction.guild.text_channels:
-        if channel.name.lower() in ("suggestions", "suggestion", "💡-suggestions", "💡suggestions"):
-            suggestions_channel = channel
-            break
-    if not suggestions_channel:
-        try:
-            suggestions_channel = await interaction.guild.create_text_channel(name="suggestions", reason="Auto-created for bot suggestions")
-        except Exception as e:
-            import logging
-            logging.getLogger(__name__).error(f"Error creating suggestions channel: {e}")
 
     if suggestions_channel:
         fields = [

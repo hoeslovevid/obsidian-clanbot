@@ -67,7 +67,8 @@ EVENT_REMINDER_MINUTES_BEFORE = int(os.getenv("EVENT_REMINDER_MINUTES_BEFORE", "
 EVENT_REMINDER_LOOP_MINUTES = int(os.getenv("EVENT_REMINDER_LOOP_MINUTES", "1"))
 
 # --- Auto setup ---
-AUTO_SETUP = os.getenv("AUTO_SETUP", "true").lower() in ("1", "true", "yes", "y", "on")
+# Default false: do not auto-create channels without permission. Run /setup_obsidian to configure.
+AUTO_SETUP = os.getenv("AUTO_SETUP", "false").lower() in ("1", "true", "yes", "y", "on")
 
 # --- Mention chat (hybrid: keywords + optional AI) ---
 OPENAI_API_KEY = (os.getenv("OPENAI_API_KEY") or "").strip() or None

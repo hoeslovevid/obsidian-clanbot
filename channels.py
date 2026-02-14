@@ -157,7 +157,11 @@ async def ensure_join_to_create_channel(guild: discord.Guild) -> int:
         if isinstance(ch, discord.VoiceChannel):
             return ch.id
 
-    category = await resolve_temp_vc_category(guild)
+    try:
+        category = await resolve_temp_vc_category(guild)
+    except RuntimeError:
+        # Temp VC category not configured (use /setup_obsidian)
+        return 0
 
     existing = discord.utils.get(category.voice_channels, name=CREATE_VC_NAME)
     if isinstance(existing, discord.VoiceChannel):
