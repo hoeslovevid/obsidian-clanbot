@@ -1,12 +1,42 @@
 """Request help command."""
 import discord
 from discord import app_commands
+import aiosqlite
 
 from utils import obsidian_embed, is_mod, display_case_status, now_utc, get_mod_role
+from database import DB_PATH
 
 
 def setup(bot, group=None):
     """Register the request_help command."""
+
+    my_complaints_decorator = group.command(name="my_complaints", description="List your open complaints/help cases.") if group else None
+    if my_complaints_decorator:
+        @my_complaints_decorator
+        async def my_complaints(interaction: discord.Interaction):
+            """List user's open complaints."""
+            if not interaction.guild:
+                return await interaction.response.send_message("Use in a server.", ephemeral=True)
+            await interaction.response.defer(ephemeral=True)
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute(
+                    "SELECT case_id, category, status, created_at FROM complaints WHERE guild_id=? AND user_id=? AND status IN ('OPEN','ACKNOWLEDGED','NEEDS INFO') ORDER BY created_at DESC LIMIT 10",
+                    (interaction.guild.id, interaction.user.id),
+                )
+                rows = await cur.fetchall()
+            if not rows:
+                return await interaction.followup.send(
+                    embed=obsidian_embed("📋 No Open Cases", "You have no open complaints or help requests. Use `/community request_help` to create one.", color=discord.Color.blue(), client=interaction.client),
+                    ephemeral=True,
+                )
+            lines = []
+            for case_id, category, status, created in rows:
+                lines.append(f"**{case_id}** — {category or '—'} ({display_case_status(status)})")
+            await interaction.followup.send(
+                embed=obsidian_embed("📋 Your Open Cases", "\n".join(lines), color=discord.Color.blue(), footer="Use /community request_help case_id:<id> to check status", client=interaction.client),
+                ephemeral=True,
+            )
+
     command_decorator = group.command(name="request_help", description="Request help or check the status of your help request case.") if group else bot.tree.command(name="request_help", description="Request help or check the status of your help request case.")
     
     @command_decorator

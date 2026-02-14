@@ -44,7 +44,7 @@ def setup(bot, group=None):
                 ),
                 ephemeral=True,
             )
-        await interaction.response.defer(ephemeral=False)
+        await interaction.response.defer(ephemeral=True)
         async with aiosqlite.connect(DB_PATH) as db:
             if mission_type:
                 cur = await db.execute("""
@@ -133,7 +133,7 @@ def setup(bot, group=None):
                 fields=pages[0]["fields"],
                 client=interaction.client,
             )
-            await interaction.followup.send(embed=embed, ephemeral=False)
+            await interaction.followup.send(embed=embed, ephemeral=True)
         else:
             view = EmbedPaginator("🔍 Active LFG Posts", pages, color=discord.Color.blue(), client=interaction.client)
-            await interaction.followup.send(embed=view._build_embed(), view=view, ephemeral=False)
+            await interaction.followup.send(embed=view._build_embed(), view=view, ephemeral=True)

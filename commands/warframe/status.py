@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import dateparser
 
 from utils import obsidian_embed
-from warframe_api import get_baro_status, fetch_alerts, get_all_cycles
+from warframe_api import get_baro_status, fetch_alerts, get_all_cycles, fetch_fissures, fetch_sortie
 from commands.warframe.alerts import format_alert_rewards
 from views import RetryView, RefreshView
 from cache_utils import invalidate
@@ -101,7 +101,32 @@ def _format_cycles_summary(cycles_data: dict) -> str:
     return "\n".join(parts) if parts else "No cycle data"
 
 
-def build_status_embed(baro_active: bool, baro_data: dict, alerts_data: list, cycles_data: dict, client) -> discord.Embed:
+def _format_fissures_summary(fissures: list) -> str:
+    """Compact fissures summary."""
+    if not fissures:
+        return "None active"
+    count = len(fissures)
+    steel = sum(1 for f in fissures if f.get("isHard"))
+    return f"**{count}** fissures ({steel} Steel Path)"
+
+
+def _format_sortie_summary(sortie_data: dict) -> str:
+    """Compact sortie summary."""
+    if not sortie_data:
+        return "No data"
+    missions = sortie_data.get("variants", [])
+    if not missions:
+        return "No sortie"
+    expiry = sortie_data.get("expiry", "")
+    try:
+        e = dateparser.parse(expiry, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
+        ts = int(e.timestamp()) if e else 0
+        return f"**{len(missions)}** missions • <t:{ts}:R>"
+    except Exception:
+        return f"**{len(missions)}** missions"
+
+
+def build_status_embed(baro_active: bool, baro_data: dict, alerts_data: list, cycles_data: dict, fissures_data: list, sortie_data: dict, client) -> discord.Embed:
     """Build the combined status embed."""
     now = datetime.now(timezone.utc)
     footer_ts = int(now.timestamp())
@@ -123,7 +148,15 @@ def build_status_embed(baro_active: bool, baro_data: dict, alerts_data: list, cy
     # Cycles
     cycles = cycles_data or {}
     fields.append(("🌍 Cycles", _format_cycles_summary(cycles), True))
-    
+
+    # Fissures
+    fissures = fissures_data or []
+    fields.append(("⚡ Fissures", _format_fissures_summary(fissures), True))
+
+    # Sortie
+    sortie = sortie_data or {}
+    fields.append(("🎯 Sortie", _format_sortie_summary(sortie), True))
+
     embed = obsidian_embed(
         "📋 What's Happening Now",
         "Baro, alerts, and open world cycles in one view.",
@@ -151,10 +184,14 @@ def setup(bot, group=None):
         baro_task = get_baro_status()
         alerts_task = fetch_alerts()
         cycles_task = get_all_cycles()
-        baro_result, alerts_data, cycles_data = await asyncio.gather(baro_task, alerts_task, cycles_task)
+        fissures_task = fetch_fissures()
+        sortie_task = fetch_sortie()
+        baro_result, alerts_data, cycles_data, fissures_data, sortie_data = await asyncio.gather(
+            baro_task, alerts_task, cycles_task, fissures_task, sortie_task,
+        )
         is_active, baro_data = baro_result
 
-        if not baro_data and not alerts_data and not cycles_data:
+        if not baro_data and not alerts_data and not cycles_data and not fissures_data and not sortie_data:
             async def on_retry(btn_interaction: discord.Interaction):
                 if btn_interaction.user.id != interaction.user.id:
                     return await btn_interaction.response.send_message("Only the person who ran this can retry.", ephemeral=True)
@@ -162,9 +199,11 @@ def setup(bot, group=None):
                 invalidate("warframe:baro")
                 invalidate("warframe:alerts")
                 invalidate("warframe:cycles")
-                br, ar, cr = await asyncio.gather(get_baro_status(), fetch_alerts(), get_all_cycles())
+                br, ar, cr, fr, sr = await asyncio.gather(
+                    get_baro_status(), fetch_alerts(), get_all_cycles(), fetch_fissures(), fetch_sortie(),
+                )
                 ia, bd = br
-                emb = build_status_embed(ia, bd, ar, cr, interaction.client)
+                emb = build_status_embed(ia, bd, ar, cr, fr, sr, interaction.client)
                 await btn_interaction.message.edit(embed=emb, view=None)
             return await interaction.edit_original_response(
                 embed=obsidian_embed(
@@ -176,7 +215,10 @@ def setup(bot, group=None):
                 view=RetryView(on_retry),
             )
 
-        embed = build_status_embed(is_active, baro_data or {}, alerts_data or [], cycles_data or {}, interaction.client)
+        embed = build_status_embed(
+            is_active, baro_data or {}, alerts_data or [], cycles_data or {},
+            fissures_data or [], sortie_data or {}, interaction.client,
+        )
 
         async def on_refresh(btn_interaction: discord.Interaction):
             if btn_interaction.user.id != interaction.user.id:
@@ -185,9 +227,11 @@ def setup(bot, group=None):
             invalidate("warframe:baro")
             invalidate("warframe:alerts")
             invalidate("warframe:cycles")
-            br, ar, cr = await asyncio.gather(get_baro_status(), fetch_alerts(), get_all_cycles())
+            br, ar, cr, fr, sr = await asyncio.gather(
+                get_baro_status(), fetch_alerts(), get_all_cycles(), fetch_fissures(), fetch_sortie(),
+            )
             ia, bd = br
-            new_emb = build_status_embed(ia, bd or {}, ar or [], cr or {}, interaction.client)
+            new_emb = build_status_embed(ia, bd or {}, ar or [], cr or {}, fr or [], sr or {}, interaction.client)
             view = RefreshView(on_refresh)
             await btn_interaction.message.edit(embed=new_emb, view=view)
 

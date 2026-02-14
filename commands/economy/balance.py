@@ -29,10 +29,11 @@ def setup(bot, group=None):
             )
         await interaction.response.defer(ephemeral=True)
 
-        # Single connection: balance + total_earned + pets in one go
+        # Single connection: balance + total_earned + pets + daily_claims in one go
         balance = 0
         total_earned = 0
         pet_row = None
+        next_daily_ts = None
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute(
                 "SELECT balance, total_earned FROM user_balances WHERE guild_id=? AND user_id=?",
@@ -47,6 +48,17 @@ def setup(bot, group=None):
                 (interaction.guild.id, interaction.user.id),
             )
             pet_row = await cur2.fetchone()
+            cur3 = await db.execute(
+                "SELECT last_claim_date FROM daily_claims WHERE guild_id=? AND user_id=?",
+                (interaction.guild.id, interaction.user.id),
+            )
+            daily_row = await cur3.fetchone()
+        if daily_row:
+            from datetime import datetime, timezone, timedelta
+            today = datetime.now(timezone.utc).date().isoformat()
+            if daily_row[0] == today:
+                next_dt = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+                next_daily_ts = int(next_dt.timestamp())
 
         is_new = balance == 0 and total_earned == 0
 
@@ -74,9 +86,11 @@ def setup(bot, group=None):
             hp = _apply_decay(happiness or 100, last_played_at, created_at, HAPPINESS_DECAY_PER_HOUR)
             fields.insert(1, ("🐾 Pet", f"{pet_name or pet_type}: Hunger {h}%, Happiness {hp}%", True))
         
-        footer = "Use /daily or /leaderboard • /help for all commands"
+        footer = "Use /daily or /leaderboard • Right-click user → Transfer Coins"
         if is_new:
             footer = "New here? Use /daily to get started! • /help for commands"
+        elif next_daily_ts:
+            footer = f"Next daily: <t:{next_daily_ts}:R> • Right-click user → Transfer Coins"
         embed = obsidian_embed(
             "💰 Coin Balance",
             "",

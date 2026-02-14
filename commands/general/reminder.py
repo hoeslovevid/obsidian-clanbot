@@ -53,7 +53,7 @@ def setup(bot, group=None):
             return await interaction.followup.send(
                 embed=obsidian_embed(
                     "❌ Invalid Time",
-                    f"Could not parse '{when}'. Try formats like 'in 2 hours', 'tomorrow at 3pm', or '2024-01-20 14:00'.",
+                    f"Could not parse '{when}'.\n\n**Try formats like:**\n• `in 2 hours`\n• `tomorrow 8pm`\n• `next Friday 3pm`\n• `2025-01-20 14:00`",
                     color=discord.Color.red(),
                     client=interaction.client,
                 ),
@@ -92,6 +92,63 @@ def setup(bot, group=None):
 
     # Reminder preferences (mods only) - quieter notifications via DM
     from utils import is_mod
+    list_decorator = group.command(name="remind_list", description="List your pending reminders. Optionally cancel one.") if group else bot.tree.command(name="remind_list", description="List your pending reminders.")
+
+    @list_decorator
+    @app_commands.describe(cancel_id="Optional: reminder ID to cancel (from list)")
+    async def remind_list(interaction: discord.Interaction, cancel_id: Optional[int] = None):
+        """List or cancel reminders."""
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=obsidian_embed("❌ Invalid Context", "Use this in a server.", color=discord.Color.red(), client=interaction.client),
+                ephemeral=True,
+            )
+        await interaction.response.defer(ephemeral=True)
+        async with aiosqlite.connect(DB_PATH) as db:
+            if cancel_id is not None:
+                cur = await db.execute(
+                    "SELECT id, reminder_text, remind_at FROM reminders WHERE guild_id=? AND user_id=? AND id=? AND sent=0",
+                    (interaction.guild.id, interaction.user.id, cancel_id),
+                )
+                row = await cur.fetchone()
+                if not row:
+                    return await interaction.followup.send(
+                        embed=obsidian_embed("❌ Not Found", f"Reminder #{cancel_id} not found or already sent.", color=discord.Color.red(), client=interaction.client),
+                        ephemeral=True,
+                    )
+                await db.execute("DELETE FROM reminders WHERE id=?", (cancel_id,))
+                await db.commit()
+                return await interaction.followup.send(
+                    embed=obsidian_embed("✅ Cancelled", f"Reminder '{row[1][:50]}...' cancelled." if len(row[1]) > 50 else f"Reminder '{row[1]}' cancelled.", color=EMBED_COLORS["success"], client=interaction.client),
+                    ephemeral=True,
+                )
+            cur = await db.execute(
+                "SELECT id, reminder_text, remind_at FROM reminders WHERE guild_id=? AND user_id=? AND sent=0 AND datetime(remind_at) > datetime('now') ORDER BY remind_at ASC LIMIT 15",
+                (interaction.guild.id, interaction.user.id),
+            )
+            rows = await cur.fetchall()
+        if not rows:
+            return await interaction.followup.send(
+                embed=obsidian_embed("📋 No Pending Reminders", "You have no active reminders. Use `/community remind` to set one.", color=discord.Color.blue(), client=interaction.client),
+                ephemeral=True,
+            )
+        lines = []
+        for rid, text, remind_at in rows:
+            try:
+                dt = datetime.fromisoformat(remind_at.replace("Z", "+00:00"))
+                ts = int(dt.timestamp())
+                lines.append(f"**#{rid}** — {text[:60]}{'…' if len(text) > 60 else ''}\n<t:{ts}:R> (<t:{ts}:t>)")
+            except Exception:
+                lines.append(f"**#{rid}** — {text[:60]} — {remind_at}")
+        embed = obsidian_embed(
+            "📋 Your Reminders",
+            "\n\n".join(lines),
+            color=discord.Color.blue(),
+            footer="To cancel: /community remind_list cancel_id:<id>",
+            client=interaction.client,
+        )
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
     pref_decorator = group.command(name="reminder_prefs", description="Set reminder delivery preference (mods: DM vs channel).") if group else bot.tree.command(name="reminder_prefs", description="Set reminder delivery preference (mods: DM vs channel).")
 
     @pref_decorator

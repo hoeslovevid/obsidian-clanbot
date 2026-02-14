@@ -4,7 +4,7 @@ from discord import app_commands
 from typing import Optional
 
 from utils import obsidian_embed, success_embed, is_mod, EMBED_COLORS
-from database import get_user_timezone, set_user_timezone, get_quieter_mode, set_quieter_mode
+from database import get_user_timezone, set_user_timezone, get_user_platform, set_user_platform, get_quieter_mode, set_quieter_mode
 
 COMMON_TIMEZONES = [
     ("UTC", "UTC"),
@@ -16,6 +16,21 @@ COMMON_TIMEZONES = [
     ("Europe/Paris", "Central Europe"),
     ("Asia/Tokyo", "Japan"),
     ("Australia/Sydney", "Australia East"),
+    ("America/Toronto", "Toronto"),
+    ("America/Sao_Paulo", "São Paulo"),
+    ("Europe/Berlin", "Berlin"),
+    ("Europe/Moscow", "Moscow"),
+    ("Asia/Shanghai", "China"),
+    ("Asia/Seoul", "Korea"),
+    ("Asia/Kolkata", "India"),
+]
+
+PLATFORM_CHOICES = [
+    app_commands.Choice(name="PC", value="pc"),
+    app_commands.Choice(name="Xbox", value="xbox"),
+    app_commands.Choice(name="PlayStation", value="ps4"),
+    app_commands.Choice(name="Switch", value="switch"),
+    app_commands.Choice(name="(clear)", value="-"),
 ]
 
 
@@ -26,11 +41,13 @@ def setup(bot, group=None):
     @command_decorator
     @app_commands.describe(
         timezone="Your timezone (used for reminders and event times)",
+        platform="Trading platform (used by /trading trade_price when not specified)",
         quieter="Enable quieter mode: fewer pings in events/reminders (mods only)"
     )
     @app_commands.choices(timezone=[
         app_commands.Choice(name=label, value=tz) for tz, label in COMMON_TIMEZONES
     ])
+    @app_commands.choices(platform=PLATFORM_CHOICES)
     @app_commands.choices(quieter=[
         app_commands.Choice(name="On - fewer pings", value="1"),
         app_commands.Choice(name="Off - normal pings", value="0"),
@@ -39,6 +56,7 @@ def setup(bot, group=None):
     async def preferences(
         interaction: discord.Interaction,
         timezone: Optional[app_commands.Choice[str]] = None,
+        platform: Optional[app_commands.Choice[str]] = None,
         quieter: Optional[app_commands.Choice[str]] = None,
     ):
         """Set timezone or quieter mode."""
@@ -56,6 +74,13 @@ def setup(bot, group=None):
             await set_user_timezone(interaction.guild.id, interaction.user.id, tz_val)
             updated.append(f"**Timezone:** {tz_val}")
 
+        if platform and platform.value != "-":
+            await set_user_platform(interaction.guild.id, interaction.user.id, platform.value)
+            updated.append(f"**Trading platform:** {platform.value.upper()}")
+        elif platform and platform.value == "-":
+            await set_user_platform(interaction.guild.id, interaction.user.id, "")
+            updated.append("**Trading platform:** cleared (defaults to PC)")
+
         if quieter and quieter.value != "-":
             if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
                 lines.append("⚠️ Only moderators can change quieter mode.")
@@ -67,8 +92,10 @@ def setup(bot, group=None):
         if not lines and not updated:
             # Show current preferences
             current_tz = await get_user_timezone(interaction.guild.id, interaction.user.id)
+            current_platform = await get_user_platform(interaction.guild.id, interaction.user.id)
             quieter_on = await get_quieter_mode(interaction.guild.id)
             lines.append(f"**Your timezone:** {current_tz or 'Not set (uses server default)'}")
+            lines.append(f"**Trading platform:** {current_platform.upper() if current_platform else 'Not set (defaults to PC)'}")
             if isinstance(interaction.user, discord.Member) and is_mod(interaction.user):
                 lines.append(f"**Quieter mode:** {'On' if quieter_on else 'Off'}")
             embed = obsidian_embed(

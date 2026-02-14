@@ -578,7 +578,36 @@ async def create_ticket_channel(guild: discord.Guild, user: discord.Member, tick
 
 def setup(bot, group=None):
     """Register ticket commands."""
-    
+
+    my_tickets_decorator = group.command(name="my_tickets", description="List your open tickets.") if group else None
+    if my_tickets_decorator:
+        @my_tickets_decorator
+        async def my_tickets(interaction: discord.Interaction):
+            """List user's open tickets."""
+            if not interaction.guild:
+                return await interaction.response.send_message("Use in a server.", ephemeral=True)
+            await interaction.response.defer(ephemeral=True)
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute(
+                    "SELECT ticket_id, subject, status, channel_id, created_at FROM tickets WHERE guild_id=? AND user_id=? AND status='open' ORDER BY created_at DESC LIMIT 10",
+                    (interaction.guild.id, interaction.user.id),
+                )
+                rows = await cur.fetchall()
+            if not rows:
+                return await interaction.followup.send(
+                    embed=obsidian_embed("📋 No Open Tickets", "You have no open tickets. Use `/community ticket` to create one.", color=discord.Color.blue(), client=interaction.client),
+                    ephemeral=True,
+                )
+            lines = []
+            for tid, subject, status, ch_id, created in rows:
+                ch = interaction.guild.get_channel(ch_id)
+                jump = f" [Jump](https://discord.com/channels/{interaction.guild.id}/{ch_id})" if ch else ""
+                lines.append(f"**{tid}** — {subject[:40]}{'…' if len(subject) > 40 else ''}{jump}")
+            await interaction.followup.send(
+                embed=obsidian_embed("📋 Your Open Tickets", "\n".join(lines), color=discord.Color.blue(), footer="Click Jump to open the ticket", client=interaction.client),
+                ephemeral=True,
+            )
+
     command_decorator = group.command(name="ticket", description="Create a support ticket.") if group else bot.tree.command(name="ticket", description="Create a support ticket.")
     
     @command_decorator

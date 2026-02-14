@@ -196,6 +196,89 @@ def setup(bot, group=None):
             ephemeral=True
         )
 
+    events_list_decorator = (
+        group.command(name="events_list", description="List upcoming events (today, this week, or your RSVPs).")
+        if group else bot.tree.command(name="events_list", description="List upcoming events.")
+    )
+
+    @events_list_decorator
+    @app_commands.describe(filter_mode="Filter: all upcoming, today, this week, or my RSVPs")
+    @app_commands.choices(filter_mode=[
+        app_commands.Choice(name="All Upcoming", value="all"),
+        app_commands.Choice(name="Today", value="today"),
+        app_commands.Choice(name="This Week", value="week"),
+        app_commands.Choice(name="My RSVPs", value="mine"),
+    ])
+    async def events_list(interaction: discord.Interaction, filter_mode: app_commands.Choice[str] = None):
+        """List upcoming events."""
+        if not interaction.guild:
+            return await interaction.response.send_message("Server only.", ephemeral=True)
+        mode = (filter_mode and filter_mode.value) or "all"
+        await interaction.response.defer(ephemeral=True)
+
+        now_ts = int(now_utc().timestamp())
+        today_start = now_ts - (now_ts % 86400)
+        week_end = today_start + (7 * 86400)
+
+        async with aiosqlite.connect(DB_PATH) as db:
+            if mode == "mine":
+                cur = await db.execute("""
+                    SELECT e.message_id, e.title, e.start_ts, e.end_ts, er.response
+                    FROM events e
+                    JOIN event_rsvps er ON e.guild_id=er.guild_id AND e.message_id=er.message_id
+                    WHERE e.guild_id=? AND er.user_id=? AND e.ended=0 AND e.start_ts >= ?
+                    ORDER BY e.start_ts ASC LIMIT 15
+                """, (interaction.guild.id, interaction.user.id, now_ts))
+            elif mode == "today":
+                cur = await db.execute("""
+                    SELECT message_id, title, start_ts, end_ts
+                    FROM events WHERE guild_id=? AND ended=0 AND start_ts >= ? AND start_ts < ?
+                    ORDER BY start_ts ASC LIMIT 15
+                """, (interaction.guild.id, now_ts, today_start + 86400))
+            elif mode == "week":
+                cur = await db.execute("""
+                    SELECT message_id, title, start_ts, end_ts
+                    FROM events WHERE guild_id=? AND ended=0 AND start_ts >= ? AND start_ts < ?
+                    ORDER BY start_ts ASC LIMIT 15
+                """, (interaction.guild.id, now_ts, week_end))
+            else:
+                cur = await db.execute("""
+                    SELECT message_id, title, start_ts, end_ts
+                    FROM events WHERE guild_id=? AND ended=0 AND start_ts >= ?
+                    ORDER BY start_ts ASC LIMIT 15
+                """, (interaction.guild.id, now_ts))
+            rows = await cur.fetchall()
+
+        if not rows:
+            label = {"all": "upcoming", "today": "today", "week": "this week", "mine": "you've RSVPed to"}[mode]
+            return await interaction.followup.send(
+                embed=obsidian_embed(
+                    "📅 No Events",
+                    f"No {label} events. Use `/community event_create` to create one.",
+                    color=discord.Color.blue(),
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+
+        lines = []
+        for row in rows:
+            title, start_ts = row[1], row[2]
+            rsvp = f" [{row[4]}]" if mode == "mine" and len(row) >= 5 else ""
+            lines.append(f"**{title}**\n<t:{start_ts}:F> — <t:{start_ts}:R>{rsvp}")
+
+        title_map = {"all": "Upcoming Events", "today": "Events Today", "week": "Events This Week", "mine": "My RSVPs"}
+        await interaction.followup.send(
+            embed=obsidian_embed(
+                f"📅 {title_map[mode]}",
+                "\n\n".join(lines),
+                color=discord.Color.blue(),
+                footer="Jump to event in the events channel to RSVP",
+                client=interaction.client,
+            ),
+            ephemeral=True,
+        )
+
     # Recurring event templates (mods only)
     recurring_add_decorator = (
         group.command(name="recurring_add", description="Add a recurring event template (mods only).")

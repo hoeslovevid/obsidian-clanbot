@@ -95,8 +95,10 @@ def setup(bot, group=None):
     ):
         """Check market prices for an item."""
         await interaction.response.defer(ephemeral=True)
-        
-        platform_val = platform.value if platform else "pc"
+
+        from database import get_user_platform
+        user_platform = await get_user_platform(interaction.guild.id, interaction.user.id) if interaction.guild else None
+        platform_val = platform.value if platform else (user_platform or "pc")
         
         # Search for item
         item_data = await search_warframe_market_item(item, platform_val)

@@ -72,6 +72,17 @@ async def set_user_timezone(guild_id: int, user_id: int, timezone: str) -> None:
     await set_guild_setting(guild_id, f"user_tz:{user_id}", timezone)
 
 
+async def get_user_platform(guild_id: int, user_id: int) -> Optional[str]:
+    """Get user's preferred trading platform (pc, xbox, ps4, switch)."""
+    val = await get_guild_setting(guild_id, f"user_platform:{user_id}")
+    return val if val in ("pc", "xbox", "ps4", "switch") else None
+
+
+async def set_user_platform(guild_id: int, user_id: int, platform: str) -> None:
+    """Set user's preferred trading platform."""
+    await set_guild_setting(guild_id, f"user_platform:{user_id}", platform)
+
+
 async def get_quieter_mode(guild_id: int) -> bool:
     """Whether the guild has quieter mode enabled (mutes non-essential pings)."""
     val = await get_guild_setting(guild_id, "quieter_mode")
