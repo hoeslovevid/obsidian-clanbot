@@ -105,6 +105,16 @@ def setup(bot, group=None):
                     await btn_interaction.followup.send("Only the person who started this can confirm.", ephemeral=True)
                     return
                 # ConfirmView already responded with edit_message; use followup for results
+                processing_embed = obsidian_embed(
+                    "⏳ Processing Purge",
+                    "Deleting messages... This may take a moment for large batches.",
+                    color=discord.Color.orange(),
+                    client=interaction.client,
+                )
+                try:
+                    await btn_interaction.edit_original_response(embed=processing_embed, view=None)
+                except Exception:
+                    pass
                 transcript_file = None
                 try:
                     deleted_msgs = []
@@ -114,14 +124,25 @@ def setup(bot, group=None):
                                 msgs = await interaction.channel.purge(limit=100, check=lambda m: not m.pinned)
                             except discord.HTTPException as e:
                                 if e.status == 429:
-                                    await asyncio.sleep(getattr(e, "retry_after", 1))
+                                    retry_after = getattr(e, "retry_after", 1.5)
+                                    await asyncio.sleep(float(retry_after))
                                     continue
                                 raise
                             deleted_msgs.extend(msgs)
                             if not msgs:
                                 break
+                            # Proactive delay between batches to avoid Discord rate limits (5 bulk deletes per 5s)
+                            await asyncio.sleep(1.1)
                     else:
-                        deleted_msgs = await interaction.channel.purge(limit=int(amount_val), check=lambda m: not m.pinned)
+                        for attempt in range(3):
+                            try:
+                                deleted_msgs = await interaction.channel.purge(limit=int(amount_val), check=lambda m: not m.pinned)
+                                break
+                            except discord.HTTPException as e:
+                                if e.status == 429 and attempt < 2:
+                                    await asyncio.sleep(getattr(e, "retry_after", 1.5))
+                                    continue
+                                raise
                     if archive and deleted_msgs:
                         transcript = _build_purge_transcript(deleted_msgs)
                         fn = f"purge_{interaction.channel.name}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.txt"
