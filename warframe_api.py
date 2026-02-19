@@ -9,8 +9,8 @@ from typing import Optional, Dict, Any, Tuple, List
 import aiohttp  # type: ignore
 
 # Timeout and retries for api.warframestat.us (can be slow or unreachable from some networks)
-WARFRAME_STAT_TIMEOUT = 20
-WARFRAME_STAT_RETRIES = 2
+WARFRAME_STAT_TIMEOUT = 25
+WARFRAME_STAT_RETRIES = 3
 
 # Optional proxy for Warframe APIs (e.g. when datacenter IP gets 404)
 def _market_proxy() -> Optional[str]:
@@ -28,6 +28,10 @@ from datetime import datetime, timezone, timedelta
 logger = logging.getLogger(__name__)
 
 
+# Cloudflare/origin errors worth retrying once (523 = Origin Unreachable, 502/503 = Bad Gateway / Unavailable)
+_WF_STAT_RETRY_STATUSES = (502, 503, 523)
+
+
 async def _wf_stat_get(url: str, proxy: Optional[str]) -> Optional[Any]:
     """GET api.warframestat.us with timeout and retries. Returns parsed JSON or None."""
     timeout = aiohttp.ClientTimeout(total=WARFRAME_STAT_TIMEOUT)
@@ -38,6 +42,15 @@ async def _wf_stat_get(url: str, proxy: Optional[str]) -> Optional[Any]:
                 async with session.get(url, timeout=timeout, proxy=proxy) as resp:
                     if resp.status == 200:
                         return await resp.json()
+                    if resp.status in _WF_STAT_RETRY_STATUSES and attempt < WARFRAME_STAT_RETRIES - 1:
+                        logger.warning(
+                            "Warframe API returned %s (%s) for %s, retrying in 2s...",
+                            resp.status,
+                            "Origin Unreachable" if resp.status == 523 else "server error",
+                            url,
+                        )
+                        await asyncio.sleep(2)
+                        continue
                     logger.warning("Warframe API returned status %s for %s", resp.status, url)
                     return None
         except (asyncio.TimeoutError, TimeoutError) as e:
@@ -45,6 +58,13 @@ async def _wf_stat_get(url: str, proxy: Optional[str]) -> Optional[Any]:
             if attempt < WARFRAME_STAT_RETRIES - 1:
                 logger.debug("Warframe API timeout for %s, retry %s/%s", url, attempt + 1, WARFRAME_STAT_RETRIES)
                 await asyncio.sleep(1)
+            else:
+                logger.warning(
+                    "Warframe API timeout for %s after %s attempt(s), skipping",
+                    url,
+                    WARFRAME_STAT_RETRIES,
+                )
+                return None
     if last_exc:
         raise last_exc
     return None
