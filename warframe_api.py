@@ -35,7 +35,7 @@ async def fetch_baro_data() -> Optional[Dict[str, Any]]:
                     logger.warning(f"Warframe API returned status {response.status}")
                     return None
         except Exception as e:
-            logger.error(f"Error fetching Baro data: {e}")
+            logger.error("Error fetching Baro data: %s: %s", type(e).__name__, e, exc_info=True)
             return None
 
     return await get_cached("warframe:baro", 60, _fetch)
@@ -70,7 +70,7 @@ async def fetch_cycle_data(cycle_type: str) -> Optional[Dict[str, Any]]:
                     logger.warning(f"Warframe API returned status {response.status} for {cycle_type}")
                     return None
     except Exception as e:
-        logger.error(f"Error fetching {cycle_type} cycle data: {e}")
+        logger.error("Error fetching %s cycle data: %s: %s", cycle_type, type(e).__name__, e, exc_info=True)
         return None
 
 
@@ -142,7 +142,7 @@ async def fetch_fissures() -> Optional[List[Dict[str, Any]]]:
                         return [f for f in data if not f.get("expired", False)]
                     return None
         except Exception as e:
-            logger.error(f"Error fetching fissures: {e}")
+            logger.error("Error fetching fissures: %s: %s", type(e).__name__, e, exc_info=True)
             return None
     return await get_cached("warframe:fissures", 60, _fetch)
 
@@ -159,7 +159,7 @@ async def fetch_sortie() -> Optional[Dict[str, Any]]:
                         return await r.json()
                     return None
         except Exception as e:
-            logger.error(f"Error fetching sortie: {e}")
+            logger.error("Error fetching sortie: %s: %s", type(e).__name__, e, exc_info=True)
             return None
     return await get_cached("warframe:sortie", 60, _fetch)
 
@@ -176,7 +176,7 @@ async def fetch_steel_path() -> Optional[Dict[str, Any]]:
                         return await r.json()
                     return None
         except Exception as e:
-            logger.error(f"Error fetching steel path: {e}")
+            logger.error("Error fetching steel path: %s: %s", type(e).__name__, e, exc_info=True)
             return None
     return await get_cached("warframe:steelPath", 60, _fetch)
 
@@ -193,7 +193,7 @@ async def fetch_arbitration() -> Optional[Dict[str, Any]]:
                         return await r.json()
                     return None
         except Exception as e:
-            logger.error(f"Error fetching arbitration: {e}")
+            logger.error("Error fetching arbitration: %s: %s", type(e).__name__, e, exc_info=True)
             return None
     return await get_cached("warframe:arbitration", 60, _fetch)
 
@@ -210,7 +210,7 @@ async def fetch_nightwave() -> Optional[Dict[str, Any]]:
                         return await r.json()
                     return None
         except Exception as e:
-            logger.error(f"Error fetching nightwave: {e}")
+            logger.error("Error fetching nightwave: %s: %s", type(e).__name__, e, exc_info=True)
             return None
     return await get_cached("warframe:nightwave", 300, _fetch)
 
@@ -230,7 +230,7 @@ async def fetch_invasions() -> Optional[list]:
                     logger.warning(f"Warframe API returned status {response.status} for invasions")
                     return None
         except Exception as e:
-            logger.error(f"Error fetching invasion data: {e}")
+            logger.error("Error fetching invasion data: %s: %s", type(e).__name__, e, exc_info=True)
             return None
 
     return await get_cached("warframe:invasions", 60, _fetch)
@@ -250,7 +250,7 @@ async def fetch_archon_hunt_data() -> Optional[Dict[str, Any]]:
                     logger.warning(f"Warframe API returned status {response.status} for archon hunt")
                     return None
         except Exception as e:
-            logger.error(f"Error fetching archon hunt data: {e}")
+            logger.error("Error fetching archon hunt data: %s: %s", type(e).__name__, e, exc_info=True)
             return None
 
     return await get_cached("warframe:archon", 60, _fetch)
@@ -271,7 +271,7 @@ async def fetch_events_data() -> Optional[List[Dict[str, Any]]]:
                     logger.warning(f"Warframe API returned status {response.status} for events")
                     return None
     except Exception as e:
-        logger.error(f"Error fetching events data: {e}")
+        logger.error("Error fetching events data: %s: %s", type(e).__name__, e, exc_info=True)
         return None
 
 
@@ -439,7 +439,7 @@ async def fetch_duviri_circuit() -> Optional[Dict[str, Any]]:
                     logger.warning(f"Warframe API returned status {response.status} for duviri circuit")
                     return None
         except Exception as e:
-            logger.error(f"Error fetching Duviri Circuit data: {e}")
+            logger.error("Error fetching Duviri Circuit data: %s: %s", type(e).__name__, e, exc_info=True)
             return None
 
     return await get_cached("warframe:duviri", 60, _fetch)
@@ -460,7 +460,7 @@ async def fetch_alerts() -> Optional[List[Dict[str, Any]]]:
                     logger.warning(f"Warframe API returned status {response.status} for alerts")
                     return None
         except Exception as e:
-            logger.error(f"Error fetching alerts data: {e}")
+            logger.error("Error fetching alerts data: %s: %s", type(e).__name__, e, exc_info=True)
             return None
 
     return await get_cached("warframe:alerts", 60, _fetch)
@@ -542,7 +542,7 @@ async def fetch_steam_warframe_playtime(steam_id_64: str) -> Optional[int]:
                         minutes = int(g.get("playtime_forever", 0) or 0)
                         return minutes // 60  # Convert to hours
     except Exception as e:
-        logger.error(f"Error fetching Steam Warframe playtime: {e}")
+        logger.error("Error fetching Steam Warframe playtime: %s: %s", type(e).__name__, e, exc_info=True)
     return None
 
 
@@ -606,7 +606,7 @@ async def fetch_twitch_stream_status(channel_name: str = "playwarframe") -> Opti
                     logger.warning(f"Twitch API returned status {response.status}")
                     return None
     except Exception as e:
-        logger.error(f"Error fetching Twitch stream status: {e}")
+        logger.error("Error fetching Twitch stream status: %s: %s", type(e).__name__, e, exc_info=True)
         return None
 
 
@@ -716,7 +716,7 @@ async def get_warframe_market_price(item_url_name: str, platform: str = "pc") ->
                         logger.warning(f"Warframe Market API returned status {response.status} for {item_url_name}")
                         return None
         except Exception as e:
-            logger.error(f"Error fetching Warframe Market price for {item_url_name}: {e}")
+            logger.error("Error fetching Warframe Market price for %s: %s: %s", item_url_name, type(e).__name__, e, exc_info=True)
             return None
 
     return await get_cached(f"warframe_market:price:{item_url_name}:{platform}", 90, _fetch)
