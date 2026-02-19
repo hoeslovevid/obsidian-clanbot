@@ -159,6 +159,12 @@ def setup(bot, group=None):
         fields.append(("💾 Database Status", db_status_text, True))
         
         # Bot Statistics
+        guild_names = [g.name for g in bot.guilds]
+        servers_text = "\n".join(f"• {name}" for name in guild_names[:15])
+        if len(guild_names) > 15:
+            servers_text += f"\n_... and {len(guild_names) - 15} more_"
+        if not servers_text:
+            servers_text = "_None_"
         fields.append((
             "📊 Bot Statistics",
             f"**Guilds:** {guild_count:,}\n"
@@ -166,6 +172,11 @@ def setup(bot, group=None):
             f"**Commands:** {len([cmd for cmd in bot.tree.get_commands(guild=None)])}\n"
             f"**Platform:** {platform.system()}",
             True
+        ))
+        fields.append((
+            "🖥️ Servers",
+            servers_text,
+            False
         ))
         
         # Additional info for moderators

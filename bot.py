@@ -2051,6 +2051,9 @@ async def on_ready():
     await bot.change_presence(activity=activity, status=discord.Status.online)
     print(f"[ready] Status set: Watching {activity.name}")
 
+    guild_names = [g.name for g in bot.guilds]
+    print(f"[ready] Servers ({len(guild_names)}): {', '.join(guild_names)}")
+
     # Parallelize startup tasks for faster initialization
     async def setup_guild_channels():
         """Setup channels for all guilds in parallel."""
