@@ -2052,7 +2052,9 @@ async def on_ready():
     print(f"[ready] Status set: Watching {activity.name}")
 
     guild_names = [g.name for g in bot.guilds]
-    print(f"[ready] Servers ({len(guild_names)}): {', '.join(guild_names)}")
+    shown = guild_names[:15]
+    suffix = f", ... and {len(guild_names) - 15} more" if len(guild_names) > 15 else ""
+    print(f"[ready] Servers ({len(guild_names)}): {', '.join(shown)}{suffix}")
 
     # Parallelize startup tasks for faster initialization
     async def setup_guild_channels():
