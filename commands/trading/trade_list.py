@@ -12,8 +12,8 @@ def setup(bot, group=None):
     trade_decorator = group.command(name="trade_list", description="View your active trading listings.") if group else bot.tree.command(name="trade_list", description="View your active trading listings.")
     my_listings_decorator = group.command(name="my_listings", description="View your active trading listings (alias for trade_list).") if group else bot.tree.command(name="my_listings", description="View your active trading listings (alias for trade_list).")
 
-    async def _list_listings(interaction: discord.Interaction):
-        """List user's active trading posts."""
+    async def _list_listings_impl(interaction: discord.Interaction):
+        """Shared implementation for listing user's active trading posts."""
         if not interaction.guild:
             return await interaction.response.send_message(
                 embed=obsidian_embed(
@@ -72,5 +72,12 @@ def setup(bot, group=None):
         
         await interaction.followup.send(embed=embed, ephemeral=True)
 
-    trade_decorator(_list_listings)
-    my_listings_decorator(_list_listings)
+    @trade_decorator
+    async def trade_list(interaction: discord.Interaction):
+        """List user's active trading posts."""
+        await _list_listings_impl(interaction)
+
+    @my_listings_decorator
+    async def my_listings(interaction: discord.Interaction):
+        """List user's active trading listings (alias for trade_list)."""
+        await _list_listings_impl(interaction)
