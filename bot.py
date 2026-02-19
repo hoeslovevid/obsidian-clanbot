@@ -2051,10 +2051,12 @@ async def on_ready():
     await bot.change_presence(activity=activity, status=discord.Status.online)
     print(f"[ready] Status set: Watching {activity.name}")
 
-    guilds_shown = [(g.name, g.id) for g in list(bot.guilds)[:15]]
-    suffix = f", ... and {len(bot.guilds) - 15} more" if len(bot.guilds) > 15 else ""
+    guild_list = list(bot.guilds)
+    guild_count = len(guild_list)
+    guilds_shown = [(g.name, g.id) for g in guild_list[:15]]
+    suffix = f", ... and {guild_count - 15} more" if guild_count > 15 else ""
     parts = [f"{name} ({gid})" for name, gid in guilds_shown]
-    print(f"[ready] Servers ({len(bot.guilds)}): {', '.join(parts)}{suffix}")
+    print(f"[ready] Servers ({guild_count}): {', '.join(parts)}{suffix}")
 
     # Parallelize startup tasks for faster initialization
     async def setup_guild_channels():

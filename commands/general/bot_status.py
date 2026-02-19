@@ -121,9 +121,10 @@ def setup(bot, group=None):
         # Bot latency
         latency_ms = round(bot.latency * 1000, 2)
         
-        # Guild and user counts
-        guild_count = len(bot.guilds)
-        user_count = len(set(member.id for guild in bot.guilds for member in guild.members))
+        # Guild and user counts (single snapshot so list and count stay in sync)
+        guild_list = list(bot.guilds)
+        guild_count = len(guild_list)
+        user_count = len(set(member.id for guild in guild_list for member in guild.members))
         
         # Build embed
         fields = []
@@ -158,11 +159,11 @@ def setup(bot, group=None):
         
         fields.append(("💾 Database Status", db_status_text, True))
         
-        # Bot Statistics
-        guilds_shown = list(bot.guilds)[:15]
+        # Bot Statistics (use guild_list snapshot so suffix count matches displayed list)
+        guilds_shown = guild_list[:15]
         servers_text = "\n".join(f"• {g.name} (`{g.id}`)" for g in guilds_shown)
-        if len(bot.guilds) > 15:
-            servers_text += f"\n_... and {len(bot.guilds) - 15} more_"
+        if guild_count > 15:
+            servers_text += f"\n_... and {guild_count - 15} more_"
         if not servers_text:
             servers_text = "_None_"
         fields.append((
