@@ -2,10 +2,15 @@
 Warframe API functions for fetching game data.
 This module handles all Warframe World State API calls.
 """
+import asyncio
 import logging
 import os
 from typing import Optional, Dict, Any, Tuple, List
 import aiohttp  # type: ignore
+
+# Timeout and retries for api.warframestat.us (can be slow or unreachable from some networks)
+WARFRAME_STAT_TIMEOUT = 20
+WARFRAME_STAT_RETRIES = 2
 
 # Optional proxy for Warframe APIs (e.g. when datacenter IP gets 404)
 def _market_proxy() -> Optional[str]:
@@ -15,10 +20,34 @@ def _market_proxy() -> Optional[str]:
 def _api_proxy() -> Optional[str]:
     """Proxy for api.warframestat.us - reuse same env vars as Warframe Market."""
     return os.environ.get("WARFRAME_STAT_PROXY") or _market_proxy()
+
+
 import dateparser  # type: ignore
 from datetime import datetime, timezone, timedelta
 
 logger = logging.getLogger(__name__)
+
+
+async def _wf_stat_get(url: str, proxy: Optional[str]) -> Optional[Any]:
+    """GET api.warframestat.us with timeout and retries. Returns parsed JSON or None."""
+    timeout = aiohttp.ClientTimeout(total=WARFRAME_STAT_TIMEOUT)
+    last_exc = None
+    for attempt in range(WARFRAME_STAT_RETRIES):
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=timeout, proxy=proxy) as resp:
+                    if resp.status == 200:
+                        return await resp.json()
+                    logger.warning("Warframe API returned status %s for %s", resp.status, url)
+                    return None
+        except (asyncio.TimeoutError, TimeoutError) as e:
+            last_exc = e
+            if attempt < WARFRAME_STAT_RETRIES - 1:
+                logger.debug("Warframe API timeout for %s, retry %s/%s", url, attempt + 1, WARFRAME_STAT_RETRIES)
+                await asyncio.sleep(1)
+    if last_exc:
+        raise last_exc
+    return None
 
 
 async def fetch_baro_data() -> Optional[Dict[str, Any]]:
@@ -27,13 +56,7 @@ async def fetch_baro_data() -> Optional[Dict[str, Any]]:
 
     async def _fetch():
         try:
-            proxy = _api_proxy()
-            async with aiohttp.ClientSession() as session:
-                async with session.get("https://api.warframestat.us/pc/voidTrader", timeout=aiohttp.ClientTimeout(total=10), proxy=proxy) as response:
-                    if response.status == 200:
-                        return await response.json()
-                    logger.warning(f"Warframe API returned status {response.status}")
-                    return None
+            return await _wf_stat_get("https://api.warframestat.us/pc/voidTrader", _api_proxy())
         except Exception as e:
             logger.error("Error fetching Baro data: %s: %s", type(e).__name__, e, exc_info=True)
             return None
@@ -60,15 +83,7 @@ async def fetch_cycle_data(cycle_type: str) -> Optional[Dict[str, Any]]:
         return None
     
     try:
-        proxy = _api_proxy()
-        async with aiohttp.ClientSession() as session:
-            async with session.get(endpoints[cycle_type], timeout=aiohttp.ClientTimeout(total=10), proxy=proxy) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    return data
-                else:
-                    logger.warning(f"Warframe API returned status {response.status} for {cycle_type}")
-                    return None
+        return await _wf_stat_get(endpoints[cycle_type], _api_proxy())
     except Exception as e:
         logger.error("Error fetching %s cycle data: %s: %s", cycle_type, type(e).__name__, e, exc_info=True)
         return None
@@ -134,13 +149,8 @@ async def fetch_fissures() -> Optional[List[Dict[str, Any]]]:
     from cache_utils import get_cached
     async def _fetch():
         try:
-            proxy = _api_proxy()
-            async with aiohttp.ClientSession() as session:
-                async with session.get("https://api.warframestat.us/pc/fissures", timeout=aiohttp.ClientTimeout(total=10), proxy=proxy) as r:
-                    if r.status == 200:
-                        data = await r.json()
-                        return [f for f in data if not f.get("expired", False)]
-                    return None
+            data = await _wf_stat_get("https://api.warframestat.us/pc/fissures", _api_proxy())
+            return [f for f in data if not f.get("expired", False)] if data else None
         except Exception as e:
             logger.error("Error fetching fissures: %s: %s", type(e).__name__, e, exc_info=True)
             return None
@@ -152,12 +162,7 @@ async def fetch_sortie() -> Optional[Dict[str, Any]]:
     from cache_utils import get_cached
     async def _fetch():
         try:
-            proxy = _api_proxy()
-            async with aiohttp.ClientSession() as session:
-                async with session.get("https://api.warframestat.us/pc/sortie", timeout=aiohttp.ClientTimeout(total=10), proxy=proxy) as r:
-                    if r.status == 200:
-                        return await r.json()
-                    return None
+            return await _wf_stat_get("https://api.warframestat.us/pc/sortie", _api_proxy())
         except Exception as e:
             logger.error("Error fetching sortie: %s: %s", type(e).__name__, e, exc_info=True)
             return None
@@ -169,12 +174,7 @@ async def fetch_steel_path() -> Optional[Dict[str, Any]]:
     from cache_utils import get_cached
     async def _fetch():
         try:
-            proxy = _api_proxy()
-            async with aiohttp.ClientSession() as session:
-                async with session.get("https://api.warframestat.us/pc/steelPath", timeout=aiohttp.ClientTimeout(total=10), proxy=proxy) as r:
-                    if r.status == 200:
-                        return await r.json()
-                    return None
+            return await _wf_stat_get("https://api.warframestat.us/pc/steelPath", _api_proxy())
         except Exception as e:
             logger.error("Error fetching steel path: %s: %s", type(e).__name__, e, exc_info=True)
             return None
@@ -186,12 +186,7 @@ async def fetch_arbitration() -> Optional[Dict[str, Any]]:
     from cache_utils import get_cached
     async def _fetch():
         try:
-            proxy = _api_proxy()
-            async with aiohttp.ClientSession() as session:
-                async with session.get("https://api.warframestat.us/pc/arbitration", timeout=aiohttp.ClientTimeout(total=10), proxy=proxy) as r:
-                    if r.status == 200:
-                        return await r.json()
-                    return None
+            return await _wf_stat_get("https://api.warframestat.us/pc/arbitration", _api_proxy())
         except Exception as e:
             logger.error("Error fetching arbitration: %s: %s", type(e).__name__, e, exc_info=True)
             return None
@@ -203,12 +198,7 @@ async def fetch_nightwave() -> Optional[Dict[str, Any]]:
     from cache_utils import get_cached
     async def _fetch():
         try:
-            proxy = _api_proxy()
-            async with aiohttp.ClientSession() as session:
-                async with session.get("https://api.warframestat.us/pc/nightwave", timeout=aiohttp.ClientTimeout(total=10), proxy=proxy) as r:
-                    if r.status == 200:
-                        return await r.json()
-                    return None
+            return await _wf_stat_get("https://api.warframestat.us/pc/nightwave", _api_proxy())
         except Exception as e:
             logger.error("Error fetching nightwave: %s: %s", type(e).__name__, e, exc_info=True)
             return None
@@ -221,14 +211,10 @@ async def fetch_invasions() -> Optional[list]:
 
     async def _fetch():
         try:
-            proxy = _api_proxy()
-            async with aiohttp.ClientSession() as session:
-                async with session.get("https://api.warframestat.us/pc/invasions", timeout=aiohttp.ClientTimeout(total=10), proxy=proxy) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        return [inv for inv in data if inv.get("completed", False) == False]
-                    logger.warning(f"Warframe API returned status {response.status} for invasions")
-                    return None
+            data = await _wf_stat_get("https://api.warframestat.us/pc/invasions", _api_proxy())
+            if not data:
+                return None
+            return [inv for inv in data if inv.get("completed", False) == False]
         except Exception as e:
             logger.error("Error fetching invasion data: %s: %s", type(e).__name__, e, exc_info=True)
             return None
@@ -242,13 +228,7 @@ async def fetch_archon_hunt_data() -> Optional[Dict[str, Any]]:
 
     async def _fetch():
         try:
-            proxy = _api_proxy()
-            async with aiohttp.ClientSession() as session:
-                async with session.get("https://api.warframestat.us/pc/archonHunt?language=en", timeout=aiohttp.ClientTimeout(total=10), proxy=proxy) as response:
-                    if response.status == 200:
-                        return await response.json()
-                    logger.warning(f"Warframe API returned status {response.status} for archon hunt")
-                    return None
+            return await _wf_stat_get("https://api.warframestat.us/pc/archonHunt?language=en", _api_proxy())
         except Exception as e:
             logger.error("Error fetching archon hunt data: %s: %s", type(e).__name__, e, exc_info=True)
             return None
@@ -259,17 +239,10 @@ async def fetch_archon_hunt_data() -> Optional[Dict[str, Any]]:
 async def fetch_events_data() -> Optional[List[Dict[str, Any]]]:
     """Fetch active events data from Warframe World State API."""
     try:
-        proxy = _api_proxy()
-        async with aiohttp.ClientSession() as session:
-            async with session.get("https://api.warframestat.us/pc/events", timeout=aiohttp.ClientTimeout(total=10), proxy=proxy) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    # Filter for active events only
-                    active_events = [event for event in data if event.get("expired", False) == False]
-                    return active_events
-                else:
-                    logger.warning(f"Warframe API returned status {response.status} for events")
-                    return None
+        data = await _wf_stat_get("https://api.warframestat.us/pc/events", _api_proxy())
+        if not data:
+            return None
+        return [event for event in data if event.get("expired", False) == False]
     except Exception as e:
         logger.error("Error fetching events data: %s: %s", type(e).__name__, e, exc_info=True)
         return None
@@ -431,13 +404,7 @@ async def fetch_duviri_circuit() -> Optional[Dict[str, Any]]:
 
     async def _fetch():
         try:
-            proxy = _api_proxy()
-            async with aiohttp.ClientSession() as session:
-                async with session.get("https://api.warframestat.us/pc/duviriCycle", timeout=aiohttp.ClientTimeout(total=10), proxy=proxy) as response:
-                    if response.status == 200:
-                        return await response.json()
-                    logger.warning(f"Warframe API returned status {response.status} for duviri circuit")
-                    return None
+            return await _wf_stat_get("https://api.warframestat.us/pc/duviriCycle", _api_proxy())
         except Exception as e:
             logger.error("Error fetching Duviri Circuit data: %s: %s", type(e).__name__, e, exc_info=True)
             return None
@@ -451,14 +418,10 @@ async def fetch_alerts() -> Optional[List[Dict[str, Any]]]:
 
     async def _fetch():
         try:
-            proxy = _api_proxy()
-            async with aiohttp.ClientSession() as session:
-                async with session.get("https://api.warframestat.us/pc/alerts", timeout=aiohttp.ClientTimeout(total=10), proxy=proxy) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        return [alert for alert in data if alert.get("expired", False) == False]
-                    logger.warning(f"Warframe API returned status {response.status} for alerts")
-                    return None
+            data = await _wf_stat_get("https://api.warframestat.us/pc/alerts", _api_proxy())
+            if not data:
+                return None
+            return [alert for alert in data if alert.get("expired", False) == False]
         except Exception as e:
             logger.error("Error fetching alerts data: %s: %s", type(e).__name__, e, exc_info=True)
             return None
