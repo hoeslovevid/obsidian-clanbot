@@ -159,10 +159,10 @@ def setup(bot, group=None):
         fields.append(("💾 Database Status", db_status_text, True))
         
         # Bot Statistics
-        guild_names = [g.name for g in bot.guilds]
-        servers_text = "\n".join(f"• {name}" for name in guild_names[:15])
-        if len(guild_names) > 15:
-            servers_text += f"\n_... and {len(guild_names) - 15} more_"
+        guilds_shown = list(bot.guilds)[:15]
+        servers_text = "\n".join(f"• {g.name} (`{g.id}`)" for g in guilds_shown)
+        if len(bot.guilds) > 15:
+            servers_text += f"\n_... and {len(bot.guilds) - 15} more_"
         if not servers_text:
             servers_text = "_None_"
         fields.append((
