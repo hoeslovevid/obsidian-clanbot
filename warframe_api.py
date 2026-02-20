@@ -43,6 +43,7 @@ _WF_STAT_RETRY_STATUSES = (502, 503, 523)
 _WF_STAT_FALLBACK_MAX_AGE = 7200
 _wf_stat_fallback: Dict[str, Tuple[Any, float]] = {}  # url -> (data, monotonic_timestamp)
 _wf_stat_proxy_logged = False
+_wf_stat_success_logged = False
 
 
 def _wf_stat_fallback_get(url: str) -> Optional[Any]:
@@ -60,7 +61,7 @@ def _wf_stat_fallback_get(url: str) -> Optional[Any]:
 
 async def _wf_stat_get(url: str, proxy: Optional[str]) -> Optional[Any]:
     """GET api.warframestat.us with timeout and retries. Returns parsed JSON or None. Uses fallback cache on failure."""
-    global _wf_stat_proxy_logged
+    global _wf_stat_proxy_logged, _wf_stat_success_logged
     if proxy and not _wf_stat_proxy_logged:
         _wf_stat_proxy_logged = True
         _host = proxy.split("@")[-1].split("/")[0] if "@" in proxy else proxy.split("/")[-1]
@@ -74,6 +75,9 @@ async def _wf_stat_get(url: str, proxy: Optional[str]) -> Optional[Any]:
                     if resp.status == 200:
                         data = await resp.json()
                         _wf_stat_fallback[url] = (data, time.monotonic())
+                        if not _wf_stat_success_logged:
+                            _wf_stat_success_logged = True
+                            logger.info("Warframe API connected successfully")
                         return data
                     if resp.status in _WF_STAT_RETRY_STATUSES and attempt < WARFRAME_STAT_RETRIES - 1:
                         logger.warning(
