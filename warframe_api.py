@@ -9,8 +9,11 @@ import time
 from typing import Optional, Dict, Any, Tuple, List
 import aiohttp  # type: ignore
 
-# Timeout and retries for api.warframestat.us (can be slow or unreachable from some networks)
-WARFRAME_STAT_TIMEOUT = 25
+# Timeout and retries for api.warframestat.us (can be slow or unreachable from some networks/proxy)
+def _wf_stat_timeout() -> int:
+    v = os.environ.get("WARFRAME_STAT_TIMEOUT", "")
+    return int(v) if v.isdigit() else 40
+WARFRAME_STAT_TIMEOUT = _wf_stat_timeout()
 WARFRAME_STAT_RETRIES = 3
 
 # Optional proxy for Warframe APIs (e.g. when datacenter IP gets 404)
