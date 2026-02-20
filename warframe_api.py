@@ -5,6 +5,7 @@ This module handles all Warframe World State API calls.
 import asyncio
 import logging
 import os
+import time
 from typing import Optional, Dict, Any, Tuple, List
 import aiohttp  # type: ignore
 
@@ -31,9 +32,32 @@ logger = logging.getLogger(__name__)
 # Cloudflare/origin errors worth retrying once (523 = Origin Unreachable, 502/503 = Bad Gateway / Unavailable)
 _WF_STAT_RETRY_STATUSES = (502, 503, 523)
 
+# When API fails, serve last successful response for up to this many seconds (1 hour)
+_WF_STAT_FALLBACK_MAX_AGE = 3600
+_wf_stat_fallback: Dict[str, Tuple[Any, float]] = {}  # url -> (data, monotonic_timestamp)
+_wf_stat_proxy_logged = False
+
+
+def _wf_stat_fallback_get(url: str) -> Optional[Any]:
+    """Return last known good data for url if still within fallback max age."""
+    entry = _wf_stat_fallback.get(url)
+    if not entry:
+        return None
+    data, ts = entry
+    age = time.monotonic() - ts
+    if age > _WF_STAT_FALLBACK_MAX_AGE:
+        return None
+    logger.info("Warframe API unavailable for %s; using last known good data (%.0f min old)", url, age / 60)
+    return data
+
 
 async def _wf_stat_get(url: str, proxy: Optional[str]) -> Optional[Any]:
-    """GET api.warframestat.us with timeout and retries. Returns parsed JSON or None."""
+    """GET api.warframestat.us with timeout and retries. Returns parsed JSON or None. Uses fallback cache on failure."""
+    if proxy and not _wf_stat_proxy_logged:
+        global _wf_stat_proxy_logged
+        _wf_stat_proxy_logged = True
+        _host = proxy.split("@")[-1].split("/")[0] if "@" in proxy else proxy.split("/")[-1]
+        logger.info("Warframe API proxy enabled: %s", _host)
     timeout = aiohttp.ClientTimeout(total=WARFRAME_STAT_TIMEOUT)
     last_exc = None
     for attempt in range(WARFRAME_STAT_RETRIES):
@@ -41,7 +65,9 @@ async def _wf_stat_get(url: str, proxy: Optional[str]) -> Optional[Any]:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, timeout=timeout, proxy=proxy) as resp:
                     if resp.status == 200:
-                        return await resp.json()
+                        data = await resp.json()
+                        _wf_stat_fallback[url] = (data, time.monotonic())
+                        return data
                     if resp.status in _WF_STAT_RETRY_STATUSES and attempt < WARFRAME_STAT_RETRIES - 1:
                         logger.warning(
                             "Warframe API returned %s (%s) for %s, retrying in 2s...",
@@ -51,20 +77,20 @@ async def _wf_stat_get(url: str, proxy: Optional[str]) -> Optional[Any]:
                         )
                         await asyncio.sleep(2)
                         continue
-                    logger.warning("Warframe API returned status %s for %s", resp.status, url)
-                    return None
+                    logger.info("Warframe API returned status %s for %s (after retries), skipping", resp.status, url)
+                    return _wf_stat_fallback_get(url) or None
         except (asyncio.TimeoutError, TimeoutError) as e:
             last_exc = e
             if attempt < WARFRAME_STAT_RETRIES - 1:
                 logger.debug("Warframe API timeout for %s, retry %s/%s", url, attempt + 1, WARFRAME_STAT_RETRIES)
                 await asyncio.sleep(1)
             else:
-                logger.warning(
+                logger.info(
                     "Warframe API timeout for %s after %s attempt(s), skipping",
                     url,
                     WARFRAME_STAT_RETRIES,
                 )
-                return None
+                return _wf_stat_fallback_get(url) or None
     if last_exc:
         raise last_exc
     return None
