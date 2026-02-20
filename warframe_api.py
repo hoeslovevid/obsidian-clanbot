@@ -12,9 +12,13 @@ import aiohttp  # type: ignore
 # Timeout and retries for api.warframestat.us (can be slow or unreachable from some networks/proxy)
 def _wf_stat_timeout() -> int:
     v = os.environ.get("WARFRAME_STAT_TIMEOUT", "")
-    return int(v) if v.isdigit() else 40
+    return int(v) if v.isdigit() else 60
 WARFRAME_STAT_TIMEOUT = _wf_stat_timeout()
-WARFRAME_STAT_RETRIES = 3
+
+def _wf_stat_retries() -> int:
+    v = os.environ.get("WARFRAME_STAT_RETRIES", "")
+    return int(v) if v.isdigit() and int(v) >= 1 else 4
+WARFRAME_STAT_RETRIES = _wf_stat_retries()
 
 # Optional proxy for Warframe APIs (e.g. when datacenter IP gets 404)
 def _market_proxy() -> Optional[str]:
@@ -35,8 +39,8 @@ logger = logging.getLogger(__name__)
 # Cloudflare/origin errors worth retrying once (523 = Origin Unreachable, 502/503 = Bad Gateway / Unavailable)
 _WF_STAT_RETRY_STATUSES = (502, 503, 523)
 
-# When API fails, serve last successful response for up to this many seconds (1 hour)
-_WF_STAT_FALLBACK_MAX_AGE = 3600
+# When API fails, serve last successful response for up to this many seconds (2 hours)
+_WF_STAT_FALLBACK_MAX_AGE = 7200
 _wf_stat_fallback: Dict[str, Tuple[Any, float]] = {}  # url -> (data, monotonic_timestamp)
 _wf_stat_proxy_logged = False
 
@@ -85,8 +89,8 @@ async def _wf_stat_get(url: str, proxy: Optional[str]) -> Optional[Any]:
         except (asyncio.TimeoutError, TimeoutError) as e:
             last_exc = e
             if attempt < WARFRAME_STAT_RETRIES - 1:
-                logger.debug("Warframe API timeout for %s, retry %s/%s", url, attempt + 1, WARFRAME_STAT_RETRIES)
-                await asyncio.sleep(1)
+                logger.debug("Warframe API timeout for %s, retry %s/%s in 3s", url, attempt + 1, WARFRAME_STAT_RETRIES)
+                await asyncio.sleep(3)
             else:
                 logger.info(
                     "Warframe API timeout for %s after %s attempt(s), skipping",
