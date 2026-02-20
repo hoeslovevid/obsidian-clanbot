@@ -12,7 +12,10 @@ import aiohttp  # type: ignore
 # Timeout and retries for api.warframestat.us (can be slow or unreachable from some networks/proxy)
 def _wf_stat_timeout() -> int:
     v = os.environ.get("WARFRAME_STAT_TIMEOUT", "")
-    return int(v) if v.isdigit() else 60
+    if not v.isdigit():
+        return 60
+    n = int(v)
+    return n if n >= 1 else 60
 WARFRAME_STAT_TIMEOUT = _wf_stat_timeout()
 
 def _wf_stat_retries() -> int:
