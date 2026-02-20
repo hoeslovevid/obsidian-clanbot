@@ -53,8 +53,8 @@ def _wf_stat_fallback_get(url: str) -> Optional[Any]:
 
 async def _wf_stat_get(url: str, proxy: Optional[str]) -> Optional[Any]:
     """GET api.warframestat.us with timeout and retries. Returns parsed JSON or None. Uses fallback cache on failure."""
+    global _wf_stat_proxy_logged
     if proxy and not _wf_stat_proxy_logged:
-        global _wf_stat_proxy_logged
         _wf_stat_proxy_logged = True
         _host = proxy.split("@")[-1].split("/")[0] if "@" in proxy else proxy.split("/")[-1]
         logger.info("Warframe API proxy enabled: %s", _host)
