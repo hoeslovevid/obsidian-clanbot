@@ -485,7 +485,7 @@ class GiveawayView(discord.ui.View):
         participants_btn.callback = self.view_participants
         self.add_item(participants_btn)
 
-    async def enter_giveaway(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def enter_giveaway(self, interaction: discord.Interaction):
         """Enter a giveaway."""
         if not self.giveaway_id:
             return await interaction.response.send_message(
@@ -626,7 +626,7 @@ class GiveawayView(discord.ui.View):
             ephemeral=True
         )
 
-    async def leave_giveaway(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def leave_giveaway(self, interaction: discord.Interaction):
         """Leave a giveaway."""
         if not self.giveaway_id:
             return await interaction.response.send_message(
@@ -731,7 +731,7 @@ class GiveawayView(discord.ui.View):
             ephemeral=True
         )
 
-    async def view_participants(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def view_participants(self, interaction: discord.Interaction):
         """Show who entered the giveaway (ephemeral)."""
         if not self.giveaway_id:
             return await interaction.response.send_message(
