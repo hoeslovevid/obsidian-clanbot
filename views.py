@@ -453,22 +453,38 @@ class TradingPostView(discord.ui.View):
 
 
 class GiveawayView(discord.ui.View):
-    """View for giveaway enter/leave buttons."""
+    """View for giveaway enter/leave/participants buttons. All buttons use giveaway_id in custom_id so multiple giveaways work."""
     def __init__(self, giveaway_id: Optional[int] = None):
         super().__init__(timeout=None)
         self.giveaway_id = giveaway_id
-        # View Participants button (custom_id must include giveaway_id for persistence when multiple giveaways exist)
-        if giveaway_id is not None:
-            participants_btn = discord.ui.Button(
-                label="View Participants",
-                style=discord.ButtonStyle.secondary,
-                emoji="👥",
-                custom_id=f"giveaway:{giveaway_id}:participants",
-            )
-            participants_btn.callback = self.view_participants
-            self.add_item(participants_btn)
-    
-    @discord.ui.button(label="Enter Giveaway", style=discord.ButtonStyle.green, emoji="🎉", custom_id="giveaway:enter")
+        if giveaway_id is None:
+            return
+        # All buttons must have unique custom_id per giveaway so persistent views route to the correct giveaway
+        enter_btn = discord.ui.Button(
+            label="Enter Giveaway",
+            style=discord.ButtonStyle.green,
+            emoji="🎉",
+            custom_id=f"giveaway:{giveaway_id}:enter",
+        )
+        enter_btn.callback = self.enter_giveaway
+        self.add_item(enter_btn)
+        leave_btn = discord.ui.Button(
+            label="Leave Giveaway",
+            style=discord.ButtonStyle.red,
+            emoji="❌",
+            custom_id=f"giveaway:{giveaway_id}:leave",
+        )
+        leave_btn.callback = self.leave_giveaway
+        self.add_item(leave_btn)
+        participants_btn = discord.ui.Button(
+            label="View Participants",
+            style=discord.ButtonStyle.secondary,
+            emoji="👥",
+            custom_id=f"giveaway:{giveaway_id}:participants",
+        )
+        participants_btn.callback = self.view_participants
+        self.add_item(participants_btn)
+
     async def enter_giveaway(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Enter a giveaway."""
         if not self.giveaway_id:
@@ -609,8 +625,7 @@ class GiveawayView(discord.ui.View):
             ),
             ephemeral=True
         )
-    
-    @discord.ui.button(label="Leave Giveaway", style=discord.ButtonStyle.red, emoji="❌", custom_id="giveaway:leave")
+
     async def leave_giveaway(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Leave a giveaway."""
         if not self.giveaway_id:
