@@ -457,6 +457,16 @@ class GiveawayView(discord.ui.View):
     def __init__(self, giveaway_id: Optional[int] = None):
         super().__init__(timeout=None)
         self.giveaway_id = giveaway_id
+        # View Participants button (custom_id must include giveaway_id for persistence when multiple giveaways exist)
+        if giveaway_id is not None:
+            participants_btn = discord.ui.Button(
+                label="View Participants",
+                style=discord.ButtonStyle.secondary,
+                emoji="👥",
+                custom_id=f"giveaway:{giveaway_id}:participants",
+            )
+            participants_btn.callback = self.view_participants
+            self.add_item(participants_btn)
     
     @discord.ui.button(label="Enter Giveaway", style=discord.ButtonStyle.green, emoji="🎉", custom_id="giveaway:enter")
     async def enter_giveaway(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -701,6 +711,72 @@ class GiveawayView(discord.ui.View):
                 "✅ Left Giveaway",
                 f"You have left the giveaway for **{prize}**.",
                 color=discord.Color.green(),
+                client=interaction.client,
+            ),
+            ephemeral=True
+        )
+
+    async def view_participants(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Show who entered the giveaway (ephemeral)."""
+        if not self.giveaway_id:
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Error",
+                    "Giveaway ID not found. Please contact a moderator.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Invalid Context",
+                    "This can only be used in a server.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute("""
+                SELECT prize, ended FROM giveaways WHERE id = ?
+            """, (self.giveaway_id,))
+            row = await cur.fetchone()
+            if not row:
+                return await interaction.response.send_message(
+                    embed=obsidian_embed(
+                        "❌ Giveaway Not Found",
+                        "This giveaway no longer exists.",
+                        color=discord.Color.red(),
+                        client=interaction.client,
+                    ),
+                    ephemeral=True
+                )
+            prize, ended = row
+            cur = await db.execute("""
+                SELECT user_id, entered_at FROM giveaway_entries WHERE giveaway_id = ? ORDER BY entered_at ASC
+            """, (self.giveaway_id,))
+            entries = await cur.fetchall()
+        total = len(entries)
+        max_show = 25
+        lines = []
+        for (user_id, entered_at) in entries[:max_show]:
+            member = interaction.guild.get_member(user_id)
+            name = member.display_name if member else f"<@{user_id}>"
+            lines.append(f"• {name}")
+        if total == 0:
+            body = "No participants yet."
+        else:
+            body = "\n".join(lines)
+            if total > max_show:
+                body += f"\n\n_... and {total - max_show} more_"
+        await interaction.response.send_message(
+            embed=obsidian_embed(
+                f"👥 Participants — {prize}",
+                body,
+                color=discord.Color.blue(),
+                footer=f"{total} entr{'y' if total == 1 else 'ies'} total" + (" • Ended" if ended else ""),
                 client=interaction.client,
             ),
             ephemeral=True

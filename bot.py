@@ -1732,41 +1732,9 @@ async def on_interaction(interaction: discord.Interaction):
                             pass
                         return
 
-        # Giveaways: Enter/Leave
-        if cid and cid.startswith("giveaway:"):
-            action = cid.split(":")[-1]
-            if action in ["enter", "leave"]:
-                # Get giveaway ID from message
-                if not interaction.message:
-                    return
-                
-                async with aiosqlite.connect(DB_PATH) as db:
-                    cur = await db.execute("""
-                        SELECT id FROM giveaways WHERE guild_id = ? AND message_id = ? AND ended = 0
-                    """, (interaction.guild.id, interaction.message.id))
-                    row = await cur.fetchone()
-                
-                if not row:
-                    return await interaction.response.send_message(
-                        embed=obsidian_embed(
-                            "❌ Giveaway Not Found",
-                            "This giveaway no longer exists or has ended.",
-                            color=discord.Color.red(),
-                            client=bot,
-                        ),
-                        ephemeral=True
-                    )
-                
-                giveaway_id = row[0]
-                from views import GiveawayView
-                view = GiveawayView(giveaway_id)
-                
-                if action == "enter":
-                    await view.enter_giveaway(interaction, None)
-                elif action == "leave":
-                    await view.leave_giveaway(interaction, None)
-                return
-        
+        # Giveaways: Enter/Leave are handled by the persistent GiveawayView (registered in on_ready).
+        # Do not handle giveaway: here or we double-respond and view.enter_giveaway is the Button, not callable.
+
         # Events: RSVP
         if cid.startswith("events:rsvp:"):
             rsvp_action = cid.split(":")[-1]
