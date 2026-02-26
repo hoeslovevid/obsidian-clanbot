@@ -105,6 +105,19 @@ async def _wf_stat_get(url: str, proxy: Optional[str]) -> Optional[Any]:
                     WARFRAME_STAT_RETRIES,
                 )
                 return _wf_stat_fallback_get(url) or None
+        except (aiohttp.ClientHttpProxyError, aiohttp.ClientConnectorError) as e:
+            # Proxy 502/Bad Gateway or connection failure: retry then fallback (don't raise)
+            last_exc = e
+            if attempt < WARFRAME_STAT_RETRIES - 1:
+                logger.debug("Warframe API proxy/connection error for %s, retry %s/%s in 3s", url, attempt + 1, WARFRAME_STAT_RETRIES)
+                await asyncio.sleep(3)
+            else:
+                logger.info(
+                    "Warframe API proxy/connection error for %s after %s attempt(s), skipping",
+                    url,
+                    WARFRAME_STAT_RETRIES,
+                )
+                return _wf_stat_fallback_get(url) or None
     if last_exc:
         raise last_exc
     return None
