@@ -39,8 +39,8 @@ from datetime import datetime, timezone, timedelta
 logger = logging.getLogger(__name__)
 
 
-# Cloudflare/origin errors worth retrying once (523 = Origin Unreachable, 502/503 = Bad Gateway / Unavailable)
-_WF_STAT_RETRY_STATUSES = (502, 503, 523)
+# Cloudflare/origin errors worth retrying (522 = Connection timed out, 523 = Origin Unreachable, 502/503 = Bad Gateway / Unavailable)
+_WF_STAT_RETRY_STATUSES = (502, 503, 522, 523)
 
 # When API fails, serve last successful response for up to this many seconds (2 hours)
 _WF_STAT_FALLBACK_MAX_AGE = 7200
@@ -83,13 +83,15 @@ async def _wf_stat_get(url: str, proxy: Optional[str]) -> Optional[Any]:
                             logger.info("Warframe API connected successfully")
                         return data
                     if resp.status in _WF_STAT_RETRY_STATUSES and attempt < WARFRAME_STAT_RETRIES - 1:
+                        delay = 2 * (attempt + 1)  # 2s, 4s, 6s...
                         logger.warning(
-                            "Warframe API returned %s (%s) for %s, retrying in 2s...",
+                            "Warframe API returned %s (%s) for %s, retrying in %ss...",
                             resp.status,
-                            "Origin Unreachable" if resp.status == 523 else "server error",
+                            "Connection timed out" if resp.status == 522 else "Origin Unreachable" if resp.status == 523 else "server error",
                             url,
+                            delay,
                         )
-                        await asyncio.sleep(2)
+                        await asyncio.sleep(delay)
                         continue
                     logger.info("Warframe API returned status %s for %s (after retries), skipping", resp.status, url)
                     return _wf_stat_fallback_get(url) or None
