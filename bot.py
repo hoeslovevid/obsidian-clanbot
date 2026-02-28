@@ -818,14 +818,15 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
                 await db.commit()
         
         # User joined a voice channel - start tracking (if not muted/deafened)
-        if after.channel and isinstance(after.channel, discord.VoiceChannel):
+        ch_after = getattr(after, "channel", None)
+        if ch_after is not None and isinstance(ch_after, discord.VoiceChannel):
             if not (after.self_mute or after.self_deaf):
                 async with aiosqlite.connect(DB_PATH) as db:
                     # First, get existing total_minutes if any
                     cur = await db.execute("""
                         SELECT total_minutes FROM voice_activity
                         WHERE guild_id=? AND user_id=? AND channel_id=?
-                    """, (member.guild.id, member.id, after.channel.id))
+                    """, (member.guild.id, member.id, ch_after.id))
                     row = await cur.fetchone()
                     existing_minutes = row[0] if row else 0
                     
@@ -833,7 +834,7 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
                     await db.execute("""
                         INSERT OR REPLACE INTO voice_activity (guild_id, user_id, channel_id, joined_at, last_reward_at, total_minutes)
                         VALUES (?, ?, ?, ?, ?, ?)
-                    """, (member.guild.id, member.id, after.channel.id, now.isoformat(), None, existing_minutes))
+                    """, (member.guild.id, member.id, ch_after.id, now.isoformat(), None, existing_minutes))
                     await db.commit()
     
     # Original join-to-create logic
