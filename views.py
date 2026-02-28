@@ -933,7 +933,28 @@ class ApplicationPanelView(discord.ui.View):
         except (discord.errors.NotFound, discord.errors.InteractionResponded, discord.errors.HTTPException):
             # Already handled or expired, will use followup
             pass
-        
-        # Import the application start logic
-        from commands.applications.application import start_application_process
-        await start_application_process(interaction)
+
+        try:
+            from commands.applications.application import start_application_process
+            await start_application_process(interaction)
+        except Exception as e:
+            # Log so it appears in Railway; view callbacks are not routed through on_interaction
+            logger.error(
+                "[ApplicationPanelView] Application button failed: %s",
+                e,
+                exc_info=True,
+                extra={"guild_id": getattr(interaction.guild, "id", None), "user_id": getattr(interaction.user, "id", None)},
+            )
+            try:
+                if interaction.response.is_done():
+                    await interaction.followup.send(
+                        "Something went wrong starting the application. Please try again or contact a moderator.",
+                        ephemeral=True,
+                    )
+                else:
+                    await interaction.response.send_message(
+                        "Something went wrong starting the application. Please try again or contact a moderator.",
+                        ephemeral=True,
+                    )
+            except (discord.errors.NotFound, discord.errors.InteractionResponded, discord.errors.HTTPException):
+                pass

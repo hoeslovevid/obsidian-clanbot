@@ -1,6 +1,8 @@
 """Application command for users to start applications."""
 from __future__ import annotations
 
+import logging
+
 import discord
 from discord import app_commands
 from typing import Optional
@@ -8,6 +10,8 @@ from typing import Optional
 from utils import obsidian_embed
 from database import DB_PATH, now_utc
 import aiosqlite
+
+logger = logging.getLogger(__name__)
 
 
 async def start_application_process(interaction: discord.Interaction):
@@ -25,7 +29,17 @@ async def start_application_process(interaction: discord.Interaction):
                 await interaction.followup.send(embed=embed, ephemeral=True)
             except Exception:
                 pass  # Can't send, that's okay
-    
+
+    if interaction.guild is None:
+        logger.warning("start_application_process called without guild (e.g. DM)")
+        await send_error(obsidian_embed(
+            "❌ Not Available",
+            "Applications can only be started from a server.",
+            color=discord.Color.red(),
+            client=interaction.client,
+        ))
+        return
+
     # Check channel, existing app, and questions in one connection
     async with aiosqlite.connect(DB_PATH) as db:
         cur = await db.execute("""
@@ -100,24 +114,48 @@ async def start_application_process(interaction: discord.Interaction):
             client=interaction.client,
         ))
         return
-    
-    # Send first question via DM
-    await send_next_question(interaction.client, interaction.guild.id, interaction.user.id, application_id)
-    
-    # Send success message (always use followup since we've deferred by this point)
+
     try:
-        await interaction.followup.send(
-            embed=obsidian_embed(
-                "✅ Application Started",
-                "I've sent you the first question via DM. Please check your DMs and answer the questions to complete your application.",
-                color=discord.Color.green(),
-                client=interaction.client,
-            ),
-            ephemeral=True
+        # Send first question via DM
+        await send_next_question(interaction.client, interaction.guild.id, interaction.user.id, application_id)
+
+        # Send success message (always use followup since we've deferred by this point)
+        try:
+            await interaction.followup.send(
+                embed=obsidian_embed(
+                    "✅ Application Started",
+                    "I've sent you the first question via DM. Please check your DMs and answer the questions to complete your application.",
+                    color=discord.Color.green(),
+                    client=interaction.client,
+                ),
+                ephemeral=True
+            )
+        except (discord.errors.NotFound, discord.errors.InteractionResponded, discord.errors.HTTPException):
+            # Interaction expired, that's okay
+            pass
+    except Exception as e:
+        logger.error(
+            "start_application_process failed after creating application (e.g. DM send): %s",
+            e,
+            exc_info=True,
+            extra={"guild_id": interaction.guild.id, "user_id": interaction.user.id, "application_id": application_id},
         )
-    except (discord.errors.NotFound, discord.errors.InteractionResponded, discord.errors.HTTPException):
-        # Interaction expired, that's okay
-        pass
+        # Mark application as cancelled so user can try again
+        try:
+            async with aiosqlite.connect(DB_PATH) as db:
+                await db.execute(
+                    "UPDATE applications SET status = 'CANCELLED' WHERE id = ? AND guild_id = ?",
+                    (application_id, interaction.guild.id),
+                )
+                await db.commit()
+        except Exception as db_err:
+            logger.warning("Could not mark failed application as CANCELLED: %s", db_err)
+        await send_error(obsidian_embed(
+            "❌ Could Not Send Questions",
+            "I couldn't send you the first question (e.g. DMs may be disabled). Please enable DMs from this server and try again, or contact a moderator.",
+            color=discord.Color.red(),
+            client=interaction.client,
+        ))
 
 
 async def cancel_application(bot, guild_id: int, user_id: int, application_id: int, interaction: Optional[discord.Interaction] = None):
