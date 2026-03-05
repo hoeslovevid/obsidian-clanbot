@@ -84,10 +84,10 @@ async def get_mention_reply(content: str, bot_id: int, openai_api_key: Optional[
     """
     query = _strip_mention(content, bot_id)
     if not query:
-    return (
-        "Hi! I'm the Obsidian Clan Bot. Use **`/help`** to explore.\n"
-        "Quick: **`/balance`** · **`/daily`** · **`/profile`** · **`/warframe status`**"
-    )
+        return (
+            "Hi! I'm the Obsidian Clan Bot. Use **`/help`** to explore.\n"
+            "Quick: **`/balance`** · **`/daily`** · **`/profile`** · **`/warframe status`**"
+        )
     canned = _match_keyword(query)
     if canned:
         return canned

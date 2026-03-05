@@ -104,10 +104,8 @@ class RetryView(discord.ui.View):
     async def retry_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         for c in self.children:
             c.disabled = True
-        try:
-            await interaction.response.edit_message(view=self)
-        except Exception:
-            pass
+        # Let the retry callback handle acknowledging the interaction (defer/edit).
+        # This avoids double-responding, which causes InteractionResponded errors.
         await self.retry_callback(interaction)
 
 
