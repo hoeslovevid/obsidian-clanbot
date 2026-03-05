@@ -53,7 +53,7 @@ def _match_keyword(query: str) -> Optional[str]:
 async def get_ai_response(query: str, api_key: str) -> Optional[str]:
     """Call OpenAI for a conversational response. Returns None on failure."""
     try:
-        from openai import AsyncOpenAI
+        from openai import AsyncOpenAI  # type: ignore[reportMissingImports]
         client = AsyncOpenAI(api_key=api_key)
         response = await client.chat.completions.create(
             model="gpt-4o-mini",
