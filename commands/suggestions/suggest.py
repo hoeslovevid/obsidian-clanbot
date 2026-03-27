@@ -13,7 +13,16 @@ EMBED_COLORS = None  # lazy load from utils
 
 async def create_suggestion_from_modal(interaction: discord.Interaction, suggestion: str, category_val: str):
     """Shared logic for creating a suggestion (used by /suggest and Add to Suggestions context menu)."""
-    from utils import obsidian_embed
+    if not interaction.guild:
+        return await interaction.followup.send(
+            embed=obsidian_embed(
+                "❌ Invalid Context",
+                "Suggestions can only be submitted in a server.",
+                color=discord.Color.red(),
+                client=interaction.client,
+            ),
+            ephemeral=True,
+        )
 
     if len(suggestion) < 10:
         return await interaction.followup.send(
@@ -39,8 +48,9 @@ async def create_suggestion_from_modal(interaction: discord.Interaction, suggest
         category_val = "other"
 
     # Check for suggestions channel before creating DB record
+    guild = interaction.guild
     suggestions_channel = None
-    for channel in interaction.guild.text_channels:
+    for channel in guild.text_channels:
         if channel.name.lower() in ("suggestions", "suggestion", "💡-suggestions", "💡suggestions"):
             suggestions_channel = channel
             break
@@ -62,11 +72,11 @@ async def create_suggestion_from_modal(interaction: discord.Interaction, suggest
         await db.execute("""
             INSERT INTO suggestions (guild_id, user_id, suggestion_text, category, status, created_at)
             VALUES (?, ?, ?, ?, 'PENDING', ?)
-        """, (interaction.guild.id, interaction.user.id, suggestion, category_val, created_at))
+        """, (guild.id, interaction.user.id, suggestion, category_val, created_at))
         await db.commit()
         try:
             from database import check_and_unlock_achievement
-            await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "suggestion_first", None)
+            await check_and_unlock_achievement(guild.id, interaction.user.id, "suggestion_first", None)
         except Exception:
             pass
         cur = await db.execute("SELECT last_insert_rowid()")
@@ -89,7 +99,7 @@ async def create_suggestion_from_modal(interaction: discord.Interaction, suggest
         embed = obsidian_embed(
             "💡 New Suggestion", "", color=discord.Color.blue(),
             author=interaction.user, fields=fields,
-            thumbnail=interaction.guild.icon.url if interaction.guild and interaction.guild.icon else None,
+            thumbnail=guild.icon.url if guild.icon else None,
             footer=f"Suggestion #{suggestion_id} • Mods can approve/reject via buttons",
             client=interaction.client,
         )

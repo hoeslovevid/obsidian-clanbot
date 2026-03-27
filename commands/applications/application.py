@@ -7,7 +7,7 @@ import discord
 from discord import app_commands
 from typing import Optional
 
-from utils import obsidian_embed
+from utils import obsidian_embed, dm_blocked_help_embed
 from database import DB_PATH, now_utc
 import aiosqlite
 
@@ -48,9 +48,9 @@ async def start_application_process(interaction: discord.Interaction):
         row = await cur.fetchone()
         if not row or not row[0]:
             await send_error(obsidian_embed(
-                "❌ Application System Not Configured",
-                "The application system has not been set up yet. Please contact a moderator.",
-                color=discord.Color.red(),
+                "Applications aren't set up here yet",
+                "A moderator still needs to configure applications for this server. Ask staff if you're trying to join.",
+                color=discord.Color.orange(),
                 client=interaction.client,
             ))
             return
@@ -63,9 +63,9 @@ async def start_application_process(interaction: discord.Interaction):
         existing = await cur.fetchone()
         if existing:
             await send_error(obsidian_embed(
-                "❌ Application Already In Progress",
-                "You already have an application in progress. Please complete it or wait for it to be reviewed.",
-                color=discord.Color.red(),
+                "You already have an application open",
+                "Finish your current application or wait for staff to review it before starting a new one.",
+                color=discord.Color.orange(),
                 client=interaction.client,
             ))
             return
@@ -77,9 +77,9 @@ async def start_application_process(interaction: discord.Interaction):
 
     if count == 0:
         await send_error(obsidian_embed(
-            "❌ No Questions Configured",
-            "The application system has no questions configured yet. Please contact a moderator.",
-            color=discord.Color.red(),
+            "Applications aren't ready yet",
+            "There aren't any application questions set up. Please check with a moderator.",
+            color=discord.Color.orange(),
             client=interaction.client,
         ))
         return
@@ -108,23 +108,38 @@ async def start_application_process(interaction: discord.Interaction):
     
     if not application_id:
         await send_error(obsidian_embed(
-            "❌ Error",
-            "Failed to create application. Please try again.",
+            "Something went wrong",
+            "We couldn't start your application. Please try again in a moment.",
             color=discord.Color.red(),
             client=interaction.client,
         ))
         return
 
     try:
-        # Send first question via DM
-        await send_next_question(interaction.client, interaction.guild.id, interaction.user.id, application_id)
+        sent = await send_next_question(interaction.client, interaction.guild.id, interaction.user.id, application_id)
+        if not sent:
+            try:
+                async with aiosqlite.connect(DB_PATH) as db:
+                    await db.execute(
+                        "UPDATE applications SET status = 'CANCELLED' WHERE id = ? AND guild_id = ?",
+                        (application_id, interaction.guild.id),
+                    )
+                    await db.commit()
+            except Exception as db_err:
+                logger.warning("Could not mark application CANCELLED after DM failure: %s", db_err)
+            await send_error(dm_blocked_help_embed(
+                "Can't DM you the first question",
+                "I need to send application questions in **Direct Messages**. Open your DM settings for this server, then tap **Start Application** again.",
+                client=interaction.client,
+            ))
+            return
 
         # Send success message (always use followup since we've deferred by this point)
         try:
             await interaction.followup.send(
                 embed=obsidian_embed(
-                    "✅ Application Started",
-                    "I've sent you the first question via DM. Please check your DMs and answer the questions to complete your application.",
+                    "Application started",
+                    "Check your **DMs** from me for the first question. Answer there to continue. _(Only you see this message.)_",
                     color=discord.Color.green(),
                     client=interaction.client,
                 ),
@@ -150,10 +165,9 @@ async def start_application_process(interaction: discord.Interaction):
                 await db.commit()
         except Exception as db_err:
             logger.warning("Could not mark failed application as CANCELLED: %s", db_err)
-        await send_error(obsidian_embed(
-            "❌ Could Not Send Questions",
-            "I couldn't send you the first question (e.g. DMs may be disabled). Please enable DMs from this server and try again, or contact a moderator.",
-            color=discord.Color.red(),
+        await send_error(dm_blocked_help_embed(
+            "Couldn't send your question",
+            "Something broke while sending the first question. If your DMs are closed, open them for this server and try again.",
             client=interaction.client,
         ))
 
@@ -252,7 +266,7 @@ async def cancel_application(bot, guild_id: int, user_id: int, application_id: i
             logging.getLogger(__name__).error(f"Error cancelling application: {e}")
             raise
     
-    # Notify user
+    dm_sent = False
     guild = bot.get_guild(guild_id)
     if guild:
         user = guild.get_member(user_id)
@@ -260,38 +274,32 @@ async def cancel_application(bot, guild_id: int, user_id: int, application_id: i
             try:
                 await user.send(
                     embed=obsidian_embed(
-                        "❌ Application Cancelled",
-                        "Your application has been cancelled. You can start a new application anytime.",
+                        "Application cancelled",
+                        "Your application was cancelled. You can start a new one anytime from the application channel.",
                         color=discord.Color.orange(),
                         client=bot,
                     )
                 )
+                dm_sent = True
             except discord.Forbidden:
                 pass
-    
-    # Send confirmation to interaction if provided
+
+    cancel_desc = "You're all set — that application is cancelled. You can start fresh whenever you're ready."
+    if interaction and not dm_sent:
+        cancel_desc += "\n\n_I couldn't DM you a copy. Turn on DMs from this server if you want confirmations in DM next time._"
+
     if interaction:
         try:
+            emb = obsidian_embed(
+                "Cancelled",
+                cancel_desc,
+                color=discord.Color.orange(),
+                client=interaction.client,
+            )
             if interaction.response.is_done():
-                await interaction.followup.send(
-                    embed=obsidian_embed(
-                        "✅ Application Cancelled",
-                        "Your application has been cancelled successfully.",
-                        color=discord.Color.orange(),
-                        client=bot,
-                    ),
-                    ephemeral=True
-                )
+                await interaction.followup.send(embed=emb, ephemeral=True)
             else:
-                await interaction.response.send_message(
-                    embed=obsidian_embed(
-                        "✅ Application Cancelled",
-                        "Your application has been cancelled successfully.",
-                        color=discord.Color.orange(),
-                        client=bot,
-                    ),
-                    ephemeral=True
-                )
+                await interaction.response.send_message(embed=emb, ephemeral=True)
         except Exception:
             pass
     
@@ -362,9 +370,9 @@ def setup(bot, group=None):
         if not row or not row[0]:
             return await interaction.response.send_message(
                 embed=obsidian_embed(
-                    "❌ Application System Not Configured",
-                    "The application system has not been set up yet. Please contact a moderator.",
-                    color=discord.Color.red(),
+                    "Applications aren't set up here yet",
+                    "A moderator still needs to configure applications. Ask staff if you're trying to join.",
+                    color=discord.Color.orange(),
                     client=interaction.client,
                 ),
                 ephemeral=True
@@ -435,31 +443,29 @@ def setup(bot, group=None):
                     """, (application_id, interaction.guild.id, interaction.user.id))
                     await db.commit()
                     
-                    # Notify user
                     guild = interaction.guild
                     user = guild.get_member(interaction.user.id)
+                    dm_ok = False
                     if user:
                         try:
                             await user.send(
                                 embed=obsidian_embed(
-                                    "❌ Application Cancelled",
-                                    "Your application has been cancelled. You can start a new application anytime.",
+                                    "Application cancelled",
+                                    "Your application was cancelled. You can start a new one anytime from the application channel.",
                                     color=discord.Color.orange(),
                                     client=interaction.client,
                                 )
                             )
+                            dm_ok = True
                         except discord.Forbidden:
                             pass
-                    
-                    # Send confirmation
+
+                    desc = "You're all set — that application is cancelled."
+                    if not dm_ok:
+                        desc += "\n\n_I couldn't DM you a copy. Enable DMs from this server if you want that next time._"
                     await interaction.followup.send(
-                        embed=obsidian_embed(
-                            "✅ Application Cancelled",
-                            "Your application has been cancelled successfully.",
-                            color=discord.Color.orange(),
-                            client=interaction.client,
-                        ),
-                        ephemeral=True
+                        embed=obsidian_embed("Cancelled", desc, color=discord.Color.orange(), client=interaction.client),
+                        ephemeral=True,
                     )
                     break  # Success, exit retry loop
                     
@@ -495,8 +501,8 @@ def setup(bot, group=None):
                 raise
 
 
-async def send_next_question(bot, guild_id: int, user_id: int, application_id: int):
-    """Send the next question to the user via DM."""
+async def send_next_question(bot, guild_id: int, user_id: int, application_id: int) -> bool:
+    """Send the next question to the user via DM. Returns True if sent, False if user unreachable or DMs closed."""
     # Get the current question index
     async with aiosqlite.connect(DB_PATH) as db:
         cur = await db.execute("""
@@ -504,7 +510,7 @@ async def send_next_question(bot, guild_id: int, user_id: int, application_id: i
         """, (application_id,))
         row = await cur.fetchone()
         if not row:
-            return
+            return True
         current_index = row[0]
         
         # Get all questions
@@ -519,37 +525,34 @@ async def send_next_question(bot, guild_id: int, user_id: int, application_id: i
     if current_index >= len(questions):
         # All questions answered, submit application
         await submit_application(bot, guild_id, user_id, application_id)
-        return
-    
+        return True
+
     question_id, order, question_text = questions[current_index]
-    
-    # Get user and send DM
+
     guild = bot.get_guild(guild_id)
     if not guild:
-        return
-    
+        return False
+
     user = guild.get_member(user_id)
     if not user:
-        return
-    
-    # Create modal for the question
+        return False
+
     from modals import ApplicationResponseModal
     modal = ApplicationResponseModal(application_id, question_id, question_text)
-    
+
     try:
-        # Send DM with question and button to answer
         embed = obsidian_embed(
             f"Application Question {order}/{len(questions)}",
             question_text,
             color=discord.Color.blue(),
             client=bot,
         )
-        
+
         view = ApplicationQuestionView(modal, application_id)
         await user.send(embed=embed, view=view)
+        return True
     except discord.Forbidden:
-        # User has DMs disabled, we'll handle this in the interaction handler
-        pass
+        return False
 
 
 class ApplicationQuestionView(discord.ui.View):

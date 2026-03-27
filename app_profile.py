@@ -40,6 +40,11 @@ async def update_app_profile_metadata():
                     logger.info("[app_profile] Application description and tags updated")
                 else:
                     text = await resp.text()
-                    logger.warning(f"[app_profile] Failed to update application metadata: {resp.status} {text}")
+                    snippet = (text[:200] + "…") if len(text) > 200 else text
+                    logger.warning(
+                        "[app_profile] Failed to update application metadata: %s %s",
+                        resp.status,
+                        snippet,
+                    )
     except Exception as e:
         logger.warning(f"[app_profile] Error updating application metadata: {e}")

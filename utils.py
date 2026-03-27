@@ -139,7 +139,7 @@ def format_number(n: int) -> str:
     return f"{n:,}"
 
 
-def pluralize(n: int, singular: str, plural: str = None) -> str:
+def pluralize(n: int, singular: str, plural: Optional[str] = None) -> str:
     """Return singular or plural form. plural defaults to singular + 's'."""
     if plural is None:
         plural = singular + "s"
@@ -228,7 +228,7 @@ def obsidian_embed(
     desc: str = "", 
     *, 
     color: Optional[discord.Color] = None,
-    author: Optional[discord.Member] = None,
+    author: Optional[discord.abc.User] = None,
     author_name: Optional[str] = None,
     author_icon: Optional[str] = None,
     thumbnail: Optional[str] = None,
@@ -313,6 +313,40 @@ def obsidian_embed(
             e.set_footer(text=footer_text, icon_url=None)
     
     return e
+
+
+# --- Member-facing QoL (buttons, DMs, Warframe API) ---
+BUTTON_ONLY_RUNNER_MSG = (
+    "These buttons are for whoever ran the command. "
+    "Run the same slash command yourself if you need this. _(Only you can see this.)_"
+)
+
+DM_SETTINGS_HINT = (
+    "**To receive bot DMs:** right-click this server → **Privacy Settings** → turn on **Direct Messages** "
+    "from server members, then try again."
+)
+
+
+def warframe_data_unavailable_embed(client=None) -> discord.Embed:
+    """Friendly message when api.warframestat.us is down, slow, or flaky."""
+    return obsidian_embed(
+        "Can't load live data right now",
+        "Warframe's public stats service is often slow or briefly offline—that's normal, not your fault. "
+        "Wait a minute and try again, or tap **Try again** / **Update data** if you see those buttons.\n\n"
+        "_If we're showing cached data, countdowns might be slightly off._",
+        color=discord.Color.orange(),
+        client=client,
+    )
+
+
+def dm_blocked_help_embed(title: str, what_failed: str, client=None) -> discord.Embed:
+    """Explain that DMs failed and how to enable them."""
+    return obsidian_embed(
+        title,
+        f"{what_failed}\n\n{DM_SETTINGS_HINT}",
+        color=discord.Color.orange(),
+        client=client,
+    )
 
 
 def get_mod_role(guild: discord.Guild) -> Optional[discord.Role]:
@@ -406,7 +440,7 @@ async def send_levelup_announcement(
         return False
 
     channel = guild.get_channel(int(channel_id_str))
-    if not channel or not hasattr(channel, "send"):
+    if not isinstance(channel, discord.abc.Messageable):
         return False
 
     xp_needed_for_level = xp_for_level(level, XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT)

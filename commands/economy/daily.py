@@ -172,7 +172,9 @@ async def _run_daily(interaction: discord.Interaction):
 
     embed = obsidian_embed(
         title,
-        "Come back tomorrow for another reward!" + ("\n\n_Used streak freeze (1 per month)._" if used_freeze else ""),
+        f"**You received {format_number(COINS_DAILY_REWARD)} {pluralize(COINS_DAILY_REWARD, 'coin')}.** "
+        "Come back after reset for the next one!"
+        + ("\n\n_Used your monthly streak freeze._" if used_freeze else ""),
         color=color,
         fields=fields,
         thumbnail=interaction.user.display_avatar.url if interaction.user.display_avatar else None,

@@ -33,7 +33,12 @@ def setup(bot, group=None):
                 "Sorry, but you are not an Administrator in this server.",
                 ephemeral=True
             )
-        
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                "This can only be used in a server.",
+                ephemeral=True,
+            )
+
         is_enabled = enabled.value == "enable"
         reward_lower = reward.lower().strip()
         

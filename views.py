@@ -5,7 +5,7 @@ This module contains all View classes used by the bot.
 import logging
 import discord  # type: ignore
 import aiosqlite  # type: ignore
-from typing import Optional, Callable, Awaitable, Any
+from typing import Optional, Callable, Awaitable, Any, Tuple
 
 from utils import is_mod, display_case_status, obsidian_embed
 from database import DB_PATH, now_utc, log_complaint_action
@@ -100,7 +100,7 @@ class RetryView(discord.ui.View):
         except Exception:
             pass
 
-    @discord.ui.button(label="Retry", style=discord.ButtonStyle.primary, emoji="🔄")
+    @discord.ui.button(label="Try again", style=discord.ButtonStyle.primary, emoji="🔄")
     async def retry_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         for c in self.children:
             c.disabled = True
@@ -128,7 +128,7 @@ class RefreshView(discord.ui.View):
         except Exception:
             pass
 
-    @discord.ui.button(label="Refresh", style=discord.ButtonStyle.secondary, emoji="🔄")
+    @discord.ui.button(label="Update data", style=discord.ButtonStyle.secondary, emoji="🔄")
     async def refresh_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         for c in self.children:
             c.disabled = True
@@ -289,17 +289,19 @@ class ComplaintModView(discord.ui.View):
         member = interaction.user
         return isinstance(member, discord.Member) and is_mod(member)
 
-    async def dm_user(self, guild: discord.Guild, user_id: int, status: str, bot):
+    async def dm_user(self, guild: discord.Guild, user_id: int, status: str, bot) -> bool:
+        """Returns True if DM sent or not needed, False if user exists but DMs blocked."""
         user = guild.get_member(user_id) or await bot.fetch_user(user_id)
         if not user:
-            return
+            return True
         try:
             e = obsidian_embed(f"Docket Update • {self.case_id}", f"Status: **{display_case_status(status)}**", client=bot)
             await user.send(embed=e)
+            return True
         except discord.Forbidden:
-            pass
+            return False
 
-    async def set_status(self, interaction: discord.Interaction, status: str, *, bot, dm_override: bool = True) -> Optional[int]:
+    async def set_status(self, interaction: discord.Interaction, status: str, *, bot, dm_override: bool = True) -> Tuple[Optional[int], bool]:
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute(
                 "SELECT user_id FROM complaints WHERE guild_id=? AND case_id=?",
@@ -307,7 +309,7 @@ class ComplaintModView(discord.ui.View):
             )
             row = await cur.fetchone()
             if not row:
-                return None
+                return (None, True)
             user_id = int(row[0])
 
             await db.execute(
@@ -316,11 +318,12 @@ class ComplaintModView(discord.ui.View):
             )
             await db.commit()
 
+        dm_ok = True
         if dm_override:
-            await self.dm_user(interaction.guild, user_id, status, bot)
+            dm_ok = await self.dm_user(interaction.guild, user_id, status, bot)
 
         await log_complaint_action(interaction.guild.id, self.case_id, interaction.user.id, f"STATUS:{status}", guild=interaction.guild, bot=bot)
-        return user_id
+        return (user_id, dm_ok)
 
 
 class RSVPView(discord.ui.View):
@@ -846,6 +849,7 @@ class ApplicationManageView(discord.ui.View):
         
         # Notify user and assign role
         role_assigned = False
+        applicant_dm_ok = True  # no DM needed if no member
         if user_id:
             user = interaction.guild.get_member(user_id)
             if user:
@@ -873,25 +877,29 @@ class ApplicationManageView(discord.ui.View):
                         logger.error(f"[application] Error assigning Oathtaker role: {e}")
                 else:
                     logger.warning(f"[application] Oathtaker role not found in guild {interaction.guild.id}")
-                
-                # Send DM notification
+
+                applicant_dm_ok = False
                 try:
                     message_text = f"Congratulations! Your application to join {interaction.guild.name} has been approved."
                     if role_assigned:
                         message_text += "\n\nYou have been assigned the **Oathtaker** role!"
-                    
+
                     await user.send(
                         embed=obsidian_embed(
-                            "✅ Application Approved",
+                            "Application approved",
                             message_text,
                             color=discord.Color.green(),
                             client=interaction.client,
                         )
                     )
+                    applicant_dm_ok = True
                 except discord.Forbidden:
                     pass
-        
-        await interaction.followup.send("Application approved.", ephemeral=True)
+
+        mod_msg = "Application approved."
+        if user_id and not applicant_dm_ok:
+            mod_msg += " **Couldn't DM the applicant** — ask them to enable DMs from this server or tell them in-channel."
+        await interaction.followup.send(mod_msg, ephemeral=True)
     
     async def reject_button(self, interaction: discord.Interaction):
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
@@ -911,7 +919,7 @@ class ApplicationPanelView(discord.ui.View):
         
         # Add button with custom_id for persistence
         apply_button = discord.ui.Button(
-            label="Start Application",
+            label="Start application (uses DMs)",
             style=discord.ButtonStyle.primary,
             emoji="📝",
             custom_id=f"application_panel:{guild_id}:start"
@@ -944,12 +952,12 @@ class ApplicationPanelView(discord.ui.View):
             try:
                 if interaction.response.is_done():
                     await interaction.followup.send(
-                        "Something went wrong starting the application. Please try again or contact a moderator.",
+                        "Couldn't start the application right now. Try again in a moment or ping a moderator if it keeps happening. _(Only you see this.)_",
                         ephemeral=True,
                     )
                 else:
                     await interaction.response.send_message(
-                        "Something went wrong starting the application. Please try again or contact a moderator.",
+                        "Couldn't start the application right now. Try again in a moment or ping a moderator if it keeps happening. _(Only you see this.)_",
                         ephemeral=True,
                     )
             except (discord.errors.NotFound, discord.errors.InteractionResponded, discord.errors.HTTPException):

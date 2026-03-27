@@ -34,15 +34,18 @@ def setup(bot, group=None):
     @app_commands.autocomplete(case_id=case_id_autocomplete)
     @app_commands.describe(case_id="Your case ID (e.g., OBS-...) — autocompletes your open cases", details="Additional details / links / screenshots")
     async def submit_complaint(interaction: discord.Interaction, case_id: str, details: str):
-        # Import bot-specific functions inside to avoid circular imports
-        from bot import ensure_core_channels, resolve_channel_id, log_complaint_action
-        from bot import COMPLAINTS_CHANNEL_ID, COMPLAINTS_CHANNEL_NAME, DB_PATH
-        import aiosqlite
-        
+        from bot import log_complaint_action
+        from bot import COMPLAINTS_CHANNEL_ID, COMPLAINTS_CHANNEL_NAME
+        from channels import ensure_core_channels, resolve_channel_id
+
+        guild = interaction.guild
+        if not guild:
+            return await interaction.response.send_message("Use this in a server.", ephemeral=True)
+
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute(
                 "SELECT user_id, staff_thread_id FROM complaints WHERE guild_id=? AND case_id=?",
-                (interaction.guild.id, case_id),
+                (guild.id, case_id),
             )
             row = await cur.fetchone()
         if not row:
@@ -53,11 +56,11 @@ def setup(bot, group=None):
             return await interaction.response.send_message("You can only add info to your own case.", ephemeral=True)
 
         from database import get_configured_channel_id
-        complaints_id = await get_configured_channel_id(interaction.guild.id, "complaints_channel_id")
+        complaints_id = await get_configured_channel_id(guild.id, "complaints_channel_id")
         if not complaints_id:
-            await ensure_core_channels(interaction.guild)
-            complaints_id = await resolve_channel_id(interaction.guild, "complaints_channel_id", COMPLAINTS_CHANNEL_ID, COMPLAINTS_CHANNEL_NAME)
-        ch = interaction.guild.get_channel(complaints_id) if complaints_id else None
+            await ensure_core_channels(guild)
+            complaints_id = await resolve_channel_id(guild, "complaints_channel_id", COMPLAINTS_CHANNEL_ID, COMPLAINTS_CHANNEL_NAME)
+        ch = guild.get_channel(complaints_id) if complaints_id else None
 
         embed = obsidian_embed(
             f"Case Addendum • {case_id}",
@@ -73,12 +76,12 @@ def setup(bot, group=None):
             await ch.send(embed=embed)
 
         if staff_thread_id:
-            thread = interaction.guild.get_thread(staff_thread_id)
+            thread = guild.get_thread(staff_thread_id)
             if thread:
                 try:
                     await thread.send(embed=embed)
                 except Exception:
                     pass
 
-        await log_complaint_action(interaction.guild, case_id, interaction.user.id, "USER_ADDENDUM", details[:200])
+        await log_complaint_action(guild, case_id, interaction.user.id, "USER_ADDENDUM", details[:200])
         await interaction.response.send_message("Addendum submitted.", ephemeral=True)

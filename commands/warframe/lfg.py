@@ -124,6 +124,8 @@ class LFGView(discord.ui.View):
     
     async def _handle_rsvp(self, interaction: discord.Interaction, response: str):
         """Handle RSVP (join/leave)."""
+        if not interaction.guild:
+            return await interaction.response.send_message("This only works in a server.", ephemeral=True)
         async with aiosqlite.connect(DB_PATH) as db:
             # Get LFG post info including thread_id
             cur = await db.execute(
@@ -241,6 +243,17 @@ class LFGView(discord.ui.View):
 async def create_lfg_post(bot, interaction, mission_type: str, max_players: int, duration_hours: int, description: str, ping_role_id: int | None):
     """Create an LFG post. Used by both /warframe lfg and the Quick LFG context menu."""
     from utils import get_mod_role
+
+    if not interaction.guild:
+        return await interaction.response.send_message(
+            "LFG posts can only be created in a server.",
+            ephemeral=True,
+        )
+    if not isinstance(interaction.channel, (discord.TextChannel, discord.Thread)):
+        return await interaction.response.send_message(
+            "LFG posts must be created in a text channel or thread.",
+            ephemeral=True,
+        )
 
     expires_at = datetime.now(timezone.utc) + timedelta(hours=duration_hours)
     mention = ""
@@ -367,6 +380,13 @@ def setup(bot, group=None):
         role_ping: str = ""
     ):
         """Create an LFG post for a Warframe mission."""
+        if not interaction.guild:
+            return await interaction.response.send_message("LFG can only be used in a server.", ephemeral=True)
+        if not isinstance(interaction.channel, (discord.TextChannel, discord.Thread)):
+            return await interaction.response.send_message(
+                "LFG posts must be created in a text channel or thread.",
+                ephemeral=True,
+            )
         if max_players < 1 or max_players > 8:
             return await interaction.response.send_message("Max players must be between 1 and 8.", ephemeral=True)
         if duration_hours < 1 or duration_hours > 168:

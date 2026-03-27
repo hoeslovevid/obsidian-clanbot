@@ -44,7 +44,17 @@ def setup(bot, group=None):
                 ),
                 ephemeral=True
             )
-        
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Invalid Context",
+                    "Giveaways can only be created in a server.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+
         if not isinstance(interaction.channel, discord.TextChannel):
             return await interaction.response.send_message(
                 embed=obsidian_embed(

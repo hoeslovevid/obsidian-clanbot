@@ -36,6 +36,11 @@ def setup(bot, group=None):
         ping_role: Optional[discord.Role] = None
     ):
         """Configure cycle notifications."""
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                "Cycle notifications can only be configured in a server.",
+                ephemeral=True,
+            )
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
             return await interaction.response.send_message(
                 "Sorry, but you are not an Administrator in this server.",

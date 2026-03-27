@@ -162,7 +162,17 @@ def setup(bot, group=None):
                 ),
                 ephemeral=True
             )
-        
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Invalid Context",
+                    "Backups are created per server — use this in a server.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+
         await interaction.response.defer(ephemeral=True)
         
         try:
@@ -200,7 +210,18 @@ def setup(bot, group=None):
     async def export_data(interaction: discord.Interaction, user: Optional[discord.Member] = None):
         """Export user data."""
         await interaction.response.defer(ephemeral=True)
-        
+
+        if not interaction.guild:
+            return await interaction.followup.send(
+                embed=obsidian_embed(
+                    "❌ Invalid Context",
+                    "Data export is tied to a server — use this in a server.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+
         target_user = user or interaction.user
         is_moderator = isinstance(interaction.user, discord.Member) and is_mod(interaction.user)
         

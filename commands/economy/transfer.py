@@ -1,7 +1,7 @@
 """Transfer command - available via context menu (right-click user → Transfer Coins)."""
 import discord
 
-from utils import obsidian_embed, feature_off_embed, ECONOMY_ENABLED
+from utils import obsidian_embed, feature_off_embed, ECONOMY_ENABLED, BUTTON_ONLY_RUNNER_MSG
 from views import ConfirmView
 
 
@@ -24,7 +24,15 @@ async def run_transfer_with_modal(interaction: discord.Interaction, user: discor
             ephemeral=True,
         )
     if not interaction.guild:
-        return
+        return await interaction.response.send_message(
+            embed=obsidian_embed(
+                "❌ Invalid Context",
+                "Transfers can only be used in a server.",
+                color=discord.Color.red(),
+                client=interaction.client,
+            ),
+            ephemeral=True,
+        )
     if user.bot:
         return await interaction.response.send_message(
             embed=obsidian_embed("❌ Invalid Recipient", "You cannot transfer coins to bots.", color=discord.Color.red(), client=interaction.client),
@@ -32,7 +40,12 @@ async def run_transfer_with_modal(interaction: discord.Interaction, user: discor
         )
     if user.id == interaction.user.id:
         return await interaction.response.send_message(
-            embed=obsidian_embed("❌ Invalid Recipient", "You cannot transfer coins to yourself.", color=discord.Color.red(), client=interaction.client),
+            embed=obsidian_embed(
+                "Pick someone else",
+                "You can't transfer coins to yourself. Choose another member.",
+                color=discord.Color.orange(),
+                client=interaction.client,
+            ),
             ephemeral=True,
         )
 
@@ -57,8 +70,8 @@ async def run_transfer_with_modal(interaction: discord.Interaction, user: discor
                 ("💵 Their Balance", f"{receiver_balance:,} coins", True),
             ]
             return obsidian_embed(
-                "✅ Transfer Complete",
-                f"You transferred **{amount:,}** coins to {user.mention}.",
+                "Transfer complete",
+                f"**{amount:,}** coins went to {user.mention}. Balances below are up to date. _(Only you see this.)_",
                 color=discord.Color.green(),
                 thumbnail=user.display_avatar.url if user.display_avatar else None,
                 fields=fields,
@@ -67,9 +80,9 @@ async def run_transfer_with_modal(interaction: discord.Interaction, user: discor
             )
         balance = await get_user_balance(interaction.guild.id, interaction.user.id)
         return obsidian_embed(
-            "❌ Insufficient Balance",
-            f"You have **{balance:,}** coins, but tried to transfer **{amount:,}** coins.",
-            color=discord.Color.red(),
+            "Not enough coins",
+            f"You have **{balance:,}** coins but tried to send **{amount:,}**. Earn more with **`/daily`** or chatting in voice.",
+            color=discord.Color.orange(),
             client=interaction.client,
         )
 
@@ -77,15 +90,15 @@ async def run_transfer_with_modal(interaction: discord.Interaction, user: discor
     if amount >= threshold:
         embed = obsidian_embed(
             "⚠️ Confirm Transfer",
-            f"Transfer **{amount:,}** coins to {user.mention}?\n\nThis cannot be undone.",
+            f"Send **{amount:,}** coins to {user.mention}?\n\nThis can't be undone. _(Only you can confirm.)_",
             color=discord.Color.orange(),
             client=interaction.client,
         )
         async def on_confirm(btn_interaction: discord.Interaction, confirmed: bool):
             if btn_interaction.user.id != interaction.user.id:
-                return await btn_interaction.followup.send("Only the sender can confirm.", ephemeral=True)
+                return await btn_interaction.followup.send(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
             if not confirmed:
-                return await btn_interaction.followup.send("Transfer cancelled.", ephemeral=True)
+                return await btn_interaction.followup.send("Transfer cancelled — nothing was sent. _(Only you see this.)_", ephemeral=True)
             result = await do_transfer()
             await btn_interaction.followup.send(embed=result, ephemeral=True)
         view = ConfirmView(on_confirm)

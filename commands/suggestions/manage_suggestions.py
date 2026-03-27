@@ -60,7 +60,12 @@ class SuggestionView(discord.ui.View):
                 "Sorry, but you are not an Administrator in this server.",
                 ephemeral=True
             )
-        
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                "This can only be used in a server.",
+                ephemeral=True,
+            )
+
         await interaction.response.defer(ephemeral=True)
         
         # Update database
@@ -197,7 +202,12 @@ def setup(bot, group=None):
                 "Sorry, but you are not an Administrator in this server.",
                 ephemeral=True
             )
-        
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                "This can only be used in a server.",
+                ephemeral=True,
+            )
+
         await interaction.response.defer(ephemeral=True)
         
         status_filter = status.value if status and status.value != "all" else None

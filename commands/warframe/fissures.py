@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from datetime import datetime, timezone
 
-from utils import obsidian_embed, EMBED_COLORS, format_number
+from utils import obsidian_embed, EMBED_COLORS, format_number, warframe_data_unavailable_embed, BUTTON_ONLY_RUNNER_MSG
 from warframe_api import fetch_fissures
 from views import RetryView, RefreshView
 from cache_utils import invalidate
@@ -38,15 +38,18 @@ def setup(bot, group=None):
         if data is None:
             async def on_retry(btn_i: discord.Interaction):
                 if btn_i.user.id != interaction.user.id:
-                    return await btn_i.response.send_message("Only the requester can retry.", ephemeral=True)
+                    return await btn_i.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
                 await btn_i.response.defer()
                 nd = await fetch_fissures()
                 if nd is None:
-                    return await btn_i.followup.send("Still unable to fetch.", ephemeral=True)
+                    return await btn_i.followup.send(
+                        "Still can't load fissures. Try **Try again** again in a bit.",
+                        ephemeral=True,
+                    )
                 emb = _build_embed(nd, interaction.client)
                 await btn_i.message.edit(embed=emb, view=None)
             return await interaction.followup.send(
-                embed=obsidian_embed("❌ Error", "Could not fetch fissures. Try again later.", color=discord.Color.red(), client=interaction.client),
+                embed=warframe_data_unavailable_embed(interaction.client),
                 view=RetryView(on_retry),
             )
         if not data:
@@ -62,7 +65,10 @@ def setup(bot, group=None):
             invalidate("warframe:fissures")
             nd = await fetch_fissures()
             if nd is None:
-                return await btn_i.followup.send("Could not refresh.", ephemeral=True)
+                return await btn_i.followup.send(
+                    "Couldn't refresh fissures yet — stats API is still having issues.",
+                    ephemeral=True,
+                )
             emb = _build_embed(nd, interaction.client)
             await btn_i.message.edit(embed=emb, view=RefreshView(on_refresh, timeout=300))
 

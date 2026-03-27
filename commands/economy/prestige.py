@@ -82,7 +82,18 @@ def setup(bot, group=None):
     async def prestige(interaction: discord.Interaction):
         """Prestige - reset level for special rewards."""
         await interaction.response.defer(ephemeral=True)
-        
+
+        if not interaction.guild:
+            return await interaction.followup.send(
+                embed=obsidian_embed(
+                    "❌ Invalid Context",
+                    "Prestige can only be used in a server.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+
         # Get current level and XP
         from database import get_user_xp
         xp, level, total_xp = await get_user_xp(interaction.guild.id, interaction.user.id)
@@ -131,7 +142,18 @@ def setup(bot, group=None):
     async def prestige_info(interaction: discord.Interaction, user: Optional[discord.Member] = None):
         """View prestige information."""
         await interaction.response.defer(ephemeral=False)
-        
+
+        if not interaction.guild:
+            return await interaction.followup.send(
+                embed=obsidian_embed(
+                    "❌ Invalid Context",
+                    "Prestige info can only be viewed in a server.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+
         target_user = user or interaction.user
         if not isinstance(target_user, discord.Member):
             return await interaction.followup.send("User not found in this server.", ephemeral=True)

@@ -47,17 +47,28 @@ def setup(bot, group=None):
         evidence="Optional evidence link (for new requests)"
     )
     async def request_help(interaction: discord.Interaction, case_id: str = "", category: str = "", details: str = "", evidence: str = ""):
-        # Import bot-specific functions inside to avoid circular imports
-        from bot import ensure_core_channels, resolve_channel_id, ComplaintModView, log_complaint_action
-        from bot import COMPLAINTS_CHANNEL_ID, COMPLAINTS_CHANNEL_NAME, DB_PATH
-        import aiosqlite
-        
+        from bot import ComplaintModView, log_complaint_action
+        from bot import COMPLAINTS_CHANNEL_ID, COMPLAINTS_CHANNEL_NAME
+        from channels import ensure_core_channels, resolve_channel_id
+
+        guild = interaction.guild
+        if not guild:
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Invalid Context",
+                    "Use this command in a server.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+
         # If case_id is provided, check status (existing behavior)
         if case_id:
             async with aiosqlite.connect(DB_PATH) as db:
                 cur = await db.execute(
                     "SELECT user_id, status, last_update_at FROM complaints WHERE guild_id=? AND case_id=?",
-                    (interaction.guild.id, case_id),
+                    (guild.id, case_id),
                 )
                 row = await cur.fetchone()
             if not row:
@@ -93,7 +104,7 @@ def setup(bot, group=None):
                 "",
                 color=discord.Color.blurple(),
                 fields=fields,
-                thumbnail=interaction.guild.icon.url if interaction.guild and interaction.guild.icon else None,
+                thumbnail=guild.icon.url if guild.icon else None,
                 footer="Use /request_help with case_id to check status again",
                 client=interaction.client,
             )
@@ -113,11 +124,11 @@ def setup(bot, group=None):
             )
         
         from database import get_configured_channel_id
-        complaints_id = await get_configured_channel_id(interaction.guild.id, "complaints_channel_id")
+        complaints_id = await get_configured_channel_id(guild.id, "complaints_channel_id")
         if not complaints_id:
-            await ensure_core_channels(interaction.guild)
-            complaints_id = await resolve_channel_id(interaction.guild, "complaints_channel_id", COMPLAINTS_CHANNEL_ID, COMPLAINTS_CHANNEL_NAME)
-        ch = interaction.guild.get_channel(complaints_id) if complaints_id else None
+            await ensure_core_channels(guild)
+            complaints_id = await resolve_channel_id(guild, "complaints_channel_id", COMPLAINTS_CHANNEL_ID, COMPLAINTS_CHANNEL_NAME)
+        ch = guild.get_channel(complaints_id) if complaints_id else None
         if not isinstance(ch, discord.TextChannel):
             return await interaction.response.send_message(
                 embed=obsidian_embed(
@@ -131,8 +142,7 @@ def setup(bot, group=None):
         
         # Defer response since we'll be creating a post
         await interaction.response.defer(ephemeral=True)
-        
-        guild = interaction.guild
+
         case_id = f"OBS-{int(now_utc().timestamp())}-{interaction.user.id % 10000}"
         created = now_utc().isoformat()
         
@@ -167,7 +177,7 @@ def setup(bot, group=None):
             desc,
             color=discord.Color.red(),
             author=interaction.user,
-            thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
+            thumbnail=guild.icon.url if guild.icon else None,
             footer=f"Filed by: {interaction.user} • Case: {case_id}",
             client=interaction.client,
         )
@@ -177,7 +187,8 @@ def setup(bot, group=None):
         bot.add_view(view)
         
         # Thread for staff discussion (tries private first; falls back)
-        thread_id = None
+        thread_id: int | None = None
+        thread: discord.Thread | None = None
         try:
             thread = await ch.create_thread(
                 name=f"{case_id} • Staff Review",
@@ -198,7 +209,7 @@ def setup(bot, group=None):
             except Exception:
                 thread = None
         
-        if thread_id:
+        if thread_id and thread is not None:
             async with aiosqlite.connect(DB_PATH) as db:
                 await db.execute(
                     "UPDATE complaints SET staff_thread_id=? WHERE guild_id=? AND case_id=?",
@@ -216,7 +227,7 @@ def setup(bot, group=None):
             "✅ Docket Sealed",
             f"Your help request has been sealed as **`{case_id}`**.\n\nYou'll receive DM updates as it progresses.",
             color=discord.Color.green(),
-            thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
+            thumbnail=guild.icon.url if guild.icon else None,
             footer=f"Case: {case_id} • Save this ID to check status",
             client=interaction.client,
         )

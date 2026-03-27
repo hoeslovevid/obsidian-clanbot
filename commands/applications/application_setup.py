@@ -1,7 +1,10 @@
 """Application setup command for moderators."""
+from __future__ import annotations
+
 import discord  # type: ignore
 from discord import app_commands  # type: ignore
-from typing import Optional
+from collections.abc import Sequence
+from typing import Any, Optional
 
 from utils import obsidian_embed, is_mod
 from database import DB_PATH
@@ -40,7 +43,12 @@ def setup(bot, group=None):
                 "Sorry, but you are not an Administrator in this server.",
                 ephemeral=True
             )
-        
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                "This can only be used in a server.",
+                ephemeral=True,
+            )
+
         await interaction.response.defer(ephemeral=True)
         
         action_value = action.value
@@ -83,13 +91,18 @@ def setup(bot, group=None):
                 ephemeral=True
             )
             try:
-                await interaction.user.send(embed=obsidian_embed(
-                    "Add Application Question",
-                    "Please fill out the form below to add a question to the application.",
-                    color=discord.Color.blue(),
-                    client=interaction.client,
-                ), view=None)
-                await interaction.user.send("Use the button below to add a question:", view=ApplicationQuestionView(interaction.guild.id))
+                await interaction.user.send(
+                    embed=obsidian_embed(
+                        "Add Application Question",
+                        "Please fill out the form below to add a question to the application.",
+                        color=discord.Color.blue(),
+                        client=interaction.client,
+                    ),
+                )
+                await interaction.user.send(
+                    "Use the button below to add a question:",
+                    view=ApplicationQuestionView(interaction.guild.id),
+                )
             except discord.Forbidden:
                 await interaction.followup.send(
                     embed=obsidian_embed(
@@ -110,7 +123,7 @@ def setup(bot, group=None):
                     WHERE guild_id = ?
                     ORDER BY question_order
                 """, (interaction.guild.id,))
-                questions = await cur.fetchall()
+                questions = list(await cur.fetchall())
             
             if not questions:
                 return await interaction.followup.send(
@@ -160,7 +173,7 @@ def setup(bot, group=None):
                     WHERE guild_id = ?
                     ORDER BY question_order
                 """, (interaction.guild.id,))
-                questions = await cur.fetchall()
+                questions = list(await cur.fetchall())
             
             if not questions:
                 return await interaction.followup.send(
@@ -230,7 +243,8 @@ def setup(bot, group=None):
                 cur = await db.execute("""
                     SELECT COUNT(*) FROM application_questions WHERE guild_id = ?
                 """, (interaction.guild.id,))
-                count = (await cur.fetchone())[0]
+                count_row = await cur.fetchone()
+                count = int(count_row[0]) if count_row else 0
             
             if count == 0:
                 return await interaction.followup.send(
@@ -396,7 +410,7 @@ class ApplicationQuestionView(discord.ui.View):
 
 class RemoveQuestionView(discord.ui.View):
     """View for removing questions."""
-    def __init__(self, questions: list):
+    def __init__(self, questions: Sequence[Any]):
         super().__init__(timeout=300)
         self.questions = questions
     
@@ -404,7 +418,10 @@ class RemoveQuestionView(discord.ui.View):
     async def remove_question_select(self, interaction: discord.Interaction, select: discord.ui.Select):
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
             return await interaction.response.send_message("Sorry, but you are not an Administrator in this server.", ephemeral=True)
-        
+        guild = interaction.guild
+        if not guild:
+            return await interaction.response.send_message("Use this in a server.", ephemeral=True)
+
         question_id = int(select.values[0])
         
         # Get question info before deleting
@@ -430,7 +447,7 @@ class RemoveQuestionView(discord.ui.View):
                     SET question_order = question_order - 1
                     WHERE guild_id = ?
                     AND question_order > ?
-                """, (interaction.guild.id, order))
+                """, (guild.id, order))
                 await db.commit()
                 
                 await interaction.response.send_message(

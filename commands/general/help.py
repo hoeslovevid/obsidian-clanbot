@@ -1,7 +1,9 @@
 """Help command with interactive group selection."""
+from __future__ import annotations
+
 import discord  # type: ignore
 from discord import app_commands  # type: ignore
-from typing import Optional
+from typing import Optional, cast
 
 from utils import obsidian_embed, is_mod, ECONOMY_ENABLED, COINS_PER_MESSAGE, COINS_DAILY_REWARD, MESSAGE_COOLDOWN_SECONDS, COINS_PER_MINUTE_VOICE
 
@@ -31,8 +33,8 @@ class PageButton(discord.ui.Button):
     
     async def callback(self, interaction: discord.Interaction):
         """Handle page navigation."""
-        view: HelpSelectView = self.view
-        if not view.current_group:
+        view = cast(Optional[HelpSelectView], self.view)
+        if view is None or not view.current_group:
             return await interaction.response.send_message("No group selected.", ephemeral=True)
         
         collected = _collect_group_commands(view.current_group, [view.current_group.name])
@@ -75,8 +77,8 @@ class PageSelect(discord.ui.Select):
     
     async def callback(self, interaction: discord.Interaction):
         """Handle page jump."""
-        view: HelpSelectView = self.view
-        if not view.current_group:
+        view = cast(Optional[HelpSelectView], self.view)
+        if view is None or not view.current_group:
             return await interaction.response.send_message("No group selected.", ephemeral=True)
         
         page = int(self.values[0])
@@ -103,13 +105,15 @@ class HelpSelectView(discord.ui.View):
     async def on_timeout(self):
         """Disable the view when it times out."""
         for item in self.children:
-            item.disabled = True
+            if isinstance(item, (discord.ui.Button, discord.ui.Select)):
+                item.disabled = True
         try:
-            if self.message and self.message.embeds:
-                emb = self.message.embeds[0]
+            msg = cast(Optional[discord.Message], getattr(self, "message", None))
+            if msg is not None and msg.embeds:
+                emb = msg.embeds[0]
                 if emb.footer and emb.footer.text:
                     emb.set_footer(text=emb.footer.text + " • ⏰ Expired")
-                await self.message.edit(embed=emb, view=self)
+                await msg.edit(embed=emb, view=self)
         except Exception:
             pass
     
@@ -310,13 +314,16 @@ class HelpSelect(discord.ui.Select):
         self.parent_view.update_pagination_buttons()
         
         # Update the message
+        target = interaction.message
         if interaction.response.is_done():
-            # Use followup to edit if response is already done
-            try:
-                await interaction.followup.edit_message(interaction.message.id, embed=embed, view=self.parent_view)
-            except Exception:
-                # Fallback: try editing the original message
-                await interaction.message.edit(embed=embed, view=self.parent_view)
+            if target is not None:
+                try:
+                    await interaction.followup.edit_message(target.id, embed=embed, view=self.parent_view)
+                except Exception:
+                    try:
+                        await target.edit(embed=embed, view=self.parent_view)
+                    except Exception:
+                        pass
         else:
             await interaction.response.edit_message(embed=embed, view=self.parent_view)
 
@@ -336,7 +343,8 @@ def setup(bot, group=None):
                 else:
                     out.append(p)
             return out
-        all_paths = _paths(bot.tree.get_commands(guild=interaction.guild))
+        cmd_src = bot.tree.get_commands(guild=interaction.guild) if interaction.guild else bot.tree.get_commands()
+        all_paths = _paths(cmd_src)
         current_lower = (current or "").lower()
         matches = [p for p in all_paths if not current_lower or current_lower in p.lower()][:25]
         return [app_commands.Choice(name=m, value=m) for m in matches]
@@ -357,7 +365,7 @@ def setup(bot, group=None):
             
             # Find the command (supports 1–3 levels: economy, economy balance, economy pets shop)
             found_command = None
-            commands_source = bot.tree.get_commands(guild=interaction.guild)
+            commands_source = bot.tree.get_commands(guild=interaction.guild) if interaction.guild else bot.tree.get_commands()
             for cmd in commands_source:
                 if cmd.name != parts[0]:
                     continue

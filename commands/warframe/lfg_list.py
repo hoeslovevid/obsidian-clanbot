@@ -39,6 +39,24 @@ def setup(bot, group=None):
     ])
     async def lfg_list(interaction: discord.Interaction, mission_type: str = None, sort: app_commands.Choice[str] = None):
         """Display active LFG posts."""
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=error_embed(
+                    "Invalid Context",
+                    "This command can only be used in a server.",
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+        if not isinstance(interaction.channel, discord.TextChannel):
+            return await interaction.response.send_message(
+                embed=error_embed(
+                    "Invalid Context",
+                    "Use this in a text channel where LFG posts are listed.",
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
         if mission_type and mission_type not in MISSION_TYPES:
             return await interaction.response.send_message(
                 embed=error_embed(

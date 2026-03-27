@@ -18,6 +18,8 @@ def setup(bot, group=None):
     async def notes(interaction: discord.Interaction, user: discord.Member):
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
             return await interaction.response.send_message("Mods only.", ephemeral=True)
+        if not interaction.guild:
+            return await interaction.response.send_message("Use this in a server.", ephemeral=True)
         await interaction.response.defer(ephemeral=True)
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute("""
@@ -55,6 +57,8 @@ def setup(bot, group=None):
     async def note_add(interaction: discord.Interaction, user: discord.Member, note: str):
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
             return await interaction.response.send_message("Mods only.", ephemeral=True)
+        if not interaction.guild:
+            return await interaction.response.send_message("Use this in a server.", ephemeral=True)
         if len(note) > 500:
             return await interaction.response.send_message("Note max 500 chars.", ephemeral=True)
         async with aiosqlite.connect(DB_PATH) as db:

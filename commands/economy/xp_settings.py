@@ -36,6 +36,16 @@ def setup(bot, group=None):
                 ),
                 ephemeral=True,
             )
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Invalid Context",
+                    "This can only be used in a server.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
 
         current = await get_guild_setting(interaction.guild.id, XP_LEVELUP_CHANNEL_KEY)
         current_channel_id = int(current) if current and current.isdigit() else None

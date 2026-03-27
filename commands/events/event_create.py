@@ -38,6 +38,16 @@ async def create_event_from_modal(interaction: discord.Interaction, title: str, 
     from bot import EVENTS_CHANNEL_ID, EVENTS_CHANNEL_NAME
     from database import get_configured_channel_id
     await interaction.response.defer(ephemeral=True)
+    if not interaction.guild:
+        return await interaction.followup.send(
+            embed=obsidian_embed(
+                "❌ Invalid Context",
+                "Events can only be created in a server.",
+                color=discord.Color.red(),
+                client=interaction.client,
+            ),
+            ephemeral=True,
+        )
     dt = parse_time_natural(when_str)
     if not dt:
         return await interaction.followup.send(

@@ -31,7 +31,12 @@ def setup(bot, group=None):
                 "Sorry, but you are not an Administrator in this server.",
                 ephemeral=True
             )
-        
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                "This can only be used in a server.",
+                ephemeral=True,
+            )
+
         target_channel = channel or interaction.channel
         if not isinstance(target_channel, discord.TextChannel):
             return await interaction.response.send_message(

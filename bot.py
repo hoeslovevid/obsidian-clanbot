@@ -4,7 +4,7 @@ import asyncio
 import random
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, Union
 
 import aiosqlite  # type: ignore
 import aiohttp  # type: ignore
@@ -145,28 +145,27 @@ class ClanBot(commands.Bot):
                 print(f"[sync] Total subcommands synced: {total_subcommands}")
         except discord.app_commands.errors.CommandSyncFailure as e:
             print(f"[sync] Failed to sync commands: {e}")
-            # Try to extract which command failed
-            if hasattr(e, 'errors') and e.errors:
-                print(f"[sync] Error details: {e.errors}")
-            # Also check the commands that were being synced
-            if hasattr(e, 'commands'):
-                print(f"[sync] Commands being synced: {len(e.commands) if e.commands else 0}")
-                # Try to find commands with choices that might be too long
-                for cmd in (e.commands or []):
-                    if isinstance(cmd, app_commands.Command):
-                        # Check parameters
-                        for param in cmd.parameters:
-                            if hasattr(param, 'choices') and param.choices:
+            # discord.py CommandSyncFailure attributes vary by version; use getattr for type checkers
+            err: Any = e
+            errs = getattr(err, "errors", None)
+            if errs:
+                print(f"[sync] Error details: {errs}")
+            cmd_list = getattr(err, "commands", None) or []
+            print(f"[sync] Commands being synced: {len(cmd_list)}")
+            for cmd in cmd_list:
+                if isinstance(cmd, app_commands.Command):
+                    for param in getattr(cmd, "parameters", []):
+                        if getattr(param, "choices", None):
+                            for choice in param.choices:
+                                if len(choice.name) >= 25:
+                                    print(f"[sync] ERROR: Command '{cmd.name}' has choice '{choice.name}' with {len(choice.name)} characters!")
+                elif isinstance(cmd, app_commands.Group):
+                    for subcmd in cmd.commands:
+                        for param in getattr(subcmd, "parameters", []):
+                            if getattr(param, "choices", None):
                                 for choice in param.choices:
                                     if len(choice.name) >= 25:
-                                        print(f"[sync] ERROR: Command '{cmd.name}' has choice '{choice.name}' with {len(choice.name)} characters!")
-                    elif isinstance(cmd, app_commands.Group):
-                        for subcmd in cmd.commands:
-                            for param in subcmd.parameters:
-                                if hasattr(param, 'choices') and param.choices:
-                                    for choice in param.choices:
-                                        if len(choice.name) >= 25:
-                                            print(f"[sync] ERROR: Group '{cmd.name}' subcommand '{subcmd.name}' has choice '{choice.name}' with {len(choice.name)} characters!")
+                                        print(f"[sync] ERROR: Group '{cmd.name}' subcommand '{subcmd.name}' has choice '{choice.name}' with {len(choice.name)} characters!")
             import traceback
             traceback.print_exc()
         except Exception as e:
@@ -283,14 +282,33 @@ _install_incident_mode_interaction_check()
 # Database initialization is now in database.py
 
 
-def format_thread_name(case_id: str, user: discord.Member, category: str = "", date_str: Optional[str] = None) -> str:
+def _channel_mention_safe(channel: Any) -> str:
+    """Discord.py stubs omit .mention on some channel types; runtime has it on guild text-like channels."""
+    if isinstance(channel, (discord.TextChannel, discord.Thread, discord.VoiceChannel, discord.StageChannel)):
+        return channel.mention
+    cid = getattr(channel, "id", 0)
+    return f"<#{cid}>"
+
+
+def _channel_name_safe(channel: Any) -> str:
+    """Channel name for logging; works when .name is missing on stubs."""
+    n = getattr(channel, "name", None)
+    return n if isinstance(n, str) else "channel"
+
+
+def format_thread_name(
+    case_id: str,
+    user: Union[discord.User, discord.Member],
+    category: str = "",
+    date_str: Optional[str] = None,
+) -> str:
     """
     Format a thread name for complaint threads.
     Format: "{username} • {date} • {case_id}"
     Discord thread names max at 100 characters.
     """
     # Get username (display_name or name, max 30 chars)
-    username = user.display_name or user.name
+    username = (getattr(user, "display_name", None) or user.name)
     if len(username) > 30:
         username = username[:27] + "..."
     
@@ -347,7 +365,7 @@ async def log_complaint_action(guild: discord.Guild, case_id: str, actor_id: int
     ledger_id = await resolve_channel_id(guild, "complaints_log_channel_id", COMPLAINTS_LOG_CHANNEL_ID, COMPLAINTS_LOG_CHANNEL_NAME)
     if ledger_id:
         ch = guild.get_channel(ledger_id)
-        if ch:
+        if isinstance(ch, discord.TextChannel):
             actor = guild.get_member(actor_id)
             desc = f"**Case:** `{case_id}`\n**Action:** {action}\n**By:** {actor.mention if actor else actor_id}"
             if note:
@@ -545,7 +563,7 @@ async def check_auto_mod(message: discord.Message) -> bool:
                     embed = obsidian_embed(
                         f"🛡️ Auto-Moderation Action: {violation_type.upper()}",
                         f"**User:** {message.author.mention} ({message.author.id})\n"
-                        f"**Channel:** {message.channel.mention}\n"
+                        f"**Channel:** {_channel_mention_safe(message.channel)}\n"
                         f"**Action:** {action_taken}\n"
                         f"**Message:** {message.content[:200]}",
                         color=discord.Color.red(),
@@ -660,7 +678,7 @@ async def on_message(message: discord.Message):
         message.author.id,
         COINS_PER_MESSAGE,
         "MESSAGE",
-        f"Message in #{message.channel.name}",
+        f"Message in #{_channel_name_safe(message.channel)}",
     )
     
     # Award XP (if enabled)
@@ -672,7 +690,7 @@ async def on_message(message: discord.Message):
             XP_PER_MESSAGE,
             "MESSAGE",
         )
-        if leveled_up:
+        if leveled_up and isinstance(message.author, discord.Member):
             # User leveled up! Assign level roles
             xp, level, total_xp = await get_user_xp(message.guild.id, message.author.id)
             logger.info(f"User {message.author.id} leveled up to level {level} in guild {message.guild.id}")
@@ -925,7 +943,8 @@ async def on_interaction(interaction: discord.Interaction):
     if interaction.type == discord.InteractionType.application_command:
         # Track command usage for activity (skip activity commands themselves to avoid recursion)
         if isinstance(interaction.user, discord.Member) and interaction.guild:
-            command_name = interaction.data.get("name", "") if interaction.data else ""
+            idata_cmd: Any = interaction.data or {}
+            command_name = idata_cmd.get("name", "")
             if command_name not in ["activity", "activity_leaderboard"]:  # Don't track these
                 try:
                     from database import track_command_usage
@@ -970,7 +989,8 @@ async def on_interaction(interaction: discord.Interaction):
             try:
                 
                 # Extract question from interaction data
-                components = interaction.data.get("components", [])
+                idata_ri: Any = interaction.data or {}
+                components = idata_ri.get("components", [])
                 question_val = ""
                 
                 for component in components:
@@ -985,10 +1005,15 @@ async def on_interaction(interaction: discord.Interaction):
                     await interaction.followup.send("Sorry, but you are not an Administrator in this server.", ephemeral=True)
                     return
 
+                guild_ri = interaction.guild
+                if guild_ri is None:
+                    await interaction.followup.send("This can only be used in a server.", ephemeral=True)
+                    return
+
                 async with aiosqlite.connect(DB_PATH) as db:
                     cur = await db.execute(
                         "SELECT user_id FROM complaints WHERE guild_id=? AND case_id=?",
-                        (interaction.guild.id, case_id),
+                        (guild_ri.id, case_id),
                     )
                     row = await cur.fetchone()
                 if not row:
@@ -1001,7 +1026,8 @@ async def on_interaction(interaction: discord.Interaction):
                 view = ComplaintModView(case_id)
                 await view.set_status(interaction, "NEEDS INFO", bot=bot, dm_override=False)
 
-                user = interaction.guild.get_member(user_id) or await bot.fetch_user(user_id)
+                user = guild_ri.get_member(user_id) or await bot.fetch_user(user_id)
+                evidence_dm_ok = False
                 if user:
                     try:
                         e = obsidian_embed(
@@ -1009,18 +1035,28 @@ async def on_interaction(interaction: discord.Interaction):
                             f"**Staff request:**\n{question_val}\n\n"
                             "Respond using:\n"
                             f"**/submit_complaint** (case_id: `{case_id}`)\n\n"
-                            "_If your DMs are closed, you may not receive updates._",
+                            "_If you don't get this in DMs, enable DMs from this server and ask staff._",
                             color=discord.Color.orange(),
                             client=bot,
                         )
                         await user.send(embed=e)
+                        evidence_dm_ok = True
                     except discord.Forbidden:
                         pass
 
-                await log_complaint_action(interaction.guild, case_id, interaction.user.id, "REQUEST_INFO", question_val)
-                
-                # Send followup since we deferred
-                await interaction.followup.send("Requested evidence (DM sent if possible).", ephemeral=True)
+                await log_complaint_action(guild_ri, case_id, interaction.user.id, "REQUEST_INFO", question_val)
+
+                if evidence_dm_ok:
+                    await interaction.followup.send(
+                        f"Evidence request logged for `{case_id}`. The reporter was **DM'd** with next steps.",
+                        ephemeral=True,
+                    )
+                else:
+                    await interaction.followup.send(
+                        f"Evidence request logged for `{case_id}`. **Couldn't DM the reporter** — they may have DMs off. "
+                        "Ping them in-channel or ask them to allow DMs from server members.",
+                        ephemeral=True,
+                    )
             except Exception as e:
                 import traceback
                 traceback.print_exc()
@@ -1072,7 +1108,8 @@ async def on_interaction(interaction: discord.Interaction):
             try:
                 
                 # Extract values from interaction data
-                components = interaction.data.get("components", [])
+                idata_cm: Any = interaction.data or {}
+                components = idata_cm.get("components", [])
                 category_val = ""
                 details_val = ""
                 evidence_val = ""
@@ -1309,7 +1346,8 @@ async def on_interaction(interaction: discord.Interaction):
                         pass
                 
                 # Extract response from interaction data
-                components = interaction.data.get("components", [])
+                idata_ar: Any = interaction.data or {}
+                components = idata_ar.get("components", [])
                 response_text = ""
                 
                 for component in components:
@@ -1347,14 +1385,50 @@ async def on_interaction(interaction: discord.Interaction):
                 
                 if row:
                     guild_id, user_id = row[0], row[1]
-                    
-                    # Send next question or submit application
                     from commands.applications.application import send_next_question
-                    await send_next_question(bot, guild_id, user_id, application_id)
-                    
-                    await interaction.followup.send("Response saved! Check your DMs for the next question.", ephemeral=True)
+                    from utils import dm_blocked_help_embed
+
+                    ok = await send_next_question(bot, guild_id, user_id, application_id)
+                    if ok:
+                        await interaction.followup.send(
+                            embed=obsidian_embed(
+                                "Saved",
+                                "Your answer is recorded. **Check your DMs** for the next step. _(Only you see this.)_",
+                                color=discord.Color.green(),
+                                client=bot,
+                            ),
+                            ephemeral=True,
+                        )
+                    else:
+                        async with aiosqlite.connect(DB_PATH) as db:
+                            await db.execute(
+                                "UPDATE applications SET current_question_index = current_question_index - 1 WHERE id = ?",
+                                (application_id,),
+                            )
+                            await db.execute(
+                                "DELETE FROM application_responses WHERE application_id = ? AND question_id = ?",
+                                (application_id, question_id),
+                            )
+                            await db.commit()
+                        await interaction.followup.send(
+                            embed=dm_blocked_help_embed(
+                                "Couldn't send the next question",
+                                "Your last answer wasn't saved because I need **Direct Messages** open to continue. "
+                                "Enable DMs from this server, then submit your answer again from the same question in your DMs.",
+                                client=bot,
+                            ),
+                            ephemeral=True,
+                        )
                 else:
-                    await interaction.followup.send("Application not found.", ephemeral=True)
+                    await interaction.followup.send(
+                        embed=obsidian_embed(
+                            "Couldn't find that application",
+                            "It may have been cancelled or already submitted. Start again from the application channel if you still need to apply.",
+                            color=discord.Color.orange(),
+                            client=bot,
+                        ),
+                        ephemeral=True,
+                    )
             return
         
         # Handle ApplicationQuestionModal submissions
@@ -1675,8 +1749,11 @@ async def on_interaction(interaction: discord.Interaction):
                         logger.warning(f"[button] complaints:ack - interaction expired/already handled: {e}")
                         return
                     # Use followup for set_status and message (don't call response methods after defer)
-                    await view.set_status(interaction, "ACKNOWLEDGED", bot=bot)
-                    await interaction.followup.send(f"`{case_id}` marked reviewed.", ephemeral=True)
+                    _, dm_ok = await view.set_status(interaction, "ACKNOWLEDGED", bot=bot)
+                    msg = f"`{case_id}` marked reviewed."
+                    if not dm_ok:
+                        msg += " **Couldn't DM the reporter** — DMs may be off; follow up in-channel if they need a ping."
+                    await interaction.followup.send(msg, ephemeral=True)
                     return
 
                 if action == "resolve":
@@ -1687,8 +1764,11 @@ async def on_interaction(interaction: discord.Interaction):
                         # Interaction expired or already handled - can't process it
                         logger.warning(f"[button] complaints:resolve - interaction expired/already handled: {e}")
                         return
-                    await view.set_status(interaction, "RESOLVED", bot=bot)
-                    await interaction.followup.send(f"`{case_id}` closed.", ephemeral=True)
+                    _, dm_ok = await view.set_status(interaction, "RESOLVED", bot=bot)
+                    msg = f"`{case_id}` closed."
+                    if not dm_ok:
+                        msg += " **Couldn't DM the reporter** — they may have DMs disabled."
+                    await interaction.followup.send(msg, ephemeral=True)
                     return
 
                 if action == "reject":
@@ -1699,8 +1779,11 @@ async def on_interaction(interaction: discord.Interaction):
                         # Interaction expired or already handled - can't process it
                         logger.warning(f"[button] complaints:reject - interaction expired/already handled: {e}")
                         return
-                    await view.set_status(interaction, "REJECTED", bot=bot)
-                    await interaction.followup.send(f"`{case_id}` dismissed.", ephemeral=True)
+                    _, dm_ok = await view.set_status(interaction, "REJECTED", bot=bot)
+                    msg = f"`{case_id}` dismissed."
+                    if not dm_ok:
+                        msg += " **Couldn't DM the reporter** — they may have DMs disabled."
+                    await interaction.followup.send(msg, ephemeral=True)
                     return
 
                 if action == "needinfo":
@@ -1765,12 +1848,16 @@ async def on_interaction(interaction: discord.Interaction):
                 if not isinstance(member, discord.Member):
                     return await interaction.response.send_message("Not allowed.", ephemeral=True)
 
+                guild_vc = interaction.guild
+                if guild_vc is None:
+                    return await interaction.response.send_message("Not allowed.", ephemeral=True)
+
                 allowed = is_mod(member)
                 if not allowed:
                     async with aiosqlite.connect(DB_PATH) as db:
                         cur = await db.execute(
                             "SELECT owner_id FROM temp_vcs WHERE guild_id=? AND channel_id=?",
-                            (interaction.guild.id, vc_id),
+                            (guild_vc.id, vc_id),
                         )
                         row = await cur.fetchone()
                     allowed = bool(row and int(row[0]) == member.id)
@@ -1778,21 +1865,21 @@ async def on_interaction(interaction: discord.Interaction):
                 if not allowed:
                     return await interaction.response.send_message("Only the squad owner (or an Administrator) may do that.", ephemeral=True)
 
-                vc = interaction.guild.get_channel(vc_id)
+                vc = guild_vc.get_channel(vc_id)
                 if not isinstance(vc, discord.VoiceChannel):
                     return await interaction.response.send_message("Channel not found.", ephemeral=True)
 
                 # Helpers for @everyone overwrite tweaks
                 async def edit_everyone(*, connect: Optional[bool] = None, view: Optional[bool] = None):
                     overwrites = vc.overwrites
-                    base = overwrites.get(interaction.guild.default_role, discord.PermissionOverwrite())
+                    base = overwrites.get(guild_vc.default_role, discord.PermissionOverwrite())
                     if connect is not None:
                         base.connect = connect
                     if view is not None:
                         base.view_channel = view
-                    overwrites[interaction.guild.default_role] = base
+                    overwrites[guild_vc.default_role] = base
 
-                    mod_role = get_mod_role(interaction.guild)
+                    mod_role = get_mod_role(guild_vc)
                     if mod_role:
                         m = overwrites.get(mod_role, discord.PermissionOverwrite())
                         m.view_channel = True
@@ -1849,7 +1936,7 @@ async def on_interaction(interaction: discord.Interaction):
 
                 if action == "disband":
                     await interaction.response.send_message("Cell dissolved.", ephemeral=True)
-                    await delete_temp_vc_and_panel(interaction.guild, vc_id, reason="Disband via panel")
+                    await delete_temp_vc_and_panel(guild_vc, vc_id, reason="Disband via panel")
                     return
         
         # Trading posts: mark as sold or delete
@@ -2014,7 +2101,8 @@ def _update_status_presence():
 
 @bot.event
 async def on_ready():
-    print(f"[ready] Logged in as {bot.user} ({bot.user.id})")
+    bu = bot.user
+    print(f"[ready] Logged in as {bu} ({bu.id if bu else '?'})")
     
     activity = _update_status_presence()
     await bot.change_presence(activity=activity, status=discord.Status.online)
@@ -2187,7 +2275,7 @@ async def on_ready():
             cur = await db.execute("""
                 SELECT guild_id, channel_id FROM update_log_settings WHERE channel_id IS NOT NULL
             """)
-            settings = await cur.fetchall()
+            settings = list(await cur.fetchall())
             if settings:
                 logger.info(f"[ready] Loaded {len(settings)} update log channel setting(s) from database")
                 for guild_id, channel_id in settings:
@@ -2195,7 +2283,7 @@ async def on_ready():
                     if guild:
                         channel = guild.get_channel(channel_id)
                         if channel:
-                            logger.info(f"[ready] Update log channel configured: {guild.name} -> #{channel.name}")
+                            logger.info(f"[ready] Update log channel configured: {guild.name} -> #{_channel_name_safe(channel)}")
                         else:
                             logger.warning(f"[ready] Update log channel not found: guild {guild.name}, channel_id {channel_id}")
             else:
@@ -2347,7 +2435,10 @@ async def on_member_join(member: discord.Member):
         from commands.general.milestones import check_and_celebrate_milestone
         member_count = member.guild.member_count
         # Check for round number milestones (100, 500, 1000, etc.)
-        if member_count % 100 == 0 or member_count in [50, 250, 500, 1000, 2500, 5000, 10000]:
+        if member_count is not None and (
+            member_count % 100 == 0
+            or member_count in [50, 250, 500, 1000, 2500, 5000, 10000]
+        ):
             await check_and_celebrate_milestone(member.guild, "member_count", member_count)
     except Exception as e:
         logger.error(f"[milestones] Error checking member count milestone: {e}")
@@ -2476,7 +2567,7 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
                     starboard_channel_id, threshold, emoji = row
                     starboard_channel = guild.get_channel(starboard_channel_id)
                     
-                    if starboard_channel and str(payload.emoji) == emoji:
+                    if isinstance(starboard_channel, discord.TextChannel) and str(payload.emoji) == emoji:
                         try:
                             channel = guild.get_channel(payload.channel_id)
                             if channel and isinstance(channel, discord.TextChannel):
@@ -2500,7 +2591,7 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
                                                 starboard_msg = await starboard_channel.fetch_message(starboard_msg_id)
                                                 embed = starboard_msg.embeds[0] if starboard_msg.embeds else None
                                                 if embed:
-                                                    embed.set_footer(text=f"{reaction.count} {emoji} | {message.channel.mention}")
+                                                    embed.set_footer(text=f"{reaction.count} {emoji} | {_channel_mention_safe(message.channel)}")
                                                     await starboard_msg.edit(embed=embed)
                                                 
                                                 await db.execute("""
@@ -2523,7 +2614,7 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
                                             color=discord.Color.gold(),
                                             client=bot,
                                         )
-                                        embed.set_footer(text=f"{reaction.count} {emoji} | {message.channel.mention}")
+                                        embed.set_footer(text=f"{reaction.count} {emoji} | {_channel_mention_safe(message.channel)}")
                                         embed.timestamp = message.created_at
                                         
                                         if message.attachments:
@@ -2540,25 +2631,25 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
                         except Exception as e:
                             logger.error(f"Error handling starboard reaction: {e}", exc_info=True)
     
-    # Reaction role handling (only if not a bot reaction)
-    if payload.guild_id and not (payload.member and payload.member.bot):
-        # Ignore bot reactions
-        if payload.member and payload.member.bot:
-            return
-    
-    # Check if this is a reaction role message
+    # Reaction role handling (guild DMs have no guild_id)
+    gid_react = payload.guild_id
+    if gid_react is None:
+        return
+    if payload.member and payload.member.bot:
+        return
+
     async with aiosqlite.connect(DB_PATH) as db:
         cur = await db.execute("""
             SELECT role_id FROM reaction_roles
             WHERE guild_id = ? AND message_id = ? AND emoji = ?
-        """, (payload.guild_id, payload.message_id, str(payload.emoji)))
+        """, (gid_react, payload.message_id, str(payload.emoji)))
         row = await cur.fetchone()
     
     if not row:
         return
     
     role_id = row[0]
-    guild = bot.get_guild(payload.guild_id)
+    guild = bot.get_guild(gid_react)
     if not guild:
         return
     
@@ -2610,19 +2701,22 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
 @bot.event
 async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
     """Handle reaction role removal."""
-    # Check if this is a reaction role message
+    gid_rm = payload.guild_id
+    if gid_rm is None:
+        return
+
     async with aiosqlite.connect(DB_PATH) as db:
         cur = await db.execute("""
             SELECT role_id FROM reaction_roles
             WHERE guild_id = ? AND message_id = ? AND emoji = ?
-        """, (payload.guild_id, payload.message_id, str(payload.emoji)))
+        """, (gid_rm, payload.message_id, str(payload.emoji)))
         row = await cur.fetchone()
     
     if not row:
         return
     
     role_id = row[0]
-    guild = bot.get_guild(payload.guild_id)
+    guild = bot.get_guild(gid_rm)
     if not guild:
         return
     
@@ -2717,7 +2811,7 @@ async def on_message_delete(message: discord.Message):
             try:
                 embed = obsidian_embed(
                     "🗑️ Message Deleted",
-                    f"**Channel:** {message.channel.mention}\n"
+                    f"**Channel:** {_channel_mention_safe(message.channel)}\n"
                     f"**Author:** {message.author.mention} ({message.author})\n"
                     f"**Content:** {message.content[:1000] if message.content else '*No content*'}",
                     color=discord.Color.red(),
@@ -2768,7 +2862,7 @@ async def on_message_edit(before: discord.Message, after: discord.Message):
             try:
                 embed = obsidian_embed(
                     "✏️ Message Edited",
-                    f"**Channel:** {after.channel.mention}\n"
+                    f"**Channel:** {_channel_mention_safe(after.channel)}\n"
                     f"**Author:** {after.author.mention} ({after.author})\n"
                     f"**Before:** {before.content[:500] if before.content else '*No content*'}\n"
                     f"**After:** {after.content[:500] if after.content else '*No content*'}\n"
@@ -2859,7 +2953,10 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
         # Typo suggestions: collect commands and find similar
         try:
             all_names = []
-            for cmd in interaction.client.tree.get_commands(guild=interaction.guild):
+            iclient = interaction.client
+            if not isinstance(iclient, commands.Bot):
+                raise TypeError("expected commands.Bot")
+            for cmd in iclient.tree.get_commands(guild=interaction.guild):
                 if isinstance(cmd, app_commands.Group):
                     all_names.append(cmd.name)
                     for sub in cmd.commands:
@@ -2925,8 +3022,8 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
         return
 
     # CommandInvokeError wraps the real exception (e.g. Forbidden from channel.send)
-    if error_type_name == "CommandInvokeError" and hasattr(error, "original"):
-        orig = error.original
+    orig = getattr(error, "original", None) if error_type_name == "CommandInvokeError" else None
+    if orig is not None:
         orig_name = type(orig).__name__
         if orig_name in ("Forbidden", "HTTPException"):
             err_msg = str(orig)

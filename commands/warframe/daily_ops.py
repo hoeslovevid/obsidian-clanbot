@@ -4,7 +4,7 @@ from discord import app_commands
 from datetime import datetime, timezone
 import dateparser
 
-from utils import obsidian_embed, EMBED_COLORS, format_number
+from utils import obsidian_embed, EMBED_COLORS, format_number, warframe_data_unavailable_embed, BUTTON_ONLY_RUNNER_MSG
 from warframe_api import fetch_steel_path, fetch_arbitration, fetch_nightwave
 from views import RetryView, RefreshView
 from cache_utils import invalidate
@@ -31,20 +31,20 @@ def setup(bot, group=None):
         if sp is None and arb is None and nw is None:
             async def on_retry(btn_i: discord.Interaction):
                 if btn_i.user.id != interaction.user.id:
-                    return await btn_i.response.send_message("Only the requester can retry.", ephemeral=True)
+                    return await btn_i.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
                 await btn_i.response.defer()
                 sp2, arb2, nw2 = await asyncio.gather(fetch_steel_path(), fetch_arbitration(), fetch_nightwave())
                 emb = _build_embed(sp2, arb2, nw2, interaction.client)
                 await btn_i.message.edit(embed=emb, view=None)
             return await interaction.followup.send(
-                embed=obsidian_embed("❌ Error", "Could not fetch daily ops data.", color=discord.Color.red(), client=interaction.client),
+                embed=warframe_data_unavailable_embed(interaction.client),
                 view=RetryView(on_retry),
             )
         embed = _build_embed(sp, arb, nw, interaction.client)
 
         async def on_refresh(btn_i: discord.Interaction):
             if btn_i.user.id != interaction.user.id:
-                return await btn_i.response.send_message("Only the requester can refresh.", ephemeral=True)
+                return await btn_i.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
             await btn_i.response.defer()
             invalidate("warframe:steelPath")
             invalidate("warframe:arbitration")

@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from datetime import datetime, timezone
 
-from utils import obsidian_embed, format_number, EMBED_COLORS
+from utils import obsidian_embed, format_number, EMBED_COLORS, warframe_data_unavailable_embed, BUTTON_ONLY_RUNNER_MSG
 from warframe_api import get_baro_status
 from views import RetryView, RefreshView
 from database import DB_PATH
@@ -188,11 +188,14 @@ def setup(bot, group=None):
         if not baro_data:
             async def on_retry(btn_interaction: discord.Interaction):
                 if btn_interaction.user.id != interaction.user.id:
-                    return await btn_interaction.response.send_message("Only the person who ran this can retry.", ephemeral=True)
+                    return await btn_interaction.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
                 await btn_interaction.response.defer()
                 is_active, new_data = await get_baro_status()
                 if not new_data:
-                    return await btn_interaction.followup.send("Still unable to fetch. Try again later.", ephemeral=True)
+                    return await btn_interaction.followup.send(
+                        "Still can't reach the stats server. Try **Try again** again in a minute.",
+                        ephemeral=True,
+                    )
                 if new_data and not is_active:
                     async with aiosqlite.connect(DB_PATH) as db:
                         cur = await db.execute(
@@ -202,12 +205,7 @@ def setup(bot, group=None):
                 emb = build_baro_embed(new_data, is_active, interaction.client)
                 await btn_interaction.message.edit(embed=emb, view=None)
             return await interaction.followup.send(
-                embed=obsidian_embed(
-                    "❌ Error",
-                    "Could not fetch Baro Ki'Teer data from Warframe API. Please try again later.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
+                embed=warframe_data_unavailable_embed(interaction.client),
                 view=RetryView(on_retry),
                 ephemeral=True,
             )
@@ -216,13 +214,16 @@ def setup(bot, group=None):
 
         async def on_refresh(btn_interaction: discord.Interaction):
             if btn_interaction.user.id != interaction.user.id:
-                return await btn_interaction.response.send_message("Only the person who ran this can refresh.", ephemeral=True)
+                return await btn_interaction.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
             await btn_interaction.response.defer()
             from cache_utils import invalidate
             invalidate("warframe:baro")
             new_active, new_data = await get_baro_status()
             if not new_data:
-                await btn_interaction.followup.send("Could not fetch fresh data. Try again later.", ephemeral=True)
+                await btn_interaction.followup.send(
+                    "Couldn't refresh Baro yet — stats server is still struggling. Try again soon.",
+                    ephemeral=True,
+                )
                 return
             if new_data and not new_active:
                 async with aiosqlite.connect(DB_PATH) as db:
@@ -237,8 +238,8 @@ def setup(bot, group=None):
         view = RefreshView(on_refresh)
         message = await interaction.followup.send(embed=embed, view=view, ephemeral=False)
 
-        # If Baro is active, store the message for live updates
-        if is_active:
+        # If Baro is active, store the message for live updates (guild text channels only; /baro works in DMs too)
+        if is_active and interaction.guild and isinstance(interaction.channel, discord.TextChannel):
             expiry = baro_data.get("expiry", "")
             if expiry:
                 try:

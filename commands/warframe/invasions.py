@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from datetime import datetime, timezone
 
-from utils import obsidian_embed
+from utils import obsidian_embed, warframe_data_unavailable_embed, BUTTON_ONLY_RUNNER_MSG
 from warframe_api import fetch_invasions
 from views import RetryView, RefreshView
 from cache_utils import invalidate
@@ -97,20 +97,19 @@ def setup(bot, group=None):
         if invasions_data is None:
             async def on_retry(btn_interaction: discord.Interaction):
                 if btn_interaction.user.id != interaction.user.id:
-                    return await btn_interaction.followup.send("Only the person who ran this can retry.", ephemeral=True)
+                    return await btn_interaction.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
+                await btn_interaction.response.defer()
                 new_data = await fetch_invasions()
                 if new_data is None:
-                    return await btn_interaction.followup.send("Still unable to fetch. Try again later.", ephemeral=True)
+                    return await btn_interaction.followup.send(
+                        "Invasions still won't load. Try **Try again** again in a minute.",
+                        ephemeral=True,
+                    )
                 emb = _build_invasions_embed(new_data, interaction.client)
                 await btn_interaction.message.edit(embed=emb, view=None)
 
             return await interaction.followup.send(
-                embed=obsidian_embed(
-                    "❌ Error",
-                    "Could not fetch invasion data from Warframe API. Please try again later.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
+                embed=warframe_data_unavailable_embed(interaction.client),
                 view=RetryView(on_retry),
             )
 
@@ -127,11 +126,15 @@ def setup(bot, group=None):
 
         async def on_refresh(btn_interaction: discord.Interaction):
             if btn_interaction.user.id != interaction.user.id:
-                return await btn_interaction.followup.send("Only the person who ran this can refresh.", ephemeral=True)
+                return await btn_interaction.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
+            await btn_interaction.response.defer()
             invalidate("warframe:invasions")
             new_data = await fetch_invasions()
             if new_data is None:
-                return await btn_interaction.followup.send("Could not fetch fresh data. Try again later.", ephemeral=True)
+                return await btn_interaction.followup.send(
+                    "Couldn't refresh invasions yet — stats API is still busy.",
+                    ephemeral=True,
+                )
             emb = _build_invasions_embed(new_data, interaction.client)
             await btn_interaction.message.edit(embed=emb, view=RefreshView(on_refresh, timeout=300))
 

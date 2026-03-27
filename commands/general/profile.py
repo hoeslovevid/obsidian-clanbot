@@ -161,7 +161,18 @@ def setup(bot, group=None):
     async def profile_callback(interaction: discord.Interaction, user: Optional[discord.Member] = None):
         """Display a comprehensive user profile."""
         await interaction.response.defer(ephemeral=False)
-        
+
+        if not interaction.guild:
+            return await interaction.followup.send(
+                embed=obsidian_embed(
+                    "❌ Invalid Context",
+                    "Profiles with server stats can only be viewed in a server.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+
         target_user = user or interaction.user
         if not isinstance(target_user, discord.Member):
             return await interaction.followup.send("User not found in this server.", ephemeral=True)

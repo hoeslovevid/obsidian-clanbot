@@ -534,27 +534,32 @@ class ApplicationRejectModal(discord.ui.Modal, title="Reject Application"):  # t
         else:
             await interaction.message.edit(embed=embed)
         
-        # Notify user
+        dm_ok = True
         if user_id:
             user = interaction.guild.get_member(user_id)
             if user:
+                dm_ok = False
                 try:
-                    rejection_msg = f"Your application to join {interaction.guild.name} has been rejected."
+                    rejection_msg = f"Your application to join {interaction.guild.name} wasn't approved this time."
                     if reason:
                         rejection_msg += f"\n\n**Reason:** {reason}"
-                    
+
                     await user.send(
                         embed=obsidian_embed(
-                            "❌ Application Rejected",
+                            "Application update",
                             rejection_msg,
-                            color=discord.Color.red(),
+                            color=discord.Color.orange(),
                             client=interaction.client,
                         )
                     )
+                    dm_ok = True
                 except discord.Forbidden:
                     pass
-        
-        await interaction.followup.send("Application rejected.", ephemeral=True)
+
+        mod_note = "Application rejected."
+        if user_id and not dm_ok:
+            mod_note += " **Couldn't DM the applicant** — they may have DMs off; consider letting them know in-channel."
+        await interaction.followup.send(mod_note, ephemeral=True)
 
 
 class ApplicationResponseModal(discord.ui.Modal, title="Application Question"):  # type: ignore

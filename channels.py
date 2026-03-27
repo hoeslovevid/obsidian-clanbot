@@ -4,7 +4,7 @@ This module handles channel finding, creation, and resolution logic.
 """
 import logging
 import discord  # type: ignore
-from typing import Optional
+from typing import Mapping, Optional, Union, cast
 import aiosqlite  # type: ignore
 
 from database import get_guild_setting, set_guild_setting, DB_PATH
@@ -168,13 +168,16 @@ async def ensure_join_to_create_channel(guild: discord.Guild) -> int:
         await set_guild_setting(guild.id, "create_vc_channel_id", str(existing.id))
         return existing.id
 
-    overwrites = {
+    overwrites: dict[discord.Role, discord.PermissionOverwrite] = {
         guild.default_role: discord.PermissionOverwrite(view_channel=True, connect=True, speak=True),
     }
     vc = await guild.create_voice_channel(
         name=CREATE_VC_NAME,
         category=category,
-        overwrites=overwrites,
+        overwrites=cast(
+            Mapping[Union[discord.Role, discord.Member, discord.Object], discord.PermissionOverwrite],
+            overwrites,
+        ),
         reason="Auto-created join-to-create channel on bot install",
     )
     await set_guild_setting(guild.id, "create_vc_channel_id", str(vc.id))

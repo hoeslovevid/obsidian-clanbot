@@ -7,6 +7,8 @@ import logging
 import os
 import time
 from typing import Optional, Dict, Any, Tuple, List
+from urllib.parse import urlencode
+
 import aiohttp  # type: ignore
 
 # Timeout and retries for api.warframestat.us (can be slow or unreachable from some networks/proxy)
@@ -579,7 +581,9 @@ async def resolve_steam_id(vanity_url_or_id: str) -> Optional[str]:
         return vanity
     try:
         async with aiohttp.ClientSession() as session:
-            url = f"https://api.steampowered.com/ISteamUser/ResolveVanityURL/v1/?key={key}&vanityurl={vanity}"
+            # urlencode prevents vanity names with & or ? from breaking the query or injecting params
+            q = urlencode({"key": key, "vanityurl": vanity})
+            url = f"https://api.steampowered.com/ISteamUser/ResolveVanityURL/v1/?{q}"
             async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                 if resp.status != 200:
                     return None
@@ -602,12 +606,15 @@ async def fetch_steam_warframe_playtime(steam_id_64: str) -> Optional[int]:
     if not key:
         logger.warning("STEAM_API_KEY not set - cannot fetch Warframe playtime")
         return None
+    sid = (steam_id_64 or "").strip()
+    if not sid.isdigit() or len(sid) < 15:
+        return None
     try:
         async with aiohttp.ClientSession() as session:
-            url = (
-                f"https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/"
-                f"?key={key}&steamid={steam_id_64}&include_played_free_games=1"
+            q = urlencode(
+                {"key": key, "steamid": sid, "include_played_free_games": "1"}
             )
+            url = f"https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?{q}"
             async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                 if resp.status != 200:
                     return None

@@ -4,7 +4,7 @@ from discord import app_commands
 from datetime import datetime, timezone
 import dateparser  # type: ignore
 
-from utils import obsidian_embed
+from utils import obsidian_embed, warframe_data_unavailable_embed, BUTTON_ONLY_RUNNER_MSG
 from warframe_api import fetch_duviri_circuit
 from views import RetryView
 
@@ -54,11 +54,14 @@ def setup(bot, group=None):
         if not data:
             async def on_retry(btn_interaction: discord.Interaction):
                 if btn_interaction.user.id != interaction.user.id:
-                    return await btn_interaction.response.send_message("Only the person who ran this can retry.", ephemeral=True)
+                    return await btn_interaction.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
                 await btn_interaction.response.defer()
                 new_data = await fetch_duviri_circuit()
                 if not new_data:
-                    return await btn_interaction.followup.send("Still unable to fetch. Try again later.", ephemeral=True)
+                    return await btn_interaction.followup.send(
+                        "Duviri data still isn't loading. Try **Try again** again shortly.",
+                        ephemeral=True,
+                    )
                 state = new_data.get("state", "Unknown")
                 expiry = new_data.get("expiry", "")
                 time_remaining = format_time_remaining(expiry) if expiry else "Unknown"
@@ -81,12 +84,7 @@ def setup(bot, group=None):
                 await btn_interaction.message.edit(embed=emb, view=None)
 
             return await interaction.followup.send(
-                embed=obsidian_embed(
-                    "❌ Error",
-                    "Failed to fetch Duviri Circuit data. Please try again later.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
+                embed=warframe_data_unavailable_embed(interaction.client),
                 view=RetryView(on_retry),
             )
         

@@ -2,7 +2,7 @@
 import discord
 from discord import app_commands
 
-from utils import obsidian_embed, error_embed, feature_off_embed, ECONOMY_ENABLED, is_mod, format_timestamp_readable, EMBED_FOOTER_DEFAULT
+from utils import obsidian_embed, error_embed, feature_off_embed, ECONOMY_ENABLED, is_mod, format_timestamp_readable, EMBED_FOOTER_DEFAULT, BUTTON_ONLY_RUNNER_MSG
 from views import RetryView
 
 
@@ -81,8 +81,8 @@ def setup(bot, group=None):
                 embed=error_embed("Invalid Context", "This can only be used in a server.", client=interaction.client),
                 ephemeral=True
             )
-        is_mod = interaction.user.guild_permissions.administrator if isinstance(interaction.user, discord.Member) else False
-        if member.id != interaction.user.id and not is_mod:
+        is_admin = interaction.user.guild_permissions.administrator if isinstance(interaction.user, discord.Member) else False
+        if member.id != interaction.user.id and not is_admin:
             return await interaction.response.send_message(
                 embed=error_embed("Permission Denied", "You can only view your own balance.", client=interaction.client),
                 ephemeral=True
@@ -197,7 +197,7 @@ def setup(bot, group=None):
         if not item_data:
             async def on_retry_search(_btn):
                 if _btn.user.id != interaction.user.id:
-                    return await _btn.response.send_message("Only the person who ran this can retry.", ephemeral=True)
+                    return await _btn.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
                 await _btn.response.defer()
                 new_item = await search_warframe_market_item(search_term, "pc")
                 if not new_item:
@@ -218,7 +218,7 @@ def setup(bot, group=None):
             item_name = item_data.get("item_name", search_term)
             async def on_retry_price(_btn):
                 if _btn.user.id != interaction.user.id:
-                    return await _btn.response.send_message("Only the person who ran this can retry.", ephemeral=True)
+                    return await _btn.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
                 await _btn.response.defer()
                 new_price = await get_warframe_market_price(url_name, "pc")
                 if not new_price:

@@ -65,7 +65,18 @@ def setup(bot, group=None):
     async def voice_leaderboard(interaction: discord.Interaction, period: str = "all_time", limit: int = 10):
         """View voice activity leaderboard."""
         await interaction.response.defer(ephemeral=False)
-        
+
+        if not interaction.guild:
+            return await interaction.followup.send(
+                embed=obsidian_embed(
+                    "❌ Invalid Context",
+                    "Voice leaderboard can only be viewed in a server.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+
         if limit > 20:
             limit = 20
         if limit < 1:

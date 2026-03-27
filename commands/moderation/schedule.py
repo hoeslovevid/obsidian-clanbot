@@ -36,6 +36,11 @@ def setup(bot, group=None):
                 "Sorry, but you are not an Administrator in this server.",
                 ephemeral=True,
             )
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                "Scheduling messages only works in a server.",
+                ephemeral=True,
+            )
 
         if len(message) < 1 or len(message) > 2000:
             return await interaction.response.send_message(

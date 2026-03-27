@@ -4,7 +4,7 @@ from discord import app_commands
 from datetime import datetime, timezone
 import dateparser  # type: ignore
 
-from utils import obsidian_embed
+from utils import obsidian_embed, warframe_data_unavailable_embed
 from warframe_api import fetch_archon_hunt_data
 
 
@@ -42,14 +42,8 @@ def setup(bot, group=None):
         
         if not archon_data:
             return await interaction.followup.send(
-                embed=obsidian_embed(
-                    "❌ Error",
-                    "Could not fetch Archon Hunt data from Warframe API. Please try again later.",
-                    color=discord.Color.red(),
-                    footer="warframestat.us",
-                    client=interaction.client,
-                ),
-                ephemeral=True
+                embed=warframe_data_unavailable_embed(interaction.client),
+                ephemeral=True,
             )
         
         # Extract archon hunt information

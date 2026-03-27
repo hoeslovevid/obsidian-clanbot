@@ -27,6 +27,11 @@ def setup(bot, group=None):
                 embed=error_embed("Permission Denied", "Sorry, but you are not an Administrator in this server.", client=interaction.client),
                 ephemeral=True,
             )
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=error_embed("Invalid Context", "This command can only be used in a server.", client=interaction.client),
+                ephemeral=True,
+            )
         if not isinstance(interaction.channel, discord.TextChannel):
             return await interaction.response.send_message(
                 embed=error_embed("Invalid Context", "This command can only be used in text channels.", client=interaction.client),
@@ -69,6 +74,11 @@ def setup(bot, group=None):
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
             return await interaction.response.send_message(
                 embed=error_embed("Permission Denied", "Sorry, but you are not an Administrator in this server.", client=interaction.client),
+                ephemeral=True,
+            )
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=error_embed("Invalid Context", "This command can only be used in a server.", client=interaction.client),
                 ephemeral=True,
             )
         if not isinstance(interaction.channel, discord.TextChannel):

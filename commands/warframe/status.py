@@ -4,7 +4,7 @@ from discord import app_commands
 from datetime import datetime, timezone
 import dateparser
 
-from utils import obsidian_embed
+from utils import obsidian_embed, warframe_data_unavailable_embed, BUTTON_ONLY_RUNNER_MSG
 from warframe_api import get_baro_status, fetch_alerts, get_all_cycles, fetch_fissures, fetch_sortie
 from commands.warframe.alerts import format_alert_rewards
 from views import RetryView, RefreshView
@@ -194,7 +194,7 @@ def setup(bot, group=None):
         if not baro_data and not alerts_data and not cycles_data and not fissures_data and not sortie_data:
             async def on_retry(btn_interaction: discord.Interaction):
                 if btn_interaction.user.id != interaction.user.id:
-                    return await btn_interaction.response.send_message("Only the person who ran this can retry.", ephemeral=True)
+                    return await btn_interaction.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
                 await btn_interaction.response.defer()
                 invalidate("warframe:baro")
                 invalidate("warframe:alerts")
@@ -206,12 +206,7 @@ def setup(bot, group=None):
                 emb = build_status_embed(ia, bd, ar, cr, fr, sr, interaction.client)
                 await btn_interaction.message.edit(embed=emb, view=None)
             return await interaction.edit_original_response(
-                embed=obsidian_embed(
-                    "❌ Error",
-                    "Could not fetch Warframe data. Please try again later.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
+                embed=warframe_data_unavailable_embed(interaction.client),
                 view=RetryView(on_retry),
             )
 
@@ -222,7 +217,7 @@ def setup(bot, group=None):
 
         async def on_refresh(btn_interaction: discord.Interaction):
             if btn_interaction.user.id != interaction.user.id:
-                return await btn_interaction.response.send_message("Only the person who ran this can refresh.", ephemeral=True)
+                return await btn_interaction.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
             await btn_interaction.response.defer()
             invalidate("warframe:baro")
             invalidate("warframe:alerts")

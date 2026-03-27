@@ -2,7 +2,7 @@
 import discord
 from discord import app_commands
 
-from utils import obsidian_embed, error_embed, EMBED_COLORS
+from utils import obsidian_embed, error_embed, EMBED_COLORS, BUTTON_ONLY_RUNNER_MSG
 from warframe_api import search_warframe_market_item, get_warframe_market_price
 from views import RetryView, RefreshView
 from cache_utils import invalidate
@@ -111,7 +111,7 @@ def setup(bot, group=None):
 
             async def on_retry_search(btn_interaction: discord.Interaction):
                 if btn_interaction.user.id != interaction.user.id:
-                    return await btn_interaction.response.send_message("Only the person who ran this can retry.", ephemeral=True)
+                    return await btn_interaction.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
                 await btn_interaction.response.defer()
                 new_item = await search_warframe_market_item(item, platform_val)
                 if not new_item:
@@ -142,7 +142,7 @@ def setup(bot, group=None):
         if not price_data:
             async def on_retry_price(btn_interaction: discord.Interaction):
                 if btn_interaction.user.id != interaction.user.id:
-                    return await btn_interaction.response.send_message("Only the person who ran this can retry.", ephemeral=True)
+                    return await btn_interaction.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
                 await btn_interaction.response.defer()
                 new_price = await get_warframe_market_price(item_url_name, platform_val)
                 if not new_price:
@@ -168,12 +168,15 @@ def setup(bot, group=None):
 
         async def on_refresh(btn_interaction: discord.Interaction):
             if btn_interaction.user.id != interaction.user.id:
-                return await btn_interaction.response.send_message("Only the person who ran this can refresh.", ephemeral=True)
+                return await btn_interaction.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
             await btn_interaction.response.defer()
             invalidate(f"warframe_market:price:{item_url_name}:{platform_val}")
             new_price = await get_warframe_market_price(item_url_name, platform_val)
             if not new_price:
-                return await btn_interaction.followup.send("Could not fetch fresh prices. Try again later.", ephemeral=True)
+                return await btn_interaction.followup.send(
+                    "Couldn't refresh prices right now. Warframe Market might be slow—try **Update data** again soon.",
+                    ephemeral=True,
+                )
             from datetime import datetime, timezone
             new_emb = _build_trade_embed(item_data, new_price, platform_val, interaction.client, author=interaction.user, fetched_at=datetime.now(timezone.utc))
             v2 = RefreshView(on_refresh, timeout=300)

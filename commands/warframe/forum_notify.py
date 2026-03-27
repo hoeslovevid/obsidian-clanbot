@@ -19,6 +19,8 @@ def setup(bot, group=None):
     async def forum(interaction: discord.Interaction, action: app_commands.Choice[str], channel: discord.TextChannel = None):
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
             return await interaction.response.send_message("Mods only.", ephemeral=True)
+        if not interaction.guild:
+            return await interaction.response.send_message("Use this in a server.", ephemeral=True)
         act = action.value
         if act == "status":
             ch_id = await get_guild_setting(interaction.guild.id, "forum_notify_channel_id")

@@ -4,7 +4,7 @@ from discord import app_commands
 from datetime import datetime, timezone
 import dateparser
 
-from utils import obsidian_embed, EMBED_COLORS
+from utils import obsidian_embed, EMBED_COLORS, warframe_data_unavailable_embed, BUTTON_ONLY_RUNNER_MSG
 from warframe_api import fetch_sortie
 from views import RetryView, RefreshView
 from cache_utils import invalidate
@@ -20,7 +20,7 @@ def setup(bot, group=None):
         if data is None:
             async def on_retry(btn_i: discord.Interaction):
                 if btn_i.user.id != interaction.user.id:
-                    return await btn_i.response.send_message("Only the requester can retry.", ephemeral=True)
+                    return await btn_i.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
                 await btn_i.response.defer()
                 nd = await fetch_sortie()
                 if nd is None:
@@ -28,7 +28,7 @@ def setup(bot, group=None):
                 emb = _build_embed(nd, interaction.client)
                 await btn_i.message.edit(embed=emb, view=None)
             return await interaction.followup.send(
-                embed=obsidian_embed("Error", "Could not fetch Sortie. Try again later.", color=discord.Color.red(), client=interaction.client),
+                embed=warframe_data_unavailable_embed(interaction.client),
                 view=RetryView(on_retry),
             )
         embed = _build_embed(data, interaction.client)
@@ -40,7 +40,10 @@ def setup(bot, group=None):
             invalidate("warframe:sortie")
             nd = await fetch_sortie()
             if nd is None:
-                return await btn_i.followup.send("Could not refresh.", ephemeral=True)
+                return await btn_i.followup.send(
+                    "Couldn't refresh the sortie yet — try **Update data** again soon.",
+                    ephemeral=True,
+                )
             emb = _build_embed(nd, interaction.client)
             await btn_i.message.edit(embed=emb, view=RefreshView(on_refresh, timeout=300))
 

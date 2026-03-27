@@ -410,6 +410,13 @@ async def close_ticket(
 ):
     """Close ticket: update DB, generate transcript, DM satisfaction, delete channel."""
     if not interaction.guild:
+        try:
+            await interaction.followup.send(
+                "Could not close ticket (no server context). Try again from the ticket channel.",
+                ephemeral=True,
+            )
+        except Exception:
+            pass
         return
 
     ticket_row = await _get_ticket_row_by_id(ticket_db_id)
