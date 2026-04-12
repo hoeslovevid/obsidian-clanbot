@@ -1939,47 +1939,9 @@ async def on_interaction(interaction: discord.Interaction):
                     await delete_temp_vc_and_panel(guild_vc, vc_id, reason="Disband via panel")
                     return
         
-        # Trading posts: mark as sold or delete
-        if cid.startswith("trade:"):
-            # trade:{listing_id}:{action}
-            parts = cid.split(":")
-            if len(parts) == 3:
-                _, listing_id_str, action = parts
-                try:
-                    listing_id = int(listing_id_str)
-                except ValueError:
-                    return
-                
-                # Get listing info
-                async with aiosqlite.connect(DB_PATH) as db:
-                    cur = await db.execute("""
-                        SELECT user_id, status FROM trading_posts WHERE id = ?
-                    """, (listing_id,))
-                    row = await cur.fetchone()
-                
-                if not row:
-                    return await interaction.response.send_message("Listing not found.", ephemeral=True)
-                
-                owner_id, status = row[0], row[1]
-                
-                # Check if user is the owner
-                if interaction.user.id != owner_id:
-                    return await interaction.response.send_message("Only the listing owner can manage this listing.", ephemeral=True)
-                
-                # Check if already sold/deleted
-                if status != "ACTIVE":
-                    return await interaction.response.send_message("This listing is no longer active.", ephemeral=True)
-                
-                await interaction.response.defer(ephemeral=True)
-                
-                from views import TradingPostView
-                view = TradingPostView(listing_id, owner_id)
-                
-                if action == "sold":
-                    await view.mark_sold_button(interaction)
-                elif action == "delete":
-                    await view.delete_button(interaction)
-                return
+        # Trading posts (trade:{id}:sold|delete): handled by TradingPostView callbacks.
+        # Those buttons defer and update the message; do not route here — discord.py invokes the
+        # persistent view first, and a second defer in this handler caused 40060 already acknowledged.
         
         # Application panel: start application
         # Note: This is handled by ApplicationPanelView.start_application callback
