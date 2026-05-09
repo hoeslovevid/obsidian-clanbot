@@ -182,6 +182,46 @@ def error_embed(title: str, message: str, *, action_hint: Optional[str] = None, 
     )
 
 
+_THREAD_NAME_MAX = 100
+
+
+def format_thread_name(
+    case_id: str,
+    user: discord.abc.User,
+    category: str,
+    created_iso: str,
+) -> str:
+    """Build a Discord thread name for complaint/docket staff threads (max 100 chars)."""
+    _ = created_iso  # Caller passes for auditing; visible name stays human-readable
+    cid = str(case_id).strip()[:34]
+    who = (" ".join(str(getattr(user, "display_name", None) or user.name).split())[:26] or "user")
+    cat = " ".join(str(category or "").split())[:38]
+    if cat:
+        name = f"{cid} · {cat} · {who}"
+    else:
+        name = f"{cid} · {who}"
+    if len(name) > _THREAD_NAME_MAX:
+        name = name[: _THREAD_NAME_MAX - 1] + "…"
+    return name
+
+
+def dm_blocked_help_embed(
+    title: str,
+    description: str,
+    *,
+    client: Optional[discord.Client] = None,
+) -> discord.Embed:
+    """Embed when a DM-only flow fails because the user's DMs are closed."""
+    ttl = title if title.startswith(("📭", "📬")) else f"📭 {title}"
+    return obsidian_embed(
+        ttl,
+        str(description),
+        category="warning",
+        footer="Enable DMs from server members under User Settings → Privacy & Safety.",
+        client=client,
+    )
+
+
 def message_jump_url(guild_id: int, channel_id: int, message_id: int) -> str:
     """Build Discord jump URL for a message."""
     return f"https://discord.com/channels/{guild_id}/{channel_id}/{message_id}"
