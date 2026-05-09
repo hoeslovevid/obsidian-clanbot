@@ -1,4 +1,5 @@
 """Self-assignable roles command."""
+import asyncio
 import discord
 from discord import app_commands
 from typing import Optional
@@ -164,6 +165,158 @@ def setup(bot, group=None):
                 ephemeral=True
             )
     
+    mass_add_decorator = (
+        group.command(name="mass_add", description="Add a role to all members (or to members who have a specific role).")
+        if group
+        else bot.tree.command(name="mass_add", description="Mass-add a role to members.")
+    )
+
+    @mass_add_decorator
+    @app_commands.describe(
+        role="Role to add to members",
+        filter_role="Only add to members who already have this role (optional)",
+    )
+    async def mass_add(
+        interaction: discord.Interaction,
+        role: discord.Role,
+        filter_role: Optional[discord.Role] = None,
+    ):
+        """Add a role to all (or filtered) members. Mod-only."""
+        if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
+            return await interaction.response.send_message(
+                embed=obsidian_embed("❌ Permission Denied", "Administrator only.", category="error", client=interaction.client),
+                ephemeral=True,
+            )
+        if not interaction.guild:
+            return await interaction.response.send_message("Server only.", ephemeral=True)
+        if role >= interaction.guild.me.top_role:
+            return await interaction.response.send_message(
+                embed=obsidian_embed("❌ Role Too High", "That role is above my highest role — I can't assign it.", category="error", client=interaction.client),
+                ephemeral=True,
+            )
+
+        await interaction.response.defer(ephemeral=True)
+
+        candidates = [
+            m for m in interaction.guild.members
+            if not m.bot and role not in m.roles and (filter_role is None or filter_role in m.roles)
+        ]
+
+        if not candidates:
+            return await interaction.followup.send(
+                embed=obsidian_embed("ℹ️ Nothing To Do", "All eligible members already have that role.", category="general", client=interaction.client),
+                ephemeral=True,
+            )
+
+        scope = f"members with **{filter_role.name}**" if filter_role else "all members"
+        await interaction.followup.send(
+            embed=obsidian_embed(
+                "⏳ Mass Role Add",
+                f"Adding {role.mention} to **{len(candidates)}** {scope}…\nThis may take a while.",
+                category="moderation",
+                client=interaction.client,
+            ),
+            ephemeral=True,
+        )
+
+        success, failed = 0, 0
+        for member in candidates:
+            try:
+                await member.add_roles(role, reason=f"Mass add by {interaction.user}")
+                success += 1
+            except discord.Forbidden:
+                failed += 1
+            except discord.HTTPException:
+                failed += 1
+            await asyncio.sleep(0.5)  # respect rate limits
+
+        await interaction.followup.send(
+            embed=obsidian_embed(
+                "✅ Mass Role Add Complete",
+                f"Added {role.mention} to **{success}** member(s)."
+                + (f"\n⚠️ Failed for **{failed}** member(s) (likely missing permissions)." if failed else ""),
+                category="moderation",
+                client=interaction.client,
+            ),
+            ephemeral=True,
+        )
+
+    mass_remove_decorator = (
+        group.command(name="mass_remove", description="Remove a role from all members who have it.")
+        if group
+        else bot.tree.command(name="mass_remove", description="Mass-remove a role from members.")
+    )
+
+    @mass_remove_decorator
+    @app_commands.describe(
+        role="Role to remove from members",
+        filter_role="Only remove from members who also have this second role (optional)",
+    )
+    async def mass_remove(
+        interaction: discord.Interaction,
+        role: discord.Role,
+        filter_role: Optional[discord.Role] = None,
+    ):
+        """Remove a role from all (or filtered) members. Mod-only."""
+        if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
+            return await interaction.response.send_message(
+                embed=obsidian_embed("❌ Permission Denied", "Administrator only.", category="error", client=interaction.client),
+                ephemeral=True,
+            )
+        if not interaction.guild:
+            return await interaction.response.send_message("Server only.", ephemeral=True)
+        if role >= interaction.guild.me.top_role:
+            return await interaction.response.send_message(
+                embed=obsidian_embed("❌ Role Too High", "That role is above my highest role — I can't remove it.", category="error", client=interaction.client),
+                ephemeral=True,
+            )
+
+        await interaction.response.defer(ephemeral=True)
+
+        candidates = [
+            m for m in interaction.guild.members
+            if not m.bot and role in m.roles and (filter_role is None or filter_role in m.roles)
+        ]
+
+        if not candidates:
+            return await interaction.followup.send(
+                embed=obsidian_embed("ℹ️ Nothing To Do", "No eligible members have that role.", category="general", client=interaction.client),
+                ephemeral=True,
+            )
+
+        scope = f"members with **{filter_role.name}**" if filter_role else "all members"
+        await interaction.followup.send(
+            embed=obsidian_embed(
+                "⏳ Mass Role Remove",
+                f"Removing {role.mention} from **{len(candidates)}** {scope}…\nThis may take a while.",
+                category="moderation",
+                client=interaction.client,
+            ),
+            ephemeral=True,
+        )
+
+        success, failed = 0, 0
+        for member in candidates:
+            try:
+                await member.remove_roles(role, reason=f"Mass remove by {interaction.user}")
+                success += 1
+            except discord.Forbidden:
+                failed += 1
+            except discord.HTTPException:
+                failed += 1
+            await asyncio.sleep(0.5)
+
+        await interaction.followup.send(
+            embed=obsidian_embed(
+                "✅ Mass Role Remove Complete",
+                f"Removed {role.mention} from **{success}** member(s)."
+                + (f"\n⚠️ Failed for **{failed}** member(s)." if failed else ""),
+                category="moderation",
+                client=interaction.client,
+            ),
+            ephemeral=True,
+        )
+
     command_decorator = group.command(name="assign", description="Assign or remove a self-assignable role.") if group else bot.tree.command(name="assign", description="Assign or remove a self-assignable role.")
     
     @command_decorator
