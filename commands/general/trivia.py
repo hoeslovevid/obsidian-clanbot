@@ -6,11 +6,13 @@ from typing import Optional
 import discord
 from discord import app_commands
 
-from core.utils import obsidian_embed, EMBED_COLORS, format_number, ECONOMY_ENABLED
-from database import add_coins, get_guild_setting, set_guild_setting
+from core.utils import obsidian_embed, format_number, ECONOMY_ENABLED
+from database import add_coins, get_guild_setting, set_guild_setting, delete_guild_setting
 
-# Cooldown in seconds (4 hours)
+# Cooldown in seconds after a completed round (answer or expiry)
 _TRIVIA_COOLDOWN = 4 * 3600
+# Block starting another trivia until the prior message resolves (answer or ~timeout)
+_TRIVIA_ACTIVE_GUARD = 45
 
 # ── Question bank ────────────────────────────────────────────────────────────
 # Format: (question, [A, B, C, D], correct_index 0-3, difficulty, fun_fact)
@@ -364,6 +366,14 @@ _REWARDS = {
 _DIFFICULTY_EMOJI = {"easy": "🟢", "medium": "🟡", "hard": "🔴"}
 _ANSWER_LABELS = ["🇦", "🇧", "🇨", "🇩"]
 
+VIEW_TIMEOUT_SEC = 30
+
+
+async def _finalize_trivia_round(guild_id: int, user_id: int) -> None:
+    """Release in-progress lock and start inter-round cooldown."""
+    await delete_guild_setting(guild_id, f"trivia_active:{user_id}")
+    await set_guild_setting(guild_id, f"trivia_last:{user_id}", str(int(time.time())))
+
 
 # ── UI ───────────────────────────────────────────────────────────────────────
 
@@ -379,8 +389,11 @@ class TriviaView(discord.ui.View):
         fact: str,
         coin_reward: int,
         interaction_user: discord.User | discord.Member,
+        guild_id: int,
+        user_id: int,
+        client: discord.Client | None,
     ):
-        super().__init__(timeout=30)
+        super().__init__(timeout=float(VIEW_TIMEOUT_SEC))
         self.question = question
         self.choices = choices
         self.correct = correct
@@ -388,7 +401,11 @@ class TriviaView(discord.ui.View):
         self.fact = fact
         self.coin_reward = coin_reward
         self.interaction_user = interaction_user
+        self.guild_id = guild_id
+        self.user_id = user_id
+        self._bot_client = client
         self.answered = False
+        self._public_message: Optional[discord.Message] = None
 
         for i, choice in enumerate(choices):
             btn = discord.ui.Button(
@@ -399,6 +416,9 @@ class TriviaView(discord.ui.View):
             )
             btn.callback = self._make_callback(i)
             self.add_item(btn)
+
+    def attach_message(self, msg: discord.Message) -> None:
+        self._public_message = msg
 
     def _make_callback(self, index: int):
         async def callback(interaction: discord.Interaction):
@@ -447,7 +467,7 @@ class TriviaView(discord.ui.View):
                 f"{emoji} Trivia — {diff_emoji} {self.difficulty.title()}",
                 "\n".join(desc_lines),
                 category=color,
-                client=interaction.client,
+                client=self._bot_client or interaction.client,
             )
 
             for item in self.children:
@@ -459,16 +479,40 @@ class TriviaView(discord.ui.View):
                     elif btn_idx == index and not correct:
                         item.style = discord.ButtonStyle.danger
 
-            await interaction.response.edit_message(embed=embed, view=self)
+            try:
+                await interaction.response.edit_message(embed=embed, view=self)
+            finally:
+                await _finalize_trivia_round(self.guild_id, self.user_id)
 
         return callback
 
-    async def on_timeout(self):
+    async def on_timeout(self) -> None:
         for item in self.children:
             if isinstance(item, discord.ui.Button):
                 item.disabled = True
                 if int(item.custom_id) == self.correct:
                     item.style = discord.ButtonStyle.success
+
+        diff_emoji = _DIFFICULTY_EMOJI[self.difficulty]
+        desc = (
+            f"**⏱️ Time ran out**\n\n"
+            f"> **Q:** {self.question}\n"
+            f"> **Correct answer:** {_ANSWER_LABELS[self.correct]} {self.choices[self.correct]}\n\n"
+            f"💡 {self.fact}\n\n"
+            "-# No coins — try again once your cooldown resets."
+        )
+        timeout_embed = obsidian_embed(
+            f"⏱️ Trivia — {diff_emoji} {self.difficulty.title()}",
+            desc,
+            category="warning",
+            client=self._bot_client,
+        )
+        if self._public_message is not None:
+            try:
+                await self._public_message.edit(embed=timeout_embed, view=self)
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                pass
+        await _finalize_trivia_round(self.guild_id, self.user_id)
 
 
 # ── Command ──────────────────────────────────────────────────────────────────
@@ -492,19 +536,24 @@ def setup(bot, group=None):
         difficulty: Optional[app_commands.Choice[str]] = None,
     ):
         if not interaction.guild:
-            return
+            return await interaction.response.send_message(
+                "Trivia runs in a server channel only.", ephemeral=True,
+            )
 
         if not ECONOMY_ENABLED:
             return await interaction.response.send_message(
-                "The economy is currently disabled.", ephemeral=True
+                "The economy is currently disabled.", ephemeral=True,
             )
 
         await interaction.response.defer(ephemeral=False)
 
-        # ── Cooldown check ──────────────────────────────────────────────────
-        cooldown_key = f"trivia_last:{interaction.user.id}"
-        last_str = await get_guild_setting(interaction.guild.id, cooldown_key)
+        guild_id = interaction.guild.id
+        uid = interaction.user.id
         now = int(time.time())
+
+        # ── Cooldown check ──────────────────────────────────────────────────
+        cooldown_key = f"trivia_last:{uid}"
+        last_str = await get_guild_setting(guild_id, cooldown_key)
         if last_str:
             last_ts = int(last_str)
             remaining = _TRIVIA_COOLDOWN - (now - last_ts)
@@ -521,14 +570,33 @@ def setup(bot, group=None):
                 )
                 return await interaction.followup.send(embed=embed, ephemeral=True)
 
-        # ── Pick question ───────────────────────────────────────────────────
+        # ── Concurrent round guard ──────────────────────────────────────────
+        active_key = f"trivia_active:{uid}"
+        raw_active = await get_guild_setting(guild_id, active_key)
+        if raw_active:
+            try:
+                started_ts = int(raw_active)
+                active_age = now - started_ts
+                if active_age >= 0 and active_age < _TRIVIA_ACTIVE_GUARD:
+                    unlock_ts = started_ts + _TRIVIA_ACTIVE_GUARD
+                    emb = obsidian_embed(
+                        "📌 Trivia in progress",
+                        "You already have an open trivia on this server. Answer it first (or wait for the countdown to expire).\n\n"
+                        f"-# You can start another <t:{unlock_ts}:R>.",
+                        category="warning",
+                        client=interaction.client,
+                    )
+                    return await interaction.followup.send(embed=emb, ephemeral=True)
+            except ValueError:
+                pass
+
+        # ── Pick question ─────────────────────────────────────────────────────
         chosen_diff = difficulty.value if difficulty else None
         pool = [q for q in _QUESTIONS if chosen_diff is None or q[3] == chosen_diff]
         if not pool:
             pool = _QUESTIONS
 
         q_text, choices, correct_idx, diff, fact = random.choice(pool)
-        # Shuffle choices while tracking the correct answer
         indexed = list(enumerate(choices))
         random.shuffle(indexed)
         new_correct = next(i for i, (orig, _) in enumerate(indexed) if orig == correct_idx)
@@ -537,10 +605,6 @@ def setup(bot, group=None):
         min_r, max_r = _REWARDS[diff]
         coin_reward = random.randint(min_r, max_r)
 
-        # ── Set cooldown ────────────────────────────────────────────────────
-        await set_guild_setting(interaction.guild.id, cooldown_key, str(now))
-
-        # ── Build question embed ────────────────────────────────────────────
         diff_emoji = _DIFFICULTY_EMOJI[diff]
         choice_lines = "\n".join(
             f"> {_ANSWER_LABELS[i]} {c}" for i, c in enumerate(shuffled_choices)
@@ -549,7 +613,7 @@ def setup(bot, group=None):
             f"{diff_emoji} **{diff.title()} • {format_number(min_r)}–{format_number(max_r)} coins**\n\n"
             f"**{q_text}**\n\n"
             f"{choice_lines}\n\n"
-            f"-# ⏱️ You have 30 seconds to answer."
+            f"-# ⏱️ You have **{VIEW_TIMEOUT_SEC}** seconds to answer."
         )
         embed = obsidian_embed(
             "🧠 Warframe Trivia",
@@ -567,5 +631,12 @@ def setup(bot, group=None):
             fact=fact,
             coin_reward=coin_reward,
             interaction_user=interaction.user,
+            guild_id=guild_id,
+            user_id=uid,
+            client=interaction.client,
         )
-        await interaction.followup.send(embed=embed, view=view)
+
+        msg = await interaction.followup.send(embed=embed, view=view, wait=True)
+        await set_guild_setting(guild_id, active_key, str(int(time.time())))
+        view.attach_message(msg)
+

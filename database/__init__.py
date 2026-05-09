@@ -133,6 +133,17 @@ async def set_guild_setting(guild_id: int, key: str, value: str) -> None:
     _cache_put(guild_id, key, value)
 
 
+async def delete_guild_setting(guild_id: int, key: str) -> None:
+    """Remove a guild_setting row if present."""
+    _cache_invalidate(guild_id, key)
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "DELETE FROM guild_settings WHERE guild_id=? AND key=?",
+            (guild_id, key),
+        )
+        await db.commit()
+
+
 async def get_user_timezone(guild_id: int, user_id: int) -> Optional[str]:
     """Get a user's timezone preference (e.g. America/New_York). Uses guild_settings key 'user_tz:{user_id}'."""
     return await get_guild_setting(guild_id, f"user_tz:{user_id}")

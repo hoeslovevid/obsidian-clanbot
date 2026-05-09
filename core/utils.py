@@ -205,23 +205,6 @@ def format_thread_name(
     return name
 
 
-def dm_blocked_help_embed(
-    title: str,
-    description: str,
-    *,
-    client: Optional[discord.Client] = None,
-) -> discord.Embed:
-    """Embed when a DM-only flow fails because the user's DMs are closed."""
-    ttl = title if title.startswith(("📭", "📬")) else f"📭 {title}"
-    return obsidian_embed(
-        ttl,
-        str(description),
-        category="warning",
-        footer="Enable DMs from server members under User Settings → Privacy & Safety.",
-        client=client,
-    )
-
-
 def message_jump_url(guild_id: int, channel_id: int, message_id: int) -> str:
     """Build Discord jump URL for a message."""
     return f"https://discord.com/channels/{guild_id}/{channel_id}/{message_id}"
@@ -384,12 +367,16 @@ def warframe_data_unavailable_embed(client=None) -> discord.Embed:
 
 
 def dm_blocked_help_embed(title: str, what_failed: str, client=None) -> discord.Embed:
-    """Explain that DMs failed and how to enable them."""
+    """Explain that DMs failed and how to enable them (used by handlers and DM flows)."""
+    ttl = (title.strip() if title else "Direct messages").strip()
+    if not (ttl.startswith("📭") or ttl.startswith("📫") or ttl.startswith("⚠️") or ttl.startswith("❗")):
+        ttl = f"📭 {ttl}"
     return obsidian_embed(
-        title,
+        ttl,
         f"{what_failed}\n\n{DM_SETTINGS_HINT}",
-        color=discord.Color.orange(),
+        category="warning",
         client=client,
+        footer="Privacy & Safety → enable DMs from server members.",
     )
 
 
