@@ -154,7 +154,7 @@ async def create_suggestion_from_modal(interaction: discord.Interaction, suggest
         await db.commit()
         try:
             from database import check_and_unlock_achievement
-            await check_and_unlock_achievement(guild.id, interaction.user.id, "suggestion_first", None)
+            await check_and_unlock_achievement(guild.id, interaction.user.id, "suggestion_first", None, interaction=interaction)
         except Exception:
             pass
         cur = await db.execute("SELECT last_insert_rowid()")

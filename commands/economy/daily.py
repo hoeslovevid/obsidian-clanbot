@@ -263,14 +263,14 @@ async def _run_daily(interaction: discord.Interaction, force_reset: bool = False
         if new_streak >= 10:
             try:
                 from database import check_and_unlock_achievement
-                await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "daily_streak_10", None)
+                await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "daily_streak_10", None, interaction=interaction)
             except Exception:
                 pass
         try:
             from database import check_and_unlock_achievement, get_user_balance
             bal = await get_user_balance(interaction.guild.id, interaction.user.id)
             if bal >= 1_000_000:
-                await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "first_million", None)
+                await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "first_million", None, interaction=interaction)
         except Exception:
             pass
         try:
@@ -279,7 +279,7 @@ async def _run_daily(interaction: discord.Interaction, force_reset: bool = False
                 days_in = (datetime.now(timezone.utc) - interaction.user.joined_at.replace(tzinfo=timezone.utc)).days
                 for months, ach_id in [(3, "months_3"), (6, "months_6")]:
                     if days_in >= months * 30:
-                        await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, ach_id, None)
+                        await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, ach_id, None, interaction=interaction)
         except Exception:
             pass
 

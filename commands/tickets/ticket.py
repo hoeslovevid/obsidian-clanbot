@@ -705,7 +705,7 @@ def setup(bot, group=None):
 
             try:
                 from database import check_and_unlock_achievement
-                await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "ticket_creator", getattr(interaction.client, "bot", interaction.client))
+                await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "ticket_creator", getattr(interaction.client, "bot", interaction.client), interaction=interaction)
             except Exception:
                 pass
 

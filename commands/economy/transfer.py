@@ -54,7 +54,7 @@ async def run_transfer_with_modal(interaction: discord.Interaction, user: discor
         if success:
             try:
                 from database import check_and_unlock_achievement, get_user_balance
-                await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "first_transfer", getattr(interaction.client, "bot", interaction.client))
+                await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "first_transfer", getattr(interaction.client, "bot", interaction.client), interaction=interaction)
                 # Check first_million for receiver
                 recv_bal = await get_user_balance(interaction.guild.id, user.id)
                 if recv_bal >= 1_000_000:

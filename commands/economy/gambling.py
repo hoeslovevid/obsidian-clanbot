@@ -61,12 +61,12 @@ async def _play_slots(
             await add_coins(interaction.guild.id, interaction.user.id, winnings, "GAMBLING", f"Slots winnings (bet {bet})")
             try:
                 from database import check_and_unlock_achievement, get_user_balance
-                await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "gambling_first_win", None)
+                await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "gambling_first_win", None, interaction=interaction)
                 if winnings >= 1000:
-                    await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "gambling_jackpot", None)
+                    await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "gambling_jackpot", None, interaction=interaction)
                 nb_check = await get_user_balance(interaction.guild.id, interaction.user.id)
                 if nb_check >= 1_000_000:
-                    await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "first_million", None)
+                    await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "first_million", None, interaction=interaction)
             except Exception:
                 pass
             profit = winnings - bet
@@ -146,7 +146,7 @@ async def _play_dice(
         await add_coins(interaction.guild.id, interaction.user.id, winnings, "GAMBLING", "Dice winnings")
         try:
             from database import check_and_unlock_achievement
-            await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "gambling_first_win", None)
+            await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "gambling_first_win", None, interaction=interaction)
         except Exception:
             pass
         result = f"**🎉 You won!**\n**Your roll:** {user_roll}\n**Bot roll:** {bot_roll}\n**Winnings:** {winnings:,} coins"
@@ -246,7 +246,7 @@ async def _play_roulette(
         await add_coins(interaction.guild.id, interaction.user.id, winnings, "GAMBLING", "Roulette winnings")
         try:
             from database import check_and_unlock_achievement
-            await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "gambling_first_win", None)
+            await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "gambling_first_win", None, interaction=interaction)
         except Exception:
             pass
         result = f"**🎉 You won!**\n**Landed on:** {landed_color.capitalize()} ({number})\n**Winnings:** {winnings:,} coins"

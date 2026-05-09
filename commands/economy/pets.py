@@ -304,9 +304,9 @@ class PetBattleChallengeView(discord.ui.View):
             try:
                 from database import check_and_unlock_achievement
                 if winner_wins == 1:
-                    await check_and_unlock_achievement(self.guild_id, winner_uid, "pet_battle_win", interaction.client)
+                    await check_and_unlock_achievement(self.guild_id, winner_uid, "pet_battle_win", interaction.client, interaction=interaction)
                 elif winner_wins >= 5:
-                    await check_and_unlock_achievement(self.guild_id, winner_uid, "pet_battle_5", interaction.client)
+                    await check_and_unlock_achievement(self.guild_id, winner_uid, "pet_battle_5", interaction.client, interaction=interaction)
             except Exception:
                 pass
 
@@ -526,7 +526,7 @@ def setup(bot, group=None):
             await db.commit()
             try:
                 from database import check_and_unlock_achievement
-                await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "pet_first", getattr(interaction.client, "bot", interaction.client))
+                await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "pet_first", getattr(interaction.client, "bot", interaction.client), interaction=interaction)
             except Exception:
                 pass
 
@@ -777,7 +777,7 @@ def setup(bot, group=None):
         if new_level >= 25 and level < 25:
             try:
                 from database import check_and_unlock_achievement
-                await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "pet_level_25", interaction.client)
+                await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "pet_level_25", interaction.client, interaction=interaction)
             except Exception:
                 pass
         level_up_text = f"\n🎉 **Level Up!** Your pet is now level {new_level}!" if new_level > level else ""
@@ -863,7 +863,7 @@ def setup(bot, group=None):
         if new_level >= 25 and level < 25:
             try:
                 from database import check_and_unlock_achievement
-                await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "pet_level_25", interaction.client)
+                await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "pet_level_25", interaction.client, interaction=interaction)
             except Exception:
                 pass
         level_up_text = f"\n🎉 **Level Up!** Your pet is now level {new_level}!" if new_level > level else ""
@@ -947,7 +947,7 @@ def setup(bot, group=None):
         if new_level >= 25 and level < 25:
             try:
                 from database import check_and_unlock_achievement
-                await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "pet_level_25", interaction.client)
+                await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "pet_level_25", interaction.client, interaction=interaction)
             except Exception:
                 pass
         level_up_text = f"\n🎉 **Level Up!** Your pet is now level {new_level}!" if new_level > level else ""
@@ -1094,7 +1094,7 @@ def setup(bot, group=None):
             await db.commit()
             try:
                 from database import check_and_unlock_achievement
-                await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "pet_evolved", interaction.client)
+                await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "pet_evolved", interaction.client, interaction=interaction)
             except Exception:
                 pass
         await interaction.followup.send(

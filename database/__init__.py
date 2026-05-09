@@ -1078,8 +1078,19 @@ async def check_and_record_milestone(guild_id: int, user_id: int, milestone_type
 
 
 # --------------------- Achievement Functions ---------------------
-async def check_and_unlock_achievement(guild_id: int, user_id: int, achievement_id: str, bot: Optional[Any] = None) -> bool:
-    """Check if achievement should be unlocked and unlock it. Returns True if achievement was newly unlocked."""
+async def check_and_unlock_achievement(
+    guild_id: int,
+    user_id: int,
+    achievement_id: str,
+    bot: Optional[Any] = None,
+    interaction: Optional[Any] = None,
+) -> bool:
+    """Check if achievement should be unlocked and unlock it.
+
+    Returns True if the achievement was newly unlocked.
+    When *interaction* is provided and the achievement is newly unlocked, an
+    ephemeral embed is sent to the user via interaction.followup.send().
+    """
     async with aiosqlite.connect(DB_PATH) as db:
         # Check if already unlocked
         cur = await db.execute("""
@@ -1088,17 +1099,19 @@ async def check_and_unlock_achievement(guild_id: int, user_id: int, achievement_
         """, (guild_id, user_id, achievement_id))
         if await cur.fetchone():
             return False  # Already unlocked
-        
-        # Get achievement definition
+
+        # Fetch full achievement definition (name, description, rewards)
         cur = await db.execute("""
-            SELECT reward_coins, reward_xp FROM achievement_definitions
+            SELECT name, description, reward_coins, reward_xp FROM achievement_definitions
             WHERE achievement_id=?
         """, (achievement_id,))
         row = await cur.fetchone()
-        
-        reward_coins = row[0] if row else 0
-        reward_xp = row[1] if row else 0
-        
+
+        ach_name        = row[0] if row else achievement_id.replace("_", " ").title()
+        ach_description = row[1] if row else ""
+        reward_coins    = row[2] if row else 0
+        reward_xp       = row[3] if row else 0
+
         # Unlock achievement
         await db.execute("""
             INSERT INTO achievements (guild_id, user_id, achievement_id, unlocked_at)
@@ -1120,7 +1133,34 @@ async def check_and_unlock_achievement(guild_id: int, user_id: int, achievement_
             await add_coins(guild_id, user_id, reward_coins, "ACHIEVEMENT", f"Achievement: {achievement_id}")
         if reward_xp > 0:
             await add_xp(guild_id, user_id, reward_xp, f"ACHIEVEMENT_{achievement_id}")
-        
+
+        # Ephemeral notification via interaction followup (when available)
+        if interaction is not None:
+            try:
+                from core.utils import obsidian_embed
+                reward_parts = []
+                if reward_coins > 0:
+                    reward_parts.append(f"💰 **{reward_coins:,}** coins")
+                if reward_xp > 0:
+                    reward_parts.append(f"⭐ **{reward_xp:,}** XP")
+                reward_line = "  ·  ".join(reward_parts) if reward_parts else None
+
+                fields = []
+                if reward_line:
+                    fields.append(("🎁 Rewards", reward_line, False))
+
+                embed = obsidian_embed(
+                    "🏆 Achievement Unlocked!",
+                    f"> **{ach_name}**\n{ach_description}",
+                    category="prestige",
+                    fields=fields if fields else None,
+                    footer="Use /general achievements to view all your achievements",
+                    client=getattr(interaction, "client", None),
+                )
+                await interaction.followup.send(embed=embed, ephemeral=True)
+            except Exception:
+                pass  # Never block the main flow for a notification
+
         return True  # Newly unlocked
 
 
