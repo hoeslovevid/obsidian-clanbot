@@ -9,9 +9,88 @@ from database import DB_PATH, remove_coins, add_coins
 import aiosqlite  # type: ignore
 
 
+EARLY_WITHDRAWAL_PENALTY = 0.15  # 15% penalty on principal
+
+
 def now_utc() -> datetime:
     """Get current UTC datetime."""
     return datetime.now(timezone.utc)
+
+
+class EarlyWithdrawConfirmView(discord.ui.View):
+    """Confirmation flow for early investment withdrawal."""
+
+    def __init__(self, investment_id: int, amount: int, payout: int, penalty: int):
+        super().__init__(timeout=60)
+        self.investment_id = investment_id
+        self.amount = amount
+        self.payout = payout
+        self.penalty = penalty
+
+    @discord.ui.button(label="✅ Confirm Withdrawal", style=discord.ButtonStyle.danger)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+        # Mark as collected
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT id FROM investments WHERE id=? AND collected=0",
+                (self.investment_id,),
+            )
+            if not await cur.fetchone():
+                return await interaction.followup.send(
+                    embed=obsidian_embed(
+                        "❌ Already Collected",
+                        "This investment has already been collected or withdrawn.",
+                        category="error",
+                        client=interaction.client,
+                    ),
+                    ephemeral=True,
+                )
+            await db.execute("UPDATE investments SET collected=1 WHERE id=?", (self.investment_id,))
+            await db.commit()
+
+        if not interaction.guild:
+            return
+        await add_coins(
+            interaction.guild.id,
+            interaction.user.id,
+            self.payout,
+            "INVESTMENT_WITHDRAW",
+            f"Early withdrawal: {self.amount:,} principal − {self.penalty:,} penalty",
+        )
+        for item in self.children:
+            item.disabled = True  # type: ignore[attr-defined]
+        embed = obsidian_embed(
+            "💸 Investment Withdrawn Early",
+            f"> You received **{self.payout:,}** coins back.\n"
+            f"-# {self.penalty:,} coins lost to the early withdrawal penalty.",
+            category="economy",
+            fields=[
+                ("💰 Principal", f"{self.amount:,} coins", True),
+                ("🔻 Penalty (15%)", f"−{self.penalty:,} coins", True),
+                ("✅ Returned", f"{self.payout:,} coins", True),
+            ],
+            client=interaction.client,
+        )
+        await interaction.edit_original_response(embed=embed, view=self)
+
+    @discord.ui.button(label="✖ Cancel", style=discord.ButtonStyle.secondary)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        for item in self.children:
+            item.disabled = True  # type: ignore[attr-defined]
+        await interaction.response.edit_message(
+            embed=obsidian_embed(
+                "↩️ Withdrawal Cancelled",
+                "Your investment remains active.",
+                category="economy",
+                client=interaction.client,
+            ),
+            view=self,
+        )
+
+    async def on_timeout(self) -> None:
+        for item in self.children:
+            item.disabled = True  # type: ignore[attr-defined]
 
 
 def setup(bot, group=None):
@@ -338,3 +417,85 @@ def setup(bot, group=None):
             client=interaction.client,
         )
         await interaction.followup.send(embed=embed, ephemeral=True)
+
+    withdraw_decorator = (
+        group.command(name="invest_withdraw", description="Withdraw your investment early (15% penalty on principal).")
+        if group
+        else bot.tree.command(name="invest_withdraw", description="Withdraw your investment early (15% penalty on principal).")
+    )
+
+    @withdraw_decorator
+    async def invest_withdraw(interaction: discord.Interaction):
+        """Withdraw an active investment early with a 15% penalty."""
+        if not ECONOMY_ENABLED:
+            return await interaction.response.send_message(
+                embed=feature_off_embed("Economy", "Ask a moderator to enable it in the bot config.", client=interaction.client),
+                ephemeral=True,
+            )
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Invalid Context",
+                    "This command can only be used in a server.",
+                    category="error",
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+
+        await interaction.response.defer(ephemeral=True)
+
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute("""
+                SELECT id, amount, interest_rate, maturity_date
+                FROM investments
+                WHERE guild_id=? AND user_id=? AND collected=0
+                ORDER BY invested_at DESC
+                LIMIT 1
+            """, (interaction.guild.id, interaction.user.id))
+            row = await cur.fetchone()
+
+        if not row:
+            return await interaction.followup.send(
+                embed=obsidian_embed(
+                    "❌ No Active Investment",
+                    "You don't have an active investment to withdraw.",
+                    category="error",
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+
+        investment_id, amount, interest_rate, maturity_date_str = row
+        maturity_date = datetime.fromisoformat(maturity_date_str.replace("Z", "+00:00"))
+
+        if now_utc() >= maturity_date:
+            return await interaction.followup.send(
+                embed=obsidian_embed(
+                    "✅ Investment Already Matured",
+                    f"Your investment has matured — use `/invest_collect` to collect **{int(amount * (1 + interest_rate)):,}** coins (no penalty).",
+                    category="economy",
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+
+        penalty = int(amount * EARLY_WITHDRAWAL_PENALTY)
+        payout  = amount - penalty
+
+        embed = obsidian_embed(
+            "⚠️ Early Withdrawal — Confirm",
+            f"> Withdrawing now forfeits **{penalty:,} coins** (15% of your {amount:,} principal).\n"
+            f"> You will receive **{payout:,} coins** back.\n\n"
+            f"The investment matures <t:{int(maturity_date.timestamp())}:R> — waiting means no penalty.\n"
+            f"-# This action cannot be undone.",
+            category="warning",
+            fields=[
+                ("💰 Principal", f"{amount:,} coins", True),
+                ("🔻 Penalty (15%)", f"−{penalty:,} coins", True),
+                ("✅ You'd Receive", f"{payout:,} coins", True),
+            ],
+            client=interaction.client,
+        )
+        view = EarlyWithdrawConfirmView(investment_id, amount, payout, penalty)
+        await interaction.followup.send(embed=embed, view=view, ephemeral=True)

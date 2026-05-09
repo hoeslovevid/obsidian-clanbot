@@ -1,7 +1,7 @@
 """Gambling games commands."""
 import discord
 from discord import app_commands
-from typing import Optional
+from typing import Optional, Dict, Tuple
 import random
 
 from core.utils import obsidian_embed, is_mod
@@ -10,6 +10,18 @@ import aiosqlite
 
 
 MIN_SLOTS_BET, MAX_SLOTS_BET = 10, 5_000
+_DEFAULT_BET = 50
+
+# In-memory last-bet store: (guild_id, user_id, game) -> bet amount
+_last_bets: Dict[Tuple[int, int, str], int] = {}
+
+
+def _remember_bet(guild_id: int, user_id: int, game: str, bet: int) -> None:
+    _last_bets[(guild_id, user_id, game)] = bet
+
+
+def _recall_bet(guild_id: int, user_id: int, game: str, default: int) -> int:
+    return _last_bets.get((guild_id, user_id, game), default)
 
 
 async def _play_slots(
@@ -45,6 +57,7 @@ async def _play_slots(
             return
 
         low_balance_warning = (balance - bet) < 100
+        _remember_bet(interaction.guild.id, interaction.user.id, "slots", bet)
         await remove_coins(interaction.guild.id, interaction.user.id, bet, "GAMBLING", f"Slots spin (bet {bet})")
 
         symbols = ["🍒", "🍋", "🍊", "🍇", "🔔", "⭐", "💎", "7️⃣"]
@@ -137,6 +150,7 @@ async def _play_dice(
             return
 
         low_balance_warning = (balance - bet) < 100
+        _remember_bet(interaction.guild.id, interaction.user.id, "dice", bet)
         await remove_coins(interaction.guild.id, interaction.user.id, bet, "GAMBLING", "Dice roll")
         user_roll = random.randint(1, 6)
         bot_roll = random.randint(1, 6)
@@ -228,6 +242,7 @@ async def _play_roulette(
             return
 
         low_balance_warning = (balance - bet) < 100
+        _remember_bet(interaction.guild.id, interaction.user.id, "roulette", bet)
         await remove_coins(interaction.guild.id, interaction.user.id, bet, "GAMBLING", "Roulette bet")
 
     number = random.randint(0, 36)
@@ -354,11 +369,11 @@ class PlayAgainRouletteView(discord.ui.View):
 def setup(bot, group=None):
     """Register gambling commands."""
 
-    command_decorator = group.command(name="slots", description="Play slots! Bet 10–5,000 coins (default 50).") if group else bot.tree.command(name="slots", description="Play slots! Bet 10–5,000 coins (default 50).")
+    command_decorator = group.command(name="slots", description="Play slots! Bet 10–5,000 coins.") if group else bot.tree.command(name="slots", description="Play slots! Bet 10–5,000 coins.")
 
     @command_decorator
-    @app_commands.describe(bet="Coins to bet (10–5,000, default 50)")
-    async def slots(interaction: discord.Interaction, bet: int = 50):
+    @app_commands.describe(bet="Coins to bet (10–5,000). Defaults to your last bet if omitted.")
+    async def slots(interaction: discord.Interaction, bet: Optional[int] = None):
         """Play a slot machine game."""
         if not interaction.guild:
             return await interaction.response.send_message(
@@ -368,9 +383,10 @@ def setup(bot, group=None):
                     color=discord.Color.red(),
                     client=interaction.client,
                 ),
-                ephemeral=True
+                ephemeral=True,
             )
-        if not (MIN_SLOTS_BET <= bet <= MAX_SLOTS_BET):
+        resolved_bet = bet if bet is not None else _recall_bet(interaction.guild.id, interaction.user.id, "slots", _DEFAULT_BET)
+        if not (MIN_SLOTS_BET <= resolved_bet <= MAX_SLOTS_BET):
             return await interaction.response.send_message(
                 embed=obsidian_embed(
                     "❌ Invalid Bet",
@@ -381,13 +397,13 @@ def setup(bot, group=None):
                 ephemeral=True,
             )
         await interaction.response.defer()
-        await _play_slots(interaction, bet)
+        await _play_slots(interaction, resolved_bet)
 
     command_decorator = group.command(name="dice", description="Roll dice! Bet coins and try to roll higher than the bot.") if group else bot.tree.command(name="dice", description="Roll dice! Bet coins and try to roll higher than the bot.")
 
     @command_decorator
-    @app_commands.describe(bet="Amount of coins to bet")
-    async def dice(interaction: discord.Interaction, bet: int):
+    @app_commands.describe(bet="Amount of coins to bet. Defaults to your last bet if omitted.")
+    async def dice(interaction: discord.Interaction, bet: Optional[int] = None):
         """Play dice game."""
         if not interaction.guild:
             return await interaction.response.send_message(
@@ -397,9 +413,10 @@ def setup(bot, group=None):
                     color=discord.Color.red(),
                     client=interaction.client,
                 ),
-                ephemeral=True
+                ephemeral=True,
             )
-        if bet < 1:
+        resolved_bet = bet if bet is not None else _recall_bet(interaction.guild.id, interaction.user.id, "dice", _DEFAULT_BET)
+        if resolved_bet < 1:
             return await interaction.response.send_message(
                 embed=obsidian_embed(
                     "❌ Invalid Bet",
@@ -407,21 +424,21 @@ def setup(bot, group=None):
                     color=discord.Color.red(),
                     client=interaction.client,
                 ),
-                ephemeral=True
+                ephemeral=True,
             )
         await interaction.response.defer()
-        await _play_dice(interaction, bet)
+        await _play_dice(interaction, resolved_bet)
 
     command_decorator = group.command(name="roulette", description="Play roulette! Bet on red, black, or green.") if group else bot.tree.command(name="roulette", description="Play roulette! Bet on red, black, or green.")
 
     @command_decorator
-    @app_commands.describe(bet="Amount of coins to bet", color="Color to bet on (red/black/green)")
+    @app_commands.describe(bet="Amount of coins to bet. Defaults to your last bet if omitted.", color="Color to bet on (red/black/green)")
     @app_commands.choices(color=[
         app_commands.Choice(name="Red", value="red"),
         app_commands.Choice(name="Black", value="black"),
         app_commands.Choice(name="Green", value="green"),
     ])
-    async def roulette(interaction: discord.Interaction, bet: int, color: str):
+    async def roulette(interaction: discord.Interaction, color: str, bet: Optional[int] = None):
         """Play roulette game."""
         if not interaction.guild:
             return await interaction.response.send_message(
@@ -431,9 +448,10 @@ def setup(bot, group=None):
                     color=discord.Color.red(),
                     client=interaction.client,
                 ),
-                ephemeral=True
+                ephemeral=True,
             )
-        if bet < 1:
+        resolved_bet = bet if bet is not None else _recall_bet(interaction.guild.id, interaction.user.id, "roulette", _DEFAULT_BET)
+        if resolved_bet < 1:
             return await interaction.response.send_message(
                 embed=obsidian_embed(
                     "❌ Invalid Bet",
@@ -441,7 +459,7 @@ def setup(bot, group=None):
                     color=discord.Color.red(),
                     client=interaction.client,
                 ),
-                ephemeral=True
+                ephemeral=True,
             )
         await interaction.response.defer()
-        await _play_roulette(interaction, bet, color)
+        await _play_roulette(interaction, resolved_bet, color)
