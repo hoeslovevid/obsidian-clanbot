@@ -16,12 +16,21 @@ from database import init_db
 logger = logging.getLogger(__name__)
 
 
+def _update_status_presence(bot: discord.Client) -> discord.Activity:
+    """Build a presence Activity reflecting guild count."""
+    guild_count = len(bot.guilds)
+    return discord.Activity(
+        type=discord.ActivityType.playing,
+        name=f"/help \u2022 {guild_count} server{'s' if guild_count != 1 else ''}",
+    )
+
+
 async def run_startup(bot: discord.Client) -> None:
     """Execute all bot startup tasks. Called from on_ready."""
     bu = bot.user
     print(f"[ready] Logged in as {bu} ({bu.id if bu else '?'})")
 
-    activity = _update_status_presence()
+    activity = _update_status_presence(bot)
     await bot.change_presence(activity=activity, status=discord.Status.online)
     print(f"[ready] Status set: Watching {activity.name}")
 
