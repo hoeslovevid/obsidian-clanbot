@@ -130,27 +130,27 @@ class SuggestionView(discord.ui.View):
                 import logging
                 logging.getLogger(__name__).error(f"Error updating suggestion message: {e}")
         
-        # Try to DM the user who submitted the suggestion
+        # DM the user who submitted the suggestion
         try:
             user = interaction.guild.get_member(user_id)
             if user:
                 status_messages = {
-                    "APPROVED": "Your suggestion has been **approved** by the moderators!",
-                    "REJECTED": "Your suggestion has been **rejected** by the moderators.",
-                    "IMPLEMENTED": "Your suggestion has been **implemented**! Thank you for your contribution!",
-                    "UNDER_REVIEW": "Your suggestion is now **under review** by the team.",
-                    "PLANNED": "Your suggestion has been added to the **planned** list!"
+                    "APPROVED":     ("✅ Your suggestion was **approved**! It may be implemented soon.", discord.Color.green()),
+                    "REJECTED":     ("❌ Your suggestion was **rejected** by the moderators.", discord.Color.red()),
+                    "IMPLEMENTED":  ("🎉 Your suggestion has been **implemented**! Thank you for your contribution!", discord.Color.blue()),
+                    "UNDER_REVIEW": ("📋 Your suggestion is now **under review** by the team.", discord.Color.blurple()),
+                    "PLANNED":      ("📌 Your suggestion has been added to the **planned** list!", discord.Color.gold()),
                 }
-                
-                message_text = status_messages.get(status, f"Your suggestion status has been updated to: {status}")
-                
+                msg_text, dm_color = status_messages.get(status, (f"Your suggestion status changed to **{status}**.", discord.Color.greyple()))
+                server_name = interaction.guild.name
+
                 embed = obsidian_embed(
-                    f"💡 Suggestion Update #{self.suggestion_id}",
-                    f"{message_text}\n\n**Your Suggestion:**\n{suggestion_text[:500]}{'...' if len(suggestion_text) > 500 else ''}",
-                    color=discord.Color.blue() if status == "APPROVED" else discord.Color.orange() if status == "REJECTED" else discord.Color.green(),
+                    f"💡 Suggestion #{self.suggestion_id} Update",
+                    f"{msg_text}\n\n**Server:** {server_name}\n\n"
+                    f"**Your Suggestion:**\n{suggestion_text[:500]}{'…' if len(suggestion_text) > 500 else ''}",
+                    color=dm_color,
                     client=interaction.client,
                 )
-                
                 await user.send(embed=embed)
         except discord.Forbidden:
             pass

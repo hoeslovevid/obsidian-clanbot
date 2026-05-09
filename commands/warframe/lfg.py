@@ -48,7 +48,7 @@ class LFGView(discord.ui.View):
                     item.custom_id = f"lfg:{lfg_id}:join"
                 elif item.label == "Leave":
                     item.custom_id = f"lfg:{lfg_id}:leave"
-                elif item.label == "Complete":
+                elif item.label == "Mark as Filled":
                     item.custom_id = f"lfg:{lfg_id}:complete"
     
     @discord.ui.button(label="Join", style=discord.ButtonStyle.success, emoji="✅")
@@ -61,66 +61,49 @@ class LFGView(discord.ui.View):
         """Leave the LFG group."""
         await self._handle_rsvp(interaction, "LEAVE")
     
-    @discord.ui.button(label="Complete", style=discord.ButtonStyle.primary, emoji="✅")
-    async def complete(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Mark the mission as complete (creator only)."""
+    @discord.ui.button(label="Mark as Filled", style=discord.ButtonStyle.primary, emoji="✅")
+    async def mark_filled(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Mark the group as filled (creator only) — keeps post visible with [FILLED] label."""
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute(
                 "SELECT creator_id, status FROM lfg_posts WHERE id=?",
                 (self.lfg_id,)
             )
             post = await cur.fetchone()
-            
+
             if not post:
                 return await interaction.response.send_message("LFG post not found.", ephemeral=True)
-            
+
             creator_id, status = post
             if interaction.user.id != creator_id:
-                return await interaction.response.send_message("Only the creator can mark the mission as complete.", ephemeral=True)
-            
+                return await interaction.response.send_message("Only the creator can mark the group as filled.", ephemeral=True)
+
             if status == "COMPLETED":
-                return await interaction.response.send_message("This mission is already marked as complete.", ephemeral=True)
-            
-            # Update status
-            await db.execute(
-                "UPDATE lfg_posts SET status='COMPLETED' WHERE id=?",
-                (self.lfg_id,)
-            )
+                return await interaction.response.send_message("This LFG post is already marked as filled.", ephemeral=True)
+
+            await db.execute("UPDATE lfg_posts SET status='COMPLETED' WHERE id=?", (self.lfg_id,))
             await db.commit()
-        
-        # Delete the message instead of editing it
+
+        # Edit the embed to show [FILLED] and disable Join/Filled buttons
+        await interaction.response.defer(ephemeral=True)
         try:
-            # Defer first so we can delete the message
-            await interaction.response.defer(ephemeral=True)
-            # Delete the LFG message
-            await interaction.message.delete()
-            await interaction.followup.send("Mission marked as complete! The LFG post has been removed.", ephemeral=True)
-        except discord.errors.NotFound:
-            # Message already deleted (maybe by another action)
-            try:
-                await interaction.followup.send("Mission marked as complete!", ephemeral=True)
-            except Exception:
-                pass  # Interaction might be expired
-        except Exception as e:
-            # If deletion fails (e.g., missing permissions), fall back to editing
-            embed = interaction.message.embeds[0]
-            embed.color = discord.Color.light_grey()
-            embed.set_footer(text="✅ Mission Completed")
-            
-            # Disable all buttons
-            for item in self.children:
-                item.disabled = True
-            
-            try:
-                # Try to edit the message
-                await interaction.message.edit(embed=embed, view=self)
-                await interaction.followup.send("Mission marked as complete! (Could not delete message - missing permissions?)", ephemeral=True)
-            except Exception:
-                # If editing also fails, just send confirmation
-                try:
-                    await interaction.followup.send("Mission marked as complete!", ephemeral=True)
-                except Exception:
-                    pass  # Interaction might be expired
+            msg = interaction.message
+            if msg and msg.embeds:
+                embed = msg.embeds[0]
+                embed.color = discord.Color.green()
+                # Prefix title with [FILLED]
+                old_title = embed.title or "Looking for Group"
+                if not old_title.startswith("[FILLED]"):
+                    embed.title = f"[FILLED ✅] {old_title}"
+                embed.set_footer(text="✅ Group filled — post will auto-archive soon")
+                # Disable Join and Mark as Filled buttons; keep Leave
+                for item in self.children:
+                    if isinstance(item, discord.ui.Button) and item.label in ("Join", "Mark as Filled"):
+                        item.disabled = True
+                await msg.edit(embed=embed, view=self)
+        except Exception:
+            pass
+        await interaction.followup.send("Group marked as filled! The post now shows [FILLED ✅].", ephemeral=True)
     
     async def _handle_rsvp(self, interaction: discord.Interaction, response: str):
         """Handle RSVP (join/leave)."""

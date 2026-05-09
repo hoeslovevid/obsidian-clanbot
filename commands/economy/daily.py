@@ -1,9 +1,43 @@
 """Daily reward command."""
 import discord
 from discord import app_commands
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from core.utils import obsidian_embed, feature_off_embed, ECONOMY_ENABLED, COINS_DAILY_REWARD, format_number, pluralize, EMBED_COLORS
+
+
+# Streak multiplier thresholds: (min_streak, multiplier, label)
+_STREAK_TIERS = [
+    (30, 2.0,  "🏆 30-day Legend bonus"),
+    (14, 1.5,  "💎 14-day Diamond bonus"),
+    (7,  1.25, "🔥 7-day Fire bonus"),
+    (1,  1.0,  None),
+]
+
+
+def _streak_multiplier(streak: int) -> tuple[float, str | None]:
+    """Return (multiplier, label) for the given streak."""
+    for min_s, mult, label in _STREAK_TIERS:
+        if streak >= min_s:
+            return mult, label
+    return 1.0, None
+
+
+def _streak_calendar(streak: int) -> str:
+    """
+    Build a compact 7-day calendar ending today.
+    Returns something like: ``M  T  W  T  F  S  S``
+                             ``✅ ✅ ✅ ✅ ✅ ⬜ ⬜``
+    Days within the current streak are ✅, others ⬜.
+    """
+    today = datetime.now(timezone.utc).date()
+    day_initials = ["M", "T", "W", "T", "F", "S", "S"]
+    header = "  ".join(day_initials[(today - timedelta(days=6 - i)).weekday()] for i in range(7))
+    cells = []
+    for i in range(7):
+        delta = 6 - i          # 6 days ago → today
+        cells.append("✅" if delta < streak else "⬜")
+    return f"`{header}`\n" + "  ".join(cells)
 
 
 def setup(bot, group=None):
@@ -96,13 +130,15 @@ async def _run_daily(interaction: discord.Interaction):
             new_streak = 1
             used_freeze = False
 
-        # Award coins
+        # Award coins with streak multiplier
+        streak_mult, streak_label = _streak_multiplier(new_streak)
+        coins_awarded = int(COINS_DAILY_REWARD * streak_mult)
         await add_coins(
             interaction.guild.id,
             interaction.user.id,
-            COINS_DAILY_REWARD,
+            coins_awarded,
             "DAILY",
-            f"Daily reward (streak: {new_streak})",
+            f"Daily reward (streak: {new_streak}, {streak_mult}x)",
         )
 
         # Update or insert claim record (set freeze_used_month when freeze is used)
@@ -145,17 +181,27 @@ async def _run_daily(interaction: discord.Interaction):
         except Exception:
             pass
 
-    # Success message with streak visualization and next claim time
+    # Success message with streak calendar and next claim time
+    streak_mult, streak_label = _streak_multiplier(new_streak)
+    coins_awarded = int(COINS_DAILY_REWARD * streak_mult)
     streak_fire = "🔥" * min(new_streak, 10) + (f" +{new_streak - 10}" if new_streak > 10 else "")
-    tomorrow = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-    from datetime import timedelta
-    tomorrow = tomorrow + timedelta(days=1)
+    tomorrow = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
     next_ts = int(tomorrow.timestamp())
-    next_line = f"Next daily: <t:{next_ts}:R>"
+    next_line = f"<t:{next_ts}:R>"
+
+    # Reward field: base + bonus breakdown
+    reward_text = f"**{format_number(coins_awarded)}** {pluralize(coins_awarded, 'coin')}"
+    if streak_mult > 1.0:
+        base_str = format_number(COINS_DAILY_REWARD)
+        bonus_str = format_number(coins_awarded - COINS_DAILY_REWARD)
+        reward_text += f"\n_{base_str} base + {bonus_str} streak bonus ({streak_label})_"
+
+    calendar = _streak_calendar(new_streak)
+    streak_text = f"{streak_fire}\n**{new_streak}** {pluralize(new_streak, 'day')}\n{calendar}"
 
     fields = [
-        ("💰 Reward", f"**{format_number(COINS_DAILY_REWARD)}** {pluralize(COINS_DAILY_REWARD, 'coin')}", True),
-        ("🔥 Streak", f"{streak_fire}\n{new_streak} {pluralize(new_streak, 'day')}", True),
+        ("💰 Reward", reward_text, True),
+        ("🔥 Streak", streak_text, True),
         ("⏰ Next Claim", next_line, True),
     ]
     if used_freeze:
@@ -172,13 +218,13 @@ async def _run_daily(interaction: discord.Interaction):
 
     embed = obsidian_embed(
         title,
-        f"**You received {format_number(COINS_DAILY_REWARD)} {pluralize(COINS_DAILY_REWARD, 'coin')}.** "
+        f"**You received {format_number(coins_awarded)} {pluralize(coins_awarded, 'coin')}.** "
         "Come back after reset for the next one!"
         + ("\n\n_Used your monthly streak freeze._" if used_freeze else ""),
         color=color,
         fields=fields,
         thumbnail=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
-        footer="What's next? /economy shop or /economy gamble • Streak resets if you miss a day",
+        footer="Streak bonuses: 7d=1.25× · 14d=1.5× · 30d=2× • Resets if you miss a day",
         client=interaction.client,
     )
     await interaction.followup.send(embed=embed, ephemeral=True)

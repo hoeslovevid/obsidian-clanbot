@@ -1612,13 +1612,24 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
     # Friendlier rate limit (cooldown) messages
     if error_type_name == "CommandOnCooldown":
         retry_after = getattr(error, "retry_after", None) or 0
-        if retry_after >= 60:
-            msg = f"You can use this again in **{int(retry_after // 60)} minute(s)**."
+        # Format the wait time clearly: hours / minutes / seconds
+        if retry_after >= 3600:
+            h = int(retry_after // 3600)
+            m = int((retry_after % 3600) // 60)
+            wait_str = f"**{h}h {m}m**" if m else f"**{h}h**"
+        elif retry_after >= 60:
+            m = int(retry_after // 60)
+            s = int(retry_after % 60)
+            wait_str = f"**{m}m {s}s**" if s else f"**{m}m**"
         elif retry_after >= 1:
-            msg = f"You can use this again in **{int(retry_after)} second(s)**."
+            wait_str = f"**{int(retry_after)}s**"
         else:
-            msg = "Please wait a moment before trying again."
-        await _send_error_reply(interaction, msg, action_hint="Use /help to explore other commands.")
+            wait_str = "**a moment**"
+        # Include the command name if available
+        cmd_name = getattr(interaction.command, "qualified_name", None)
+        cmd_str = f"`/{cmd_name}` " if cmd_name else "This command "
+        msg = f"⏳ Slow down! {cmd_str}can be used again in {wait_str}."
+        await _send_error_reply(interaction, msg, action_hint="Use /help to explore other commands while you wait.")
         return
 
     if error_type_name in ("CheckFailure", "MissingRole", "MissingAnyRole"):

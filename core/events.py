@@ -50,8 +50,15 @@ def setup_events(bot, config):
                 await update_last_message_time(message.guild.id, message.author.id, now_utc().isoformat())
             
             if config.get("XP_ENABLED", True):
-                # Award XP
+                # Award XP (apply server-wide event multiplier if active)
                 xp = config.get("XP_PER_MESSAGE", 1)
+                try:
+                    from commands.economy.xp_settings import get_active_xp_event
+                    event_mult, _ = await get_active_xp_event(message.guild.id)
+                    if event_mult > 1.0:
+                        xp = max(1, int(xp * event_mult))
+                except Exception:
+                    pass
                 await add_xp(message.guild.id, message.author.id, xp)
         
         # Auto-moderation

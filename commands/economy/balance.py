@@ -92,12 +92,43 @@ def setup(bot, group=None):
             hp = _apply_decay(happiness or 100, last_played_at, created_at, HAPPINESS_DECAY_PER_HOUR)
             fields.insert(1, ("🐾 Pet", f"{pet_name or pet_type}: Hunger {h}%, Happiness {hp}%", True))
 
+        # Active investment summary
+        inv_field = None
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur_inv = await db.execute(
+                "SELECT amount, interest_rate, maturity_date FROM investments WHERE guild_id=? AND user_id=? AND collected=0 ORDER BY invested_at DESC LIMIT 1",
+                (interaction.guild.id, interaction.user.id),
+            )
+            inv_row = await cur_inv.fetchone()
+        if inv_row:
+            from datetime import datetime, timezone as _tz
+            inv_amt, inv_rate, inv_maturity_str = inv_row
+            inv_return = int(inv_amt * (1 + inv_rate))
+            try:
+                inv_mat = datetime.fromisoformat(inv_maturity_str.replace("Z", "+00:00"))
+                mat_ts = int(inv_mat.timestamp())
+                now_dt = datetime.now(_tz.utc)
+                if now_dt >= inv_mat:
+                    inv_status = "✅ **Ready to collect!** Use `/economy invest_collect`"
+                else:
+                    inv_status = f"⏳ Matures <t:{mat_ts}:R>"
+            except Exception:
+                inv_status = "⏳ Maturing…"
+            inv_field = (
+                "📈 Active Investment",
+                f"**{format_number(inv_amt)}** → **{format_number(inv_return)}** (+{int(inv_rate*100)}%)\n{inv_status}",
+                True,
+            )
+
         if recent_tx:
             tx_lines = []
             for amt, txn_type, desc, created in recent_tx:
                 sign = "+" if amt > 0 else ""
                 tx_lines.append(f"{sign}{format_number(amt)} — {desc[:30]}{'…' if desc and len(desc) > 30 else ''}")
             fields.append(("📜 Recent", "\n".join(tx_lines), True))
+
+        if inv_field:
+            fields.append(inv_field)
 
         footer = "Use /daily or /leaderboard • Right-click user → Transfer Coins"
         if is_new:

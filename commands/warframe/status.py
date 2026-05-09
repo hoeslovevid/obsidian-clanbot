@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import dateparser
 
 from core.utils import obsidian_embed, warframe_data_unavailable_embed, BUTTON_ONLY_RUNNER_MSG
-from api.warframe_api import get_baro_status, fetch_alerts, get_all_cycles, fetch_fissures, fetch_sortie
+from api.warframe_api import get_baro_status, fetch_alerts, get_all_cycles, fetch_fissures, fetch_sortie, fetch_invasions
 from commands.warframe.alerts import format_alert_rewards
 from views import RetryView, RefreshView
 from core.cache_utils import invalidate
@@ -110,6 +110,35 @@ def _format_fissures_summary(fissures: list) -> str:
     return f"**{count}** fissures ({steel} Steel Path)"
 
 
+def _format_invasions_summary(invasions: list) -> str:
+    """Compact invasions summary — count active and note any with worthwhile rewards."""
+    if not invasions:
+        return "None active"
+    active = [inv for inv in invasions if not inv.get("completed", True)]
+    if not active:
+        return "None active"
+    count = len(active)
+    # Highlight invasions that offer forma, orokin, or catalyst/reactor
+    keywords = ("forma", "orokin", "catalyst", "reactor", "nitain", "kuva")
+    notable = []
+    for inv in active[:5]:
+        desc = (inv.get("desc") or "").lower()
+        atk = (inv.get("attackerReward", {}) or {})
+        def_r = (inv.get("defenderReward", {}) or {})
+        reward_items = []
+        for side in (atk, def_r):
+            for ct in side.get("countedItems", []):
+                reward_items.append((ct.get("type") or ct.get("key") or "").lower())
+        all_text = desc + " ".join(reward_items)
+        if any(k in all_text for k in keywords):
+            node = inv.get("node", "?")
+            notable.append(node)
+    result = f"**{count}** active"
+    if notable:
+        result += f"\n⭐ Notable: {', '.join(notable[:3])}"
+    return result
+
+
 def _format_sortie_summary(sortie_data: dict) -> str:
     """Compact sortie summary."""
     if not sortie_data:
@@ -126,7 +155,7 @@ def _format_sortie_summary(sortie_data: dict) -> str:
         return f"**{len(missions)}** missions"
 
 
-def build_status_embed(baro_active: bool, baro_data: dict, alerts_data: list, cycles_data: dict, fissures_data: list, sortie_data: dict, client) -> discord.Embed:
+def build_status_embed(baro_active: bool, baro_data: dict, alerts_data: list, cycles_data: dict, fissures_data: list, sortie_data: dict, client, invasions_data: list | None = None) -> discord.Embed:
     """Build the combined status embed."""
     now = datetime.now(timezone.utc)
     footer_ts = int(now.timestamp())
@@ -157,6 +186,10 @@ def build_status_embed(baro_active: bool, baro_data: dict, alerts_data: list, cy
     sortie = sortie_data or {}
     fields.append(("🎯 Sortie", _format_sortie_summary(sortie), True))
 
+    # Invasions
+    if invasions_data is not None:
+        fields.append(("⚔️ Invasions", _format_invasions_summary(invasions_data), True))
+
     embed = obsidian_embed(
         "📋 What's Happening Now",
         "Baro, alerts, and open world cycles in one view.",
@@ -181,13 +214,8 @@ def setup(bot, group=None):
         await interaction.response.defer(ephemeral=False)
 
         import asyncio
-        baro_task = get_baro_status()
-        alerts_task = fetch_alerts()
-        cycles_task = get_all_cycles()
-        fissures_task = fetch_fissures()
-        sortie_task = fetch_sortie()
-        baro_result, alerts_data, cycles_data, fissures_data, sortie_data = await asyncio.gather(
-            baro_task, alerts_task, cycles_task, fissures_task, sortie_task,
+        baro_result, alerts_data, cycles_data, fissures_data, sortie_data, invasions_data = await asyncio.gather(
+            get_baro_status(), fetch_alerts(), get_all_cycles(), fetch_fissures(), fetch_sortie(), fetch_invasions(),
         )
         is_active, baro_data = baro_result
 
@@ -199,11 +227,11 @@ def setup(bot, group=None):
                 invalidate("warframe:baro")
                 invalidate("warframe:alerts")
                 invalidate("warframe:cycles")
-                br, ar, cr, fr, sr = await asyncio.gather(
-                    get_baro_status(), fetch_alerts(), get_all_cycles(), fetch_fissures(), fetch_sortie(),
+                br, ar, cr, fr, sr, ir = await asyncio.gather(
+                    get_baro_status(), fetch_alerts(), get_all_cycles(), fetch_fissures(), fetch_sortie(), fetch_invasions(),
                 )
                 ia, bd = br
-                emb = build_status_embed(ia, bd, ar, cr, fr, sr, interaction.client)
+                emb = build_status_embed(ia, bd, ar, cr, fr, sr, interaction.client, ir)
                 await btn_interaction.message.edit(embed=emb, view=None)
             return await interaction.edit_original_response(
                 embed=warframe_data_unavailable_embed(interaction.client),
@@ -212,7 +240,7 @@ def setup(bot, group=None):
 
         embed = build_status_embed(
             is_active, baro_data or {}, alerts_data or [], cycles_data or {},
-            fissures_data or [], sortie_data or {}, interaction.client,
+            fissures_data or [], sortie_data or {}, interaction.client, invasions_data or [],
         )
 
         async def on_refresh(btn_interaction: discord.Interaction):
@@ -222,11 +250,11 @@ def setup(bot, group=None):
             invalidate("warframe:baro")
             invalidate("warframe:alerts")
             invalidate("warframe:cycles")
-            br, ar, cr, fr, sr = await asyncio.gather(
-                get_baro_status(), fetch_alerts(), get_all_cycles(), fetch_fissures(), fetch_sortie(),
+            br, ar, cr, fr, sr, ir = await asyncio.gather(
+                get_baro_status(), fetch_alerts(), get_all_cycles(), fetch_fissures(), fetch_sortie(), fetch_invasions(),
             )
             ia, bd = br
-            new_emb = build_status_embed(ia, bd or {}, ar or [], cr or {}, fr or [], sr or {}, interaction.client)
+            new_emb = build_status_embed(ia, bd or {}, ar or [], cr or {}, fr or [], sr or {}, interaction.client, ir or [])
             view = RefreshView(on_refresh)
             await btn_interaction.message.edit(embed=new_emb, view=view)
 
