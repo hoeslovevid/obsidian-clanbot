@@ -61,13 +61,13 @@ class GracePeriodView(discord.ui.View):
 
         bal = await get_user_balance(interaction.guild.id, interaction.user.id)
         if bal < self.grace_cost:
-        return await interaction.followup.send(
-            embed=obsidian_embed(
-                "❌ Insufficient Coins",
-                f"You need **{self.grace_cost:,}** coins to restore your streak but only have **{bal:,}**.",
-                category="error", client=interaction.client,
-            ), ephemeral=True,
-        )
+            return await interaction.followup.send(
+                embed=obsidian_embed(
+                    "❌ Insufficient Coins",
+                    f"You need **{self.grace_cost:,}** coins to restore your streak but only have **{bal:,}**.",
+                    category="error", client=interaction.client,
+                ), ephemeral=True,
+            )
 
         today = datetime.now(timezone.utc).date().isoformat()
         new_streak = self.streak + 1
