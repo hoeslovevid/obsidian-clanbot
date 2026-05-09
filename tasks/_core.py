@@ -1,6 +1,8 @@
 """
-Background tasks for the bot.
-This module contains all periodic tasks and loops.
+Background tasks for the bot (internal module).
+
+All tasks are defined here as closures inside setup_tasks(bot).
+Import setup_tasks from the tasks package: ``from tasks import setup_tasks``
 """
 import logging
 import os
@@ -280,7 +282,7 @@ def setup_tasks(bot):
     async def recurring_event_loop():
         """Create events from recurring templates when scheduled time matches."""
         try:
-            from bot import ensure_core_channels
+            from channels import ensure_core_channels
             from views import RSVPView
             now = now_utc()
             current_week = now.strftime("%Y-W%V")

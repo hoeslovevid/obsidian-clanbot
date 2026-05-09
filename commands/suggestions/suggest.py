@@ -182,9 +182,8 @@ async def create_suggestion_from_modal(interaction: discord.Interaction, suggest
             client=interaction.client,
         )
         try:
-            from bot import bot as _bot
             vote_view = SuggestionVoteView(suggestion_id)
-            _bot.add_view(vote_view)
+            interaction.client.add_view(vote_view)
             message = await suggestions_channel.send(embed=embed, view=vote_view)
             async with aiosqlite.connect(DB_PATH) as db:
                 await db.execute("UPDATE suggestions SET message_id=? WHERE id=?", (message.id, suggestion_id))
