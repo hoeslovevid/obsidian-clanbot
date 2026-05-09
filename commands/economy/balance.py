@@ -168,8 +168,9 @@ def setup(bot, group=None):
         elif next_daily_ts:
             footer = f"Next daily: <t:{next_daily_ts}:R> • Right-click user → Transfer Coins"
 
+        owner = "Your" if is_self else f"{target.display_name}'s"
         embed = obsidian_embed(
-            f"💰 {'Your' if is_self else target.display_name + \"'s\"} Balance",
+            f"💰 {owner} Balance",
             "",
             color=EMBED_COLORS["economy"],
             author=target,
