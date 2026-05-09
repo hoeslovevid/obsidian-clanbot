@@ -90,20 +90,20 @@ def build_baro_embed(baro_data: dict, is_active: bool, client) -> discord.Embed:
         
         fields = [
             ("📍 Location", location, True),
-            ("⏰ Time Remaining", f"{time_str}\n{expiry_discord}", True),
+            ("⏰ Leaves", f"{time_str}\n{expiry_discord}", True),
             ("📦 Inventory", inventory_list, False),
         ]
-        
+
         if inventory:
-            fields.append(("💰 Total Cost", f"💎 **{format_number(total_ducats)} ducats**\n💰 **{format_number(total_credits)} credits**", True))
-        
+            fields.append(("💰 Total", f"💎 **{format_number(total_ducats)}** ducats  ·  💰 **{format_number(total_credits)}** credits", True))
+
         embed = obsidian_embed(
             "🛒 Baro Ki'Teer",
-            "🟢 **Currently Active**",
-            color=EMBED_COLORS["warframe"],
+            f"> 🟢 **Currently Active** — leaves {expiry_discord}",
+            category="warframe",
             thumbnail="https://vignette.wikia.nocookie.net/warframe/images/4/4a/BaroKiTeer.png/revision/latest?cb=20150213150000",
             fields=fields,
-            footer=f"PC data • Use Refresh • See also: /warframe cycles, /warframe alerts",
+            footer="PC data · Use Refresh · See also: /warframe cycles, /warframe alerts",
             client=client,
         )
     else:
@@ -157,11 +157,11 @@ def build_baro_embed(baro_data: dict, is_active: bool, client) -> discord.Embed:
 
         embed = obsidian_embed(
             "🛒 Baro Ki'Teer",
-            "🔴 **Not Currently Active**\n\nPrepare your ducats for the next visit!" + countdown_line + last_visit_text,
-            color=EMBED_COLORS["warframe"],
+            "> 🔴 **Not Currently Active**\n\nPrepare your ducats for the next visit!" + countdown_line + last_visit_text,
+            category="warframe",
             thumbnail="https://vignette.wikia.nocookie.net/warframe/images/4/4a/BaroKiTeer.png/revision/latest?cb=20150213150000",
             fields=fields,
-            footer=f"PC data • Last updated <t:{int(datetime.now(timezone.utc).timestamp())}:R> • Baro visits every ~2 weeks",
+            footer="PC data · Baro visits every ~2 weeks",
             client=client,
         )
     

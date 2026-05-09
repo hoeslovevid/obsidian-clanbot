@@ -61,13 +61,13 @@ class GracePeriodView(discord.ui.View):
 
         bal = await get_user_balance(interaction.guild.id, interaction.user.id)
         if bal < self.grace_cost:
-            return await interaction.followup.send(
-                embed=obsidian_embed(
-                    "❌ Insufficient Coins",
-                    f"You need **{self.grace_cost:,}** coins to restore your streak but only have **{bal:,}**.",
-                    color=discord.Color.red(), client=interaction.client,
-                ), ephemeral=True,
-            )
+        return await interaction.followup.send(
+            embed=obsidian_embed(
+                "❌ Insufficient Coins",
+                f"You need **{self.grace_cost:,}** coins to restore your streak but only have **{bal:,}**.",
+                category="error", client=interaction.client,
+            ), ephemeral=True,
+        )
 
         today = datetime.now(timezone.utc).date().isoformat()
         new_streak = self.streak + 1
@@ -93,9 +93,9 @@ class GracePeriodView(discord.ui.View):
         await interaction.followup.send(
             embed=obsidian_embed(
                 "🔥 Streak Restored!",
-                f"Paid **{self.grace_cost:,}** coins to restore your streak.\n\n"
-                f"**Streak:** {new_streak} days\n{calendar}",
-                color=discord.Color.orange(),
+                f"> **{new_streak}-day streak** preserved!\n\n"
+                f"{calendar}",
+                category="prestige",
                 fields=[("💰 Daily Reward", reward_text, True)],
                 thumbnail=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
                 footer="Streak restored! Don't miss tomorrow.",
@@ -136,7 +136,7 @@ async def _run_daily(interaction: discord.Interaction, force_reset: bool = False
             embed=obsidian_embed(
                 "❌ Invalid Context",
                 "This command can only be used in a server.",
-                color=discord.Color.red(),
+                category="error",
                 client=interaction.client,
             ),
             ephemeral=True
@@ -177,7 +177,7 @@ async def _run_daily(interaction: discord.Interaction, force_reset: bool = False
                 embed = obsidian_embed(
                     "⏰ Already Claimed",
                     "You've already claimed your daily reward today!",
-                    color=discord.Color.orange(),
+                    category="warning",
                     fields=fields,
                     thumbnail=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
                     footer="Come back tomorrow for your next reward",
@@ -216,16 +216,16 @@ async def _run_daily(interaction: discord.Interaction, force_reset: bool = False
             view = GracePeriodView(streak_days, grace_cost)
             embed = obsidian_embed(
                 "😬 You Missed a Day!",
-                f"Your **{streak_days}-day streak** is at risk!\n\n"
+                f"> Your **{streak_days}-day streak** is at risk!\n\n"
                 f"Pay **{grace_cost:,} coins** to restore it, or start fresh from day 1.",
-                color=discord.Color.orange(),
+                category="warning",
                 fields=[
                     ("🔥 Current Streak", f"{streak_days} days", True),
                     ("💸 Restore Cost", f"{grace_cost:,} coins", True),
                     ("⏰ Next Claim", f"<t:{int(tomorrow_dt.timestamp())}:R>", True),
                 ],
                 thumbnail=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
-                footer="You have 2 minutes to decide • Start Fresh is always free",
+                footer="You have 2 minutes to decide · Start Fresh is always free",
                 client=interaction.client,
             )
             msg = await interaction.followup.send(embed=embed, view=view, ephemeral=True)
@@ -310,23 +310,23 @@ async def _run_daily(interaction: discord.Interaction, force_reset: bool = False
         fields.append(("🛡️ Streak Freeze", "Used 1 monthly freeze to preserve streak", True))
 
     if new_streak >= 100:
-        title, color = "💯 Century Streak!", discord.Color.purple()
+        title, cat = "💯 Century Streak!", "prestige"
     elif new_streak >= 30:
-        title, color = "🌟 30-Day Streak!", discord.Color.gold()
+        title, cat = "🌟 30-Day Streak!", "prestige"
     elif new_streak >= 10:
-        title, color = "🔥 10-Day Streak!", discord.Color.orange()
+        title, cat = "🔥 10-Day Streak!", "warning"
     else:
-        title, color = "🎁 Daily Reward Claimed!", discord.Color.green()
+        title, cat = "🎁 Daily Reward Claimed!", "economy"
 
+    freeze_note = "\n-# Used your monthly streak freeze." if used_freeze else ""
     embed = obsidian_embed(
         title,
-        f"**You received {format_number(coins_awarded)} {pluralize(coins_awarded, 'coin')}.** "
-        "Come back after reset for the next one!"
-        + ("\n\n_Used your monthly streak freeze._" if used_freeze else ""),
-        color=color,
+        f"> **+{format_number(coins_awarded)}** {pluralize(coins_awarded, 'coin')} claimed!\n\n"
+        f"Come back after reset for the next one!{freeze_note}",
+        category=cat,
         fields=fields,
         thumbnail=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
-        footer="Streak bonuses: 7d=1.25× · 14d=1.5× · 30d=2× • Resets if you miss a day",
+        footer="Streak bonuses: 7d=1.25× · 14d=1.5× · 30d=2× · Resets if you miss a day",
         client=interaction.client,
     )
     await interaction.followup.send(embed=embed, ephemeral=True)

@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 import aiosqlite
 
-from core.utils import obsidian_embed, try_dm_then_ephemeral, feature_off_embed, ECONOMY_ENABLED, COINS_PER_MESSAGE, MESSAGE_COOLDOWN_SECONDS, COINS_PER_MINUTE_VOICE, COINS_DAILY_REWARD, EMBED_COLORS, bullet_list, format_number, pluralize
+from core.utils import obsidian_embed, try_dm_then_ephemeral, feature_off_embed, ECONOMY_ENABLED, COINS_PER_MESSAGE, MESSAGE_COOLDOWN_SECONDS, COINS_PER_MINUTE_VOICE, COINS_DAILY_REWARD, EMBED_COLORS, bullet_list, format_number, pluralize, render_bar
 from database import DB_PATH
 
 
@@ -22,7 +22,7 @@ def setup(bot, group=None):
                 embed=obsidian_embed(
                     "❌ Invalid Context",
                     "This command can only be used in a server.",
-                    color=discord.Color.red(),
+                    category="error",
                     client=interaction.client,
                 ),
                 ephemeral=True
@@ -68,12 +68,9 @@ def setup(bot, group=None):
 
         is_new = balance == 0 and total_earned == 0
 
-        # Compact layout with progress bar (visual bar for balance, capped at 100k display)
+        # Visual balance bar capped at 100k for display
         bar_max = 100_000
         pct = min(100, int(100 * balance / bar_max)) if bar_max > 0 else 0
-        bar_len = 10
-        filled = int(bar_len * pct / 100)
-        bar_str = "█" * filled + "░" * (bar_len - filled)
 
         earning_items = [
             f"`/economy daily` – {format_number(COINS_DAILY_REWARD)} coins/day",
@@ -81,8 +78,14 @@ def setup(bot, group=None):
             f"Voice – {COINS_PER_MINUTE_VOICE} coins/minute",
         ]
         fields = [
-            ("💰 Balance", f"**{format_number(balance)}** {pluralize(balance, 'coin')}\n`[{bar_str}]` {pct}%", True),
-            ("📊 Earning Methods", bullet_list(earning_items), False)
+            (
+                "💰 Balance",
+                f"> **{format_number(balance)}** {pluralize(balance, 'coin')}\n"
+                f"{render_bar(pct)}\n"
+                f"-# Total earned: {format_number(total_earned)} coins",
+                True,
+            ),
+            ("📊 Earning Methods", bullet_list(earning_items), False),
         ]
 
         if pet_row:

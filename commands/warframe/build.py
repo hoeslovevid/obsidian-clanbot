@@ -91,10 +91,10 @@ def setup(bot, group=None):
         embed = obsidian_embed(
             f"🔧 Build: {search}",
             "",
-            color=discord.Color.blue(),
+            category="warframe",
             fields=fields,
             thumbnail=interaction.guild.icon.url if interaction.guild and interaction.guild.icon else None,
-            footer=f"Category: {category_val} • Community builds may vary",
+            footer=f"Category: {category_val} · Community builds may vary",
             client=interaction.client,
         )
         await interaction.response.send_message(embed=embed)

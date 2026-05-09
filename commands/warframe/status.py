@@ -192,8 +192,8 @@ def build_status_embed(baro_active: bool, baro_data: dict, alerts_data: list, cy
 
     embed = obsidian_embed(
         "📋 What's Happening Now",
-        "Baro, alerts, and open world cycles in one view.",
-        color=discord.Color.blue(),
+        "> Baro · Alerts · Cycles · Fissures · Sortie",
+        category="warframe",
         fields=fields,
         footer=footer,
         client=client,

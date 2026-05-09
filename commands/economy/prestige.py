@@ -122,13 +122,13 @@ def setup(bot, group=None):
         # Send confirmation
         embed = obsidian_embed(
             "⭐ Prestige Complete!",
-            f"Congratulations! You have reached **Prestige {result['prestige_level']}**!\n\n"
+            f"> 🎖️ **Prestige {result['prestige_level']}** achieved!\n\n"
             f"**Rewards:**\n"
             f"• {result['coin_reward']:,} coins\n"
             f"• {result['xp_bonus']:,} bonus XP\n\n"
             f"Your level has been reset to 0, but you keep your total XP progress!\n"
             f"**Total Prestige XP:** {prestige_info['total_prestige_xp'] + result['xp_bonus']:,}",
-            color=discord.Color.gold(),
+            category="prestige",
             client=interaction.client,
         )
         
@@ -163,13 +163,10 @@ def setup(bot, group=None):
         
         embed = obsidian_embed(
             f"⭐ {target_user.display_name}'s Prestige",
-            f"**Prestige Level:** {prestige_info['prestige_level']}\n"
-            f"**Total Prestige XP:** {prestige_info['total_prestige_xp']:,}\n"
-            f"**Current Level:** {level}\n"
-            f"**Current XP:** {xp:,}\n"
-            f"**Total XP:** {total_xp:,}\n\n"
-            f"*Prestige to reset your level and gain special rewards!*",
-            color=discord.Color.gold(),
+            f"> 🎖️ **Prestige {prestige_info['prestige_level']}** · {prestige_info['total_prestige_xp']:,} total prestige XP\n\n"
+            f"**Current Level:** {level}  ·  **Current XP:** {xp:,}  ·  **Total XP:** {total_xp:,}\n\n"
+            f"-# Prestige to reset your level and earn special rewards!",
+            category="prestige",
             author=target_user,
             client=interaction.client,
         )

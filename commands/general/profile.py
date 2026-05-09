@@ -178,7 +178,7 @@ def setup(bot, group=None):
                 embed=obsidian_embed(
                     "❌ Invalid Context",
                     "Profiles with server stats can only be viewed in a server.",
-                    color=discord.Color.red(),
+                    category="error",
                     client=interaction.client,
                 ),
                 ephemeral=True,
@@ -304,47 +304,54 @@ def setup(bot, group=None):
                 True
             ))
         
-        # Build description: Member since, title and badges prominent
-        desc_parts = [f"Profile for {target_user.mention}"]
+        # Build description with blockquote highlight for the key identity info
+        desc_lines = []
+        # Identity block — blockquoted for visual prominence
+        identity_parts = []
         if target_user.joined_at:
-            desc_parts.append(f"\n**Member since:** {join_date_str}")
+            identity_parts.append(f"📅 Member since {join_date_str}")
         if profile_data.get("title"):
-            desc_parts.append(f"\n**Title:** {profile_data['title']}")
+            identity_parts.append(f"🏷️ {profile_data['title']}")
+        if identity_parts:
+            desc_lines.append("\n".join(f"> {p}" for p in identity_parts))
+
         if profile_data.get("equipped_badge"):
             emoji, name = profile_data["equipped_badge"]
-            badge_emoji = emoji or "🏆"
-            badge_name = name or "Badge"
-            desc_parts.append(f"\n**Equipped Badge:** {badge_emoji} {badge_name}")
+            desc_lines.append(f"{emoji or '🏆'} **{name or 'Badge'}**")
         if profile_data.get("showcase_badges"):
             showcase = profile_data["showcase_badges"]
-            parts = [f"{(e or '🏆')} {n or 'Badge'}" for _, e, n in showcase[:5]]
-            desc_parts.append(f"\n**Showcase:** {' '.join(parts)}")
+            parts = [f"{(e or '🏆')}" for _, e, n in showcase[:5]]
+            desc_lines.append(f"Showcase: {'  '.join(parts)}")
         if target_user.id == interaction.user.id:
-            desc_parts.append("\n_This is your profile!_")
-        desc = "".join(desc_parts)
-        
-        embed = obsidian_embed(
-            f"👤 {target_user.display_name}'s Profile",
-            desc,
-            color=target_user.color if target_user.color.value != 0 else discord.Color.blurple(),
-            author=target_user,
-            fields=fields,
-            client=interaction.client,
-        )
+            desc_lines.append("-# This is your profile!")
 
-        # Consistent footer
-        footer_parts = [EMBED_FOOTER_DEFAULT]
+        desc = "\n".join(desc_lines)
+
+        # Footer: last active + tip
+        footer_parts = []
         if profile_data["last_activity"]:
             try:
                 last_activity = datetime.fromisoformat(profile_data["last_activity"])
                 days_ago = (now_utc() - last_activity.replace(tzinfo=timezone.utc)).days
-                footer_parts.append(f"Last active: {days_ago}d ago")
+                footer_parts.append(f"Last active {days_ago}d ago")
             except Exception:
                 pass
         if profile_data["achievements_count"] > 0:
             footer_parts.append("/achievements for full list")
-        embed.set_footer(text=" • ".join(footer_parts))
-        embed.set_thumbnail(url=target_user.display_avatar.url)
+        footer_text = " · ".join(footer_parts) if footer_parts else EMBED_FOOTER_DEFAULT
+
+        member_color = target_user.color if target_user.color.value != 0 else EMBED_COLORS["general"]
+
+        embed = obsidian_embed(
+            f"👤 {target_user.display_name}",
+            desc,
+            color=member_color,
+            author=target_user,
+            thumbnail=target_user.display_avatar.url,
+            fields=fields,
+            footer=footer_text,
+            client=interaction.client,
+        )
 
         await interaction.followup.send(embed=embed, ephemeral=defer_ephemeral)
 

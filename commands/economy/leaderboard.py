@@ -139,7 +139,7 @@ def setup(bot, group=None):
             pages.append({
                 "description": f"Top {len(rows)} by {sort_label}{you_line}",
                 "fields": [("Rankings", leaderboard_text.strip(), False)],
-                "footer": f"{interaction.guild.name} • Page {len(pages) + 1}/{(len(rows) + per_page - 1) // per_page}{rank_suffix}",
+                "footer": f"{interaction.guild.name} · Page {len(pages) + 1}/{(len(rows) + per_page - 1) // per_page}{rank_suffix}",
                 "thumbnail": thumb_url,
             })
 
@@ -148,7 +148,7 @@ def setup(bot, group=None):
             embed = obsidian_embed(
                 "🏆 Coin Leaderboard",
                 p0["description"],
-                color=discord.Color.gold(),
+                category="economy",
                 thumbnail=p0.get("thumbnail"),
                 fields=p0.get("fields"),
                 footer=p0.get("footer"),
@@ -164,11 +164,11 @@ def setup(bot, group=None):
                     "footer": p["footer"],
                     "thumbnail": p.get("thumbnail"),
                 })
-            paginator = EmbedPaginator("🏆 Coin Leaderboard", paginator_pages, color=discord.Color.gold(), client=interaction.client, total_items=total_count, per_page=per_page)
+            paginator = EmbedPaginator("🏆 Coin Leaderboard", paginator_pages, color=EMBED_COLORS["economy"], client=interaction.client, total_items=total_count, per_page=per_page)
             first_embed = obsidian_embed(
                 "🏆 Coin Leaderboard",
                 paginator_pages[0]["description"],
-                color=discord.Color.gold(),
+                category="economy",
                 thumbnail=pages[0].get("thumbnail"),
                 fields=paginator_pages[0]["fields"],
                 footer=paginator_pages[0]["footer"],

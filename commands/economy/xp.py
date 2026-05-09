@@ -2,7 +2,7 @@
 import discord
 from discord import app_commands
 
-from core.utils import obsidian_embed, render_bar, XP_ENABLED, XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT
+from core.utils import obsidian_embed, render_bar, XP_ENABLED, XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT, EMBED_COLORS
 
 
 def setup(bot, group=None):
@@ -21,18 +21,18 @@ def setup(bot, group=None):
                 embed=obsidian_embed(
                     "❌ XP System Disabled",
                     "The XP system is currently disabled.",
-                    color=discord.Color.red(),
+                    category="error",
                     client=interaction.client,
                 ),
                 ephemeral=True
             )
-        
+
         if not interaction.guild:
             return await interaction.response.send_message(
                 embed=obsidian_embed(
                     "❌ Invalid Context",
                     "This command can only be used in a server.",
-                    color=discord.Color.red(),
+                    category="error",
                     client=interaction.client,
                 ),
                 ephemeral=True
@@ -59,8 +59,8 @@ def setup(bot, group=None):
         
         embed = obsidian_embed(
             f"⭐ {target_user.display_name}'s XP",
-            "",
-            color=discord.Color.blue(),
+            f"> **Level {level}** · {xp:,} / {xp_for_next:,} XP",
+            category="economy",
             author=target_user,
             thumbnail=target_user.display_avatar.url if hasattr(target_user, 'display_avatar') else target_user.avatar.url if target_user.avatar else None,
             fields=fields,

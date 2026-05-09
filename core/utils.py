@@ -43,16 +43,17 @@ AUTOCOMPLETE_MAX_CHOICES = 25
 # Consistent footer for embeds
 EMBED_FOOTER_DEFAULT = "Use /help for commands"
 
-# Stable colors by category (for consistency across the bot)
+# Stable colors by category — custom hex palette for a cohesive Obsidian brand feel
 EMBED_COLORS = {
-    "economy": discord.Color.gold(),
-    "warframe": discord.Color.blue(),
-    "moderation": discord.Color.dark_red(),
-    "community": discord.Color.green(),
-    "general": discord.Color.blurple(),
-    "success": discord.Color.green(),
-    "warning": discord.Color.orange(),
-    "error": discord.Color.red(),
+    "economy":    discord.Color.from_str("#F0A800"),  # warm amber gold
+    "warframe":   discord.Color.from_str("#4DA6FF"),  # Warframe signature blue
+    "moderation": discord.Color.from_str("#E05252"),  # muted red
+    "community":  discord.Color.from_str("#52C97B"),  # fresh green
+    "general":    discord.Color.from_str("#7C83FF"),  # rich blurple
+    "success":    discord.Color.from_str("#43B581"),  # Discord success green
+    "warning":    discord.Color.from_str("#FAA61A"),  # amber warning
+    "error":      discord.Color.from_str("#F04747"),  # Discord error red
+    "prestige":   discord.Color.from_str("#C084FC"),  # purple for milestones/level-ups
 }
 
 # Common time phrases for autocomplete (event_create, reminder, etc.)
@@ -89,7 +90,7 @@ def success_embed(title: str, message: str, *, flair: Optional[str] = None, clie
     return obsidian_embed(
         f"✅ {title}" if not title.startswith("✅") else title,
         desc,
-        color=EMBED_COLORS["success"],
+        category="success",
         footer=EMBED_FOOTER_DEFAULT,
         client=client,
         **kwargs
@@ -172,14 +173,13 @@ def error_embed(title: str, message: str, *, action_hint: Optional[str] = None, 
     desc = truncate_desc(str(message))
     if action_hint:
         desc += f"\n\n_→ {action_hint}_"
-    emb = obsidian_embed(
+    return obsidian_embed(
         f"❌ {title}" if not title.startswith("❌") else title,
         desc,
-        color=EMBED_COLORS["error"],
+        category="error",
         footer=EMBED_FOOTER_DEFAULT,
         client=client,
     )
-    return emb
 
 
 def message_jump_url(guild_id: int, channel_id: int, message_id: int) -> str:
@@ -224,10 +224,11 @@ def now_utc() -> datetime:
 
 
 def obsidian_embed(
-    title: str, 
-    desc: str = "", 
-    *, 
+    title: str,
+    desc: str = "",
+    *,
     color: Optional[discord.Color] = None,
+    category: Optional[str] = None,
     author: Optional[discord.abc.User] = None,
     author_name: Optional[str] = None,
     author_icon: Optional[str] = None,
@@ -237,28 +238,29 @@ def obsidian_embed(
     footer_icon: Optional[str] = None,
     fields: Optional[list] = None,
     client: Optional[discord.Client] = None,
-    timestamp: bool = True
+    timestamp: bool = True,
 ) -> discord.Embed:
-    """
-    Create a standardized Obsidian-themed embed with enhanced styling.
-    
+    """Create a standardized Obsidian-themed embed.
+
     Args:
-        title: Embed title
-        desc: Embed description
-        color: Embed color (defaults to Obsidian purple-blue)
-        author: Discord member to set as author
-        author_name: Custom author name
-        author_icon: Custom author icon URL
-        thumbnail: Thumbnail image URL
-        image: Large image URL
-        footer: Custom footer text
-        footer_icon: Custom footer icon URL
-        fields: List of (name, value, inline) tuples for fields
-        timestamp: Whether to include timestamp (default: True)
+        title:       Embed title.
+        desc:        Embed description.
+        color:       Explicit embed color (overrides category).
+        category:    Key from EMBED_COLORS for auto-color ("economy", "warframe", etc.).
+        author:      Discord member shown as embed author (avatar + display name).
+        author_name: Custom author name (used when author member not available).
+        author_icon: Custom author icon URL.
+        thumbnail:   Thumbnail image URL (top-right corner).
+        image:       Large banner image URL (bottom of embed).
+        footer:      Custom footer text.
+        footer_icon: Custom footer icon URL (defaults to bot avatar when client given).
+        fields:      List of (name, value) or (name, value, inline) tuples.
+        client:      Bot client — enables bot-avatar thumbnail and footer icon.
+        timestamp:   Whether to include current UTC timestamp (default True).
     """
-    # Default to a nice purple-blue color for Obsidian theme
+    # Resolve color: explicit > category > default brand color
     if color is None:
-        color = discord.Color.from_rgb(75, 0, 130)  # Indigo/purple
+        color = EMBED_COLORS.get(category or "", EMBED_COLORS["general"])
     
     title = str(title)[:EMBED_TITLE_MAX]
     desc = truncate_desc(str(desc), EMBED_DESC_MAX)
@@ -301,16 +303,18 @@ def obsidian_embed(
             value = truncate_field(str(value), EMBED_FIELD_VALUE_MAX)
             e.add_field(name=name, value=value, inline=inline)
     
-    # Set footer: use provided, else default helpful footer
-    if footer:
-        e.set_footer(text=footer[:2048], icon_url=footer_icon)
-    else:
-        footer_text = EMBED_FOOTER_DEFAULT
-        if client and client.user:
-            bot_avatar = client.user.display_avatar.url if hasattr(client.user, 'display_avatar') else client.user.avatar.url if client.user.avatar else None
-            e.set_footer(text=footer_text, icon_url=bot_avatar)
-        else:
-            e.set_footer(text=footer_text, icon_url=None)
+    # Resolve bot avatar for footer icon (used when no explicit footer_icon given)
+    _bot_avatar: Optional[str] = None
+    if client and client.user:
+        _bot_avatar = (
+            client.user.display_avatar.url
+            if hasattr(client.user, "display_avatar")
+            else (client.user.avatar.url if client.user.avatar else None)
+        )
+
+    # Set footer: always attach bot avatar as icon for a polished look
+    footer_text = footer or EMBED_FOOTER_DEFAULT
+    e.set_footer(text=footer_text[:2048], icon_url=footer_icon or _bot_avatar)
     
     return e
 
@@ -453,8 +457,8 @@ async def send_levelup_announcement(
         embed = obsidian_embed(
             "🎉 Level Up!",
             f"You leveled up to **Level {level}** in **{guild.name}**!\n\n"
-            f"*Keep chatting and staying active to climb even higher!*",
-            color=discord.Color.gold(),
+            f"-# Keep chatting and staying active to climb even higher!",
+            category="prestige",
             author=member,
             thumbnail=member.display_avatar.url if member.display_avatar else None,
             image=LEVELUP_IMAGE_URL,
@@ -480,8 +484,8 @@ async def send_levelup_announcement(
     embed = obsidian_embed(
         "🎉 Level Up!",
         f"{member.mention} has leveled up to **Level {level}**!\n\n"
-        f"*Keep chatting and staying active to climb even higher!*",
-        color=discord.Color.gold(),
+        f"-# Keep chatting and staying active to climb even higher!",
+        category="prestige",
         author=member,
         thumbnail=member.display_avatar.url if member.display_avatar else None,
         image=LEVELUP_IMAGE_URL,

@@ -65,8 +65,8 @@ def setup(bot, group=None):
 
         embed = obsidian_embed(
             f"About {bot_name}",
-            desc,
-            color=discord.Color.blurple(),
+            f"> {desc}",
+            category="general",
             author_name=bot_name,
             author_icon=bot_avatar,
             thumbnail=bot_avatar,

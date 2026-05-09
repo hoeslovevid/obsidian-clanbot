@@ -80,7 +80,7 @@ def setup(bot, group=None):
                             desc += f"**{choice_type.title()} {i}:** {', '.join(choice_name) if choice_name else 'None'}\n"
                 else:
                     desc += "No rotation data available."
-                emb = obsidian_embed("🌊 Duviri Circuit", desc, color=discord.Color.blue(), footer="warframestat.us", client=interaction.client)
+                emb = obsidian_embed("🌊 Duviri Circuit", desc, category="warframe", footer="warframestat.us", client=interaction.client)
                 await btn_interaction.message.edit(embed=emb, view=None)
 
             return await interaction.followup.send(
@@ -118,9 +118,9 @@ def setup(bot, group=None):
         embed = obsidian_embed(
             "🌊 Duviri Circuit",
             desc,
-            color=discord.Color.blue(),
+            category="warframe",
             thumbnail=interaction.guild.icon.url if interaction.guild and interaction.guild.icon else None,
-            footer="warframestat.us • Refreshes every 60s • Timestamps in your timezone",
+            footer="warframestat.us · Refreshes every 60s",
             client=interaction.client,
         )
         

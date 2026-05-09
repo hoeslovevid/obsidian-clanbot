@@ -73,10 +73,10 @@ def _build_invasions_embed(invasions_data, client):
 
     return obsidian_embed(
         "⚔️ Active Invasions",
-        desc,
-        color=discord.Color.orange(),
+        f"> {desc}",
+        category="warframe",
         fields=fields,
-        footer="warframestat.us • Refreshes every 60s",
+        footer="warframestat.us · Refreshes every 60s",
         client=client,
     )
 
@@ -116,7 +116,7 @@ def setup(bot, group=None):
                 embed=obsidian_embed(
                     "📋 Active Invasions",
                     "No active invasions at this time. Check back later!",
-                    color=discord.Color.blue(),
+                    category="warframe",
                     footer="warframestat.us",
                     client=interaction.client,
                 ),
