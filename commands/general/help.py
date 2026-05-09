@@ -266,7 +266,7 @@ class HelpSelect(discord.ui.Select):
         
         # Group descriptions and colors per group
         group_descriptions = {
-            "general": "📋 General commands: help, profile, bio, preferences, polls, rules, server setup, and welcome configuration",
+            "general": "📋 General commands: help, profile, bio, trivia, preferences, polls, rules, server setup, and welcome configuration",
             "economy": "💰 Economy: balance, daily, bounties, gambling (slots/dice/roulette), gambling stats, pets, investments, prestige, shop, stash, transfer, and XP",
             "tools": "🔧 Tools: coinflip, activity heatmap, voice leaderboard, achievements, server stats, badges, AFK, reminders",
             "warframe": "🎮 Warframe: Baro, cycles, alerts, fissures, invasions, sortie, archon, builds, LFG, trading, roles, and notifications",
@@ -415,6 +415,7 @@ def setup(bot, group=None):
                 "tools achievements": ["/tools achievements", "/tools achievements user:@Member"],
                 "tools achievements_leaderboard": ["/tools achievements_leaderboard"],
                 "general preferences": ["/general preferences daily_reminder:On levelup_dm:On achievement_notify:Off"],
+                "general trivia": ["/general trivia", "/general trivia difficulty:Hard"],
                 "general links": ["/general links"],
                 "general about": ["/general about"],
                 # Tools

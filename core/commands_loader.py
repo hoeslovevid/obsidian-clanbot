@@ -173,6 +173,7 @@ def load_all_commands(bot):
         "commands.general.voice_leaderboard",
         "commands.general.coinflip",
         "commands.general.activity_heatmap",
+        "commands.general.trivia",
         "commands.warframe.build",
         "commands.warframe.drop_tables",
         "commands.context_menus",
@@ -275,6 +276,7 @@ def load_all_commands(bot):
         "commands.general.voice_leaderboard": tools_group,
         "commands.general.coinflip": tools_group,  # Moved: community at 25 limit
         "commands.general.activity_heatmap": tools_group,
+        "commands.general.trivia": general_group,
         "commands.warframe.build": warframe_group,
         "commands.warframe.drop_tables": warframe_group,
         "commands.music.music": music_group,
