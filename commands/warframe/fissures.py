@@ -78,21 +78,49 @@ def setup(bot, group=None):
 def _build_embed(fissures_list, client):
     lines = []
     tier_emoji = {"Lith": "🟢", "Meso": "🟡", "Neo": "🔵", "Axi": "🟣"}
-    for f in fissures_list[:15]:
-        node = f.get("node", "?")
-        tier = f.get("tier", "?")
+
+    # Separate normal, Steel Path, and Void Storm fissures
+    normal   = [f for f in fissures_list if not f.get("isHard") and not f.get("isStorm")]
+    sp       = [f for f in fissures_list if f.get("isHard")]
+    storms   = [f for f in fissures_list if f.get("isStorm")]
+
+    is_fallback = any("isStorm" in f for f in fissures_list) or (
+        # Fallback data uses plain planet names (no parenthetical node detail)
+        fissures_list and "(" not in fissures_list[0].get("node", "(")
+    )
+
+    def _fmt_entry(f: dict, idx: int) -> str:
+        node   = f.get("node", "?")
+        tier   = f.get("tier", "?")
         mission = f.get("missionType", "?")
-        enemy = f.get("enemy", "?")
-        eta = _fmt_time(f.get("expiry", ""))
-        em = tier_emoji.get(tier, "⚪")
-        lines.append(f"{em} **{node}** — {tier} {mission} ({enemy}) • {eta}")
-    if len(fissures_list) > 15:
-        lines.append(f"_...and {format_number(len(fissures_list) - 15)} more_")
+        enemy  = f.get("enemy", "?")
+        eta    = _fmt_time(f.get("expiry", ""))
+        em     = tier_emoji.get(tier, "⚪")
+        storm  = " ⚡Storm" if f.get("isStorm") else ""
+        return f"{em} **{node}** — {tier} {mission} ({enemy}){storm} • {eta}"
+
+    if normal:
+        lines.append("**Normal Fissures**")
+        lines += [_fmt_entry(f, i) for i, f in enumerate(normal[:8])]
+    if sp:
+        lines.append("\n**🗡️ Steel Path Fissures**")
+        lines += [_fmt_entry(f, i) for i, f in enumerate(sp[:8])]
+    if storms:
+        lines.append("\n**⚡ Void Storms (Railjack)**")
+        lines += [_fmt_entry(f, i) for i, f in enumerate(storms[:4])]
+
+    total = len(fissures_list)
+    shown = min(8, len(normal)) + min(8, len(sp)) + min(4, len(storms))
+    if total > shown:
+        lines.append(f"_...and {format_number(total - shown)} more_")
+
     desc = "\n".join(lines) if lines else "No active fissures."
+
+    note = " • ⚠️ Approx. locations (API unavailable)" if is_fallback else ""
     return obsidian_embed(
         "⚡ Void Fissures",
         desc,
         color=EMBED_COLORS["warframe"],
-        footer=f"See also: /warframe sortie, /warframe baro • warframestat.us",
+        footer=f"See also: /warframe sortie, /warframe baro{note}",
         client=client,
     )

@@ -431,6 +431,137 @@ def _ws_to_invasions(ws: Dict[str, Any]) -> List[Dict[str, Any]]:
     return result
 
 
+# Map world-state Region integer → (planet_name, primary_faction)
+# Based on Warframe's solar chart region numbering.
+_WS_REGION_INFO: Dict[int, tuple] = {
+    1:  ("Mercury",       "Grineer"),
+    2:  ("Venus",         "Corpus"),
+    3:  ("Earth",         "Grineer"),
+    4:  ("Mars",          "Grineer"),
+    5:  ("Phobos",        "Grineer"),
+    6:  ("Ceres",         "Grineer"),
+    7:  ("Jupiter",       "Corpus"),
+    8:  ("Europa",        "Corpus"),
+    9:  ("Saturn",        "Grineer"),
+    10: ("Uranus",        "Grineer"),
+    11: ("Neptune",       "Corpus"),
+    12: ("Pluto",         "Corpus"),
+    13: ("Sedna",         "Grineer"),
+    14: ("Eris",          "Infested"),
+    15: ("Void",          "Corrupted"),
+    16: ("Kuva Fortress", "Grineer"),
+    17: ("Deimos",        "Infested"),
+    18: ("Zariman",       "Corrupted"),
+    19: ("Duviri",        "Grineer"),
+}
+
+_WS_MT_MAP: Dict[str, str] = {
+    "MT_EXTERMINATION":  "Exterminate",
+    "MT_CAPTURE":        "Capture",
+    "MT_TERRITORY":      "Interception",
+    "MT_RESCUE":         "Rescue",
+    "MT_SABOTAGE":       "Sabotage",
+    "MT_ARTIFACT":       "Sabotage",
+    "MT_SURVIVAL":       "Survival",
+    "MT_DEFENSE":        "Defense",
+    "MT_MOBILE_DEFENSE": "Mobile Defense",
+    "MT_EXCAVATE":       "Excavation",
+    "MT_HIVE":           "Hive",
+    "MT_ASSASSINATION":  "Assassination",
+    "MT_SPY":            "Spy",
+    "MT_INTEL":          "Spy",
+    "MT_DISRUPTION":     "Disruption",
+    "MT_PURSUIT":        "Pursuit",
+    "MT_RUSH":           "Rush",
+    "MT_LANDSCAPE":      "Free Roam",
+    "MT_JUNCTION":       "Junction",
+}
+
+_WS_VOID_TIER: Dict[str, str] = {
+    "VoidT1": "Lith",
+    "VoidT2": "Meso",
+    "VoidT3": "Neo",
+    "VoidT4": "Axi",
+}
+_WS_TIER_NUM: Dict[str, int] = {"Lith": 1, "Meso": 2, "Neo": 3, "Axi": 4}
+
+
+def _ws_to_fissures(ws: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Convert world-state ActiveMissions + VoidStorms to warframestat.us fissure shape.
+
+    The world state does not carry human-readable node names, so we derive
+    planet and faction from the ``Region`` integer field and translate the
+    ``MissionType`` code (``MT_SURVIVAL`` → ``Survival``, etc.).  The display
+    will read e.g. "Saturn • Survival (Grineer)" instead of "Piscinas (Saturn)".
+    """
+    now = datetime.now(timezone.utc)
+    result: List[Dict[str, Any]] = []
+
+    for m in ws.get("ActiveMissions", []):
+        expiry = _parse_ws_date(m.get("Expiry"))
+        if not expiry:
+            continue
+        try:
+            if datetime.fromisoformat(expiry) < now:
+                continue
+        except Exception:
+            pass
+
+        modifier = m.get("Modifier", "")
+        tier = _WS_VOID_TIER.get(modifier)
+        if not tier:
+            continue  # Not a fissure mission
+
+        region = m.get("Region", 0)
+        planet, faction = _WS_REGION_INFO.get(region, ("Unknown", "Unknown"))
+
+        mt_raw = m.get("MissionType", "")
+        mission = _WS_MT_MAP.get(mt_raw, mt_raw.replace("MT_", "").title() if mt_raw else "?")
+
+        is_hard = bool(m.get("Hard", False))
+
+        result.append({
+            "node": f"{planet}",
+            "tier": tier,
+            "tierNum": _WS_TIER_NUM.get(tier, 0),
+            "missionType": mission,
+            "enemy": faction,
+            "expiry": expiry,
+            "expired": False,
+            "isHard": is_hard,
+            "isStorm": False,
+        })
+
+    # VoidStorms (Railjack fissures — use ActiveMissionTier not Modifier)
+    for m in ws.get("VoidStorms", []):
+        expiry = _parse_ws_date(m.get("Expiry"))
+        if not expiry:
+            continue
+        try:
+            if datetime.fromisoformat(expiry) < now:
+                continue
+        except Exception:
+            pass
+        tier = _WS_VOID_TIER.get(m.get("ActiveMissionTier", ""))
+        if not tier:
+            continue
+        result.append({
+            "node": "Railjack",
+            "tier": tier,
+            "tierNum": _WS_TIER_NUM.get(tier, 0),
+            "missionType": "Void Storm",
+            "enemy": "Grineer/Corpus",
+            "expiry": expiry,
+            "expired": False,
+            "isHard": False,
+            "isStorm": True,
+        })
+
+    # Sort: normal first, then Steel Path; within each group sort by tier
+    result.sort(key=lambda f: (1 if f.get("isHard") else 0, f.get("tierNum", 99)))
+    return result
+
+
 def _ws_to_sortie(ws: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Convert world-state Sorties[0] to warframestat.us shape."""
     sorties = ws.get("Sorties", [])
@@ -550,7 +681,7 @@ async def get_baro_status() -> Tuple[bool, Optional[Dict[str, Any]]]:
 
 
 async def fetch_fissures() -> Optional[List[Dict[str, Any]]]:
-    """Fetch active Void Fissure missions. Cached 60s."""
+    """Fetch active Void Fissure missions. Falls back to content.warframe.com world state."""
     from core.cache_utils import get_cached
     async def _fetch():
         try:
@@ -559,7 +690,9 @@ async def fetch_fissures() -> Optional[List[Dict[str, Any]]]:
                 return [f for f in data if not f.get("expired", False)]
         except Exception as e:
             logger.error("Error fetching fissures: %s: %s", type(e).__name__, e, exc_info=True)
-        return None  # No reliable world-state fallback for fissures (need relic tier lookup)
+        # Fallback: parse ActiveMissions from official world state
+        ws = await _fetch_official_world_state()
+        return _ws_to_fissures(ws) if ws else None
     return await get_cached("warframe:fissures", 60, _fetch)
 
 
