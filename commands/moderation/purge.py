@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import discord  # type: ignore
 from discord import app_commands  # type: ignore
 
-from utils import obsidian_embed, error_embed, is_mod, format_number, pluralize, permission_hint_embed
+from core.utils import obsidian_embed, error_embed, is_mod, format_number, pluralize, permission_hint_embed
 from views import ConfirmView
 
 
@@ -165,7 +165,7 @@ def setup(bot, group=None):
                             kwargs["file"] = transcript_file
                         await btn_interaction.followup.send(**kwargs)
                     try:
-                        from audit import log_audit
+                        from core.audit import log_audit
                         await log_audit(interaction.guild.id, "purge", interaction.user.id, details=f"{deleted} msgs in #{interaction.channel.name}", bot=interaction.client)
                     except Exception:
                         pass

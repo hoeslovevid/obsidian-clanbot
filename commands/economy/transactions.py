@@ -5,7 +5,7 @@ from datetime import datetime
 import io
 import csv
 
-from utils import obsidian_embed, error_embed, feature_off_embed, ECONOMY_ENABLED
+from core.utils import obsidian_embed, error_embed, feature_off_embed, ECONOMY_ENABLED
 from database import DB_PATH
 import aiosqlite
 

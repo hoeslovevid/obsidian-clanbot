@@ -31,7 +31,7 @@ except ImportError:
     discord = None  # type: ignore
 
 # Use config for DB_PATH (single source of truth)
-from config import DB_PATH
+from core.config import DB_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -320,7 +320,7 @@ def xp_for_next_level(current_level: int, multiplier: int = 100, exponent: float
 
 async def get_user_xp(guild_id: int, user_id: int) -> Tuple[int, int, int]:
     """Get a user's XP, level, and total XP. Returns (xp, level, total_xp)."""
-    from utils import XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT
+    from core.utils import XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT
     async with aiosqlite.connect(DB_PATH) as db:
         cur = await db.execute(
             "SELECT xp, level, total_xp FROM user_xp WHERE guild_id=? AND user_id=?",
@@ -345,7 +345,7 @@ async def get_user_xp(guild_id: int, user_id: int) -> Tuple[int, int, int]:
 
 async def add_xp(guild_id: int, user_id: int, amount: int, source: str = "ACTIVITY") -> bool:
     """Add XP to a user. Returns True if user leveled up. Applies active XP boosts."""
-    from utils import XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT
+    from core.utils import XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT
     # Apply XP boost if active
     try:
         boost_val = await get_guild_setting(guild_id, f"xp_boost:{user_id}")
@@ -396,7 +396,7 @@ async def add_xp(guild_id: int, user_id: int, amount: int, source: str = "ACTIVI
 
 async def remove_xp(guild_id: int, user_id: int, amount: int) -> bool:
     """Remove XP from a user. Returns True if successful, False if insufficient XP."""
-    from utils import XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT
+    from core.utils import XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT
     if amount <= 0:
         return False
     
@@ -450,8 +450,8 @@ async def log_complaint_action(guild_id: int, case_id: str, actor_id: int, actio
         try:
             # Import discord here to ensure it's available
             import discord as discord_module  # type: ignore
-            from channels import resolve_channel_id
-            from utils import obsidian_embed
+            from core.channels import resolve_channel_id
+            from core.utils import obsidian_embed
             
             # Get ledger channel ID from bot.py constants
             import os
@@ -1204,7 +1204,7 @@ async def check_and_unlock_eligible_titles(guild_id: int, user_id: int) -> list:
     Check if user meets criteria for any locked titles and unlock them.
     Returns list of newly unlocked title IDs.
     """
-    from config import ECONOMY_ENABLED
+    from core.config import ECONOMY_ENABLED
     newly_unlocked = []
     definitions = await get_all_title_definitions()
     unlocked = await get_user_unlocked_titles(guild_id, user_id)

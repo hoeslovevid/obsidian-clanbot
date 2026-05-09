@@ -3,9 +3,9 @@ import discord
 from discord import app_commands
 from typing import Optional
 
-from utils import obsidian_embed
+from core.utils import obsidian_embed
 from database import link_steam_account, unlink_steam_account, get_linked_steam_id, update_steam_playtime
-from warframe_api import resolve_steam_id, fetch_steam_warframe_playtime
+from api.warframe_api import resolve_steam_id, fetch_steam_warframe_playtime
 
 
 def setup(bot, group=None):

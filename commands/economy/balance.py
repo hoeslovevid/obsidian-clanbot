@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 import aiosqlite
 
-from utils import obsidian_embed, try_dm_then_ephemeral, feature_off_embed, ECONOMY_ENABLED, COINS_PER_MESSAGE, MESSAGE_COOLDOWN_SECONDS, COINS_PER_MINUTE_VOICE, COINS_DAILY_REWARD, EMBED_COLORS, bullet_list, format_number, pluralize
+from core.utils import obsidian_embed, try_dm_then_ephemeral, feature_off_embed, ECONOMY_ENABLED, COINS_PER_MESSAGE, MESSAGE_COOLDOWN_SECONDS, COINS_PER_MINUTE_VOICE, COINS_DAILY_REWARD, EMBED_COLORS, bullet_list, format_number, pluralize
 from database import DB_PATH
 
 

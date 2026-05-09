@@ -2,7 +2,7 @@
 Call init_db() once at startup to initialise all tables and indexes.
 """
 import aiosqlite  # type: ignore
-from config import DB_PATH
+from core.config import DB_PATH
 
 
 async def init_db() -> None:

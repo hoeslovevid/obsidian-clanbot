@@ -275,7 +275,7 @@ async def detect_and_update_version(bot) -> Tuple[str, list]:
 async def check_and_post_updates(bot):
     """Check if bot version has changed and post update logs automatically."""
     from bot import BOT_VERSION, BOT_CHANGELOG
-    from utils import obsidian_embed
+    from core.utils import obsidian_embed
     
     logger.info("[update_log] ========== Starting automatic update check ==========")
     

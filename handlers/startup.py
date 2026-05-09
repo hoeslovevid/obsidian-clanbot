@@ -10,7 +10,7 @@ import discord  # type: ignore
 import aiosqlite  # type: ignore
 from typing import Any
 
-from config import DB_PATH
+from core.config import DB_PATH
 from database import init_db
 
 logger = logging.getLogger(__name__)
@@ -235,7 +235,7 @@ async def run_startup(bot: discord.Client) -> None:
     # Update application profile (description, tags) for bot profile display
     async def update_app_profile():
         try:
-            from app_profile import update_app_profile_metadata
+            from core.app_profile import update_app_profile_metadata
             await update_app_profile_metadata()
         except Exception as e:
             logger.debug(f"[ready] App profile update skipped: {e}")
@@ -252,7 +252,7 @@ async def run_startup(bot: discord.Client) -> None:
     async def check_updates():
         """Check for updates in background (lazy-import defers version_tracking until ready)."""
         try:
-            from version_tracking import check_and_post_updates
+            from core.version_tracking import check_and_post_updates
             logger.info("[ready] Waiting for commands to sync, then checking for automatic updates...")
             await asyncio.sleep(5)  # Give commands more time to fully register and sync with Discord
             logger.info("[ready] Starting update check...")

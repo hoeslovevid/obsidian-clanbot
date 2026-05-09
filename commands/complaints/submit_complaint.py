@@ -2,7 +2,7 @@
 import discord
 from discord import app_commands
 
-from utils import obsidian_embed
+from core.utils import obsidian_embed
 from database import DB_PATH
 import aiosqlite
 
@@ -36,7 +36,7 @@ def setup(bot, group=None):
     async def submit_complaint(interaction: discord.Interaction, case_id: str, details: str):
         from bot import log_complaint_action
         from bot import COMPLAINTS_CHANNEL_ID, COMPLAINTS_CHANNEL_NAME
-        from channels import ensure_core_channels, resolve_channel_id
+        from core.channels import ensure_core_channels, resolve_channel_id
 
         guild = interaction.guild
         if not guild:

@@ -2,7 +2,7 @@
 import discord
 from discord import app_commands
 
-from utils import obsidian_embed, XP_ENABLED, XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT
+from core.utils import obsidian_embed, XP_ENABLED, XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT
 
 
 def setup(bot, group=None):

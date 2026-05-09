@@ -4,7 +4,7 @@ from discord import app_commands
 from typing import Optional
 from datetime import datetime, timezone
 
-from utils import obsidian_embed, is_mod, format_timestamp_readable, EMBED_FOOTER_DEFAULT
+from core.utils import obsidian_embed, is_mod, format_timestamp_readable, EMBED_FOOTER_DEFAULT
 from database import (
     DB_PATH, now_utc, get_user_balance, get_user_xp, 
     calculate_level, xp_for_next_level
@@ -182,7 +182,7 @@ def setup(bot, group=None):
         
         # Calculate XP progress
         from database import xp_for_level, xp_for_next_level
-        from utils import XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT
+        from core.utils import XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT
         current_level = profile_data["level"]
         current_xp = profile_data["xp"]
         xp_for_current = xp_for_level(current_level, XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT) if current_level > 0 else 0

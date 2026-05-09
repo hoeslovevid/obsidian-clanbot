@@ -4,8 +4,8 @@ from discord import app_commands
 from datetime import datetime, timezone
 import dateparser  # type: ignore
 
-from utils import obsidian_embed, warframe_data_unavailable_embed
-from warframe_api import fetch_archon_hunt_data
+from core.utils import obsidian_embed, warframe_data_unavailable_embed
+from api.warframe_api import fetch_archon_hunt_data
 
 
 def format_time_remaining(expiry_time: datetime) -> str:

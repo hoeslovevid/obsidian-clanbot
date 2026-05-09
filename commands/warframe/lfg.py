@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from datetime import datetime, timedelta, timezone
 
-from utils import obsidian_embed, get_mod_role, extract_id
+from core.utils import obsidian_embed, get_mod_role, extract_id
 from database import DB_PATH, get_guild_setting, set_guild_setting
 import aiosqlite
 
@@ -244,7 +244,7 @@ class LFGView(discord.ui.View):
             try:
                 creator = interaction.guild.get_member(creator_id)
                 if creator:
-                    from utils import obsidian_embed
+                    from core.utils import obsidian_embed
                     dm_embed = obsidian_embed(
                         "✅ Your LFG Group is Full!",
                         f"Your **{embed.title or 'LFG'}** group has reached **{max_players}/{max_players}** players.\n\n"
@@ -260,7 +260,7 @@ class LFGView(discord.ui.View):
 
 async def create_lfg_post(bot, interaction, mission_type: str, max_players: int, duration_hours: int, description: str, ping_role_id: int | None):
     """Create an LFG post. Used by both /warframe lfg and the Quick LFG context menu."""
-    from utils import get_mod_role
+    from core.utils import get_mod_role
 
     if not interaction.guild:
         return await interaction.response.send_message(

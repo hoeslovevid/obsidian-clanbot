@@ -2,7 +2,7 @@
 import discord
 from discord import app_commands
 
-from utils import obsidian_embed, error_embed, feature_off_embed, ECONOMY_ENABLED, is_mod, format_timestamp_readable, EMBED_FOOTER_DEFAULT, BUTTON_ONLY_RUNNER_MSG
+from core.utils import obsidian_embed, error_embed, feature_off_embed, ECONOMY_ENABLED, is_mod, format_timestamp_readable, EMBED_FOOTER_DEFAULT, BUTTON_ONLY_RUNNER_MSG
 from views import RetryView
 
 
@@ -14,7 +14,7 @@ def setup(bot, group=None):
         """View a user's profile from context menu."""
         from commands.general.profile import get_user_profile_data
         from database import xp_for_level, xp_for_next_level
-        from utils import XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT, now_utc
+        from core.utils import XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT, now_utc
 
         await interaction.response.defer(ephemeral=True)
         if not interaction.guild:
@@ -69,7 +69,7 @@ def setup(bot, group=None):
     async def view_balance_context(interaction: discord.Interaction, member: discord.Member):
         """View a user's balance from context menu."""
         from database import get_user_balance
-        from utils import COINS_PER_MESSAGE, COINS_DAILY_REWARD
+        from core.utils import COINS_PER_MESSAGE, COINS_DAILY_REWARD
 
         if not ECONOMY_ENABLED:
             return await interaction.response.send_message(
@@ -106,7 +106,7 @@ def setup(bot, group=None):
     @bot.tree.context_menu(name="Transfer Coins")
     async def transfer_coins_context(interaction: discord.Interaction, member: discord.Member):
         """Right-click user → Transfer Coins (opens modal for amount)."""
-        from modals import TransferCoinsModal
+        from core.modals import TransferCoinsModal
         if not interaction.guild:
             return await interaction.response.send_message(
                 embed=error_embed("Invalid Context", "This can only be used in a server.", client=interaction.client),
@@ -132,7 +132,7 @@ def setup(bot, group=None):
     @bot.tree.context_menu(name="Warn User")
     async def warn_user_context(interaction: discord.Interaction, member: discord.Member):
         """Right-click user → Warn (mod only, opens modal for reason)."""
-        from modals import WarnUserModal
+        from core.modals import WarnUserModal
         if not interaction.guild:
             return await interaction.response.send_message(
                 embed=error_embed("Invalid Context", "This can only be used in a server.", client=interaction.client),
@@ -153,7 +153,7 @@ def setup(bot, group=None):
     @bot.tree.context_menu(name="Give Reputation")
     async def give_rep_context(interaction: discord.Interaction, member: discord.Member):
         """Right-click user → Give Reputation (opens modal for optional reason)."""
-        from modals import GiveRepModal
+        from core.modals import GiveRepModal
         if not interaction.guild:
             return await interaction.response.send_message(
                 embed=error_embed("Invalid Context", "This can only be used in a server.", client=interaction.client),
@@ -174,7 +174,7 @@ def setup(bot, group=None):
     @bot.tree.context_menu(name="Check Price")
     async def check_price_context(interaction: discord.Interaction, message: discord.Message):
         """Right-click message → Check Warframe Market price for text in message."""
-        from warframe_api import search_warframe_market_item, get_warframe_market_price
+        from api.warframe_api import search_warframe_market_item, get_warframe_market_price
         from commands.trading.trade_price import _build_trade_embed
         content = (message.content or "").strip()
         # Try to extract item-like text: words with potential item names (e.g. "Mesa Prime Set", "Primed Continuity")
@@ -250,7 +250,7 @@ def setup(bot, group=None):
     @bot.tree.context_menu(name="Report Message")
     async def report_message_context(interaction: discord.Interaction, message: discord.Message):
         """Right-click message → Report (opens complaint modal pre-filled with message link)."""
-        from modals import ReportMessageModal
+        from core.modals import ReportMessageModal
         if not interaction.guild:
             return await interaction.response.send_message(
                 embed=error_embed("Invalid Context", "This can only be used in a server.", client=interaction.client),
@@ -261,7 +261,7 @@ def setup(bot, group=None):
     @bot.tree.context_menu(name="Add to Suggestions")
     async def add_to_suggestions_context(interaction: discord.Interaction, message: discord.Message):
         """Right-click message → Add to Suggestions (turns message content into a suggestion)."""
-        from modals import AddToSuggestionModal
+        from core.modals import AddToSuggestionModal
         if not interaction.guild:
             return await interaction.response.send_message(
                 embed=error_embed("Invalid Context", "This can only be used in a server.", client=interaction.client),
@@ -289,7 +289,7 @@ def setup(bot, group=None):
                 embed=error_embed("No Content", "Message has no usable text. Try a message with a title or description.", action_hint="Use /community event_create to create an event manually.", client=interaction.client),
                 ephemeral=True,
             )
-        from modals import AddAsEventModal
+        from core.modals import AddAsEventModal
         await interaction.response.send_modal(AddAsEventModal(message))
 
     # Create Ticket for User removed: Discord allows max 5 user context menus. Use /community ticket instead.

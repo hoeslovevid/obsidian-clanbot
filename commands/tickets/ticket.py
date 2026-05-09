@@ -7,7 +7,7 @@ import asyncio
 import re
 import io
 
-from utils import obsidian_embed, success_embed, is_mod, format_timestamp_readable, EMBED_COLORS
+from core.utils import obsidian_embed, success_embed, is_mod, format_timestamp_readable, EMBED_COLORS
 from database import DB_PATH, now_utc, get_guild_setting
 from views import ConfirmView
 import aiosqlite
@@ -445,7 +445,7 @@ async def close_ticket(
         await db.commit()
 
     try:
-        from audit import log_audit
+        from core.audit import log_audit
         bot_ref = getattr(interaction.client, "bot", interaction.client) or interaction.client
         await log_audit(interaction.guild.id, "ticket_close", closer_id, target_id=int(ticket_row["user_id"]), target_type="user",
             details=f"Ticket {ticket_row['ticket_id']}: {reason or 'No reason'}", bot=bot_ref)
@@ -491,7 +491,7 @@ async def close_ticket(
 
 async def create_ticket_for_user(interaction: discord.Interaction, target_member: discord.Member, subject: str):
     """Create a ticket for another user (mod action)."""
-    from utils import obsidian_embed, EMBED_COLORS
+    from core.utils import obsidian_embed, EMBED_COLORS
     await interaction.response.defer(ephemeral=True)
     if not interaction.guild or not isinstance(interaction.user, discord.Member):
         return await interaction.followup.send("Invalid context.", ephemeral=True)

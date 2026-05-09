@@ -6,7 +6,7 @@ import aiosqlite  # type: ignore
 import discord  # type: ignore
 
 from database import DB_PATH, now_utc, get_log_channel_id
-from utils import obsidian_embed
+from core.utils import obsidian_embed
 
 logger = logging.getLogger(__name__)
 

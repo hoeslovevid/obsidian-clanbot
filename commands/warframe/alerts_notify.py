@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from typing import Optional
 
-from utils import obsidian_embed, is_mod
+from core.utils import obsidian_embed, is_mod
 from database import get_guild_setting, set_guild_setting, DB_PATH
 import aiosqlite  # type: ignore
 

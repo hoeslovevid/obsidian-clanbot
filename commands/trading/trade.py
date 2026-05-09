@@ -3,9 +3,9 @@ import discord
 from discord import app_commands
 from datetime import datetime, timezone
 
-from utils import obsidian_embed
+from core.utils import obsidian_embed
 from database import DB_PATH, now_utc
-from warframe_api import search_warframe_market_item, get_warframe_market_price
+from api.warframe_api import search_warframe_market_item, get_warframe_market_price
 from commands.trading.trade_price import item_autocomplete
 import aiosqlite  # type: ignore
 

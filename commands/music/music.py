@@ -8,7 +8,7 @@ import yt_dlp  # type: ignore
 import asyncio
 import re
 
-from utils import obsidian_embed, is_mod
+from core.utils import obsidian_embed, is_mod
 from database import DB_PATH
 import aiosqlite  # type: ignore
 import json

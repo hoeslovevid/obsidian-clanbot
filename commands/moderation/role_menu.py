@@ -4,7 +4,7 @@ from discord import app_commands
 from typing import Optional, List
 from discord.ui import View, Button, Select
 
-from utils import obsidian_embed, is_mod
+from core.utils import obsidian_embed, is_mod
 from database import DB_PATH, now_utc
 import aiosqlite
 

@@ -1,7 +1,7 @@
 """Transfer command - available via context menu (right-click user → Transfer Coins)."""
 import discord
 
-from utils import obsidian_embed, feature_off_embed, ECONOMY_ENABLED, BUTTON_ONLY_RUNNER_MSG
+from core.utils import obsidian_embed, feature_off_embed, ECONOMY_ENABLED, BUTTON_ONLY_RUNNER_MSG
 from views import ConfirmView
 
 

@@ -12,10 +12,10 @@ import discord  # type: ignore
 import aiosqlite  # type: ignore
 from typing import Any, Optional
 
-from config import DB_PATH
+from core.config import DB_PATH
 from database import now_utc, log_complaint_action
-from utils import obsidian_embed, is_mod, get_mod_role
-from channels import resolve_channel_id
+from core.utils import obsidian_embed, is_mod, get_mod_role
+from core.channels import resolve_channel_id
 
 logger = logging.getLogger(__name__)
 
@@ -26,8 +26,8 @@ _processed_modal_submissions: set[str] = set()
 async def handle_modal_submit(bot: discord.Client, interaction: discord.Interaction) -> None:
     """Route a modal_submit interaction to the appropriate handler."""
     from views import ComplaintModView
-    from modals import ComplaintModal
-    from utils import format_thread_name, dm_blocked_help_embed
+    from core.modals import ComplaintModal
+    from core.utils import format_thread_name, dm_blocked_help_embed
     import os as _os
     COMPLAINTS_CHANNEL_ID = int(_os.getenv("COMPLAINTS_CHANNEL_ID", "0") or "0")
     COMPLAINTS_CHANNEL_NAME = _os.getenv("COMPLAINTS_CHANNEL_NAME", "docket-log")
@@ -461,7 +461,7 @@ async def handle_modal_submit(bot: discord.Client, interaction: discord.Interact
             if row:
                 guild_id, user_id = row[0], row[1]
                 from commands.applications.application import send_next_question
-                from utils import dm_blocked_help_embed
+                from core.utils import dm_blocked_help_embed
 
                 ok = await send_next_question(bot, guild_id, user_id, application_id)
                 if ok:

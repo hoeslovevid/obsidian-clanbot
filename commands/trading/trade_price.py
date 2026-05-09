@@ -2,10 +2,10 @@
 import discord
 from discord import app_commands
 
-from utils import obsidian_embed, error_embed, EMBED_COLORS, BUTTON_ONLY_RUNNER_MSG
-from warframe_api import search_warframe_market_item, get_warframe_market_price
+from core.utils import obsidian_embed, error_embed, EMBED_COLORS, BUTTON_ONLY_RUNNER_MSG
+from api.warframe_api import search_warframe_market_item, get_warframe_market_price
 from views import RetryView, RefreshView
-from cache_utils import invalidate
+from core.cache_utils import invalidate
 
 POPULAR_ITEMS = [
     "Mesa Prime Set", "Saryn Prime Set", "Rhino Prime Set", "Nova Prime Set",
@@ -18,7 +18,7 @@ POPULAR_ITEMS = [
 
 async def item_autocomplete(interaction: discord.Interaction, current: str):
     """Autocomplete for item names. Paginated: top 25 by relevance."""
-    from utils import AUTOCOMPLETE_MAX_CHOICES
+    from core.utils import AUTOCOMPLETE_MAX_CHOICES
     current_lower = (current or "").lower().strip()
     if not current_lower:
         matches = POPULAR_ITEMS[:AUTOCOMPLETE_MAX_CHOICES]

@@ -3,8 +3,8 @@ import discord
 from discord import app_commands
 from datetime import datetime, timezone
 
-from utils import obsidian_embed, format_number, EMBED_COLORS, warframe_data_unavailable_embed, BUTTON_ONLY_RUNNER_MSG
-from warframe_api import get_baro_status
+from core.utils import obsidian_embed, format_number, EMBED_COLORS, warframe_data_unavailable_embed, BUTTON_ONLY_RUNNER_MSG
+from api.warframe_api import get_baro_status
 from views import RetryView, RefreshView
 from database import DB_PATH
 import aiosqlite
@@ -216,7 +216,7 @@ def setup(bot, group=None):
             if btn_interaction.user.id != interaction.user.id:
                 return await btn_interaction.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
             await btn_interaction.response.defer()
-            from cache_utils import invalidate
+            from core.cache_utils import invalidate
             invalidate("warframe:baro")
             new_active, new_data = await get_baro_status()
             if not new_data:

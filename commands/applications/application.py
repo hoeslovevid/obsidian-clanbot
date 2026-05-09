@@ -7,7 +7,7 @@ import discord
 from discord import app_commands
 from typing import Optional
 
-from utils import obsidian_embed, dm_blocked_help_embed
+from core.utils import obsidian_embed, dm_blocked_help_embed
 from database import DB_PATH, now_utc
 import aiosqlite
 
@@ -537,7 +537,7 @@ async def send_next_question(bot, guild_id: int, user_id: int, application_id: i
     if not user:
         return False
 
-    from modals import ApplicationResponseModal
+    from core.modals import ApplicationResponseModal
     modal = ApplicationResponseModal(application_id, question_id, question_text)
 
     try:

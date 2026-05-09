@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from datetime import datetime, timezone, timedelta
 
-from utils import obsidian_embed, feature_off_embed, ECONOMY_ENABLED, format_number, EMBED_COLORS
+from core.utils import obsidian_embed, feature_off_embed, ECONOMY_ENABLED, format_number, EMBED_COLORS
 from database import DB_PATH, now_utc, add_coins, remove_coins, get_user_balance
 import aiosqlite
 

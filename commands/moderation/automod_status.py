@@ -2,7 +2,7 @@
 import discord
 from discord import app_commands
 
-from utils import obsidian_embed
+from core.utils import obsidian_embed
 from database import get_auto_mod_settings
 
 

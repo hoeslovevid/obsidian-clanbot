@@ -2,7 +2,7 @@
 import discord
 from discord import app_commands
 
-from utils import obsidian_embed, is_mod
+from core.utils import obsidian_embed, is_mod
 from database import get_guild_setting, set_guild_setting
 
 WARFRAME_YT_CHANNEL_ID = "UCZ8h7R8l2LoXzbc-GufOyKw"

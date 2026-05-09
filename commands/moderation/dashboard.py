@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 
 from datetime import datetime, timezone
-from utils import obsidian_embed, is_mod, format_timestamp_readable
+from core.utils import obsidian_embed, is_mod, format_timestamp_readable
 from database import DB_PATH
 import aiosqlite
 

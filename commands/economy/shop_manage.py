@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from typing import Optional
 
-from utils import obsidian_embed, feature_off_embed, ECONOMY_ENABLED, is_mod
+from core.utils import obsidian_embed, feature_off_embed, ECONOMY_ENABLED, is_mod
 from database import DB_PATH
 import aiosqlite  # type: ignore
 

@@ -167,7 +167,7 @@ async def _wf_stat_get(url: str, proxy: Optional[str]) -> Optional[Any]:
 
 async def fetch_baro_data() -> Optional[Dict[str, Any]]:
     """Fetch Baro Ki'Teer data from Warframe World State API. Cached for 60s."""
-    from cache_utils import get_cached
+    from core.cache_utils import get_cached
 
     async def _fetch():
         try:
@@ -206,7 +206,7 @@ async def fetch_cycle_data(cycle_type: str) -> Optional[Dict[str, Any]]:
 
 async def get_all_cycles() -> Dict[str, Optional[Dict[str, Any]]]:
     """Fetch all cycle data (Cetus, Fortuna, Deimos). Cached for 60s."""
-    from cache_utils import get_cached
+    from core.cache_utils import get_cached
 
     async def _fetch():
         import asyncio
@@ -261,7 +261,7 @@ async def get_baro_status() -> Tuple[bool, Optional[Dict[str, Any]]]:
 
 async def fetch_fissures() -> Optional[List[Dict[str, Any]]]:
     """Fetch active Void Fissure missions. Cached 60s."""
-    from cache_utils import get_cached
+    from core.cache_utils import get_cached
     async def _fetch():
         try:
             data = await _wf_stat_get(_wf_stat_url("pc/fissures"), _api_proxy())
@@ -274,7 +274,7 @@ async def fetch_fissures() -> Optional[List[Dict[str, Any]]]:
 
 async def fetch_sortie() -> Optional[Dict[str, Any]]:
     """Fetch today's Sortie. Cached 60s."""
-    from cache_utils import get_cached
+    from core.cache_utils import get_cached
     async def _fetch():
         try:
             return await _wf_stat_get(_wf_stat_url("pc/sortie"), _api_proxy())
@@ -286,7 +286,7 @@ async def fetch_sortie() -> Optional[Dict[str, Any]]:
 
 async def fetch_steel_path() -> Optional[Dict[str, Any]]:
     """Fetch Steel Path data (current missions). Cached 60s."""
-    from cache_utils import get_cached
+    from core.cache_utils import get_cached
     async def _fetch():
         try:
             return await _wf_stat_get(_wf_stat_url("pc/steelPath"), _api_proxy())
@@ -298,7 +298,7 @@ async def fetch_steel_path() -> Optional[Dict[str, Any]]:
 
 async def fetch_arbitration() -> Optional[Dict[str, Any]]:
     """Fetch current Arbitration. Cached 60s."""
-    from cache_utils import get_cached
+    from core.cache_utils import get_cached
     async def _fetch():
         try:
             return await _wf_stat_get(_wf_stat_url("pc/arbitration"), _api_proxy())
@@ -310,7 +310,7 @@ async def fetch_arbitration() -> Optional[Dict[str, Any]]:
 
 async def fetch_nightwave() -> Optional[Dict[str, Any]]:
     """Fetch Nightwave challenges. Cached 300s (updates daily)."""
-    from cache_utils import get_cached
+    from core.cache_utils import get_cached
     async def _fetch():
         try:
             return await _wf_stat_get(_wf_stat_url("pc/nightwave"), _api_proxy())
@@ -322,7 +322,7 @@ async def fetch_nightwave() -> Optional[Dict[str, Any]]:
 
 async def fetch_invasions() -> Optional[list]:
     """Fetch invasion data from Warframe World State API. Cached for 60s."""
-    from cache_utils import get_cached
+    from core.cache_utils import get_cached
 
     async def _fetch():
         try:
@@ -339,7 +339,7 @@ async def fetch_invasions() -> Optional[list]:
 
 async def fetch_archon_hunt_data() -> Optional[Dict[str, Any]]:
     """Fetch Archon Hunt data from Warframe World State API. Cached for 60s."""
-    from cache_utils import get_cached
+    from core.cache_utils import get_cached
 
     async def _fetch():
         try:
@@ -394,7 +394,7 @@ def _extract_items_list(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 async def _fetch_warframe_market_items_list() -> List[Dict[str, Any]]:
     """Fetch full Warframe Market items list. Cached for 5 minutes."""
-    from cache_utils import get_cached
+    from core.cache_utils import get_cached
 
     async def _fetch():
         headers = {
@@ -515,7 +515,7 @@ async def search_warframe_market_item(item_name: str, platform: str = "pc") -> O
 
 async def fetch_duviri_circuit() -> Optional[Dict[str, Any]]:
     """Fetch Duviri Circuit data from Warframe World State API. Cached for 60s."""
-    from cache_utils import get_cached
+    from core.cache_utils import get_cached
 
     async def _fetch():
         try:
@@ -529,7 +529,7 @@ async def fetch_duviri_circuit() -> Optional[Dict[str, Any]]:
 
 async def fetch_alerts() -> Optional[List[Dict[str, Any]]]:
     """Fetch active alerts from Warframe World State API. Cached for 60s."""
-    from cache_utils import get_cached
+    from core.cache_utils import get_cached
 
     async def _fetch():
         try:
@@ -748,7 +748,7 @@ async def get_warframe_market_price(item_url_name: str, platform: str = "pc") ->
     Returns:
         Price statistics dict with orders and stats, or None if error
     """
-    from cache_utils import get_cached
+    from core.cache_utils import get_cached
 
     async def _fetch():
         try:

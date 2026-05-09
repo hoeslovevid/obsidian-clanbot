@@ -4,7 +4,7 @@ from discord import app_commands
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from utils import obsidian_embed, is_mod, parse_time_natural
+from core.utils import obsidian_embed, is_mod, parse_time_natural
 from database import DB_PATH
 import aiosqlite
 

@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 import aiosqlite
 
-from utils import obsidian_embed, is_mod, display_case_status, now_utc, get_mod_role
+from core.utils import obsidian_embed, is_mod, display_case_status, now_utc, get_mod_role
 from database import DB_PATH
 
 
@@ -49,7 +49,7 @@ def setup(bot, group=None):
     async def request_help(interaction: discord.Interaction, case_id: str = "", category: str = "", details: str = "", evidence: str = ""):
         from bot import ComplaintModView, log_complaint_action
         from bot import COMPLAINTS_CHANNEL_ID, COMPLAINTS_CHANNEL_NAME
-        from channels import ensure_core_channels, resolve_channel_id
+        from core.channels import ensure_core_channels, resolve_channel_id
 
         guild = interaction.guild
         if not guild:

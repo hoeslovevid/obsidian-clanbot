@@ -4,8 +4,8 @@ from discord import app_commands
 from datetime import datetime, timezone
 import dateparser  # type: ignore
 
-from utils import obsidian_embed, warframe_data_unavailable_embed, BUTTON_ONLY_RUNNER_MSG
-from warframe_api import fetch_duviri_circuit
+from core.utils import obsidian_embed, warframe_data_unavailable_embed, BUTTON_ONLY_RUNNER_MSG
+from api.warframe_api import fetch_duviri_circuit
 from views import RetryView
 
 

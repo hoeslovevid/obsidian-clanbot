@@ -4,7 +4,7 @@ from discord import app_commands
 from typing import Optional
 import dateparser
 
-from utils import obsidian_embed, error_embed, is_mod, channel_jump_url, copy_friendly_id, format_number, pluralize, EMBED_COLORS
+from core.utils import obsidian_embed, error_embed, is_mod, channel_jump_url, copy_friendly_id, format_number, pluralize, EMBED_COLORS
 from database import DB_PATH, now_utc, get_log_channel_id
 from views import EmbedPaginator
 import aiosqlite
@@ -94,7 +94,7 @@ async def execute_warn(interaction: discord.Interaction, user: discord.Member, r
         pass
 
     try:
-        from audit import log_audit
+        from core.audit import log_audit
         bot_ref = getattr(interaction.client, "bot", interaction.client) or interaction.client
         await log_audit(interaction.guild.id, "warn", interaction.user.id, target_id=user.id, target_type="user", details=reason[:200], bot=bot_ref)
     except Exception:

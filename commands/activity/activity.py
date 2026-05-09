@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from datetime import datetime, timezone, timedelta
 
-from utils import obsidian_embed
+from core.utils import obsidian_embed
 from database import DB_PATH
 import aiosqlite  # type: ignore
 

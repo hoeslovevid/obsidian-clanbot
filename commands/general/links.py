@@ -3,7 +3,7 @@ import json
 import discord
 from discord import app_commands
 
-from utils import obsidian_embed, EMBED_COLORS, is_mod
+from core.utils import obsidian_embed, EMBED_COLORS, is_mod
 from database import get_guild_setting, set_guild_setting
 
 DEFAULT_LINKS = [

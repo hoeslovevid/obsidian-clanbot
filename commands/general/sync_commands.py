@@ -2,7 +2,7 @@
 import discord  # type: ignore
 from discord import app_commands  # type: ignore
 
-from utils import is_mod, obsidian_embed
+from core.utils import is_mod, obsidian_embed
 
 
 def setup(bot, group=None):

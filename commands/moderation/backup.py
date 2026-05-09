@@ -7,7 +7,7 @@ import json
 from datetime import datetime, timezone
 from typing import Optional
 
-from utils import obsidian_embed, is_mod
+from core.utils import obsidian_embed, is_mod
 from database import DB_PATH, now_utc
 import aiosqlite
 

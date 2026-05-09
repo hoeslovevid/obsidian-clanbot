@@ -6,7 +6,7 @@ from discord import app_commands  # type: ignore
 from collections.abc import Sequence
 from typing import Any, Optional
 
-from utils import obsidian_embed, is_mod
+from core.utils import obsidian_embed, is_mod
 from database import DB_PATH
 import aiosqlite  # type: ignore
 
@@ -84,7 +84,7 @@ def setup(bot, group=None):
             await interaction.followup.send(embed=embed, ephemeral=True)
         
         elif action_value == "add_question":
-            from modals import ApplicationQuestionModal
+            from core.modals import ApplicationQuestionModal
             modal = ApplicationQuestionModal(interaction.guild.id)
             await interaction.followup.send(
                 "Please fill out the form to add a question.",
@@ -403,7 +403,7 @@ class ApplicationQuestionView(discord.ui.View):
     
     @discord.ui.button(label="Add Question", style=discord.ButtonStyle.primary, custom_id="add_question_btn")
     async def add_question_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        from modals import ApplicationQuestionModal
+        from core.modals import ApplicationQuestionModal
         modal = ApplicationQuestionModal(self.guild_id)
         await interaction.response.send_modal(modal)
 

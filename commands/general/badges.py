@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from typing import Optional
 
-from utils import obsidian_embed, feature_off_embed, is_mod
+from core.utils import obsidian_embed, feature_off_embed, is_mod
 from database import (
     DB_PATH, now_utc,
     get_all_title_definitions,
@@ -13,7 +13,7 @@ from database import (
     get_user_balance,
     remove_coins,
 )
-from config import ECONOMY_ENABLED
+from core.config import ECONOMY_ENABLED
 import aiosqlite
 
 

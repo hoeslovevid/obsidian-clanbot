@@ -2,7 +2,7 @@
 import discord
 from discord import app_commands
 
-from utils import obsidian_embed, feature_off_embed, ECONOMY_ENABLED
+from core.utils import obsidian_embed, feature_off_embed, ECONOMY_ENABLED
 from views import EmbedPaginator
 
 

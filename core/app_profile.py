@@ -5,7 +5,7 @@ Makes the bot profile more informative when users view it.
 import logging
 import aiohttp
 
-from config import TOKEN
+from core.config import TOKEN
 
 logger = logging.getLogger(__name__)
 

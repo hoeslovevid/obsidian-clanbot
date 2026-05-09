@@ -2,7 +2,7 @@
 import discord
 from discord import app_commands
 
-from utils import obsidian_embed, XP_ENABLED, is_mod
+from core.utils import obsidian_embed, XP_ENABLED, is_mod
 
 
 def setup(bot, group=None):
@@ -28,7 +28,7 @@ def setup(bot, group=None):
         """Add or remove XP from a user (moderators only)."""
         # Import bot-specific functions inside to avoid circular imports
         from database import add_xp, remove_xp, get_user_xp, calculate_level
-        from utils import XP_LEVEL_MULTIPLIER
+        from core.utils import XP_LEVEL_MULTIPLIER
         
         if not XP_ENABLED:
             return await interaction.response.send_message("XP system is disabled.", ephemeral=True)
@@ -79,7 +79,7 @@ def setup(bot, group=None):
             desc = f"Added **{amount:,}** XP to {user.mention}."
             if leveled_up:
                 desc += f"\n\n🎉 **Level Up!** {user.mention} reached level **{new_level}**!"
-                from utils import send_levelup_announcement
+                from core.utils import send_levelup_announcement
                 await send_levelup_announcement(
                     interaction.guild,
                     user,

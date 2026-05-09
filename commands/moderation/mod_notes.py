@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from datetime import datetime
 
-from utils import obsidian_embed, is_mod, copy_friendly_id, EMBED_COLORS
+from core.utils import obsidian_embed, is_mod, copy_friendly_id, EMBED_COLORS
 from database import DB_PATH, now_utc
 import aiosqlite
 

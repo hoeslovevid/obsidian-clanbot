@@ -7,7 +7,7 @@ import discord  # type: ignore
 import aiosqlite  # type: ignore
 from typing import Optional
 
-from utils import extract_id, get_mod_role, is_mod, obsidian_embed
+from core.utils import extract_id, get_mod_role, is_mod, obsidian_embed
 from database import DB_PATH, now_utc
 
 logger = logging.getLogger(__name__)
@@ -466,7 +466,7 @@ class ApplicationQuestionModal(discord.ui.Modal, title="Add Application Question
             """, (self.guild_id, next_order, question_text))
             await db.commit()
         
-        from utils import obsidian_embed
+        from core.utils import obsidian_embed
         await interaction.followup.send(
             embed=obsidian_embed(
                 "✅ Question Added",

@@ -2,7 +2,7 @@
 import discord  # type: ignore
 from discord import app_commands  # type: ignore
 
-from utils import obsidian_embed, error_embed, is_mod
+from core.utils import obsidian_embed, error_embed, is_mod
 from views import ConfirmView
 
 

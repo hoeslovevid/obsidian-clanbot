@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 # ============================================================
 
 # Import config first (loads env, no heavy deps)
-from config import (
+from core.config import (
     TOKEN, GUILD_ID, MOD_ROLE_NAME, BOT_STATUS, TIMEZONE, DB_PATH,
     BOT_VERSION, BOT_CHANGELOG,
     TEMP_VC_CATEGORY_ID, TEMP_VC_CATEGORY_NAME, CREATE_VC_NAME,
@@ -71,23 +71,23 @@ INTENTS.members = True
 INTENTS.voice_states = True
 
 # Import utilities and modules (avoid heavy: tasks, version_tracking, warframe_api)
-from utils import obsidian_embed, extract_id, get_mod_role, is_mod, parse_time_natural, display_case_status
+from core.utils import obsidian_embed, extract_id, get_mod_role, is_mod, parse_time_natural, display_case_status
 from database import (
     get_user_balance, add_coins, remove_coins, transfer_coins,
     get_user_xp, add_xp, calculate_level, xp_for_level, xp_for_next_level,
     get_guild_setting, set_guild_setting, now_utc, init_db
 )
-from channels import (
+from core.channels import (
     resolve_channel_id, find_or_create_text_channel,
     resolve_temp_vc_category, ensure_join_to_create_channel, ensure_core_channels,
     delete_temp_vc_and_panel, delete_vc_panel_message
 )
-from modals import RenameVCModal, InviteModal, RemoveAccessModal, TransferOwnerModal, ComplaintModal, RequestInfoModal
+from core.modals import RenameVCModal, InviteModal, RemoveAccessModal, TransferOwnerModal, ComplaintModal, RequestInfoModal
 from views import VCPanelView, ComplaintPanel, ComplaintModView, RSVPView, SetLimitView, SetLimitSelect
 # tasks and version_tracking: lazy-import to defer ~2k lines until needed
 def detect_and_update_version(*args, **kwargs):
     """Lazy wrapper - loads version_tracking only when called (e.g. /force_version_update)."""
-    from version_tracking import detect_and_update_version as _fn
+    from core.version_tracking import detect_and_update_version as _fn
     return _fn(*args, **kwargs)
 
 
@@ -176,7 +176,7 @@ class ClanBot(commands.Bot):
 bot = ClanBot()
 
 # Load commands from commands_loader (cleaner, easier to debug)
-from commands_loader import load_all_commands
+from core.commands_loader import load_all_commands
 load_all_commands(bot)
 
 # --------------------- Global app command checks ---------------------
@@ -424,7 +424,7 @@ async def check_auto_mod(message: discord.Message) -> bool:
         get_auto_mod_settings, get_spam_tracking, update_spam_tracking,
         reset_spam_tracking, log_auto_mod_violation
     )
-    from utils import is_mod
+    from core.utils import is_mod
     
     if not message.guild or message.author.bot:
         return False
@@ -600,7 +600,7 @@ async def on_message(message: discord.Message):
     # Bot mention: hybrid response (keywords + optional AI)
     if message.guild.me in message.mentions:
         try:
-            from mention_chat import get_mention_reply
+            from core.mention_chat import get_mention_reply
             reply = await get_mention_reply(
                 message.content,
                 message.guild.me.id,
@@ -681,7 +681,7 @@ async def on_message(message: discord.Message):
     )
     
     # Award XP (if enabled)
-    from utils import XP_ENABLED, XP_PER_MESSAGE
+    from core.utils import XP_ENABLED, XP_PER_MESSAGE
     if XP_ENABLED:
         leveled_up = await add_xp(
             message.guild.id,
@@ -695,7 +695,7 @@ async def on_message(message: discord.Message):
             logger.info(f"User {message.author.id} leveled up to level {level} in guild {message.guild.id}")
             
             # Send level-up announcement to configured channel
-            from utils import send_levelup_announcement
+            from core.utils import send_levelup_announcement
             await send_levelup_announcement(message.guild, message.author, level, xp, total_xp)
             
             # Assign level roles
@@ -1538,7 +1538,7 @@ async def on_member_ban(guild: discord.Guild, user: discord.User):
 
 async def _send_error_reply(interaction: discord.Interaction, message: str, ephemeral: bool = True, action_hint: Optional[str] = None):
     """Send an error reply with consistent embed, using followup if response was already sent."""
-    from utils import error_embed
+    from core.utils import error_embed
     emb = error_embed("Error", message, action_hint=action_hint, client=interaction.client)
     try:
         if interaction.response.is_done():

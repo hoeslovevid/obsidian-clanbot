@@ -7,10 +7,10 @@ import discord
 from datetime import datetime, timezone
 import aiosqlite
 
-from utils import obsidian_embed, is_mod, get_mod_role
+from core.utils import obsidian_embed, is_mod, get_mod_role
 from database import DB_PATH, now_utc, get_guild_setting, get_user_balance, add_coins, get_user_xp, add_xp, calculate_level
-from channels import resolve_channel_id, delete_temp_vc_and_panel, resolve_temp_vc_category
-from modals import ComplaintModal, RequestInfoModal
+from core.channels import resolve_channel_id, delete_temp_vc_and_panel, resolve_temp_vc_category
+from core.modals import ComplaintModal, RequestInfoModal
 from views import ComplaintPanel, ComplaintModView
 
 logger = logging.getLogger(__name__)

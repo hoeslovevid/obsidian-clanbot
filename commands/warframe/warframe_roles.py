@@ -3,7 +3,7 @@ import discord  # type: ignore
 from discord import app_commands  # type: ignore
 from typing import Optional
 
-from utils import obsidian_embed, is_mod
+from core.utils import obsidian_embed, is_mod
 from database import (
     add_warframe_achievement_role,
     remove_warframe_achievement_role,

@@ -8,7 +8,7 @@ from typing import Mapping, Optional, Union, cast
 import aiosqlite  # type: ignore
 
 from database import get_guild_setting, set_guild_setting, DB_PATH
-from utils import get_mod_role
+from core.utils import get_mod_role
 
 logger = logging.getLogger(__name__)
 

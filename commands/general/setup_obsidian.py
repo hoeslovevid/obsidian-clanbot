@@ -4,7 +4,7 @@ import discord
 from discord import app_commands
 from typing import Optional, List, Tuple
 
-from utils import obsidian_embed, is_mod
+from core.utils import obsidian_embed, is_mod
 from database import get_guild_setting, set_guild_setting, get_configured_channel_id
 
 # Channel config: (setting_key, display_name, default_channel_name, channel_type)
@@ -122,7 +122,7 @@ class SetupObsidianView(discord.ui.View):
         self.step_index += 1
         if self.step_index >= len(CHANNEL_CONFIGS):
             # Done
-            from config import CREATE_VC_NAME, TEMP_VC_CATEGORY_NAME
+            from core.config import CREATE_VC_NAME, TEMP_VC_CATEGORY_NAME
             from bot import ensure_join_to_create_channel
 
             # Ensure join-to-create channel if Temp VC category was configured

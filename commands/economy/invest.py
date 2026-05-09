@@ -4,7 +4,7 @@ from discord import app_commands
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from utils import obsidian_embed, feature_off_embed, ECONOMY_ENABLED
+from core.utils import obsidian_embed, feature_off_embed, ECONOMY_ENABLED
 from database import DB_PATH, remove_coins, add_coins
 import aiosqlite  # type: ignore
 

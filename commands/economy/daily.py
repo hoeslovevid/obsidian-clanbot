@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from datetime import datetime, timezone
 
-from utils import obsidian_embed, feature_off_embed, ECONOMY_ENABLED, COINS_DAILY_REWARD, format_number, pluralize, EMBED_COLORS
+from core.utils import obsidian_embed, feature_off_embed, ECONOMY_ENABLED, COINS_DAILY_REWARD, format_number, pluralize, EMBED_COLORS
 
 
 def setup(bot, group=None):

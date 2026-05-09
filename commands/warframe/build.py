@@ -3,7 +3,7 @@ import urllib.parse
 import discord  # type: ignore
 from discord import app_commands  # type: ignore
 
-from utils import obsidian_embed
+from core.utils import obsidian_embed
 
 OVERFRAME_BASE = "https://overframe.gg/builds"
 BUILD_TIPS = {

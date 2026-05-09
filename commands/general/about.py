@@ -3,8 +3,8 @@ import aiosqlite  # type: ignore
 import discord  # type: ignore
 from discord import app_commands  # type: ignore
 
-from utils import obsidian_embed
-from config import BOT_VERSION, BOT_WEBSITE, BOT_DEVELOPER
+from core.utils import obsidian_embed
+from core.config import BOT_VERSION, BOT_WEBSITE, BOT_DEVELOPER
 from database import DB_PATH
 
 

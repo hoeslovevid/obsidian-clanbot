@@ -5,8 +5,8 @@ from typing import Optional
 from datetime import datetime, timezone, timedelta
 import dateparser
 
-from config import TIMEZONE
-from utils import obsidian_embed, TIME_AUTOCOMPLETE_CHOICES, EMBED_COLORS
+from core.config import TIMEZONE
+from core.utils import obsidian_embed, TIME_AUTOCOMPLETE_CHOICES, EMBED_COLORS
 from database import DB_PATH, now_utc, get_user_timezone
 import aiosqlite
 
@@ -134,7 +134,7 @@ def setup(bot, group=None):
         )
 
     # Reminder preferences (mods only) - quieter notifications via DM
-    from utils import is_mod
+    from core.utils import is_mod
     list_decorator = group.command(name="remind_list", description="List your pending reminders. Optionally cancel one.") if group else bot.tree.command(name="remind_list", description="List your pending reminders.")
 
     @list_decorator

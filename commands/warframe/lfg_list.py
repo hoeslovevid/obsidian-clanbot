@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from datetime import datetime, timezone
 
-from utils import obsidian_embed, error_embed
+from core.utils import obsidian_embed, error_embed
 from database import DB_PATH
 from views import EmbedPaginator
 from commands.warframe.lfg import MISSION_TYPES
@@ -14,7 +14,7 @@ ITEMS_PER_PAGE = 15
 
 async def mission_type_autocomplete(interaction: discord.Interaction, current: str):
     """Autocomplete for mission type filter. Paginated: top 25 by relevance."""
-    from utils import AUTOCOMPLETE_MAX_CHOICES
+    from core.utils import AUTOCOMPLETE_MAX_CHOICES
     current_lower = (current or "").lower().strip()
     if not current_lower:
         matches = list(MISSION_TYPES)[:AUTOCOMPLETE_MAX_CHOICES]

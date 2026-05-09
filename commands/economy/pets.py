@@ -5,7 +5,7 @@ from typing import Optional
 from datetime import datetime, timedelta, timezone
 import random
 
-from utils import obsidian_embed
+from core.utils import obsidian_embed
 from database import DB_PATH, now_utc, get_user_balance, remove_coins, add_coins
 from views import ConfirmView
 import aiosqlite
@@ -415,7 +415,7 @@ def setup(bot, group=None):
     
     async def pet_type_autocomplete(interaction: discord.Interaction, current: str):
         """Autocomplete for pet types. Paginated: returns top 25 by relevance."""
-        from utils import AUTOCOMPLETE_MAX_CHOICES
+        from core.utils import AUTOCOMPLETE_MAX_CHOICES
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute("SELECT pet_type FROM pet_types ORDER BY pet_type")
             rows = await cur.fetchall()

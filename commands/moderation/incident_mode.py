@@ -4,7 +4,7 @@ from discord import app_commands
 from typing import Optional
 from datetime import datetime, timezone, timedelta
 
-from utils import obsidian_embed, is_mod
+from core.utils import obsidian_embed, is_mod
 from database import get_guild_setting, set_guild_setting, now_utc
 
 

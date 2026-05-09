@@ -4,8 +4,8 @@ import discord  # type: ignore
 from discord import app_commands  # type: ignore
 from datetime import datetime, timezone
 
-from config import TIMEZONE
-from utils import obsidian_embed, is_mod
+from core.config import TIMEZONE
+from core.utils import obsidian_embed, is_mod
 from database import DB_PATH, now_utc
 import aiosqlite  # type: ignore
 

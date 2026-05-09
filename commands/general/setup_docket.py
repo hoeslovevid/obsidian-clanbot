@@ -2,7 +2,7 @@
 import asyncio
 import discord
 
-from utils import obsidian_embed, is_mod
+from core.utils import obsidian_embed, is_mod
 
 # Track in-flight setup commands to prevent duplicates
 _docket_setup_in_progress = set()

@@ -3,7 +3,7 @@ import discord  # type: ignore
 from discord import app_commands  # type: ignore
 from datetime import datetime, timezone
 
-from utils import obsidian_embed
+from core.utils import obsidian_embed
 from database import DB_PATH, now_utc
 import aiosqlite  # type: ignore
 
@@ -291,7 +291,7 @@ def setup(bot, group=None):
     @app_commands.describe(channel="The channel where suggestions will be posted")
     async def suggest_setup(interaction: discord.Interaction, channel: discord.TextChannel):
         """Pin a specific channel for suggestions."""
-        from utils import obsidian_embed, is_mod, success_embed
+        from core.utils import obsidian_embed, is_mod, success_embed
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
             return await interaction.response.send_message(
                 embed=obsidian_embed(

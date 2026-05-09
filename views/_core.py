@@ -7,7 +7,7 @@ import discord  # type: ignore
 import aiosqlite  # type: ignore
 from typing import Optional, Callable, Awaitable, Any, Tuple
 
-from utils import is_mod, display_case_status, obsidian_embed
+from core.utils import is_mod, display_case_status, obsidian_embed
 from database import DB_PATH, now_utc, log_complaint_action
 
 logger = logging.getLogger(__name__)
@@ -906,7 +906,7 @@ class ApplicationManageView(discord.ui.View):
             return await interaction.response.send_message("Only moderators can use this.", ephemeral=True)
         
         # Show modal for rejection reason
-        from modals import ApplicationRejectModal
+        from core.modals import ApplicationRejectModal
         modal = ApplicationRejectModal(self.application_id)
         await interaction.response.send_modal(modal)
 

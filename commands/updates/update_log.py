@@ -4,7 +4,7 @@ from discord import app_commands
 from datetime import datetime, timezone
 import hashlib
 
-from utils import obsidian_embed, is_mod
+from core.utils import obsidian_embed, is_mod
 from database import DB_PATH
 import aiosqlite  # type: ignore
 

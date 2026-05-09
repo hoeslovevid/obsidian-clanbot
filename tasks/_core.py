@@ -13,9 +13,9 @@ import discord
 from discord.ext import tasks  # type: ignore
 
 from database import DB_PATH, now_utc, get_guild_setting, set_guild_setting, get_quieter_mode, add_coins, add_xp, get_user_xp
-from channels import resolve_channel_id, delete_temp_vc_and_panel
-from warframe_api import get_baro_status, get_all_cycles, fetch_invasions, fetch_archon_hunt_data, fetch_events_data, fetch_alerts, fetch_duviri_circuit
-from utils import obsidian_embed, ECONOMY_ENABLED, COINS_PER_MINUTE_VOICE, MIN_VOICE_MINUTES_FOR_REWARD, XP_ENABLED, XP_PER_MINUTE_VOICE
+from core.channels import resolve_channel_id, delete_temp_vc_and_panel
+from api.warframe_api import get_baro_status, get_all_cycles, fetch_invasions, fetch_archon_hunt_data, fetch_events_data, fetch_alerts, fetch_duviri_circuit
+from core.utils import obsidian_embed, ECONOMY_ENABLED, COINS_PER_MINUTE_VOICE, MIN_VOICE_MINUTES_FOR_REWARD, XP_ENABLED, XP_PER_MINUTE_VOICE
 
 # Import Baro embed builder (lazy import to avoid circular dependency)
 def get_baro_embed_builder():
@@ -282,7 +282,7 @@ def setup_tasks(bot):
     async def recurring_event_loop():
         """Create events from recurring templates when scheduled time matches."""
         try:
-            from channels import ensure_core_channels
+            from core.channels import ensure_core_channels
             from views import RSVPView
             now = now_utc()
             current_week = now.strftime("%Y-W%V")
@@ -543,7 +543,7 @@ def setup_tasks(bot):
                                         if leveled_up:
                                             xp, level, total_xp = await get_user_xp(guild.id, user_id)
                                             logger.info(f"User {user_id} leveled up to level {level} in guild {guild.id} (voice activity)")
-                                            from utils import send_levelup_announcement
+                                            from core.utils import send_levelup_announcement
                                             await send_levelup_announcement(guild, user, level, xp, total_xp)
                                 
                                 # Update tracking
@@ -685,7 +685,7 @@ def setup_tasks(bot):
                 record_warframe_achievement_unlock,
                 update_steam_playtime,
             )
-            from warframe_api import fetch_steam_warframe_playtime
+            from api.warframe_api import fetch_steam_warframe_playtime
 
             if not os.environ.get("STEAM_API_KEY"):
                 return
@@ -1657,7 +1657,7 @@ def setup_tasks(bot):
                     
                     # If no valid devstream date, auto-calculate the next one
                     if not devstream_date:
-                        from warframe_api import calculate_next_devstream_date
+                        from api.warframe_api import calculate_next_devstream_date
                         devstream_date = await calculate_next_devstream_date()
                         
                         if devstream_date:
@@ -1961,7 +1961,7 @@ def setup_tasks(bot):
     async def stale_ticket_reminder_loop():
         """Remind staff about open tickets with no activity for X days."""
         try:
-            from utils import get_mod_role
+            from core.utils import get_mod_role
             stale_days = 3
             cutoff = now_utc() - timedelta(days=stale_days)
             cutoff_iso = cutoff.isoformat()

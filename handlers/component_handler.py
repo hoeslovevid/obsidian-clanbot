@@ -10,8 +10,8 @@ import discord  # type: ignore
 import aiosqlite  # type: ignore
 from typing import Any, Optional
 
-from config import DB_PATH
-from utils import is_mod, obsidian_embed, get_mod_role
+from core.config import DB_PATH
+from core.utils import is_mod, obsidian_embed, get_mod_role
 
 logger = logging.getLogger(__name__)
 
@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 async def handle_component(bot: discord.Client, interaction: discord.Interaction) -> None:
     """Route a component interaction (button / select menu) to the appropriate handler."""
     from views import ComplaintModView, RSVPView, SetLimitView
-    from modals import ComplaintModal, RenameVCModal, InviteModal, RemoveAccessModal, TransferOwnerModal
-    from channels import delete_temp_vc_and_panel
+    from core.modals import ComplaintModal, RenameVCModal, InviteModal, RemoveAccessModal, TransferOwnerModal
+    from core.channels import delete_temp_vc_and_panel
     try:
         cid = interaction.data.get("custom_id") if interaction.data else None
         if not cid:

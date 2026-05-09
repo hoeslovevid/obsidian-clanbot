@@ -5,7 +5,7 @@ import discord  # type: ignore
 from discord import app_commands  # type: ignore
 from typing import Optional, cast
 
-from utils import obsidian_embed, is_mod, ECONOMY_ENABLED, COINS_PER_MESSAGE, COINS_DAILY_REWARD, MESSAGE_COOLDOWN_SECONDS, COINS_PER_MINUTE_VOICE
+from core.utils import obsidian_embed, is_mod, ECONOMY_ENABLED, COINS_PER_MESSAGE, COINS_DAILY_REWARD, MESSAGE_COOLDOWN_SECONDS, COINS_PER_MINUTE_VOICE
 
 
 def _collect_group_commands(group: app_commands.Group, prefix: list[str]) -> list[tuple[str, str]]:
