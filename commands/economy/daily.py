@@ -40,6 +40,79 @@ def _streak_calendar(streak: int) -> str:
     return f"`{header}`\n" + "  ".join(cells)
 
 
+class GracePeriodView(discord.ui.View):
+    """Buttons shown when the user missed exactly 1 day and can pay to restore their streak."""
+
+    def __init__(self, streak: int, grace_cost: int):
+        super().__init__(timeout=120)
+        self.streak = streak
+        self.grace_cost = grace_cost
+
+    @discord.ui.button(label="Restore Streak", style=discord.ButtonStyle.success, emoji="🔥")
+    async def restore(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Pay the grace fee and keep the streak."""
+        for item in self.children:
+            item.disabled = True
+        await interaction.response.edit_message(view=self)
+
+        from bot import add_coins, DB_PATH
+        import aiosqlite
+        from database import remove_coins, get_user_balance
+
+        bal = await get_user_balance(interaction.guild.id, interaction.user.id)
+        if bal < self.grace_cost:
+            return await interaction.followup.send(
+                embed=obsidian_embed(
+                    "❌ Insufficient Coins",
+                    f"You need **{self.grace_cost:,}** coins to restore your streak but only have **{bal:,}**.",
+                    color=discord.Color.red(), client=interaction.client,
+                ), ephemeral=True,
+            )
+
+        today = datetime.now(timezone.utc).date().isoformat()
+        new_streak = self.streak + 1
+        streak_mult, streak_label = _streak_multiplier(new_streak)
+        coins_awarded = int(COINS_DAILY_REWARD * streak_mult)
+
+        ok = await remove_coins(interaction.guild.id, interaction.user.id, self.grace_cost, "GRACE_FEE", "Streak grace period fee")
+        if not ok:
+            return await interaction.followup.send("Transaction failed. Please try again.", ephemeral=True)
+
+        await add_coins(interaction.guild.id, interaction.user.id, coins_awarded, "DAILY", f"Daily reward (streak: {new_streak}, grace restored)")
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute("""
+                UPDATE daily_claims SET last_claim_date=?, streak_days=? WHERE guild_id=? AND user_id=?
+            """, (today, new_streak, interaction.guild.id, interaction.user.id))
+            await db.commit()
+
+        calendar = _streak_calendar(new_streak)
+        streak_mult_val, _ = _streak_multiplier(new_streak)
+        bonus_coins = int(COINS_DAILY_REWARD * streak_mult_val) - COINS_DAILY_REWARD
+        reward_text = f"**{coins_awarded:,}** coins" + (f" _(+{bonus_coins:,} streak bonus)_" if bonus_coins else "")
+
+        await interaction.followup.send(
+            embed=obsidian_embed(
+                "🔥 Streak Restored!",
+                f"Paid **{self.grace_cost:,}** coins to restore your streak.\n\n"
+                f"**Streak:** {new_streak} days\n{calendar}",
+                color=discord.Color.orange(),
+                fields=[("💰 Daily Reward", reward_text, True)],
+                thumbnail=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
+                footer="Streak restored! Don't miss tomorrow.",
+                client=interaction.client,
+            ), ephemeral=True,
+        )
+
+    @discord.ui.button(label="Start Fresh (free)", style=discord.ButtonStyle.secondary, emoji="🔄")
+    async def fresh(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Reset streak and claim normally."""
+        for item in self.children:
+            item.disabled = True
+        await interaction.response.edit_message(view=self)
+        # Run normal daily with streak reset
+        await _run_daily(interaction, force_reset=True)
+
+
 def setup(bot, group=None):
     """Register the daily command under /economy and as top-level /daily shortcut."""
     async def daily_callback(interaction: discord.Interaction):
@@ -50,7 +123,7 @@ def setup(bot, group=None):
     shortcut = app_commands.Command(name="daily", description="Claim your daily coin reward! (shortcut for /economy daily)", callback=daily_callback)
     bot.tree.add_command(shortcut)
     
-async def _run_daily(interaction: discord.Interaction):
+async def _run_daily(interaction: discord.Interaction, force_reset: bool = False):
     """Claim daily coins (once per day)."""
     if not ECONOMY_ENABLED:
         return await interaction.response.send_message(
@@ -120,15 +193,44 @@ async def _run_daily(interaction: discord.Interaction):
             if last_claim_date == yesterday_str:
                 new_streak = streak_days + 1
                 used_freeze = False
+                offer_grace = False
             elif freeze_used_month != current_month:
                 new_streak = streak_days
                 used_freeze = True
+                offer_grace = False
             else:
+                # Missed exactly 1 day (2-day gap)? Offer grace period if streak >= 3
+                day_before_yesterday = (datetime.now(timezone.utc).date() - timedelta(days=2)).isoformat()
+                offer_grace = (last_claim_date == day_before_yesterday and streak_days >= 3 and not force_reset)
                 new_streak = 1
                 used_freeze = False
         else:
             new_streak = 1
             used_freeze = False
+            offer_grace = False
+
+        # Offer grace period before awarding if user missed exactly 1 day
+        if offer_grace:
+            grace_cost = max(100, int(COINS_DAILY_REWARD * 0.20))  # 20% of daily reward
+            tomorrow_dt = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+            view = GracePeriodView(streak_days, grace_cost)
+            embed = obsidian_embed(
+                "😬 You Missed a Day!",
+                f"Your **{streak_days}-day streak** is at risk!\n\n"
+                f"Pay **{grace_cost:,} coins** to restore it, or start fresh from day 1.",
+                color=discord.Color.orange(),
+                fields=[
+                    ("🔥 Current Streak", f"{streak_days} days", True),
+                    ("💸 Restore Cost", f"{grace_cost:,} coins", True),
+                    ("⏰ Next Claim", f"<t:{int(tomorrow_dt.timestamp())}:R>", True),
+                ],
+                thumbnail=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
+                footer="You have 2 minutes to decide • Start Fresh is always free",
+                client=interaction.client,
+            )
+            msg = await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+            view.message = msg
+            return
 
         # Award coins with streak multiplier
         streak_mult, streak_label = _streak_multiplier(new_streak)

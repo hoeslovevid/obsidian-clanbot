@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from typing import Optional
 
-from core.utils import obsidian_embed, is_mod
+from core.utils import obsidian_embed, setup_missing_embed, is_mod
 from database import get_guild_setting, set_guild_setting, DB_PATH
 import aiosqlite  # type: ignore
 
@@ -90,13 +90,13 @@ def setup(bot, group=None):
             
             if not channel_id_str:
                 return await interaction.followup.send(
-                    embed=obsidian_embed(
-                        "📢 Alert Notifications Status",
-                        "Alert notifications are not configured.",
-                        color=discord.Color.orange(),
+                    embed=setup_missing_embed(
+                        "Alert Notifications",
+                        "/warframe alerts_notify",
+                        "Use the 'set' action to choose a channel for Warframe alert pings.",
                         client=interaction.client,
                     ),
-                    ephemeral=True
+                    ephemeral=True,
                 )
             
             try:

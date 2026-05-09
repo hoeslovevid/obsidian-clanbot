@@ -5,7 +5,7 @@ from typing import Optional
 from datetime import datetime, timezone
 import dateparser  # type: ignore
 
-from core.utils import obsidian_embed, is_mod
+from core.utils import obsidian_embed, setup_missing_embed, is_mod
 from database import get_guild_setting, set_guild_setting, DB_PATH
 import aiosqlite  # type: ignore
 
@@ -95,13 +95,13 @@ def setup(bot, group=None):
             
             if not channel_id_str:
                 return await interaction.followup.send(
-                    embed=obsidian_embed(
-                        "📺 Devstream Notifications Status",
-                        "Devstream notifications are not configured.",
-                        color=discord.Color.orange(),
+                    embed=setup_missing_embed(
+                        "Devstream Notifications",
+                        "/warframe devstream_notify",
+                        "Use the 'set' action to choose a channel for devstream alerts.",
                         client=interaction.client,
                     ),
-                    ephemeral=True
+                    ephemeral=True,
                 )
             
             try:

@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from typing import Optional
 
-from core.utils import obsidian_embed, is_mod
+from core.utils import obsidian_embed, setup_missing_embed, is_mod
 from database import DB_PATH, now_utc
 import aiosqlite
 
@@ -95,13 +95,13 @@ def setup(bot, group=None):
         
         if not row:
             return await interaction.followup.send(
-                embed=obsidian_embed(
-                    "📌 Starboard",
-                    "Starboard is not configured. Use `/starboard_setup` to configure it.",
-                    color=discord.Color.orange(),
+                embed=setup_missing_embed(
+                    "Starboard",
+                    "/mod starboard",
+                    "Use the 'setup' action to choose a channel and star threshold.",
                     client=interaction.client,
                 ),
-                ephemeral=True
+                ephemeral=True,
             )
         
         channel_id, threshold, emoji = row

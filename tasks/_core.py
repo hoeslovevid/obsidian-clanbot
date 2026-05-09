@@ -1992,29 +1992,45 @@ def setup_tasks(bot):
 
     @tasks.loop(hours=6)
     async def stale_ticket_reminder_loop():
-        """Remind staff about open tickets with no activity for X days."""
+        """Remind staff about idle tickets; auto-close if still idle after warning."""
         try:
             from core.utils import get_mod_role
-            stale_days = 3
-            cutoff = now_utc() - timedelta(days=stale_days)
-            cutoff_iso = cutoff.isoformat()
             for guild in bot.guilds:
                 try:
+                    stale_days = 3
                     days_setting = await get_guild_setting(guild.id, "stale_ticket_days")
                     if days_setting and days_setting.isdigit():
                         stale_days = int(days_setting)
-                        cutoff = now_utc() - timedelta(days=stale_days)
-                        cutoff_iso = cutoff.isoformat()
+                    cutoff = now_utc() - timedelta(days=stale_days)
+                    cutoff_iso = cutoff.isoformat()
+                    # Auto-close configured? (default True unless disabled)
+                    autoclose_setting = await get_guild_setting(guild.id, "ticket_autoclose")
+                    autoclose_enabled = autoclose_setting != "0"
+
                     async with aiosqlite.connect(DB_PATH) as db:
+                        # --- Step 1: warn tickets not yet warned ---
                         cur = await db.execute("""
-                            SELECT id, channel_id, ticket_id, subject, last_activity_at, stale_reminder_sent
+                            SELECT id, channel_id, ticket_id, subject, last_activity_at
                             FROM tickets
-                            WHERE guild_id=? AND status='open' AND (stale_reminder_sent IS NULL OR stale_reminder_sent=0)
-                            AND (last_activity_at IS NULL OR last_activity_at < ?)
+                            WHERE guild_id=? AND status='open'
+                              AND (stale_reminder_sent IS NULL OR stale_reminder_sent=0)
+                              AND (last_activity_at IS NULL OR last_activity_at < ?)
                         """, (guild.id, cutoff_iso))
-                        rows = await cur.fetchall()
-                    for row in rows:
-                        tid, ch_id, ticket_id, subject, last_at, _ = row
+                        warn_rows = await cur.fetchall()
+
+                        # --- Step 2: auto-close tickets already warned + still idle ---
+                        # "24h after warning sent" ≈ the loop runs daily; if warned AND still past cutoff, close
+                        autoclose_cutoff = (now_utc() - timedelta(days=stale_days + 1)).isoformat()
+                        cur2 = await db.execute("""
+                            SELECT id, channel_id, ticket_id, user_id, subject
+                            FROM tickets
+                            WHERE guild_id=? AND status='open' AND stale_reminder_sent=1
+                              AND (last_activity_at IS NULL OR last_activity_at < ?)
+                        """, (guild.id, autoclose_cutoff))
+                        close_rows = await cur2.fetchall()
+
+                    # Send warnings
+                    for tid, ch_id, ticket_id, subject, last_at in warn_rows:
                         channel = guild.get_channel(int(ch_id))
                         if not isinstance(channel, discord.TextChannel):
                             continue
@@ -2022,14 +2038,15 @@ def setup_tasks(bot):
                         mention = ""
                         if not await get_quieter_mode(guild.id) and mod_role:
                             mention = mod_role.mention
+                        autoclose_note = f"\n\n⚠️ This ticket will be **auto-closed in ~24 hours** if there is no activity." if autoclose_enabled else ""
                         try:
                             await channel.send(
                                 content=mention or None,
                                 embed=obsidian_embed(
-                                    "⏰ Stale Ticket Reminder",
+                                    "⏰ Ticket Inactive",
                                     f"This ticket has had no activity for **{stale_days}+ days**.\n"
                                     f"**Last activity:** {last_at[:19] if last_at else '—'}\n\n"
-                                    "Staff: please respond or close this ticket.",
+                                    f"Staff: please respond or close this ticket.{autoclose_note}",
                                     color=discord.Color.orange(),
                                     client=bot,
                                 ),
@@ -2042,6 +2059,59 @@ def setup_tasks(bot):
                                 await db.commit()
                         except Exception as e:
                             logger.warning(f"[stale_ticket] Could not send reminder for ticket {ticket_id}: {e}")
+
+                    # Auto-close stale warned tickets
+                    if autoclose_enabled:
+                        for tid, ch_id, ticket_id, user_id, subject in close_rows:
+                            channel = guild.get_channel(int(ch_id))
+                            if not isinstance(channel, discord.TextChannel):
+                                continue
+                            try:
+                                now_iso = now_utc().isoformat()
+                                # Generate transcript first
+                                from commands.tickets.ticket import _build_transcript, _send_transcript_to_log, _get_ticket_row_by_id
+                                ticket_row = await _get_ticket_row_by_id(tid)
+                                transcript_bytes = await _build_transcript(channel)
+                                file_name = f"ticket-{ticket_id}.txt"
+                                log_ch_id, log_msg_id = None, None
+                                if ticket_row:
+                                    log_ch_id, log_msg_id = await _send_transcript_to_log(guild, ticket_row, transcript_bytes, file_name)
+
+                                async with aiosqlite.connect(DB_PATH) as db:
+                                    await db.execute(
+                                        "UPDATE tickets SET status='closed', closed_at=?, closed_by=?, transcript_channel_id=?, transcript_message_id=? WHERE id=?",
+                                        (now_iso, bot.user.id if bot.user else 0, log_ch_id, log_msg_id, tid),
+                                    )
+                                    await db.commit()
+
+                                await channel.send(embed=obsidian_embed(
+                                    "🔒 Ticket Auto-Closed",
+                                    f"This ticket (`{ticket_id}`) was automatically closed due to inactivity "
+                                    f"(**{stale_days + 1}+ days** with no messages).\n\n"
+                                    "A transcript has been saved. This channel will be deleted in 30 seconds.",
+                                    color=discord.Color.dark_grey(), client=bot,
+                                ))
+
+                                # DM the ticket owner
+                                try:
+                                    owner = guild.get_member(int(user_id)) or await bot.fetch_user(int(user_id))
+                                    if owner:
+                                        await owner.send(embed=obsidian_embed(
+                                            "🔒 Your Ticket Was Closed",
+                                            f"Your ticket **{ticket_id}** in **{guild.name}** was automatically closed "
+                                            f"after {stale_days + 1} days of inactivity.\n\n"
+                                            "If you still need help, open a new ticket with `/community ticket`.",
+                                            color=discord.Color.dark_grey(), client=bot,
+                                        ))
+                                except Exception:
+                                    pass
+
+                                import asyncio as _asyncio
+                                await _asyncio.sleep(30)
+                                await channel.delete(reason="Auto-closed: ticket idle too long")
+                                logger.info(f"[stale_ticket] Auto-closed idle ticket {ticket_id} in guild {guild.id}")
+                            except Exception as e:
+                                logger.warning(f"[stale_ticket] Could not auto-close ticket {ticket_id}: {e}")
                 except Exception as e:
                     logger.error(f"[stale_ticket] Error for guild {guild.id}: {e}", exc_info=True)
         except Exception as e:

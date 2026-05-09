@@ -135,10 +135,11 @@ def setup(bot, group=None):
                 if top_user and top_user.display_avatar:
                     thumb_url = top_user.display_avatar.url
 
+            rank_suffix = f" • 📍 Your rank: #{user_rank}/{total_count}" if user_rank else ""
             pages.append({
                 "description": f"Top {len(rows)} by {sort_label}{you_line}",
                 "fields": [("Rankings", leaderboard_text.strip(), False)],
-                "footer": f"{interaction.guild.name} • Page {len(pages) + 1}/{(len(rows) + per_page - 1) // per_page} • {total_count} users",
+                "footer": f"{interaction.guild.name} • Page {len(pages) + 1}/{(len(rows) + per_page - 1) // per_page}{rank_suffix}",
                 "thumbnail": thumb_url,
             })
 

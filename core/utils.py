@@ -512,3 +512,32 @@ def display_case_status(status: str) -> str:
         "RESOLVED": "Closed",
         "REJECTED": "Dismissed",
     }.get(s, status.title() if status else "Unknown")
+
+
+def setup_missing_embed(
+    feature: str,
+    fix_command: str,
+    extra: str = "",
+    client: Optional[discord.Client] = None,
+) -> discord.Embed:
+    """Return a standardised 'feature not configured' embed that tells mods the exact fix.
+
+    Args:
+        feature:     Human-readable feature name, e.g. "Events channel".
+        fix_command: The slash command mods should run, e.g. "/general setup_obsidian".
+        extra:       Optional additional context shown in a second line.
+        client:      Bot client (used for thumbnail/branding).
+    """
+    desc = (
+        f"**{feature}** has not been configured for this server.\n\n"
+        f"🔧 **Mods:** run `{fix_command}` to set it up."
+    )
+    if extra:
+        desc += f"\n\n_{extra}_"
+    return obsidian_embed(
+        f"⚙️ {feature} Not Configured",
+        desc,
+        color=discord.Color.orange(),
+        footer=f"Run {fix_command} to enable this feature",
+        client=client,
+    )

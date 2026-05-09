@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from typing import Optional
 
-from core.utils import obsidian_embed, is_mod
+from core.utils import obsidian_embed, setup_missing_embed, is_mod
 from database import set_server_stats_channel, remove_server_stats_channel, get_server_stats_channel
 
 
@@ -98,13 +98,13 @@ def setup(bot, group=None):
             
             if not settings:
                 return await interaction.followup.send(
-                    embed=obsidian_embed(
-                        "📊 Server Stats Status",
-                        "Server stats are not configured.",
-                        color=discord.Color.orange(),
+                    embed=setup_missing_embed(
+                        "Server Stats",
+                        "/general server_stats",
+                        "Use the 'setup' action to pick a channel and display options.",
                         client=interaction.client,
                     ),
-                    ephemeral=True
+                    ephemeral=True,
                 )
             
             channel_obj = interaction.guild.get_channel(settings["channel_id"])

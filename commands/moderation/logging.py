@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from typing import Optional
 
-from core.utils import obsidian_embed, error_embed, success_embed, is_mod
+from core.utils import obsidian_embed, setup_missing_embed, error_embed, success_embed, is_mod
 from database import get_guild_setting, set_guild_setting, DB_PATH
 import aiosqlite  # type: ignore
 
@@ -130,13 +130,13 @@ def setup(bot, group=None):
             
             if not rows:
                 return await interaction.followup.send(
-                    embed=obsidian_embed(
-                        "📋 Logging Status",
-                        "No logging channels are configured.",
-                        color=discord.Color.orange(),
+                    embed=setup_missing_embed(
+                        "Logging Channels",
+                        "/mod logging",
+                        "Use the 'set' action to assign a channel for each log type (moderation, messages, joins, etc.).",
                         client=interaction.client,
                     ),
-                    ephemeral=True
+                    ephemeral=True,
                 )
             
             desc = ""
