@@ -116,16 +116,28 @@ async def create_suggestion_from_modal(interaction: discord.Interaction, suggest
     # Check for suggestions channel before creating DB record
     guild = interaction.guild
     suggestions_channel = None
-    for channel in guild.text_channels:
-        if channel.name.lower() in ("suggestions", "suggestion", "💡-suggestions", "💡suggestions"):
-            suggestions_channel = channel
-            break
+
+    # 1. Check guild_settings for an explicitly configured channel ID
+    from database import get_guild_setting
+    channel_id_str = await get_guild_setting(guild.id, "suggestions_channel_id")
+    if channel_id_str and channel_id_str.isdigit():
+        ch = guild.get_channel(int(channel_id_str))
+        if isinstance(ch, discord.TextChannel):
+            suggestions_channel = ch
+
+    # 2. Fall back to name-scanning if no explicit setting
+    if not suggestions_channel:
+        for channel in guild.text_channels:
+            if channel.name.lower() in ("suggestions", "suggestion", "💡-suggestions", "💡suggestions"):
+                suggestions_channel = channel
+                break
 
     if not suggestions_channel:
         return await interaction.followup.send(
             embed=obsidian_embed(
                 "❌ No Suggestions Channel",
-                "No suggestions channel found. Ask a moderator to create a #suggestions channel or run `/general setup_obsidian` to configure channels.",
+                "No suggestions channel found. A moderator can run `/community suggest_setup` to pin a specific channel, "
+                "or create a channel named `#suggestions`.",
                 color=discord.Color.red(),
                 client=interaction.client,
             ),
@@ -273,3 +285,39 @@ def setup(bot, group=None):
 
         await interaction.response.defer(ephemeral=True)
         await create_suggestion_from_modal(interaction, suggestion, category_val)
+
+    setup_decorator = group.command(name="suggest_setup", description="Set the suggestions channel (mods only).") if group else bot.tree.command(name="suggest_setup", description="Set the suggestions channel (mods only).")
+
+    @setup_decorator
+    @app_commands.describe(channel="The channel where suggestions will be posted")
+    async def suggest_setup(interaction: discord.Interaction, channel: discord.TextChannel):
+        """Pin a specific channel for suggestions."""
+        from utils import obsidian_embed, is_mod, success_embed
+        if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Permission Denied",
+                    "Only moderators can configure the suggestions channel.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=obsidian_embed("❌ Invalid Context", "Use this in a server.", color=discord.Color.red(), client=interaction.client),
+                ephemeral=True,
+            )
+        await interaction.response.defer(ephemeral=True)
+        from database import set_guild_setting
+        await set_guild_setting(interaction.guild.id, "suggestions_channel_id", str(channel.id))
+        await interaction.followup.send(
+            embed=obsidian_embed(
+                "✅ Suggestions Channel Set",
+                f"Suggestions will now be posted in {channel.mention}.\n\n"
+                f"Users can submit suggestions with `/community suggest`.",
+                color=discord.Color.green(),
+                client=interaction.client,
+            ),
+            ephemeral=True,
+        )

@@ -227,7 +227,7 @@ class LFGView(discord.ui.View):
                 break
         
         await interaction.response.edit_message(embed=embed, view=self)
-        
+
         action = "joined" if response == "JOIN" else "left"
         thread_mention = ""
         if thread_id:
@@ -238,6 +238,24 @@ class LFGView(discord.ui.View):
             except Exception:
                 pass
         await interaction.followup.send(f"You {action} the group! ({current_count}/{max_players}){thread_mention}", ephemeral=True)
+
+        # DM the creator when the group becomes full
+        if response == "JOIN" and current_count >= max_players and interaction.user.id != creator_id:
+            try:
+                creator = interaction.guild.get_member(creator_id)
+                if creator:
+                    from utils import obsidian_embed
+                    dm_embed = obsidian_embed(
+                        "✅ Your LFG Group is Full!",
+                        f"Your **{embed.title or 'LFG'}** group has reached **{max_players}/{max_players}** players.\n\n"
+                        f"The last player to join was **{interaction.user.display_name}**.\n\n"
+                        f"*Head to your LFG post to get started!*",
+                        color=discord.Color.green(),
+                        client=interaction.client,
+                    )
+                    await creator.send(embed=dm_embed)
+            except (discord.Forbidden, discord.HTTPException):
+                pass
 
 
 async def create_lfg_post(bot, interaction, mission_type: str, max_players: int, duration_hours: int, description: str, ping_role_id: int | None):

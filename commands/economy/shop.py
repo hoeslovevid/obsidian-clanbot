@@ -2,6 +2,7 @@
 import discord
 from discord import app_commands
 from typing import Optional
+from datetime import datetime, timezone, timedelta
 
 from utils import obsidian_embed, feature_off_embed, bullet_list, ECONOMY_ENABLED
 from database import DB_PATH, remove_coins, add_coins
@@ -61,7 +62,7 @@ def setup(bot, group=None):
                 ephemeral=True
             )
         
-        item_type_emoji = {"role": "🎭", "coins": "💰", "xp": "⭐", "custom": "🎁"}
+        item_type_emoji = {"role": "🎭", "coins": "💰", "xp": "⭐", "xp_boost": "⚡", "coin_boost": "💸", "custom": "🎁"}
         items = []
         for item_id, item_name, description, price, item_type, item_value, stock in rows[:15]:
             stock_text = f"({stock} left)" if stock >= 0 else "(Unlimited)"
@@ -247,11 +248,71 @@ def setup(bot, group=None):
                 item_given = True
             except ValueError:
                 pass
-        
+
+        elif item_type == "xp_boost" and item_value:
+            # item_value format: "multiplier:hours" e.g. "2:24" = 2x XP for 24 hours
+            try:
+                parts = item_value.split(":")
+                multiplier = float(parts[0])
+                hours = int(parts[1]) if len(parts) > 1 else 24
+                expires_at = (datetime.now(timezone.utc) + timedelta(hours=hours)).isoformat()
+                from database import set_guild_setting, get_guild_setting
+                # Stack with existing boost (take the higher one)
+                existing = await get_guild_setting(interaction.guild.id, f"xp_boost:{interaction.user.id}")
+                if existing:
+                    try:
+                        ex_mult, ex_exp = existing.split(":", 1)
+                        ex_dt = datetime.fromisoformat(ex_exp)
+                        if datetime.now(timezone.utc) < ex_dt and float(ex_mult) >= multiplier:
+                            # Existing boost is still active and stronger — extend expiry only
+                            new_expires = (max(ex_dt, datetime.now(timezone.utc)) + timedelta(hours=hours)).isoformat()
+                            await set_guild_setting(interaction.guild.id, f"xp_boost:{interaction.user.id}", f"{ex_mult}:{new_expires}")
+                            item_given = True
+                        else:
+                            await set_guild_setting(interaction.guild.id, f"xp_boost:{interaction.user.id}", f"{multiplier}:{expires_at}")
+                            item_given = True
+                    except Exception:
+                        await set_guild_setting(interaction.guild.id, f"xp_boost:{interaction.user.id}", f"{multiplier}:{expires_at}")
+                        item_given = True
+                else:
+                    await set_guild_setting(interaction.guild.id, f"xp_boost:{interaction.user.id}", f"{multiplier}:{expires_at}")
+                    item_given = True
+            except (ValueError, IndexError):
+                pass
+
+        elif item_type == "coin_boost" and item_value:
+            # item_value format: "multiplier:hours" e.g. "1.5:12" = 1.5x coins for 12 hours
+            try:
+                parts = item_value.split(":")
+                multiplier = float(parts[0])
+                hours = int(parts[1]) if len(parts) > 1 else 24
+                expires_at = (datetime.now(timezone.utc) + timedelta(hours=hours)).isoformat()
+                from database import set_guild_setting, get_guild_setting
+                existing = await get_guild_setting(interaction.guild.id, f"coin_boost:{interaction.user.id}")
+                if existing:
+                    try:
+                        ex_mult, ex_exp = existing.split(":", 1)
+                        ex_dt = datetime.fromisoformat(ex_exp)
+                        if datetime.now(timezone.utc) < ex_dt and float(ex_mult) >= multiplier:
+                            new_expires = (max(ex_dt, datetime.now(timezone.utc)) + timedelta(hours=hours)).isoformat()
+                            await set_guild_setting(interaction.guild.id, f"coin_boost:{interaction.user.id}", f"{ex_mult}:{new_expires}")
+                            item_given = True
+                        else:
+                            await set_guild_setting(interaction.guild.id, f"coin_boost:{interaction.user.id}", f"{multiplier}:{expires_at}")
+                            item_given = True
+                    except Exception:
+                        await set_guild_setting(interaction.guild.id, f"coin_boost:{interaction.user.id}", f"{multiplier}:{expires_at}")
+                        item_given = True
+                else:
+                    await set_guild_setting(interaction.guild.id, f"coin_boost:{interaction.user.id}", f"{multiplier}:{expires_at}")
+                    item_given = True
+            except (ValueError, IndexError):
+                pass
+
         desc = f"**Item:** {item_name}\n"
         desc += f"**Price:** {price:,} coins\n"
         desc += f"**Type:** {item_type.replace('_', ' ').title()}\n\n"
-        
+
         if item_type == "role":
             if item_given:
                 desc += "✅ Role has been added to your account!"
@@ -267,6 +328,28 @@ def setup(bot, group=None):
                 desc += f"✅ {item_value} XP has been added to your account!"
             else:
                 desc += "⚠️ XP could not be added. Please contact a moderator."
+        elif item_type == "xp_boost":
+            if item_given and item_value:
+                try:
+                    parts = item_value.split(":")
+                    mult = float(parts[0])
+                    hrs = int(parts[1]) if len(parts) > 1 else 24
+                    desc += f"⚡ **{mult}x XP Boost** active for **{hrs} hours**!\n*All XP earned during this period is multiplied.*"
+                except Exception:
+                    desc += "⚡ XP Boost activated!"
+            else:
+                desc += "⚠️ XP Boost could not be applied. Please contact a moderator."
+        elif item_type == "coin_boost":
+            if item_given and item_value:
+                try:
+                    parts = item_value.split(":")
+                    mult = float(parts[0])
+                    hrs = int(parts[1]) if len(parts) > 1 else 24
+                    desc += f"💸 **{mult}x Coin Boost** active for **{hrs} hours**!\n*All coins earned during this period are multiplied.*"
+                except Exception:
+                    desc += "💸 Coin Boost activated!"
+            else:
+                desc += "⚠️ Coin Boost could not be applied. Please contact a moderator."
         else:
             desc += "✅ Purchase successful! Your item will be delivered shortly."
         

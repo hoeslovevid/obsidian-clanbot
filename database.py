@@ -118,7 +118,20 @@ async def get_user_balance(guild_id: int, user_id: int) -> int:
 
 
 async def add_coins(guild_id: int, user_id: int, amount: int, transaction_type: str, description: Optional[str] = None) -> None:
-    """Add coins to a user's balance."""
+    """Add coins to a user's balance. Applies active coin boosts (not to gambling winnings)."""
+    # Apply coin boost if active (only for earning, not for shop rewards or gambling winnings)
+    _no_boost_types = {"SHOP_REWARD", "GAMBLING", "SHOP_PURCHASE"}
+    if transaction_type not in _no_boost_types:
+        try:
+            boost_val = await get_guild_setting(guild_id, f"coin_boost:{user_id}")
+            if boost_val:
+                from datetime import datetime, timezone as _tz
+                mult_str, exp_str = boost_val.split(":", 1)
+                expires = datetime.fromisoformat(exp_str)
+                if datetime.now(_tz.utc) < expires:
+                    amount = int(amount * float(mult_str))
+        except Exception:
+            pass
     async with aiosqlite.connect(DB_PATH) as db:
         # Insert or update balance
         await db.execute("""
@@ -260,8 +273,19 @@ async def get_user_xp(guild_id: int, user_id: int) -> Tuple[int, int, int]:
 
 
 async def add_xp(guild_id: int, user_id: int, amount: int, source: str = "ACTIVITY") -> bool:
-    """Add XP to a user. Returns True if user leveled up."""
+    """Add XP to a user. Returns True if user leveled up. Applies active XP boosts."""
     from utils import XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT
+    # Apply XP boost if active
+    try:
+        boost_val = await get_guild_setting(guild_id, f"xp_boost:{user_id}")
+        if boost_val:
+            from datetime import datetime, timezone as _tz
+            mult_str, exp_str = boost_val.split(":", 1)
+            expires = datetime.fromisoformat(exp_str)
+            if datetime.now(_tz.utc) < expires:
+                amount = int(amount * float(mult_str))
+    except Exception:
+        pass
     async with aiosqlite.connect(DB_PATH) as db:
         # Get current XP
         cur = await db.execute(

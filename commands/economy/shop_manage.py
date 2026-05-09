@@ -27,6 +27,8 @@ def setup(bot, group=None):
         app_commands.Choice(name="Role", value="role"),
         app_commands.Choice(name="Coins", value="coins"),
         app_commands.Choice(name="XP", value="xp"),
+        app_commands.Choice(name="XP Boost (temporary multiplier)", value="xp_boost"),
+        app_commands.Choice(name="Coin Boost (temporary multiplier)", value="coin_boost"),
         app_commands.Choice(name="Custom", value="custom"),
     ])
     async def shop_manage(

@@ -44,6 +44,7 @@ def setup(bot, group=None):
         platform="Trading platform (used by /trading trade_price when not specified)",
         quieter="Enable quieter mode: fewer pings in events/reminders (mods only)",
         daily_reminder="Get a DM ~1 hour before your daily streak resets",
+        levelup_dm="Get a DM (instead of a public post) when you level up",
     )
     @app_commands.choices(timezone=[
         app_commands.Choice(name=label, value=tz) for tz, label in COMMON_TIMEZONES
@@ -59,12 +60,18 @@ def setup(bot, group=None):
         app_commands.Choice(name="Off - no reminder", value="0"),
         app_commands.Choice(name="(no change)", value="-"),
     ])
+    @app_commands.choices(levelup_dm=[
+        app_commands.Choice(name="On - DM me when I level up (private)", value="1"),
+        app_commands.Choice(name="Off - post in level-up channel (public)", value="0"),
+        app_commands.Choice(name="(no change)", value="-"),
+    ])
     async def preferences(
         interaction: discord.Interaction,
         timezone: Optional[app_commands.Choice[str]] = None,
         platform: Optional[app_commands.Choice[str]] = None,
         quieter: Optional[app_commands.Choice[str]] = None,
         daily_reminder: Optional[app_commands.Choice[str]] = None,
+        levelup_dm: Optional[app_commands.Choice[str]] = None,
     ):
         """Set timezone or quieter mode."""
         if not interaction.guild:
@@ -103,6 +110,12 @@ def setup(bot, group=None):
             state = "On" if daily_reminder.value == "1" else "Off"
             updated.append(f"**Daily streak reminder:** {state}")
 
+        if levelup_dm and levelup_dm.value != "-":
+            from database import set_guild_setting
+            await set_guild_setting(interaction.guild.id, f"user_levelup_dm:{interaction.user.id}", levelup_dm.value)
+            state = "On (DM)" if levelup_dm.value == "1" else "Off (public)"
+            updated.append(f"**Level-up notification:** {state}")
+
         if not lines and not updated:
             # Show current preferences
             current_tz = await get_user_timezone(interaction.guild.id, interaction.user.id)
@@ -111,9 +124,12 @@ def setup(bot, group=None):
             from database import get_guild_setting
             dr_val = await get_guild_setting(interaction.guild.id, f"user_daily_reminder:{interaction.user.id}")
             dr_on = dr_val == "1"
+            lu_val = await get_guild_setting(interaction.guild.id, f"user_levelup_dm:{interaction.user.id}")
+            lu_dm = lu_val == "1"
             lines.append(f"**Your timezone:** {current_tz or 'Not set (uses server default)'}")
             lines.append(f"**Trading platform:** {current_platform.upper() if current_platform else 'Not set (defaults to PC)'}")
             lines.append(f"**Daily streak reminder:** {'On 🔔' if dr_on else 'Off'}")
+            lines.append(f"**Level-up notification:** {'DM (private) 📬' if lu_dm else 'Public channel'}")
             if isinstance(interaction.user, discord.Member) and is_mod(interaction.user):
                 lines.append(f"**Quieter mode:** {'On' if quieter_on else 'Off'}")
             embed = obsidian_embed(

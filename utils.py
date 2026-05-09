@@ -429,19 +429,11 @@ async def send_levelup_announcement(
     total_xp: int,
 ) -> bool:
     """
-    Send a level-up announcement embed to the configured channel.
+    Send a level-up announcement embed to the configured channel, or DM the user
+    if they have opted in to private level-up notifications.
     Returns True if sent, False otherwise.
     """
-    from database import get_guild_setting
-    from database import xp_for_level, xp_for_next_level
-
-    channel_id_str = await get_guild_setting(guild.id, XP_LEVELUP_CHANNEL_KEY)
-    if not channel_id_str or not channel_id_str.isdigit():
-        return False
-
-    channel = guild.get_channel(int(channel_id_str))
-    if not isinstance(channel, discord.abc.Messageable):
-        return False
+    from database import get_guild_setting, xp_for_level, xp_for_next_level
 
     xp_needed_for_level = xp_for_level(level, XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT)
     xp_for_next = xp_for_next_level(level, XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT)
@@ -458,6 +450,36 @@ async def send_levelup_announcement(
         ("📊 XP", f"{xp:,} / {xp_for_next:,}", True),
         ("Progress", f"{progress_bar} {progress_pct}%", False),
     ]
+
+    # Check if user prefers a private DM over a public announcement
+    dm_pref = await get_guild_setting(guild.id, f"user_levelup_dm:{member.id}")
+    if dm_pref == "1":
+        embed = obsidian_embed(
+            "🎉 Level Up!",
+            f"You leveled up to **Level {level}** in **{guild.name}**!\n\n"
+            f"*Keep chatting and staying active to climb even higher!*",
+            color=discord.Color.gold(),
+            author=member,
+            thumbnail=member.display_avatar.url if member.display_avatar else None,
+            image=LEVELUP_IMAGE_URL,
+            fields=fields,
+            footer=f"Total XP: {total_xp:,}",
+            client=None,
+        )
+        try:
+            await member.send(embed=embed)
+            return True
+        except (discord.Forbidden, discord.HTTPException) as e:
+            logger.debug(f"Could not DM level-up to {member}: {e}")
+            # Fall through to channel announcement if DM fails
+
+    channel_id_str = await get_guild_setting(guild.id, XP_LEVELUP_CHANNEL_KEY)
+    if not channel_id_str or not channel_id_str.isdigit():
+        return False
+
+    channel = guild.get_channel(int(channel_id_str))
+    if not isinstance(channel, discord.abc.Messageable):
+        return False
 
     embed = obsidian_embed(
         "🎉 Level Up!",
