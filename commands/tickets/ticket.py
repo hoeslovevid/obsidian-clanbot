@@ -756,7 +756,53 @@ def setup(bot, group=None):
             await db.commit()
 
         await channel.send(f"{interaction.user.mention}, your ticket has been created!")
-        
+
+        # Auto-assign: ping a random online mod via DM
+        try:
+            from core.utils import get_mod_role
+            mod_role = get_mod_role(interaction.guild)
+            if mod_role:
+                online_mods = [
+                    m for m in mod_role.members
+                    if not m.bot and m.status != discord.Status.offline and m.id != interaction.user.id
+                ]
+                if online_mods:
+                    import random as _random
+                    assigned_mod = _random.choice(online_mods)
+                    priority_str = priority_val.capitalize() if priority_val else "Normal"
+                    tag_str = f" [{tag_val}]" if tag_val else ""
+                    try:
+                        dm_embed = obsidian_embed(
+                            "🎫 New Ticket Assigned",
+                            f"> **{subject}**\n"
+                            f"A new ticket has been opened in **{interaction.guild.name}** and auto-assigned to you.",
+                            category="moderation",
+                            fields=[
+                                ("🆔 Ticket", f"`{ticket_id}`{tag_str}", True),
+                                ("👤 Opened by", interaction.user.mention, True),
+                                ("⚡ Priority", priority_str, True),
+                                ("📌 Channel", channel.mention, False),
+                            ],
+                            footer="You can claim it officially with the Claim button in the ticket channel.",
+                            client=interaction.client,
+                        )
+                        await assigned_mod.send(embed=dm_embed)
+                        # Pre-assign in DB so the claim button shows the right owner
+                        async with aiosqlite.connect(DB_PATH) as _db:
+                            await _db.execute(
+                                "UPDATE tickets SET assigned_to=? WHERE id=?",
+                                (assigned_mod.id, ticket_db_id),
+                            )
+                            await _db.commit()
+                        await channel.send(
+                            f"📋 This ticket has been auto-assigned to {assigned_mod.mention}.",
+                            allowed_mentions=discord.AllowedMentions(users=True),
+                        )
+                    except discord.Forbidden:
+                        pass  # mod has DMs closed
+        except Exception:
+            pass  # never block ticket creation for notification errors
+
         embed = success_embed(
             "Ticket Created",
             f"Your ticket has been created: {channel.mention}\n**Ticket ID:** `{ticket_id}`",

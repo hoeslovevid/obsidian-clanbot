@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from datetime import datetime, timezone
 
-from core.utils import obsidian_embed, feature_off_embed, ECONOMY_ENABLED, format_number, EMBED_COLORS
+from core.utils import obsidian_embed, feature_off_embed, ECONOMY_ENABLED, format_number, EMBED_COLORS, render_bar
 from database import DB_PATH, now_utc, get_user_balance, add_coins
 import aiosqlite
 
@@ -64,31 +64,52 @@ def setup(bot, group=None):
         lines = []
         claimed_any = False
         total_reward = 0
+
+        # Pre-fetch claim statuses in one query
+        claimed_set: set = set()
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT bounty_type FROM economy_bounties WHERE guild_id=? AND user_id=? AND date(created_at)=? AND claimed=1",
+                (gid, uid, today),
+            )
+            claimed_set = {r[0] for r in await cur.fetchall()}
+
         for b in BOUNTY_DEFS:
             bid = b["id"]
-            target = 1 if bid == "daily" else (100 if bid == "earn_100" else 10)
-            current = progress["daily"] if bid == "daily" else (progress["earn_100"] if bid == "earn_100" else progress["voice_10"])
-            done = progress["daily"] if bid == "daily" else (progress["earn_100"] >= 100 if bid == "earn_100" else progress["voice_10"] >= 10)
-            async with aiosqlite.connect(DB_PATH) as db:
-                cur = await db.execute(
-                    "SELECT 1 FROM economy_bounties WHERE guild_id=? AND user_id=? AND bounty_type=? AND date(created_at)=? AND claimed=1",
-                    (gid, uid, bid, today),
-                )
-                already_claimed = await cur.fetchone() is not None
+            target_val = 1 if bid == "daily" else (100 if bid == "earn_100" else 10)
+            if bid == "daily":
+                current_val = 1 if progress["daily"] else 0
+            elif bid == "earn_100":
+                current_val = min(int(progress["earn_100"]), 100)
+            else:
+                current_val = min(int(progress["voice_10"]), 10)
+
+            done = current_val >= target_val
+            already_claimed = bid in claimed_set
+
+            pct = int(100 * current_val / target_val) if target_val > 0 else 0
+            bar = render_bar(pct, length=10, show_pct=False)
+
             if already_claimed:
-                status = "✅ Claimed"
+                status_line = f"✅ **Claimed**  {bar} 100%"
                 claimed_any = True
             elif done:
-                status = f"✅ Done! Use **Claim** below"
+                status_line = f"✅ **Complete** — use **Claim** below  {bar} 100%"
                 total_reward += b["reward"]
             else:
                 if bid == "daily":
-                    status = f"0/1"
+                    progress_label = "0/1"
                 elif bid == "earn_100":
-                    status = f"{format_number(int(current))}/100 coins"
+                    progress_label = f"{format_number(current_val)}/100 coins"
                 else:
-                    status = f"{current}/10 min"
-            lines.append(f"**{b['name']}** ({b['reward']} coins) – {status}\n_{b['desc']}_")
+                    progress_label = f"{current_val}/10 min"
+                status_line = f"{bar} {progress_label}"
+
+            lines.append(
+                f"**{b['name']}** · 🎁 {b['reward']} coins\n"
+                f"{status_line}\n"
+                f"-# {b['desc']}"
+            )
         desc = "\n\n".join(lines)
         embed = obsidian_embed(
             "Daily Bounties",

@@ -1137,6 +1137,10 @@ async def check_and_unlock_achievement(
         # Ephemeral notification via interaction followup (when available)
         if interaction is not None:
             try:
+                # Respect user opt-out preference (default: on)
+                _an_val = await get_guild_setting(guild_id, f"user_achievement_notify:{user_id}")
+                if _an_val == "0":
+                    return True
                 from core.utils import obsidian_embed
                 reward_parts = []
                 if reward_coins > 0:

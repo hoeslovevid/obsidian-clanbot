@@ -12,6 +12,32 @@ from database import (
 import aiosqlite
 
 
+class BioModal(discord.ui.Modal, title="Set Your Profile Bio"):
+    bio = discord.ui.TextInput(
+        label="Bio",
+        placeholder="Write a short bio about yourself (max 150 chars)…",
+        max_length=150,
+        required=False,
+        style=discord.TextStyle.paragraph,
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        if not interaction.guild:
+            return await interaction.response.send_message("Server only.", ephemeral=True)
+        from database import set_guild_setting
+        bio_text = self.bio.value.strip()
+        await set_guild_setting(interaction.guild.id, f"user_bio:{interaction.user.id}", bio_text)
+        await interaction.response.send_message(
+            embed=obsidian_embed(
+                "✅ Bio Updated",
+                f"> {bio_text}" if bio_text else "Your bio has been cleared.",
+                category="general",
+                client=interaction.client,
+            ),
+            ephemeral=True,
+        )
+
+
 async def get_user_profile_data(guild_id: int, user_id: int) -> dict:
     """Get comprehensive user profile data."""
     data = {
@@ -38,6 +64,7 @@ async def get_user_profile_data(guild_id: int, user_id: int) -> dict:
         "complaints": {"total": 0, "open": 0},
         "title": None,
         "equipped_badge": None,  # tuple (emoji, name)
+        "bio": None,
     }
     
     g, u = guild_id, user_id
@@ -151,6 +178,14 @@ async def get_user_profile_data(guild_id: int, user_id: int) -> dict:
         row = await cur.fetchone()
         if row:
             data["complaints"] = {"total": row[0] or 0, "open": row[1] or 0}
+
+        # Bio
+        cur = await db.execute(
+            "SELECT value FROM guild_settings WHERE guild_id=? AND key=?",
+            (g, f"user_bio:{u}"),
+        )
+        bio_row = await cur.fetchone()
+        data["bio"] = bio_row[0].strip() if bio_row and bio_row[0] else None
 
     return data
 
@@ -315,6 +350,8 @@ def setup(bot, group=None):
         if identity_parts:
             desc_lines.append("\n".join(f"> {p}" for p in identity_parts))
 
+        if profile_data.get("bio"):
+            desc_lines.append(f"*{profile_data['bio']}*")
         if profile_data.get("equipped_badge"):
             emoji, name = profile_data["equipped_badge"]
             desc_lines.append(f"{emoji or '🏆'} **{name or 'Badge'}**")
@@ -323,7 +360,7 @@ def setup(bot, group=None):
             parts = [f"{(e or '🏆')}" for _, e, n in showcase[:5]]
             desc_lines.append(f"Showcase: {'  '.join(parts)}")
         if target_user.id == interaction.user.id:
-            desc_lines.append("-# This is your profile!")
+            desc_lines.append("-# This is your profile  ·  Use /general set_bio to add a bio")
 
         desc = "\n".join(desc_lines)
 
@@ -358,3 +395,10 @@ def setup(bot, group=None):
     group.command(name="profile", description="View your or another user's profile and statistics.")(profile_callback)
     shortcut = app_commands.Command(name="profile", description="View profile (shortcut for /general profile)", callback=profile_callback)
     bot.tree.add_command(shortcut)
+
+    bio_decorator = group.command(name="set_bio", description="Set a short bio that appears on your profile card.") if group else bot.tree.command(name="set_bio", description="Set a short bio for your profile.")
+
+    @bio_decorator
+    async def set_bio(interaction: discord.Interaction):
+        """Open a modal to set your profile bio."""
+        await interaction.response.send_modal(BioModal())

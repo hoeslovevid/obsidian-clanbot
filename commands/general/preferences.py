@@ -45,6 +45,7 @@ def setup(bot, group=None):
         quieter="Enable quieter mode: fewer pings in events/reminders (mods only)",
         daily_reminder="Get a DM ~1 hour before your daily streak resets",
         levelup_dm="Get a DM (instead of a public post) when you level up",
+        achievement_notify="Show a private notification when you unlock an achievement",
     )
     @app_commands.choices(timezone=[
         app_commands.Choice(name=label, value=tz) for tz, label in COMMON_TIMEZONES
@@ -65,6 +66,11 @@ def setup(bot, group=None):
         app_commands.Choice(name="Off - post in level-up channel (public)", value="0"),
         app_commands.Choice(name="(no change)", value="-"),
     ])
+    @app_commands.choices(achievement_notify=[
+        app_commands.Choice(name="On - show notification when I unlock an achievement", value="1"),
+        app_commands.Choice(name="Off - no notification", value="0"),
+        app_commands.Choice(name="(no change)", value="-"),
+    ])
     async def preferences(
         interaction: discord.Interaction,
         timezone: Optional[app_commands.Choice[str]] = None,
@@ -72,6 +78,7 @@ def setup(bot, group=None):
         quieter: Optional[app_commands.Choice[str]] = None,
         daily_reminder: Optional[app_commands.Choice[str]] = None,
         levelup_dm: Optional[app_commands.Choice[str]] = None,
+        achievement_notify: Optional[app_commands.Choice[str]] = None,
     ):
         """Set timezone or quieter mode."""
         if not interaction.guild:
@@ -116,6 +123,12 @@ def setup(bot, group=None):
             state = "On (DM)" if levelup_dm.value == "1" else "Off (public)"
             updated.append(f"**Level-up notification:** {state}")
 
+        if achievement_notify and achievement_notify.value != "-":
+            from database import set_guild_setting
+            await set_guild_setting(interaction.guild.id, f"user_achievement_notify:{interaction.user.id}", achievement_notify.value)
+            state = "On" if achievement_notify.value == "1" else "Off"
+            updated.append(f"**Achievement notifications:** {state}")
+
         if not lines and not updated:
             # Show current preferences
             current_tz = await get_user_timezone(interaction.guild.id, interaction.user.id)
@@ -126,10 +139,13 @@ def setup(bot, group=None):
             dr_on = dr_val == "1"
             lu_val = await get_guild_setting(interaction.guild.id, f"user_levelup_dm:{interaction.user.id}")
             lu_dm = lu_val == "1"
+            an_val = await get_guild_setting(interaction.guild.id, f"user_achievement_notify:{interaction.user.id}")
+            an_on = an_val != "0"  # default ON when unset
             lines.append(f"**Your timezone:** {current_tz or 'Not set (uses server default)'}")
             lines.append(f"**Trading platform:** {current_platform.upper() if current_platform else 'Not set (defaults to PC)'}")
             lines.append(f"**Daily streak reminder:** {'On 🔔' if dr_on else 'Off'}")
             lines.append(f"**Level-up notification:** {'DM (private) 📬' if lu_dm else 'Public channel'}")
+            lines.append(f"**Achievement notifications:** {'On 🏆' if an_on else 'Off'}")
             if isinstance(interaction.user, discord.Member) and is_mod(interaction.user):
                 lines.append(f"**Quieter mode:** {'On' if quieter_on else 'Off'}")
             embed = obsidian_embed(

@@ -94,6 +94,75 @@ def setup(bot, group=None):
         
         await interaction.followup.send(embed=embed, ephemeral=(user is None))
     
+    lb_decorator = group.command(name="achievements_leaderboard", description="See who has unlocked the most achievements.") if group else bot.tree.command(name="achievements_leaderboard", description="Achievement count leaderboard.")
+
+    @lb_decorator
+    async def achievements_leaderboard(interaction: discord.Interaction):
+        """Rank members by number of achievements unlocked."""
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=obsidian_embed("❌ Invalid Context", "This command can only be used in a server.", color=discord.Color.red(), client=interaction.client),
+                ephemeral=True,
+            )
+        await interaction.response.defer()
+
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute("""
+                SELECT user_id, COUNT(*) AS cnt
+                FROM achievements
+                WHERE guild_id=?
+                GROUP BY user_id
+                ORDER BY cnt DESC
+                LIMIT 15
+            """, (interaction.guild.id,))
+            rows = await cur.fetchall()
+
+            cur2 = await db.execute("SELECT COUNT(*) FROM achievement_definitions")
+            total_ach = (await cur2.fetchone())[0] or 0
+
+        if not rows:
+            return await interaction.followup.send(
+                embed=obsidian_embed("🏆 No Data", "No one has unlocked any achievements yet.", category="prestige", client=interaction.client),
+            )
+
+        lines = []
+        medals = {1: "🥇", 2: "🥈", 3: "🥉"}
+        viewer_rank = None
+        for pos, (uid, cnt) in enumerate(rows, 1):
+            member = interaction.guild.get_member(uid)
+            name = member.display_name if member else f"User {uid}"
+            medal = medals.get(pos, f"**#{pos}**")
+            bar = render_bar(int(100 * cnt / total_ach) if total_ach else 0, length=8, show_pct=False)
+            lines.append(f"{medal} **{name}** — {cnt}/{total_ach} {bar}")
+            if uid == interaction.user.id:
+                viewer_rank = pos
+
+        # Viewer's rank if not in top 15
+        if viewer_rank is None:
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute("""
+                    SELECT COUNT(*) FROM (
+                        SELECT user_id, COUNT(*) AS cnt FROM achievements WHERE guild_id=? GROUP BY user_id
+                    ) WHERE cnt >= (
+                        SELECT COALESCE(COUNT(*), 0) FROM achievements WHERE guild_id=? AND user_id=?
+                    )
+                """, (interaction.guild.id, interaction.guild.id, interaction.user.id))
+                rank_row = await cur.fetchone()
+                viewer_rank = rank_row[0] if rank_row else None
+            rank_suffix = f"\n-# Your rank: #{viewer_rank}" if viewer_rank else ""
+        else:
+            rank_suffix = f"\n-# Your rank: #{viewer_rank}"
+
+        embed = obsidian_embed(
+            "🏆 Achievement Leaderboard",
+            "\n".join(lines) + rank_suffix,
+            category="prestige",
+            thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
+            footer=f"{total_ach} achievements available  ·  Top 15 shown",
+            client=interaction.client,
+        )
+        await interaction.followup.send(embed=embed)
+
     command_decorator = group.command(name="achievement_list", description="View all available achievements.") if group else bot.tree.command(name="achievement_list", description="View all available achievements.")
     
     @command_decorator

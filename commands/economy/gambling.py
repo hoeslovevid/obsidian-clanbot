@@ -369,6 +369,90 @@ class PlayAgainRouletteView(discord.ui.View):
 def setup(bot, group=None):
     """Register gambling commands."""
 
+    stats_decorator = group.command(name="gamble_stats", description="View your gambling statistics and win rate.") if group else bot.tree.command(name="gamble_stats", description="View your gambling statistics.")
+
+    @stats_decorator
+    @app_commands.describe(user="Member to look up (defaults to yourself)")
+    async def gamble_stats(interaction: discord.Interaction, user: Optional[discord.Member] = None):
+        """Show gambling win/loss stats for a user."""
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=obsidian_embed("❌ Invalid Context", "This command can only be used in a server.", color=discord.Color.red(), client=interaction.client),
+                ephemeral=True,
+            )
+        target = user or interaction.user
+        is_self = target.id == interaction.user.id
+        await interaction.response.defer(ephemeral=is_self)
+
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute("""
+                SELECT game_type,
+                       COUNT(*) AS plays,
+                       COALESCE(SUM(CASE WHEN result='win' THEN 1 ELSE 0 END), 0) AS wins,
+                       COALESCE(SUM(bet_amount), 0) AS total_wagered,
+                       COALESCE(SUM(win_amount - bet_amount), 0) AS net_profit,
+                       MAX(win_amount) AS biggest_win,
+                       MAX(bet_amount) AS biggest_bet
+                FROM gambling_history
+                WHERE guild_id=? AND user_id=?
+                GROUP BY game_type
+            """, (interaction.guild.id, target.id))
+            rows = await cur.fetchall()
+
+            cur = await db.execute("""
+                SELECT COUNT(*),
+                       COALESCE(SUM(CASE WHEN result='win' THEN 1 ELSE 0 END), 0),
+                       COALESCE(SUM(bet_amount), 0),
+                       COALESCE(SUM(win_amount - bet_amount), 0),
+                       MAX(win_amount)
+                FROM gambling_history
+                WHERE guild_id=? AND user_id=?
+            """, (interaction.guild.id, target.id))
+            totals = await cur.fetchone()
+
+        if not totals or totals[0] == 0:
+            return await interaction.followup.send(
+                embed=obsidian_embed(
+                    "🎲 No Gambling History",
+                    f"{target.mention} hasn't played any games yet.",
+                    category="economy",
+                    client=interaction.client,
+                ),
+                ephemeral=is_self,
+            )
+
+        total_plays, total_wins, total_wagered, net_profit, biggest_win = totals
+        total_losses = total_plays - total_wins
+        win_rate = int(100 * total_wins / total_plays) if total_plays > 0 else 0
+        profit_sign = "+" if net_profit >= 0 else ""
+
+        fields = []
+        game_name_map = {"slots": "🎰 Slots", "dice": "🎲 Dice", "roulette": "🎡 Roulette"}
+        for game_type, plays, wins, wagered, net, bwin, bbet in rows:
+            losses = plays - wins
+            wr = int(100 * wins / plays) if plays > 0 else 0
+            p_sign = "+" if net >= 0 else ""
+            fields.append((
+                game_name_map.get(game_type, game_type.title()),
+                f"**Plays:** {plays:,}  ·  **W/L:** {wins}/{losses}\n"
+                f"**Win rate:** {wr}%  ·  **Net:** {p_sign}{net:,}\n"
+                f"**Wagered:** {wagered:,}  ·  **Best win:** {bwin:,}",
+                True,
+            ))
+
+        net_sign = "+" if net_profit >= 0 else ""
+        embed = obsidian_embed(
+            f"🎲 Gambling Stats — {target.display_name}",
+            f"> **{total_wins}W / {total_losses}L** across {total_plays:,} games\n"
+            f"> Win rate: **{win_rate}%**  ·  Net: **{net_sign}{net_profit:,}** coins",
+            category="economy",
+            thumbnail=target.display_avatar.url if target.display_avatar else None,
+            fields=fields if fields else None,
+            footer=f"Total wagered: {total_wagered:,} coins  ·  Best win: {biggest_win:,} coins",
+            client=interaction.client,
+        )
+        await interaction.followup.send(embed=embed, ephemeral=is_self)
+
     command_decorator = group.command(name="slots", description="Play slots! Bet 10–5,000 coins.") if group else bot.tree.command(name="slots", description="Play slots! Bet 10–5,000 coins.")
 
     @command_decorator
