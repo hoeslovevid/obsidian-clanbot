@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from datetime import datetime, timezone
 
-from core.utils import obsidian_embed, EMBED_COLORS, warframe_data_unavailable_embed, BUTTON_ONLY_RUNNER_MSG
+from core.utils import obsidian_embed, EMBED_COLORS, warframe_data_unavailable_embed, BUTTON_ONLY_RUNNER_MSG, render_bar
 from api.warframe_api import get_all_cycles
 from views import RetryView, RefreshView
 import dateparser
@@ -31,19 +31,16 @@ def format_time_remaining(expiry_time: datetime) -> str:
 
 
 def format_cycle_progress(expiry_time: datetime, cycle_total_seconds: int) -> tuple[str, str]:
-    """Return (countdown_str, progress_bar) for a cycle. E.g. Cetus: 150 min (100 day + 50 night)."""
+    """Return (countdown_str, progress_bar) for a cycle."""
     now = datetime.now(timezone.utc)
     elapsed = (expiry_time - now).total_seconds()
     if elapsed <= 0:
-        return "Just changed", "██████████ 0%"
+        return "Just changed", render_bar(100, length=10)
     if cycle_total_seconds <= 0:
         return format_time_remaining(expiry_time), ""
-    # elapsed = time remaining until cycle ends. Progress = (total - remaining) / total
     time_elapsed = cycle_total_seconds - elapsed
     progress_pct = min(100, max(0, int(100 * time_elapsed / cycle_total_seconds)))
-    filled = int(progress_pct / 10)
-    bar = "█" * filled + "░" * (10 - filled)
-    return format_time_remaining(expiry_time), f"{bar} {progress_pct}%"
+    return format_time_remaining(expiry_time), render_bar(progress_pct, length=10)
 
 
 def _build_cycle_fields(cycles_data: dict) -> list:

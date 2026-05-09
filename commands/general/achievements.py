@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from typing import Optional
 
-from core.utils import obsidian_embed
+from core.utils import obsidian_embed, render_bar
 from database import DB_PATH, add_coins, add_xp
 import aiosqlite  # type: ignore
 
@@ -72,12 +72,9 @@ def setup(bot, group=None):
         
         unlocked_count = len(rows)
         pct = min(100, int(100 * unlocked_count / total_ach)) if total_ach > 0 else 0
-        bar_len = 10
-        filled = int(bar_len * pct / 100)
-        progress_bar = "█" * filled + "░" * (bar_len - filled)
-        
+
         fields = [
-            ("📊 Progress", f"**{unlocked_count}/{total_ach}** unlocked\n`[{progress_bar}]` {pct}%", True),
+            ("📊 Progress", f"**{unlocked_count}/{total_ach}** unlocked\n{render_bar(pct)}", True),
         ]
         for category, achievement_list in achievements_by_category.items():
             cat_text = "\n".join(f"🏆 **{name}**\n{desc}" for name, desc, _ in achievement_list[:5])

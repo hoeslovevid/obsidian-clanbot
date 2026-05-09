@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from datetime import datetime, timezone
 
-from core.utils import obsidian_embed, warframe_data_unavailable_embed, BUTTON_ONLY_RUNNER_MSG
+from core.utils import obsidian_embed, warframe_data_unavailable_embed, BUTTON_ONLY_RUNNER_MSG, render_bar
 from api.warframe_api import fetch_invasions
 from views import RetryView, RefreshView
 from core.cache_utils import invalidate
@@ -41,8 +41,6 @@ def _build_invasions_embed(invasions_data, client):
             defender_reward_str = ", ".join(items[:2]) + (f" +{len(items) - 2}" if len(items) > 2 else "")
 
         pct = max(0, min(100, float(completion)))
-        progress = int(pct / 100 * 8)
-        progress_bar = "█" * progress + "░" * (8 - progress)
 
         time_str = "—"
         activation = inv.get("activation")
@@ -60,7 +58,7 @@ def _build_invasions_embed(invasions_data, client):
                 pass
 
         value = f"**{attacker}** ⚔️ **{defender}**\n"
-        value += f"`{progress_bar}` **{completion:.1f}%**\n"
+        value += f"{render_bar(pct, length=10)}\n"
         value += f"⏱️ {time_str}\n"
         if required_runs:
             value += f"Runs: {count:,}/{required_runs:,}\n"

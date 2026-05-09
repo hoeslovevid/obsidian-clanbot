@@ -4,7 +4,7 @@ from discord import app_commands
 from typing import Optional
 from datetime import datetime, timezone
 
-from core.utils import obsidian_embed, is_mod, format_timestamp_readable, EMBED_FOOTER_DEFAULT
+from core.utils import obsidian_embed, is_mod, format_timestamp_readable, EMBED_FOOTER_DEFAULT, render_bar
 from database import (
     DB_PATH, now_utc, get_user_balance, get_user_xp, 
     calculate_level, xp_for_next_level
@@ -247,12 +247,11 @@ def setup(bot, group=None):
         
         # Leveling section
         if profile_data["level"] > 0 or profile_data["xp"] > 0:
-            progress_bar = "█" * (progress_percent // 5) + "░" * (20 - (progress_percent // 5))
             fields.append((
                 "📊 Leveling",
                 f"**Level:** {profile_data['level']}\n"
                 f"**XP:** {profile_data['xp']:,} / {xp_for_next:,}\n"
-                f"**Progress:** {progress_bar} {progress_percent}%\n"
+                f"{render_bar(progress_percent)}\n"
                 f"**Total XP:** {profile_data['total_xp']:,}",
                 True
             ))

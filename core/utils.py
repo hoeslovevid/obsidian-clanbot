@@ -441,14 +441,10 @@ async def send_levelup_announcement(
     xp_needed_in_level = xp_for_next - xp_needed_for_level
     progress_pct = min(100, int(100 * xp_in_current_level / xp_needed_in_level)) if xp_needed_in_level > 0 else 100
 
-    bar_filled = int(progress_pct / 10)
-    bar_empty = 10 - bar_filled
-    progress_bar = "▰" * bar_filled + "▱" * bar_empty
-
     fields = [
         ("⭐ Level", f"**{level}**", True),
         ("📊 XP", f"{xp:,} / {xp_for_next:,}", True),
-        ("Progress", f"{progress_bar} {progress_pct}%", False),
+        ("Progress", render_bar(progress_pct), False),
     ]
 
     # Check if user prefers a private DM over a public announcement
@@ -500,6 +496,28 @@ async def send_levelup_announcement(
     except Exception as e:
         logger.warning(f"Failed to send level-up announcement: {e}")
         return False
+
+
+def render_bar(pct: float, length: int = 12, *, show_pct: bool = True) -> str:
+    """Render a sleek Unicode progress bar for Discord embeds.
+
+    Uses ▰ (filled) and ▱ (empty) for a clean, modern look consistent
+    across all bot commands.
+
+    Args:
+        pct:      Percentage 0–100 (clamped automatically).
+        length:   Number of segments (default 12).
+        show_pct: Whether to append the percentage label.
+
+    Returns:
+        e.g. "▰▰▰▰▰▰▰▱▱▱▱▱ · 58%"
+    """
+    pct = min(100.0, max(0.0, float(pct)))
+    filled = round(pct / 100 * length)
+    bar = "▰" * filled + "▱" * (length - filled)
+    if show_pct:
+        return f"{bar} · **{pct:.0f}%**"
+    return bar
 
 
 def display_case_status(status: str) -> str:
