@@ -5,7 +5,7 @@ import discord  # type: ignore
 from discord import app_commands  # type: ignore
 from typing import Optional, cast
 
-from core.utils import obsidian_embed, is_mod, ECONOMY_ENABLED, COINS_PER_MESSAGE, COINS_DAILY_REWARD, MESSAGE_COOLDOWN_SECONDS, COINS_PER_MINUTE_VOICE
+from core.utils import obsidian_embed, is_mod, ECONOMY_ENABLED, COINS_PER_MESSAGE, COINS_DAILY_REWARD, MESSAGE_COOLDOWN_SECONDS, COINS_PER_MINUTE_VOICE, EMBED_COLORS
 
 
 def _collect_group_commands(group: app_commands.Group, prefix: list[str]) -> list[tuple[str, str]]:
@@ -163,13 +163,13 @@ class HelpSelect(discord.ui.Select):
         
         # Define all possible groups with their emojis and descriptions
         group_definitions = {
-            "general": ("General", "Help, profile, preferences, and setup", "📋"),
-            "economy": ("Economy", "Coins, daily, shop, gambling, pets", "💰"),
-            "tools": ("Tools", "Coinflip, server stats, utilities", "🔧"),
+            "general": ("General", "Help, profile, bio, achievements, preferences", "📋"),
+            "economy": ("Economy", "Coins, daily, bounties, gambling, pets, invest", "💰"),
+            "tools": ("Tools", "Coinflip, activity heatmap, voice LB, stats", "🔧"),
             "warframe": ("Warframe", "Baro, cycles, alerts, builds, LFG", "🎮"),
             "community": ("Community", "Events, tickets, reminders, suggestions", "👥"),
             "trading": ("Trading", "Market prices and trading post", "💼"),
-            "mod": ("Moderation", "Purge, warn, logging, automod, roles", "🛡️"),
+            "mod": ("Moderation", "Purge, warn, dashboard, mass roles, automod", "🛡️"),
             "giveaways": ("Giveaways", "Create and manage giveaways", "🎁"),
             "updates": ("Updates", "Update log and version management", "📝"),
             "music": ("Music", "Play music in voice channels", "🎵"),
@@ -266,26 +266,28 @@ class HelpSelect(discord.ui.Select):
         
         # Group descriptions and colors per group
         group_descriptions = {
-            "general": "General bot commands and utilities",
-            "economy": "💰 Economy and coin management commands",
-            "warframe": "🎮 Warframe game information and tracking",
-            "community": "👥 Community features and interactions",
-            "trading": "💼 Trading and marketplace commands",
-            "mod": "🛡️ Moderation and server management (moderators only)",
-            "giveaways": "🎁 Giveaway management commands",
-            "updates": "📝 Bot update log commands (moderators only)",
-            "music": "🎵 Music and audio commands"
+            "general": "📋 General commands: help, profile, bio, achievements, leaderboard, preferences, reminders, polls, reputation, and server setup",
+            "economy": "💰 Economy: balance, daily, bounties, gambling (slots/dice/roulette), gambling stats, pets, investments, prestige, shop, stash, transfer, and XP",
+            "tools": "🔧 Tools: coinflip, activity heatmap, voice leaderboard, server stats, badges, AFK, reminders",
+            "warframe": "🎮 Warframe: Baro, cycles, alerts, fissures, invasions, sortie, archon, builds, LFG, trading, roles, and notifications",
+            "community": "👥 Community: events, tickets, suggestions, applications, complaints, trading, Twitch notifications",
+            "trading": "💼 Trading: post trades, browse listings, look up market prices",
+            "mod": "🛡️ Moderation: purge, warn, dashboard, stats dashboard, mass role add/remove, automod, logging, starboard, schedule, and more (moderators only)",
+            "giveaways": "🎁 Giveaways: create, list, end, and reroll giveaways",
+            "updates": "📝 Updates: update log and version tracking (moderators only)",
+            "music": "🎵 Music: play, pause, skip, and manage music in voice channels",
         }
         group_colors = {
-            "general": discord.Color.blurple(),
-            "economy": discord.Color.gold(),
-            "warframe": discord.Color.blue(),
-            "community": discord.Color.green(),
-            "trading": discord.Color.blue(),
-            "mod": discord.Color.orange(),
-            "giveaways": discord.Color.purple(),
-            "updates": discord.Color.dark_grey(),
-            "music": discord.Color.magenta(),
+            "general":   EMBED_COLORS["general"],
+            "economy":   EMBED_COLORS["economy"],
+            "tools":     EMBED_COLORS["general"],
+            "warframe":  EMBED_COLORS["warframe"],
+            "community": EMBED_COLORS["community"],
+            "trading":   EMBED_COLORS["warframe"],
+            "mod":       EMBED_COLORS["moderation"],
+            "giveaways": EMBED_COLORS["prestige"],
+            "updates":   EMBED_COLORS["general"],
+            "music":     EMBED_COLORS["community"],
         }
         group_name = group.name.title()
         group_desc = group_descriptions.get(group.name, group.description or "Commands")
@@ -392,22 +394,55 @@ def setup(bot, group=None):
             
             # Short examples for common commands
             HELP_EXAMPLES = {
-                "economy balance": ["/economy balance", "/bal"],
+                # Economy
+                "economy balance": ["/economy balance", "/economy balance user:@Member", "/bal"],
                 "economy daily": ["/economy daily", "/daily"],
+                "economy bounties": ["/economy bounties"],
+                "economy gamble_stats": ["/economy gamble_stats", "/economy gamble_stats user:@Member"],
+                "economy gambling slots": ["/economy gambling slots", "/economy gambling slots bet:500"],
+                "economy gambling dice": ["/economy gambling dice bet:200"],
+                "economy gambling roulette": ["/economy gambling roulette color:red bet:100"],
+                "economy invest": ["/economy invest amount:1000 duration:30 days (25%)"],
+                "economy invest_status": ["/economy invest_status"],
+                "economy invest_collect": ["/economy invest_collect"],
+                "economy invest_withdraw": ["/economy invest_withdraw"],
                 "economy shop": ["/economy shop buy item_name:Orokin Catalyst"],
+                "economy stash": ["/economy stash"],
+                "economy prestige": ["/economy prestige"],
+                # General
+                "general profile": ["/general profile", "/general profile user:@Member", "/profile"],
+                "general set_bio": ["/general set_bio"],
+                "general achievements": ["/general achievements", "/general achievements user:@Member"],
+                "general achievements_leaderboard": ["/general achievements_leaderboard"],
+                "general preferences": ["/general preferences daily_reminder:On levelup_dm:On achievement_notify:Off"],
+                "general links": ["/general links"],
+                "general about": ["/general about"],
+                # Tools
+                "tools activity_heatmap": ["/tools activity_heatmap", "/tools activity_heatmap days:30 days", "/tools activity_heatmap user:@Member days:7 days"],
+                "tools voice_leaderboard": ["/tools voice_leaderboard"],
+                "tools coinflip": ["/tools coinflip"],
+                # Warframe
                 "warframe baro": ["/warframe baro"],
                 "warframe cycles": ["/warframe cycles"],
                 "warframe fissures": ["/warframe fissures"],
                 "warframe sortie": ["/warframe sortie"],
                 "warframe daily_ops": ["/warframe daily_ops"],
-                "general links": ["/general links"],
-            "economy bounties": ["/economy bounties"],
-            "economy stash": ["/economy stash"],
-            "warframe drop": ["/warframe drop item:Ash Prime Neuroptics"],
-            "mod warn notes": ["/mod warn notes user:@User"],
+                "warframe build": ["/warframe build name:Saryn"],
+                "warframe drop": ["/warframe drop item:Ash Prime Neuroptics"],
+                "warframe invasions": ["/warframe invasions"],
+                "warframe archon": ["/warframe archon"],
+                # Community
                 "community event_create": ["/community event_create name:Sortie Run when:tomorrow 7pm"],
+                "community ticket": ["/community ticket subject:Need help with role"],
+                "community suggest": ["/community suggest suggestion:Add a weekly bounty"],
+                # Moderation
                 "mod purge": ["/mod purge amount:50 archive:True"],
                 "mod warn": ["/mod warn user:@User reason:Spam"],
+                "mod warn notes": ["/mod warn notes user:@User"],
+                "mod dashboard": ["/mod dashboard"],
+                "mod stats_dashboard": ["/mod stats_dashboard"],
+                "mod role_tools mass_add": ["/mod role_tools mass_add role:@Member", "/mod role_tools mass_add role:@VIP filter_role:@Verified"],
+                "mod role_tools mass_remove": ["/mod role_tools mass_remove role:@TempRole"],
             }
             if found_command:
                 # Build help for specific command
@@ -516,10 +551,14 @@ def setup(bot, group=None):
         # Add feature info
         desc += "\n**💬 Features:**\n"
         desc += "• Join-to-Create Voice Channels • Voice Channel Controls\n"
-        desc += "• Complaints • Tickets • Suggestions\n"
+        desc += "• Complaints • Tickets (auto-assign) • Suggestions\n"
         desc += "• Application System • Event RSVP • Trading Post • Giveaways\n"
         desc += "• LFG (Looking for Group) • Twitch stream notifications\n"
-        desc += "• Achievements & Milestones • XP & Levels • Pets • Badges\n"
+        desc += "• Achievements & Milestones • Achievement Leaderboard\n"
+        desc += "• XP & Levels • Prestige • Pets • Badges • Profile Bio\n"
+        desc += "• Gambling (slots/dice/roulette) + Stats • Daily Bounties with progress\n"
+        desc += "• Investments + Early Withdrawal • Activity Heatmap\n"
+        desc += "• Mass Role Add/Remove • Refreshable Mod Dashboard\n"
         desc += "• Warframe: Baro, cycles, alerts, link account, achievement roles"
         if ECONOMY_ENABLED:
             desc += f"\n• Economy: {COINS_PER_MESSAGE} coins/msg, {COINS_DAILY_REWARD:,} daily, {COINS_PER_MINUTE_VOICE}/min voice ({MESSAGE_COOLDOWN_SECONDS}s msg cooldown)"
