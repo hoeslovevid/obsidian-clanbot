@@ -291,7 +291,7 @@ def load_all_commands(bot):
         "commands.trading.trade_list": trading_group,
         "commands.trading.trade_setup": trading_group,
         "commands.activity.activity": community_group,
-        "commands.activity.activity_leaderboard": community_group,
+        "commands.activity.activity_leaderboard": tools_group,  # community_group at 25-cmd limit
         "commands.giveaways.giveaway": giveaways_group,
         "commands.giveaways.giveaway_end": giveaways_group,
         "commands.giveaways.giveaway_list": giveaways_group,
