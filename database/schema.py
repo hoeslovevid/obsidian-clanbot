@@ -1,8 +1,11 @@
 """Database schema: all CREATE TABLE, migrations, and index creation.
 Call init_db() once at startup to initialise all tables and indexes.
 """
+import logging
 import aiosqlite  # type: ignore
 from core.config import DB_PATH
+
+logger = logging.getLogger(__name__)
 
 
 async def init_db() -> None:
