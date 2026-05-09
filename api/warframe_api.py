@@ -45,6 +45,7 @@ def _wf_stat_url(path: str) -> str:
     return f"{_wf_stat_base_url()}/{path.lstrip('/')}"
 
 
+import re as _re
 import dateparser  # type: ignore
 from datetime import datetime, timezone, timedelta
 
@@ -165,16 +166,301 @@ async def _wf_stat_get(url: str, proxy: Optional[str]) -> Optional[Any]:
     return None
 
 
+# ---------------------------------------------------------------------------
+# Official world-state fallback (content.warframe.com)
+# Used when api.warframestat.us is unreachable (common on datacenter IPs).
+# ---------------------------------------------------------------------------
+
+# Relay node → human-readable name (used by Baro Ki'Teer)
+# The world state uses short hub codes (EarthHUB, PlutoHUB, …) rather than SolNodeXX
+_BARO_RELAY_MAP: Dict[str, str] = {
+    # Short hub codes (current world state format)
+    "EarthHUB":   "Strata Relay (Earth)",
+    "PlutoHUB":   "Orcus Relay (Pluto)",
+    "SaturnHUB":  "Kronia Relay (Saturn)",
+    "MercuryHUB": "Larunda Relay (Mercury)",
+    "EuropaHUB":  "Leonov Relay (Europa)",
+    "VenusHUB":   "Vesper Relay (Venus)",
+    # SolNode codes (older format, kept for compatibility)
+    "SolNode36": "Maroo's Bazaar (Mars)",
+    "SolNode39": "Strata Relay (Earth)",
+    "SolNode40": "Orcus Relay (Pluto)",
+    "SolNode41": "Kronia Relay (Saturn)",
+    "SolNode43": "Larunda Relay (Mercury)",
+    "SolNode44": "Leonov Relay (Europa)",
+    "SolNode45": "Vesper Relay (Venus)",
+}
+
+# World-state in-memory cache
+_ws_cache_data: Optional[Dict[str, Any]] = None
+_ws_cache_ts: float = 0.0
+_WS_CACHE_TTL = 90.0
+
+# Suppress repeated "fallback active" log spam
+_ws_fallback_logged = False
+
+
+def _parse_ws_date(val: Any) -> Optional[str]:
+    """Convert a world-state date object to an ISO UTC string.
+
+    World state uses MongoDB Extended JSON: ``{"$date": {"$numberLong": "ms"}}``
+    or occasionally the old .NET ``/Date(ms)/`` format.
+    """
+    if val is None:
+        return None
+    if isinstance(val, dict):
+        d = val.get("$date")
+        if isinstance(d, dict):
+            ms = d.get("$numberLong")
+            if ms:
+                try:
+                    return datetime.fromtimestamp(int(ms) / 1000, tz=timezone.utc).isoformat()
+                except Exception:
+                    pass
+        elif isinstance(d, (int, float)):
+            try:
+                return datetime.fromtimestamp(int(d) / 1000, tz=timezone.utc).isoformat()
+            except Exception:
+                pass
+    if isinstance(val, str):
+        m = _re.match(r"/Date\((\d+)", val)
+        if m:
+            try:
+                return datetime.fromtimestamp(int(m.group(1)) / 1000, tz=timezone.utc).isoformat()
+            except Exception:
+                pass
+    return None
+
+
+def _ws_is_active(activation_iso: Optional[str], expiry_iso: Optional[str]) -> bool:
+    """Return True if the time window [activation, expiry] contains now."""
+    if not activation_iso or not expiry_iso:
+        return False
+    try:
+        now = datetime.now(timezone.utc)
+        act = datetime.fromisoformat(activation_iso)
+        exp = datetime.fromisoformat(expiry_iso)
+        return act <= now < exp
+    except Exception:
+        return False
+
+
+async def _fetch_official_world_state() -> Optional[Dict[str, Any]]:
+    """Fetch the raw Warframe world state from DE's official content endpoint.
+
+    This endpoint (content.warframe.com) is the source that api.warframestat.us
+    parses. It is not subject to the same Cloudflare bot-protection that blocks
+    most datacenter IPs from warframestat.us.
+    """
+    global _ws_cache_data, _ws_cache_ts, _ws_fallback_logged
+    now = time.monotonic()
+    if _ws_cache_data is not None and (now - _ws_cache_ts) < _WS_CACHE_TTL:
+        return _ws_cache_data
+    url = "https://content.warframe.com/dynamic/worldState.php"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                url,
+                timeout=aiohttp.ClientTimeout(total=12),
+                headers={"User-Agent": "Mozilla/5.0", "Accept": "*/*"},
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json(content_type=None)
+                    _ws_cache_data = data
+                    _ws_cache_ts = time.monotonic()
+                    if not _ws_fallback_logged:
+                        _ws_fallback_logged = True
+                        logger.info(
+                            "Warframe world state: using content.warframe.com fallback "
+                            "(api.warframestat.us unreachable from this IP). "
+                            "Set WARFRAME_STAT_PROXY in .env to restore full API access."
+                        )
+                    return data
+    except Exception as e:
+        logger.debug("content.warframe.com world state unavailable: %s", e)
+    return None
+
+
+def _ws_to_baro(ws: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Convert world-state VoidTraders[0] to warframestat.us voidTrader shape."""
+    traders = ws.get("VoidTraders", [])
+    if not traders:
+        return None
+    t = traders[0]
+    activation = _parse_ws_date(t.get("Activation"))
+    expiry = _parse_ws_date(t.get("Expiry"))
+    node = t.get("Node", "")
+    location = _BARO_RELAY_MAP.get(node, node or "Unknown Relay")
+    inventory = []
+    for item in t.get("Manifest", []):
+        raw = item.get("ItemType", "")
+        name_part = raw.strip("/").split("/")[-1] if raw else "Unknown Item"
+        # CamelCase → spaced
+        name_part = _re.sub(r"(?<=[a-z])(?=[A-Z])", " ", name_part)
+        inventory.append({
+            "item": name_part,
+            "ducats": int(item.get("PrimePrice", 0)),
+            "credits": int(item.get("RegularPrice", 0)),
+        })
+    return {
+        "character": "Baro Ki'Teer",
+        "location": location,
+        "activation": activation or "",
+        "expiry": expiry or "",
+        "inventory": inventory,
+    }
+
+
+# Cycle epochs and constants (from warframe-worldstate-parser community research).
+# All durations in seconds.
+_CETUS_EPOCH   = 1509826800   # Unix ts of a known Cetus day start
+_CETUS_DAY     = 6000         # 100 min
+_CETUS_NIGHT   = 3000         # 50 min
+_CETUS_TOTAL   = _CETUS_DAY + _CETUS_NIGHT
+
+_VALLIS_EPOCH  = 1543027200   # Unix ts of a known Fortuna warm start
+_VALLIS_WARM   = 1600          # ~26.6 min
+_VALLIS_COLD   = 3200          # ~53.3 min
+_VALLIS_TOTAL  = _VALLIS_WARM + _VALLIS_COLD
+
+
+def _ws_to_cycles(_ws: Dict[str, Any]) -> Dict[str, Optional[Dict[str, Any]]]:
+    """Compute cycle states from epoch maths (no lookup tables required)."""
+    now_ts = datetime.now(timezone.utc).timestamp()
+
+    # Cetus
+    cetus: Optional[Dict[str, Any]] = None
+    try:
+        elapsed_c = (now_ts - _CETUS_EPOCH) % _CETUS_TOTAL
+        if elapsed_c < _CETUS_DAY:
+            left_c = _CETUS_DAY - elapsed_c
+            cetus = {"state": "day", "isDay": True,
+                     "expiry": datetime.fromtimestamp(now_ts + left_c, tz=timezone.utc).isoformat()}
+        else:
+            left_c = _CETUS_TOTAL - elapsed_c
+            cetus = {"state": "night", "isDay": False,
+                     "expiry": datetime.fromtimestamp(now_ts + left_c, tz=timezone.utc).isoformat()}
+    except Exception:
+        pass
+
+    # Fortuna (Venus Proxima)
+    vallis: Optional[Dict[str, Any]] = None
+    try:
+        elapsed_v = (now_ts - _VALLIS_EPOCH) % _VALLIS_TOTAL
+        if elapsed_v < _VALLIS_WARM:
+            left_v = _VALLIS_WARM - elapsed_v
+            vallis = {"state": "warm", "isWarm": True,
+                      "expiry": datetime.fromtimestamp(now_ts + left_v, tz=timezone.utc).isoformat()}
+        else:
+            left_v = _VALLIS_TOTAL - elapsed_v
+            vallis = {"state": "cold", "isWarm": False,
+                      "expiry": datetime.fromtimestamp(now_ts + left_v, tz=timezone.utc).isoformat()}
+    except Exception:
+        pass
+
+    # Cambion Drift — world state has a direct CambionCycle object
+    cambion: Optional[Dict[str, Any]] = None
+    try:
+        cc = _ws.get("CambionCycle") or {}
+        if cc:
+            exp = _parse_ws_date(cc.get("Expiry"))
+            state = cc.get("State", "fass").lower()
+            cambion = {"state": state, "expiry": exp or ""}
+    except Exception:
+        pass
+
+    return {"cetus": cetus, "vallis": vallis, "cambion": cambion}
+
+
+def _ws_to_alerts(ws: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Convert world-state Alerts to warframestat.us-compatible list."""
+    now = datetime.now(timezone.utc)
+    result = []
+    for a in ws.get("Alerts", []):
+        expiry = _parse_ws_date(a.get("Expiry"))
+        if not expiry:
+            continue
+        try:
+            if datetime.fromisoformat(expiry) < now:
+                continue
+        except Exception:
+            pass
+        mi = a.get("MissionInfo", {})
+        node_raw = mi.get("location") or mi.get("missionType", "")
+        node = node_raw.strip("/").split("/")[-1] if node_raw else "?"
+        reward = mi.get("missionReward", {})
+        counted = [i.get("ItemType", "").strip("/").split("/")[-1]
+                   for i in reward.get("countedItems", [])]
+        result.append({
+            "active": True,
+            "expired": False,
+            "expiry": expiry,
+            "mission": {"node": node, "type": mi.get("missionType", "").split("/")[-1]},
+            "rewardTypes": counted,
+        })
+    return result
+
+
+def _ws_to_invasions(ws: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Convert world-state Invasions to warframestat.us-compatible list."""
+    result = []
+    for inv in ws.get("Invasions", []):
+        if inv.get("Completed", False):
+            continue
+        node_raw = inv.get("Node", "")
+        node = node_raw.strip("/").split("/")[-1] if node_raw else "?"
+
+        def _extract_items(reward: Any) -> List[Dict[str, Any]]:
+            """Handle reward as a dict-with-countedItems or as a plain list."""
+            if isinstance(reward, dict):
+                items = reward.get("countedItems", [])
+            elif isinstance(reward, list):
+                items = reward
+            else:
+                return []
+            return [{"type": i.get("ItemType", "").strip("/").split("/")[-1]}
+                    for i in items if isinstance(i, dict)]
+
+        result.append({
+            "completed": False,
+            "node": node,
+            "desc": inv.get("Desc", ""),
+            "attackerReward": {"countedItems": _extract_items(inv.get("AttackerReward", {}))},
+            "defenderReward": {"countedItems": _extract_items(inv.get("DefenderReward", {}))},
+        })
+    return result
+
+
+def _ws_to_sortie(ws: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Convert world-state Sorties[0] to warframestat.us shape."""
+    sorties = ws.get("Sorties", [])
+    if not sorties:
+        return None
+    s = sorties[0]
+    expiry = _parse_ws_date(s.get("Expiry"))
+    variants = []
+    for v in s.get("Variants", []):
+        variants.append({
+            "missionType": v.get("missionType", "").split("/")[-1],
+            "modifier": v.get("modifierType", ""),
+            "node": v.get("node", "").split("/")[-1],
+        })
+    return {"expiry": expiry or "", "variants": variants}
+
+
 async def fetch_baro_data() -> Optional[Dict[str, Any]]:
-    """Fetch Baro Ki'Teer data from Warframe World State API. Cached for 60s."""
+    """Fetch Baro Ki'Teer data. Falls back to content.warframe.com world state."""
     from core.cache_utils import get_cached
 
     async def _fetch():
         try:
-            return await _wf_stat_get(_wf_stat_url("pc/voidTrader"), _api_proxy())
+            result = await _wf_stat_get(_wf_stat_url("pc/voidTrader"), _api_proxy())
+            if result is not None:
+                return result
         except Exception as e:
             logger.error("Error fetching Baro data: %s: %s", type(e).__name__, e, exc_info=True)
-            return None
+        ws = await _fetch_official_world_state()
+        return _ws_to_baro(ws) if ws else None
 
     return await get_cached("warframe:baro", 60, _fetch)
 
@@ -205,17 +491,21 @@ async def fetch_cycle_data(cycle_type: str) -> Optional[Dict[str, Any]]:
 
 
 async def get_all_cycles() -> Dict[str, Optional[Dict[str, Any]]]:
-    """Fetch all cycle data (Cetus, Fortuna, Deimos). Cached for 60s."""
+    """Fetch all cycle data (Cetus, Fortuna, Deimos). Falls back to epoch calculation."""
     from core.cache_utils import get_cached
 
     async def _fetch():
-        import asyncio
-        cetus, vallis, cambion = await asyncio.gather(
+        import asyncio as _asyncio
+        cetus, vallis, cambion = await _asyncio.gather(
             fetch_cycle_data('cetus'),
             fetch_cycle_data('vallis'),
             fetch_cycle_data('cambion'),
         )
-        return {'cetus': cetus, 'vallis': vallis, 'cambion': cambion}
+        if cetus is not None or vallis is not None or cambion is not None:
+            return {'cetus': cetus, 'vallis': vallis, 'cambion': cambion}
+        # Primary API unreachable — fall back to epoch calculation + world state for Cambion
+        ws = await _fetch_official_world_state()
+        return _ws_to_cycles(ws or {})
 
     return await get_cached("warframe:cycles", 60, _fetch)
 
@@ -265,22 +555,26 @@ async def fetch_fissures() -> Optional[List[Dict[str, Any]]]:
     async def _fetch():
         try:
             data = await _wf_stat_get(_wf_stat_url("pc/fissures"), _api_proxy())
-            return [f for f in data if not f.get("expired", False)] if data else None
+            if data is not None:
+                return [f for f in data if not f.get("expired", False)]
         except Exception as e:
             logger.error("Error fetching fissures: %s: %s", type(e).__name__, e, exc_info=True)
-            return None
+        return None  # No reliable world-state fallback for fissures (need relic tier lookup)
     return await get_cached("warframe:fissures", 60, _fetch)
 
 
 async def fetch_sortie() -> Optional[Dict[str, Any]]:
-    """Fetch today's Sortie. Cached 60s."""
+    """Fetch today's Sortie. Falls back to content.warframe.com world state."""
     from core.cache_utils import get_cached
     async def _fetch():
         try:
-            return await _wf_stat_get(_wf_stat_url("pc/sortie"), _api_proxy())
+            result = await _wf_stat_get(_wf_stat_url("pc/sortie"), _api_proxy())
+            if result is not None:
+                return result
         except Exception as e:
             logger.error("Error fetching sortie: %s: %s", type(e).__name__, e, exc_info=True)
-            return None
+        ws = await _fetch_official_world_state()
+        return _ws_to_sortie(ws) if ws else None
     return await get_cached("warframe:sortie", 60, _fetch)
 
 
@@ -321,32 +615,51 @@ async def fetch_nightwave() -> Optional[Dict[str, Any]]:
 
 
 async def fetch_invasions() -> Optional[list]:
-    """Fetch invasion data from Warframe World State API. Cached for 60s."""
+    """Fetch invasion data. Falls back to content.warframe.com world state."""
     from core.cache_utils import get_cached
 
     async def _fetch():
         try:
             data = await _wf_stat_get(_wf_stat_url("pc/invasions"), _api_proxy())
-            if not data:
-                return None
-            return [inv for inv in data if inv.get("completed", False) == False]
+            if data is not None:
+                return [inv for inv in data if not inv.get("completed", False)]
         except Exception as e:
             logger.error("Error fetching invasion data: %s: %s", type(e).__name__, e, exc_info=True)
-            return None
+        ws = await _fetch_official_world_state()
+        return _ws_to_invasions(ws) if ws else None
 
     return await get_cached("warframe:invasions", 60, _fetch)
 
 
 async def fetch_archon_hunt_data() -> Optional[Dict[str, Any]]:
-    """Fetch Archon Hunt data from Warframe World State API. Cached for 60s."""
+    """Fetch Archon Hunt data. Falls back to content.warframe.com world state."""
     from core.cache_utils import get_cached
 
     async def _fetch():
         try:
-            return await _wf_stat_get(_wf_stat_url("pc/archonHunt?language=en"), _api_proxy())
+            result = await _wf_stat_get(_wf_stat_url("pc/archonHunt?language=en"), _api_proxy())
+            if result is not None:
+                return result
         except Exception as e:
             logger.error("Error fetching archon hunt data: %s: %s", type(e).__name__, e, exc_info=True)
+        # World state archon hunt: look for "ArchwingMission" with SortieTag or
+        # the dedicated ArchonMissions list
+        ws = await _fetch_official_world_state()
+        if not ws:
             return None
+        archon = ws.get("ArchwingMission") or ws.get("ArchonMissions")
+        if archon and isinstance(archon, list) and archon:
+            a = archon[0]
+            expiry = _parse_ws_date(a.get("Expiry"))
+            variants = []
+            for v in a.get("Variants", []):
+                variants.append({
+                    "missionType": v.get("missionType", "").split("/")[-1],
+                    "node": v.get("node", "").split("/")[-1],
+                    "boss": v.get("boss", ""),
+                })
+            return {"expiry": expiry or "", "variants": variants, "boss": a.get("boss", "Archon Hunt")}
+        return None
 
     return await get_cached("warframe:archon", 60, _fetch)
 
@@ -528,18 +841,18 @@ async def fetch_duviri_circuit() -> Optional[Dict[str, Any]]:
 
 
 async def fetch_alerts() -> Optional[List[Dict[str, Any]]]:
-    """Fetch active alerts from Warframe World State API. Cached for 60s."""
+    """Fetch active alerts. Falls back to content.warframe.com world state."""
     from core.cache_utils import get_cached
 
     async def _fetch():
         try:
             data = await _wf_stat_get(_wf_stat_url("pc/alerts"), _api_proxy())
-            if not data:
-                return None
-            return [alert for alert in data if alert.get("expired", False) == False]
+            if data is not None:
+                return [a for a in data if not a.get("expired", False)]
         except Exception as e:
             logger.error("Error fetching alerts data: %s: %s", type(e).__name__, e, exc_info=True)
-            return None
+        ws = await _fetch_official_world_state()
+        return _ws_to_alerts(ws) if ws else None
 
     return await get_cached("warframe:alerts", 60, _fetch)
 
