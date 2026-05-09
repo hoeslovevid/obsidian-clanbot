@@ -121,11 +121,8 @@ class SetupObsidianView(discord.ui.View):
         self.results.append(result)
         self.step_index += 1
         if self.step_index >= len(CHANNEL_CONFIGS):
-            # Done
-            from core.config import CREATE_VC_NAME, TEMP_VC_CATEGORY_NAME
+            # Done — ensure join-to-create channel if Temp VC category was configured
             from bot import ensure_join_to_create_channel
-
-            # Ensure join-to-create channel if Temp VC category was configured
             temp_cat_id = await get_configured_channel_id(interaction.guild.id, "temp_vc_category_id")
             if temp_cat_id:
                 try:
@@ -134,22 +131,14 @@ class SetupObsidianView(discord.ui.View):
                     pass
 
             summary = "\n".join(self.results)
-            embed = obsidian_embed(
-                "✅ Setup Complete",
-                f"Channel configuration saved:\n\n{summary}\n\n"
-                "• Voice Panel: VC control panels appear here when users create temp channels\n"
-                "• Events: Use `/community event_create` to post events here\n"
-                "• Complaints: Use `/general setup_docket` to post the complaint panel\n"
-                "• Temp VC: Join-to-create voice channels in this category\n\n"
-                "**Next steps:** Try `/community event_create`, `/daily`, and `/warframe status`",
-                color=discord.Color.green(),
-                client=interaction.client,
+            checklist_embed, checklist_view = await build_setup_checklist(
+                interaction.guild, summary, interaction.client
             )
             self.stop()
             try:
-                await interaction.response.edit_message(embed=embed, view=None)
+                await interaction.response.edit_message(embed=checklist_embed, view=checklist_view)
             except discord.NotFound:
-                await interaction.followup.send(embed=embed, ephemeral=True)
+                await interaction.followup.send(embed=checklist_embed, view=checklist_view, ephemeral=True)
         else:
             self._add_select()
             sk, display_name, _, _ = CHANNEL_CONFIGS[self.step_index]
@@ -177,6 +166,93 @@ class SetupObsidianView(discord.ui.View):
                 )
         except Exception:
             pass
+
+
+class SetupChecklistView(discord.ui.View):
+    """Quick-action buttons shown after setup completes."""
+
+    def __init__(self):
+        super().__init__(timeout=300)
+
+    @discord.ui.button(label="Setup Docket (Complaints)", style=discord.ButtonStyle.secondary, emoji="📋")
+    async def setup_docket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message(
+            "Run `/general setup_docket` to post the complaint panel in your docket channel.",
+            ephemeral=True,
+        )
+
+    @discord.ui.button(label="Configure Suggestions", style=discord.ButtonStyle.secondary, emoji="💡")
+    async def setup_suggestions(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message(
+            "Run `/community suggest_setup` and select a channel to receive suggestion posts.",
+            ephemeral=True,
+        )
+
+    @discord.ui.button(label="Configure Notifications", style=discord.ButtonStyle.secondary, emoji="🔔")
+    async def setup_notifications(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message(
+            "Use `/warframe notify` commands to set channels for Baro, cycles, invasions, and Archon alerts.",
+            ephemeral=True,
+        )
+
+
+async def build_setup_checklist(
+    guild: discord.Guild,
+    channel_summary: str,
+    client,
+) -> tuple:
+    """Build a checklist embed + view showing configured/unconfigured features."""
+    # Query relevant settings
+    checks: list[tuple[str, str, bool]] = []  # (emoji, label, configured)
+
+    async def _get(key: str) -> Optional[str]:
+        try:
+            return await get_guild_setting(guild.id, key)
+        except Exception:
+            return None
+
+    voice_panel = await _get("voice_panel_channel_id")
+    events_ch = await _get("events_channel_id")
+    complaints_ch = await _get("complaints_channel_id")
+    complaints_log = await _get("complaints_log_channel_id")
+    temp_vc = await _get("temp_vc_category_id")
+    suggestions_ch = await _get("suggestions_channel_id")
+
+    def _ok(val: Optional[str]) -> bool:
+        return bool(val and val != "0")
+
+    checks = [
+        ("🎙️", "Voice Panel channel", _ok(voice_panel)),
+        ("📅", "Events channel", _ok(events_ch)),
+        ("📋", "Complaints (Docket) channel", _ok(complaints_ch)),
+        ("📝", "Complaints Log (Ledger) channel", _ok(complaints_log)),
+        ("🔊", "Temp VC Category", _ok(temp_vc)),
+        ("💡", "Suggestions channel", _ok(suggestions_ch)),
+    ]
+
+    configured = sum(1 for _, _, ok in checks if ok)
+    total = len(checks)
+
+    lines = []
+    for icon, label, ok in checks:
+        tick = "✅" if ok else "❌"
+        lines.append(f"{tick} {icon} **{label}**")
+
+    checklist_text = "\n".join(lines)
+
+    desc = (
+        f"**Channel configuration saved:**\n{channel_summary}\n\n"
+        f"**Feature Checklist ({configured}/{total} configured):**\n{checklist_text}\n\n"
+        "Use the buttons below for common next steps, or run `/general setup_obsidian` again to reconfigure."
+    )
+
+    embed = obsidian_embed(
+        "✅ Setup Complete",
+        desc,
+        color=discord.Color.green(),
+        client=client,
+    )
+    return embed, SetupChecklistView()
 
 
 def setup(bot, group=None):

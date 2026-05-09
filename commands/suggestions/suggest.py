@@ -77,7 +77,7 @@ class SuggestionVoteView(discord.ui.View):
         await self._handle_vote(interaction, -1)
 
 
-async def create_suggestion_from_modal(interaction: discord.Interaction, suggestion: str, category_val: str):
+async def create_suggestion_from_modal(interaction: discord.Interaction, suggestion: str, category_val: str, anonymous: bool = False):
     """Shared logic for creating a suggestion (used by /suggest and Add to Suggestions context menu)."""
     if not interaction.guild:
         return await interaction.followup.send(
@@ -167,16 +167,17 @@ async def create_suggestion_from_modal(interaction: discord.Interaction, suggest
         )
 
     if suggestions_channel:
+        submitted_by_value = "🎭 Anonymous" if anonymous else interaction.user.mention
         fields = [
             ("Suggestion", suggestion, False),
             ("Category", category_val.title(), True),
             ("Status", "⏳ Pending Review", True),
-            ("Submitted By", interaction.user.mention, True),
+            ("Submitted By", submitted_by_value, True),
             ("Suggestion ID", f"#{suggestion_id}", True),
         ]
         embed = obsidian_embed(
             "💡 New Suggestion", "", color=discord.Color.blue(),
-            author=interaction.user, fields=fields,
+            author=None if anonymous else interaction.user, fields=fields,
             thumbnail=guild.icon.url if guild.icon else None,
             footer=f"👍 0  ·  👎 0  ·  Mods can manage via /manage_suggestions",
             client=interaction.client,
@@ -268,12 +269,14 @@ def setup(bot, group=None):
         suggestion="Your suggestion text",
         category="Category of the suggestion",
         template="Optional format template to guide your suggestion",
+        anonymous="Post suggestion anonymously — mods can still see who submitted (default: False)",
     )
     async def suggest(
         interaction: discord.Interaction,
         suggestion: str,
         category: app_commands.Choice[str] = None,
         template: app_commands.Choice[str] = None,
+        anonymous: bool = False,
     ):
         """Submit a suggestion for the bot."""
         category_val = (category.value if category else "other").lower()
@@ -283,7 +286,7 @@ def setup(bot, group=None):
             suggestion = f"{template_hint}\n\n{suggestion}" if suggestion else template_hint
 
         await interaction.response.defer(ephemeral=True)
-        await create_suggestion_from_modal(interaction, suggestion, category_val)
+        await create_suggestion_from_modal(interaction, suggestion, category_val, anonymous=anonymous)
 
     setup_decorator = group.command(name="suggest_setup", description="Set the suggestions channel (mods only).") if group else bot.tree.command(name="suggest_setup", description="Set the suggestions channel (mods only).")
 

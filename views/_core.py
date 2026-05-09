@@ -598,13 +598,36 @@ class GiveawayView(discord.ui.View):
             """, (giveaway_id,))
             entry_count = (await cur.fetchone())[0]
         
-        # Update embed
+        # Parse end time for the confirmation embed
+        try:
+            from datetime import datetime, timezone as _tz
+            end_dt = datetime.fromisoformat(end_time_str.replace("Z", "+00:00"))
+            end_ts = int(end_dt.timestamp())
+            end_str = f"<t:{end_ts}:R> (<t:{end_ts}:F>)"
+        except Exception:
+            end_str = "soon"
+
+        # Respond to the interaction first — prevents the 3-second timeout while editing
+        await interaction.response.send_message(
+            embed=obsidian_embed(
+                "🎉 You're In!",
+                f"You entered the giveaway for **{prize}**!\n\n"
+                f"**Your entry:** #{entry_count}\n"
+                f"**Ends:** {end_str}\n"
+                f"**Winners:** {winner_count}\n\n"
+                f"_Good luck! Use the Leave button if you change your mind._",
+                color=discord.Color.green(),
+                client=interaction.client,
+            ),
+            ephemeral=True,
+        )
+
+        # Update the public embed entry count in the background (non-blocking)
         try:
             message = interaction.message
             if message and message.embeds:
                 embed = message.embeds[0]
-                # Update entry count in description
-                desc = embed.description
+                desc = embed.description or ""
                 if "**Entries:**" in desc:
                     desc = desc.rsplit("**Entries:**", 1)[0] + f"**Entries:** {entry_count}"
                 else:
@@ -613,17 +636,6 @@ class GiveawayView(discord.ui.View):
                 await message.edit(embed=embed)
         except Exception as e:
             logger.debug(f"Could not update giveaway embed: {e}")
-        
-        await interaction.response.send_message(
-            embed=obsidian_embed(
-                "✅ Entered Giveaway",
-                f"You have entered the giveaway for **{prize}**!\n\n"
-                f"**Entries:** {entry_count}",
-                color=discord.Color.green(),
-                client=interaction.client,
-            ),
-            ephemeral=True
-        )
 
     async def leave_giveaway(self, interaction: discord.Interaction):
         """Leave a giveaway."""

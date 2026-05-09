@@ -157,10 +157,21 @@ async def get_user_profile_data(guild_id: int, user_id: int) -> dict:
 
 def setup(bot, group=None):
     """Register the profile command under general and as top-level /profile shortcut."""
-    @app_commands.describe(user="The user to view the profile of (defaults to yourself)")
-    async def profile_callback(interaction: discord.Interaction, user: Optional[discord.Member] = None):
+    @app_commands.describe(
+        user="The user to view the profile of (defaults to yourself)",
+        share="Post your profile publicly in the channel for others to see (default: False)",
+    )
+    async def profile_callback(
+        interaction: discord.Interaction,
+        user: Optional[discord.Member] = None,
+        share: bool = False,
+    ):
         """Display a comprehensive user profile."""
-        await interaction.response.defer(ephemeral=False)
+        # When sharing own profile: public. Viewing someone else: always public.
+        # Viewing own profile without share: ephemeral.
+        is_self = user is None or (isinstance(interaction.user, discord.Member) and user.id == interaction.user.id)
+        defer_ephemeral = is_self and not share
+        await interaction.response.defer(ephemeral=defer_ephemeral)
 
         if not interaction.guild:
             return await interaction.followup.send(
@@ -322,9 +333,6 @@ def setup(bot, group=None):
             client=interaction.client,
         )
 
-        # Ephemeral when viewing own profile (private)
-        ephemeral = target_user.id == interaction.user.id
-
         # Consistent footer
         footer_parts = [EMBED_FOOTER_DEFAULT]
         if profile_data["last_activity"]:
@@ -339,7 +347,7 @@ def setup(bot, group=None):
         embed.set_footer(text=" • ".join(footer_parts))
         embed.set_thumbnail(url=target_user.display_avatar.url)
 
-        await interaction.followup.send(embed=embed, ephemeral=ephemeral)
+        await interaction.followup.send(embed=embed, ephemeral=defer_ephemeral)
 
     group.command(name="profile", description="View your or another user's profile and statistics.")(profile_callback)
     shortcut = app_commands.Command(name="profile", description="View profile (shortcut for /general profile)", callback=profile_callback)

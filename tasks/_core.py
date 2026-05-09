@@ -17,6 +17,35 @@ from core.channels import resolve_channel_id, delete_temp_vc_and_panel
 from api.warframe_api import get_baro_status, get_all_cycles, fetch_invasions, fetch_archon_hunt_data, fetch_events_data, fetch_alerts, fetch_duviri_circuit
 from core.utils import obsidian_embed, ECONOMY_ENABLED, COINS_PER_MINUTE_VOICE, MIN_VOICE_MINUTES_FOR_REWARD, XP_ENABLED, XP_PER_MINUTE_VOICE
 
+# ---------------------------------------------------------------------------
+# Notify channel health-check helper
+# ---------------------------------------------------------------------------
+# Tracks (guild_id, channel_id) pairs already warned this session to avoid
+# spamming the guild owner every loop iteration.
+_warned_broken_channels: set[tuple[int, int]] = set()
+
+
+async def _warn_broken_channel(
+    guild: discord.Guild, channel_id: int, feature: str
+) -> None:
+    """DM the guild owner once when a notification channel is missing or inaccessible."""
+    key = (guild.id, channel_id)
+    if key in _warned_broken_channels:
+        return
+    _warned_broken_channels.add(key)
+    owner = guild.owner
+    if not owner:
+        return
+    try:
+        await owner.send(
+            f"\u26a0\ufe0f **{guild.name}** \u2014 the **{feature}** notification channel "
+            f"(ID: `{channel_id}`) could not be found or is no longer accessible.\n"
+            f"Please reconfigure it with the appropriate `/warframe notify` or setup command."
+        )
+    except Exception:
+        pass  # DMs disabled or bot can't reach owner
+
+
 # Import Baro embed builder (lazy import to avoid circular dependency)
 def get_baro_embed_builder():
     """Lazy import to avoid circular dependency."""
@@ -139,6 +168,7 @@ async def check_and_notify_baro_arrival(bot):
             
             ch = guild.get_channel(channel_id)
             if not isinstance(ch, discord.TextChannel):
+                await _warn_broken_channel(guild, channel_id, "Baro Ki'Teer")
                 continue
             
             # Re-fetch Baro data to get freshest inventory (API may have delayed population at arrival)
@@ -1033,6 +1063,7 @@ def setup_tasks(bot):
                             
                             ch = guild.get_channel(channel_id)
                             if not isinstance(ch, discord.TextChannel):
+                                await _warn_broken_channel(guild, channel_id, "Cycle")
                                 continue
                             
                             ping_content = None
@@ -1174,6 +1205,7 @@ def setup_tasks(bot):
                             # Get channel
                             ch = guild.get_channel(channel_id)
                             if not isinstance(ch, discord.TextChannel):
+                                await _warn_broken_channel(guild, channel_id, "Invasion")
                                 continue
                             
                             # Build notification (API: attacker.faction, defender.faction; no eta, use activation)
@@ -1302,6 +1334,7 @@ def setup_tasks(bot):
                 
                 ch = guild.get_channel(channel_id)
                 if not isinstance(ch, discord.TextChannel):
+                    await _warn_broken_channel(guild, channel_id, "Archon Hunt")
                     continue
                 
                 # Check if we've already notified this guild for this hunt
