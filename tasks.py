@@ -877,6 +877,75 @@ def setup_tasks(bot):
     async def before_pet_decay_reminder_loop():
         await bot.wait_until_ready()
 
+    @tasks.loop(minutes=30)
+    async def daily_streak_reminder_loop():
+        """DM opted-in users ~1 hour before their daily streak resets (23h after last claim)."""
+        try:
+            if not bot.is_ready():
+                return
+
+            now = now_utc()
+            # Find users whose last_claim_date is today (UTC) so their reset is at next midnight
+            # We want to remind them when there is between 60 and 90 minutes left until midnight UTC
+            next_midnight = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+            minutes_until_midnight = (next_midnight - now).total_seconds() / 60
+
+            if not (60 <= minutes_until_midnight <= 90):
+                return  # Only fire in the 60-90 min window before midnight UTC
+
+            today_str = now.date().isoformat()
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute("""
+                    SELECT guild_id, user_id, streak_days
+                    FROM daily_claims
+                    WHERE last_claim_date = ?
+                """, (today_str,))
+                claimants = await cur.fetchall()
+
+            for guild_id, user_id, streak_days in claimants:
+                try:
+                    # Check opt-in
+                    opted_in = await get_guild_setting(guild_id, f"user_daily_reminder:{user_id}")
+                    if opted_in != "1":
+                        continue
+
+                    # Throttle: max one reminder per day
+                    last_sent = await get_guild_setting(guild_id, f"daily_reminder_sent:{user_id}")
+                    if last_sent == today_str:
+                        continue
+
+                    user = bot.get_user(user_id)
+                    if not user:
+                        try:
+                            user = await bot.fetch_user(user_id)
+                        except Exception:
+                            continue
+
+                    streak_fire = "🔥" * min(streak_days, 10) + (f" +{streak_days - 10}" if streak_days > 10 else "")
+                    reset_ts = int(next_midnight.timestamp())
+                    embed = obsidian_embed(
+                        "⏰ Daily Streak Reminder",
+                        f"Your **{streak_days}-day streak** resets <t:{reset_ts}:R>!\n\n"
+                        f"{streak_fire}\n\nUse `/economy daily` (or `/daily`) to keep it going.",
+                        color=discord.Color.orange(),
+                        footer="Turn this off with /general preferences daily_reminder:Off",
+                        client=bot,
+                    )
+                    try:
+                        await user.send(embed=embed)
+                        await set_guild_setting(guild_id, f"daily_reminder_sent:{user_id}", today_str)
+                    except discord.Forbidden:
+                        pass
+                except Exception as e:
+                    logger.debug(f"daily_streak_reminder for {user_id}: {e}")
+
+        except Exception as e:
+            logger.error(f"Error in daily_streak_reminder_loop: {e}", exc_info=True)
+
+    @daily_streak_reminder_loop.before_loop
+    async def before_daily_streak_reminder_loop():
+        await bot.wait_until_ready()
+
     @tasks.loop(minutes=5)  # Check every 5 minutes for cycle changes
     async def cycle_check_loop():
         """Check for cycle changes and send notifications."""
@@ -2129,6 +2198,7 @@ def setup_tasks(bot):
         ('warframe_achievement_roles_loop', warframe_achievement_roles_loop),
         ('lfg_expire_loop', lfg_expire_loop),
         ('pet_decay_reminder_loop', pet_decay_reminder_loop),
+        ('daily_streak_reminder_loop', daily_streak_reminder_loop),
         ('cycle_check_loop', cycle_check_loop),
         ('invasion_check_loop', invasion_check_loop),
         ('archon_check_loop', archon_check_loop),

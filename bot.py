@@ -2183,6 +2183,11 @@ async def on_ready():
                 bot.add_view(SuggestionView(int(suggestion_id)))
             except Exception:
                 pass
+            try:
+                from commands.suggestions.suggest import SuggestionVoteView
+                bot.add_view(SuggestionVoteView(int(suggestion_id)))
+            except Exception:
+                pass
         
         for (application_id,) in view_data['applications']:
             try:

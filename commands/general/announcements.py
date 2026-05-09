@@ -171,6 +171,7 @@ def setup(bot, group=None):
     )
     @app_commands.choices(action=[
         app_commands.Choice(name="Create", value="create"),
+        app_commands.Choice(name="Preview", value="preview"),
         app_commands.Choice(name="List", value="list"),
         app_commands.Choice(name="Delete", value="delete"),
     ])
@@ -211,7 +212,47 @@ def setup(bot, group=None):
 
         await interaction.response.defer(ephemeral=True)
         
-        if action == "create":
+        if action == "preview":
+            if not message:
+                return await interaction.followup.send(
+                    embed=obsidian_embed(
+                        "❌ Missing Message",
+                        "Provide the `message` parameter to preview how the announcement will look.",
+                        color=discord.Color.red(),
+                        client=interaction.client,
+                    ),
+                    ephemeral=True,
+                )
+            preview_embed = obsidian_embed(
+                "📢 Announcement Preview",
+                message,
+                color=discord.Color.blurple(),
+                footer=f"Preview only — not scheduled yet • Channel: {channel.mention if channel else 'not set'}",
+                client=interaction.client,
+            )
+            try:
+                await interaction.user.send(
+                    content="**Here's how your announcement will look:**",
+                    embed=preview_embed,
+                )
+                await interaction.followup.send(
+                    embed=obsidian_embed(
+                        "✅ Preview Sent",
+                        "Check your DMs! The preview of your announcement has been sent to you.",
+                        color=discord.Color.green(),
+                        client=interaction.client,
+                    ),
+                    ephemeral=True,
+                )
+            except discord.Forbidden:
+                # DMs closed — send ephemerally in-channel instead
+                await interaction.followup.send(
+                    content="**Announcement preview (DMs are closed — showing here instead):**",
+                    embed=preview_embed,
+                    ephemeral=True,
+                )
+
+        elif action == "create":
             if not channel or not message or not schedule_type or not schedule_value:
                 return await interaction.followup.send(
                     embed=obsidian_embed(

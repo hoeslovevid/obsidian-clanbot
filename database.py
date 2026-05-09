@@ -1598,6 +1598,15 @@ async def init_db() -> None:
         except Exception as e:
             logger.warning(f"[db] Error adding category to suggestions: {e}")
 
+        # Suggestion votes table (one row per user-per-suggestion, value 1=up -1=down)
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS suggestion_votes (
+            suggestion_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            vote INTEGER NOT NULL DEFAULT 1,
+            PRIMARY KEY (suggestion_id, user_id)
+        )""")
+
         await db.execute("""
         CREATE TABLE IF NOT EXISTS application_settings (
             guild_id INTEGER NOT NULL PRIMARY KEY,

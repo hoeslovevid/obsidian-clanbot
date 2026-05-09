@@ -11,6 +11,72 @@ SUGGESTION_CATEGORIES = ["feature", "bug", "improvement", "other"]
 EMBED_COLORS = None  # lazy load from utils
 
 
+class SuggestionVoteView(discord.ui.View):
+    """Persistent 👍/👎 vote buttons on suggestion posts."""
+
+    def __init__(self, suggestion_id: int):
+        super().__init__(timeout=None)
+        self.suggestion_id = suggestion_id
+        for item in self.children:
+            if isinstance(item, discord.ui.Button):
+                if item.emoji and str(item.emoji) == "👍":
+                    item.custom_id = f"svote:{suggestion_id}:up"
+                elif item.emoji and str(item.emoji) == "👎":
+                    item.custom_id = f"svote:{suggestion_id}:down"
+
+    async def _handle_vote(self, interaction: discord.Interaction, vote: int):
+        async with aiosqlite.connect(DB_PATH) as db:
+            # Fetch existing vote
+            cur = await db.execute(
+                "SELECT vote FROM suggestion_votes WHERE suggestion_id=? AND user_id=?",
+                (self.suggestion_id, interaction.user.id),
+            )
+            row = await cur.fetchone()
+            if row and row[0] == vote:
+                # Toggle off (remove vote)
+                await db.execute(
+                    "DELETE FROM suggestion_votes WHERE suggestion_id=? AND user_id=?",
+                    (self.suggestion_id, interaction.user.id),
+                )
+                toggled_off = True
+            else:
+                await db.execute(
+                    """INSERT INTO suggestion_votes (suggestion_id, user_id, vote)
+                       VALUES (?, ?, ?)
+                       ON CONFLICT(suggestion_id, user_id) DO UPDATE SET vote=excluded.vote""",
+                    (self.suggestion_id, interaction.user.id, vote),
+                )
+                toggled_off = False
+
+            cur2 = await db.execute(
+                "SELECT SUM(CASE WHEN vote=1 THEN 1 ELSE 0 END), SUM(CASE WHEN vote=-1 THEN 1 ELSE 0 END) FROM suggestion_votes WHERE suggestion_id=?",
+                (self.suggestion_id,),
+            )
+            counts = await cur2.fetchone()
+            upvotes = int(counts[0] or 0)
+            downvotes = int(counts[1] or 0)
+            await db.commit()
+
+        # Update embed footer to reflect current vote tally
+        if interaction.message and interaction.message.embeds:
+            embed = interaction.message.embeds[0]
+            embed.set_footer(text=f"👍 {upvotes}  ·  👎 {downvotes}  ·  Mods can manage via /manage_suggestions")
+            await interaction.response.edit_message(embed=embed, view=self)
+        else:
+            await interaction.response.defer()
+
+        action = "removed your vote" if toggled_off else ("upvoted" if vote == 1 else "downvoted")
+        await interaction.followup.send(f"✅ You {action} this suggestion.", ephemeral=True)
+
+    @discord.ui.button(emoji="👍", style=discord.ButtonStyle.secondary, custom_id="svote:0:up")
+    async def upvote(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._handle_vote(interaction, 1)
+
+    @discord.ui.button(emoji="👎", style=discord.ButtonStyle.secondary, custom_id="svote:0:down")
+    async def downvote(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._handle_vote(interaction, -1)
+
+
 async def create_suggestion_from_modal(interaction: discord.Interaction, suggestion: str, category_val: str):
     """Shared logic for creating a suggestion (used by /suggest and Add to Suggestions context menu)."""
     if not interaction.guild:
@@ -100,13 +166,14 @@ async def create_suggestion_from_modal(interaction: discord.Interaction, suggest
             "💡 New Suggestion", "", color=discord.Color.blue(),
             author=interaction.user, fields=fields,
             thumbnail=guild.icon.url if guild.icon else None,
-            footer=f"Suggestion #{suggestion_id} • Mods can approve/reject via buttons",
+            footer=f"👍 0  ·  👎 0  ·  Mods can manage via /manage_suggestions",
             client=interaction.client,
         )
         try:
-            message = await suggestions_channel.send(embed=embed)
-            await message.add_reaction("👍")
-            await message.add_reaction("👎")
+            from bot import bot as _bot
+            vote_view = SuggestionVoteView(suggestion_id)
+            _bot.add_view(vote_view)
+            message = await suggestions_channel.send(embed=embed, view=vote_view)
             async with aiosqlite.connect(DB_PATH) as db:
                 await db.execute("UPDATE suggestions SET message_id=? WHERE id=?", (message.id, suggestion_id))
                 await db.commit()

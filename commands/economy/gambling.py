@@ -12,10 +12,13 @@ import aiosqlite
 def setup(bot, group=None):
     """Register gambling commands."""
     
-    command_decorator = group.command(name="slots", description="Play slots! (Cost: 50 coins)") if group else bot.tree.command(name="slots", description="Play slots! (Cost: 50 coins)")
+    MIN_SLOTS_BET, MAX_SLOTS_BET = 10, 5_000
+
+    command_decorator = group.command(name="slots", description="Play slots! Bet 10–5,000 coins (default 50).") if group else bot.tree.command(name="slots", description="Play slots! Bet 10–5,000 coins (default 50).")
     
     @command_decorator
-    async def slots(interaction: discord.Interaction):
+    @app_commands.describe(bet="Coins to bet (10–5,000, default 50)")
+    async def slots(interaction: discord.Interaction, bet: int = 50):
         """Play a slot machine game."""
         if not interaction.guild:
             return await interaction.response.send_message(
@@ -27,10 +30,20 @@ def setup(bot, group=None):
                 ),
                 ephemeral=True
             )
-        
+
+        if not (MIN_SLOTS_BET <= bet <= MAX_SLOTS_BET):
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Invalid Bet",
+                    f"Bet must be between **{MIN_SLOTS_BET:,}** and **{MAX_SLOTS_BET:,}** coins.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+
         await interaction.response.defer()
         
-        cost = 50
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute(
                 "SELECT balance FROM user_balances WHERE guild_id=? AND user_id=?",
@@ -39,31 +52,33 @@ def setup(bot, group=None):
             row = await cur.fetchone()
             balance = row[0] or 0 if row else 0
             
-            if balance < cost:
+            if balance < bet:
                 return await interaction.followup.send(
                     embed=obsidian_embed(
                         "❌ Insufficient Funds",
-                        f"You need {cost} coins to play slots. You have **{balance}** coins.\n\nUse `/daily` or send messages to earn more!",
+                        f"You need **{bet:,}** coins to spin at that bet. You have **{balance:,}** coins.\n\nUse `/daily` or send messages to earn more!",
                         color=discord.Color.red(),
                         footer="Use /daily or /economy balance to earn more",
                         client=interaction.client,
                     )
                 )
-            low_balance_warning = (balance - cost) < 100
+            low_balance_warning = (balance - bet) < 100
             
-            await remove_coins(interaction.guild.id, interaction.user.id, cost, "GAMBLING", "Slots spin")
+            await remove_coins(interaction.guild.id, interaction.user.id, bet, "GAMBLING", f"Slots spin (bet {bet})")
             
             symbols = ["🍒", "🍋", "🍊", "🍇", "🔔", "⭐", "💎", "7️⃣"]
             reel1, reel2, reel3 = random.choice(symbols), random.choice(symbols), random.choice(symbols)
             
+            # Winnings scale with bet: same multipliers as before (20x/10x/6x/4x triple, 2x pair)
             winnings = 0
             if reel1 == reel2 == reel3:
-                winnings = 1000 if reel1 == "💎" else 500 if reel1 == "7️⃣" else 300 if reel1 == "⭐" else 200
+                mult = 20 if reel1 == "💎" else 10 if reel1 == "7️⃣" else 6 if reel1 == "⭐" else 4
+                winnings = bet * mult
             elif reel1 == reel2 or reel2 == reel3 or reel1 == reel3:
-                winnings = 50
+                winnings = bet * 2  # pair: return bet + 1x profit
             
             if winnings > 0:
-                await add_coins(interaction.guild.id, interaction.user.id, winnings, "GAMBLING", "Slots winnings")
+                await add_coins(interaction.guild.id, interaction.user.id, winnings, "GAMBLING", f"Slots winnings (bet {bet})")
                 try:
                     from database import check_and_unlock_achievement, get_user_balance
                     await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "gambling_first_win", None)
@@ -74,16 +89,17 @@ def setup(bot, group=None):
                         await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "first_million", None)
                 except Exception:
                     pass
-                result_pre = f"**🎉 You won {winnings} coins!**"
+                profit = winnings - bet
+                result_pre = f"**🎉 You won {winnings:,} coins!** (profit: +{profit:,})"
                 color = discord.Color.gold()
             else:
-                result_pre = "**Better luck next time!**"
+                result_pre = f"**Better luck next time!** (lost {bet:,} coins)"
                 color = discord.Color.red()
             
             await db.execute("""
                 INSERT INTO gambling_history (guild_id, user_id, game_type, bet_amount, win_amount, result, created_at)
                 VALUES (?, ?, 'slots', ?, ?, ?, ?)
-            """, (interaction.guild.id, interaction.user.id, cost, winnings, "win" if winnings > 0 else "loss", now_utc().isoformat()))
+            """, (interaction.guild.id, interaction.user.id, bet, winnings, "win" if winnings > 0 else "loss", now_utc().isoformat()))
             cur = await db.execute(
                 "SELECT balance FROM user_balances WHERE guild_id=? AND user_id=?",
                 (interaction.guild.id, interaction.user.id),
@@ -92,7 +108,7 @@ def setup(bot, group=None):
             await db.commit()
         
         low_warn = "\n\n⚠️ **Low balance!** Consider saving for your daily." if low_balance_warning and nb < 100 else ""
-        footer = f"Bet: {cost} coins • {'Jackpot! Try again?' if winnings > 0 else 'Play again with /economy gambling slots'}"
+        footer = f"Bet: {bet:,} coins • {'Jackpot! Try again?' if winnings > 0 else 'Play again with /economy gambling slots'}"
         embed = obsidian_embed(
             "🎰 Slots",
             f"**{reel1} | {reel2} | {reel3}**\n\n{result_pre}\n**New Balance:** {nb:,} coins{low_warn}",

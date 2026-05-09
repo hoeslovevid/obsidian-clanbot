@@ -42,7 +42,8 @@ def setup(bot, group=None):
     @app_commands.describe(
         timezone="Your timezone (used for reminders and event times)",
         platform="Trading platform (used by /trading trade_price when not specified)",
-        quieter="Enable quieter mode: fewer pings in events/reminders (mods only)"
+        quieter="Enable quieter mode: fewer pings in events/reminders (mods only)",
+        daily_reminder="Get a DM ~1 hour before your daily streak resets",
     )
     @app_commands.choices(timezone=[
         app_commands.Choice(name=label, value=tz) for tz, label in COMMON_TIMEZONES
@@ -53,11 +54,17 @@ def setup(bot, group=None):
         app_commands.Choice(name="Off - normal pings", value="0"),
         app_commands.Choice(name="(no change)", value="-"),
     ])
+    @app_commands.choices(daily_reminder=[
+        app_commands.Choice(name="On - DM me before my streak resets", value="1"),
+        app_commands.Choice(name="Off - no reminder", value="0"),
+        app_commands.Choice(name="(no change)", value="-"),
+    ])
     async def preferences(
         interaction: discord.Interaction,
         timezone: Optional[app_commands.Choice[str]] = None,
         platform: Optional[app_commands.Choice[str]] = None,
         quieter: Optional[app_commands.Choice[str]] = None,
+        daily_reminder: Optional[app_commands.Choice[str]] = None,
     ):
         """Set timezone or quieter mode."""
         if not interaction.guild:
@@ -90,13 +97,23 @@ def setup(bot, group=None):
                 await set_quieter_mode(interaction.guild.id, enabled)
                 updated.append(f"**Quieter mode:** {'On' if enabled else 'Off'}")
 
+        if daily_reminder and daily_reminder.value != "-":
+            from database import set_guild_setting
+            await set_guild_setting(interaction.guild.id, f"user_daily_reminder:{interaction.user.id}", daily_reminder.value)
+            state = "On" if daily_reminder.value == "1" else "Off"
+            updated.append(f"**Daily streak reminder:** {state}")
+
         if not lines and not updated:
             # Show current preferences
             current_tz = await get_user_timezone(interaction.guild.id, interaction.user.id)
             current_platform = await get_user_platform(interaction.guild.id, interaction.user.id)
             quieter_on = await get_quieter_mode(interaction.guild.id)
+            from database import get_guild_setting
+            dr_val = await get_guild_setting(interaction.guild.id, f"user_daily_reminder:{interaction.user.id}")
+            dr_on = dr_val == "1"
             lines.append(f"**Your timezone:** {current_tz or 'Not set (uses server default)'}")
             lines.append(f"**Trading platform:** {current_platform.upper() if current_platform else 'Not set (defaults to PC)'}")
+            lines.append(f"**Daily streak reminder:** {'On 🔔' if dr_on else 'Off'}")
             if isinstance(interaction.user, discord.Member) and is_mod(interaction.user):
                 lines.append(f"**Quieter mode:** {'On' if quieter_on else 'Off'}")
             embed = obsidian_embed(
