@@ -163,7 +163,7 @@ class HelpSelect(discord.ui.Select):
         
         # Define all possible groups with their emojis and descriptions
         group_definitions = {
-            "general": ("General", "Help, profile, bio, achievements, preferences", "📋"),
+            "general": ("General", "Help, profile, bio, preferences, polls, rules", "📋"),
             "economy": ("Economy", "Coins, daily, bounties, gambling, pets, invest", "💰"),
             "tools": ("Tools", "Coinflip, activity heatmap, voice LB, stats", "🔧"),
             "warframe": ("Warframe", "Baro, cycles, alerts, builds, LFG", "🎮"),
@@ -266,9 +266,9 @@ class HelpSelect(discord.ui.Select):
         
         # Group descriptions and colors per group
         group_descriptions = {
-            "general": "📋 General commands: help, profile, bio, achievements, leaderboard, preferences, reminders, polls, reputation, and server setup",
+            "general": "📋 General commands: help, profile, bio, preferences, polls, rules, server setup, and welcome configuration",
             "economy": "💰 Economy: balance, daily, bounties, gambling (slots/dice/roulette), gambling stats, pets, investments, prestige, shop, stash, transfer, and XP",
-            "tools": "🔧 Tools: coinflip, activity heatmap, voice leaderboard, server stats, badges, AFK, reminders",
+            "tools": "🔧 Tools: coinflip, activity heatmap, voice leaderboard, achievements, server stats, badges, AFK, reminders",
             "warframe": "🎮 Warframe: Baro, cycles, alerts, fissures, invasions, sortie, archon, builds, LFG, trading, roles, and notifications",
             "community": "👥 Community: events, tickets, suggestions, applications, complaints, trading, Twitch notifications",
             "trading": "💼 Trading: post trades, browse listings, look up market prices",
@@ -412,8 +412,8 @@ def setup(bot, group=None):
                 # General
                 "general profile": ["/general profile", "/general profile user:@Member", "/profile"],
                 "general set_bio": ["/general set_bio"],
-                "general achievements": ["/general achievements", "/general achievements user:@Member"],
-                "general achievements_leaderboard": ["/general achievements_leaderboard"],
+                "tools achievements": ["/tools achievements", "/tools achievements user:@Member"],
+                "tools achievements_leaderboard": ["/tools achievements_leaderboard"],
                 "general preferences": ["/general preferences daily_reminder:On levelup_dm:On achievement_notify:Off"],
                 "general links": ["/general links"],
                 "general about": ["/general about"],

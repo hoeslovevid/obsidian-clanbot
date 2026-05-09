@@ -257,7 +257,7 @@ def load_all_commands(bot):
         "commands.general.sync_commands": general_group,
         "commands.general.welcome_setup": general_group,
         "commands.general.milestones": general_group,
-        "commands.general.achievements": general_group,
+        "commands.general.achievements": tools_group,  # Moved: general_group at 25-cmd limit
         "commands.general.webhooks": general_group,
         "commands.general.rules": general_group,
         "commands.general.polls": general_group,
