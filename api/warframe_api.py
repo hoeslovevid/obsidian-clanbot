@@ -15,14 +15,14 @@ import aiohttp  # type: ignore
 def _wf_stat_timeout() -> int:
     v = os.environ.get("WARFRAME_STAT_TIMEOUT", "")
     if not v.isdigit():
-        return 60
+        return 12  # Sensible default: 12s per attempt (was 60s — too slow when proxy is dead)
     n = int(v)
-    return n if n >= 1 else 60
+    return n if n >= 1 else 12
 WARFRAME_STAT_TIMEOUT = _wf_stat_timeout()
 
 def _wf_stat_retries() -> int:
     v = os.environ.get("WARFRAME_STAT_RETRIES", "")
-    return int(v) if v.isdigit() and int(v) >= 1 else 4
+    return int(v) if v.isdigit() and int(v) >= 1 else 2  # 2 retries default (was 4)
 WARFRAME_STAT_RETRIES = _wf_stat_retries()
 
 # Optional proxy for Warframe APIs (e.g. when datacenter IP gets 404)
