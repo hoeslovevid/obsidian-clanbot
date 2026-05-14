@@ -1,6 +1,6 @@
 """Persistent self-subscribe panel for Warframe notifications (Item 21).
 
-Mods run ``/warframe notify post_panel`` to drop a single embed in a channel.
+Mods run ``/wfnotify post_panel`` to drop a single embed in a channel.
 Each button on that embed toggles the user's
 ``wfsub:{category}:{user_id}`` setting — the same key shared by
 ``/warframe subscribe`` (Item 2) — so the two surfaces stay in sync.

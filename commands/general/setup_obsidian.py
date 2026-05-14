@@ -191,7 +191,7 @@ class SetupChecklistView(discord.ui.View):
     @discord.ui.button(label="Configure Notifications", style=discord.ButtonStyle.secondary, emoji="🔔")
     async def setup_notifications(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message(
-            "Use `/warframe notify` commands to set channels for Baro, cycles, invasions, and Archon alerts.",
+            "Use `/wfnotify` commands to set channels for Baro, cycles, invasions, and Archon alerts.",
             ephemeral=True,
         )
 

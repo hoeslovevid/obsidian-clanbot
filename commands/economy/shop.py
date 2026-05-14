@@ -82,14 +82,14 @@ def setup(bot, group=None):
         
         embed = obsidian_embed(
             "🛒 Shop",
-            "Use `/economy store buy <item_name>` to purchase.",
+            "Use `/store buy <item_name>` to purchase.",
             color=discord.Color.blue(),
             thumbnail=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
             fields=[
                 ("💰 Your Balance", balance_line, True),
                 ("📦 Items", items_text.strip()[:1024], False),
             ],
-            footer=f"{len(rows)} item(s) • Use /economy store buy <item> to purchase",
+            footer=f"{len(rows)} item(s) • Use /store buy <item> to purchase",
             client=interaction.client,
         )
         
@@ -139,7 +139,7 @@ def setup(bot, group=None):
             return await interaction.followup.send(
                 embed=obsidian_embed(
                     "❌ Item Not Found",
-                    f"No item found matching '{item_name}'. Use `/economy store browse` to see available items.",
+                    f"No item found matching '{item_name}'. Use `/store browse` to see available items.",
                     color=discord.Color.red(),
                     client=interaction.client,
                 ),

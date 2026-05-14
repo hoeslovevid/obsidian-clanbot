@@ -1,4 +1,4 @@
-"""Unified `/warframe notify setup` panel (Item 3).
+"""Unified `/wfnotify setup` panel (Item 3).
 
 Lets a mod set or clear every Warframe notification channel from a single
 ephemeral embed. Persists into the same setting keys/tables the individual
@@ -178,8 +178,8 @@ async def _build_overview_embed(
     # Mention the categories we intentionally don't manage from here so mods
     # know to use their dedicated commands.
     extras = (
-        "\n\n_For per-reward invasion pings, use `/warframe notify invasion_notify`._\n"
-        "_For automatic event creation toggle, use `/warframe notify warframe_event_notify`._"
+        "\n\n_For per-reward invasion pings, use `/wfnotify invasion_notify`._\n"
+        "_For automatic event creation toggle, use `/wfnotify warframe_event_notify`._"
     )
 
     desc = "Use the menu to set or clear a channel for each notification stream.\n\n" + "\n".join(lines) + extras
@@ -293,7 +293,7 @@ class NotifySetupView(discord.ui.View):
 
 
 def setup(bot, group=None):
-    """Register the `/warframe notify setup` command."""
+    """Register the `/wfnotify setup` command."""
     cmd = group.command(name="setup", description="Configure every Warframe notification channel from one panel.") if group else None
     if not cmd:
         return

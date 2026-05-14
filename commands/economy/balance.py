@@ -117,7 +117,7 @@ def setup(bot, group=None):
             happy_icon   = "🚨" if hp < 25 else "⚠️" if hp < 50 else "😊"
             needs_care   = h < 50 or hp < 50
             pet_label    = f"🐾 Pet {'— needs attention!' if needs_care else ''}"
-            nudge        = "\n-# Use `/economy pets feed` or `play` to restore stats." if needs_care else ""
+            nudge        = "\n-# Use `/pets feed` or `play` to restore stats." if needs_care else ""
 
             fields.insert(1, (
                 pet_label,

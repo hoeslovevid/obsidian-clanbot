@@ -192,7 +192,7 @@ async def _run_me(interaction: discord.Interaction):
 
     # Footer: pick the most urgent helpful hint
     if pet_urgent:
-        footer = "🐾 Pet needs attention — `/economy pets feed` / `play`"
+        footer = "🐾 Pet needs attention — `/pets feed` / `play`"
     elif investment_urgent:
         footer = "📈 Investment ready! Use `/economy invest_collect`"
     elif not today_claimed:

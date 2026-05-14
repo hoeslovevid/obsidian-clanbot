@@ -10,11 +10,9 @@ from discord import app_commands  # type: ignore
 def load_all_commands(bot):
     """Load all command modules and organize them into groups."""
     # Create command groups (Discord limit: 25 commands per group)
-    economy_group = app_commands.Group(name="economy", description="💰 Coins, XP, shop, gambling, and pets")
-    warframe_group = app_commands.Group(name="warframe", description="🎮 Baro, cycles, alerts, LFG, builds, and more")
-    warframe_notify = app_commands.Group(name="notify", description="Configure Baro, cycle, alert, and devstream notifications")
-    warframe_group.add_command(warframe_notify)
-    moderation_group = app_commands.Group(name="mod", description="🛡️ Purge, lock, warn, automod, logging, and moderation tools")
+    economy_group = app_commands.Group(name="economy", description="💰 Coins, daily, gambling, stash, invest, prestige")
+    warframe_group = app_commands.Group(name="warframe", description="🎮 Baro, cycles, alerts, builds, and clan info")
+    moderation_group = app_commands.Group(name="mod", description="🛡️ Purge, snipe, schedule, raid shield, and core moderation")
     general_group = app_commands.Group(name="general", description="📋 Help, about, setup, profiles, and server tools")
     tools_group = app_commands.Group(name="tools", description="🔧 Coinflip and utilities")
     community_group = app_commands.Group(name="community", description="👥 Events, tickets, suggestions, applications, and community features")
@@ -23,24 +21,34 @@ def load_all_commands(bot):
     giveaways_group = app_commands.Group(name="giveaways", description="🎁 Create, manage, and enter giveaways")
     trading_group = app_commands.Group(name="trading", description="💼 Trading post, prices, and Warframe market lookup")
     vc_group = app_commands.Group(name="vc", description="🎙️ Temp voice channel tools (transfer, presets)")
+    # Top-level groups split out of /mod to keep its serialized payload under Discord's 8000-char cap
+    automod_group = app_commands.Group(name="automod", description="🤖 Auto-moderation (spam, caps, links, mentions)")
+    warn_group = app_commands.Group(name="warn", description="🛑 Warnings, templates, and moderator notes")
+    roletools_group = app_commands.Group(name="roletools", description="🎭 Reaction roles, level roles, role menus, mass assign")
+    admin_group = app_commands.Group(name="admin", description="🗄️ Server admin: backups, retention, incidents, KPIs, applications")
+    # Promoted from economy/warframe/community subgroups for the same 8000-char cap reason
+    pets_group = app_commands.Group(name="pets", description="🐾 Pet shop, care, battles, evolutions, and marketplace")
+    store_group = app_commands.Group(name="store", description="🛒 Browse and buy server shop items")
+    xp_group = app_commands.Group(name="xp", description="✨ XP check, leaderboard, settings, and events")
+    wfnotify_group = app_commands.Group(name="wfnotify", description="🔔 Warframe notifications: Baro, cycles, alerts, devstream")
+    lfg_group = app_commands.Group(name="lfg", description="🤝 Warframe LFG: post and browse looking-for-group ads")
+    events_group = app_commands.Group(name="events", description="📅 Server events: create, browse, and recurring schedules")
 
-    # Economy subgroups (stays under 25 items: commands + subgroups)
-    economy_pets = app_commands.Group(name="pets", description="Pet shop, care, battles, evolutions, and trading")
-    economy_shop = app_commands.Group(name="store", description="Buy items and manage shop (mods)")
-    economy_xp = app_commands.Group(name="xp", description="XP, leaderboard, and XP settings")
-    economy_group.add_command(economy_pets)
-    economy_group.add_command(economy_shop)
-    economy_group.add_command(economy_xp)
+    # NOTE: economy.pets/store/xp and warframe.notify are NOT added as subgroups any more —
+    # they each became their own top-level group above to fit Discord's 8000-byte limit.
 
-    # Moderation subgroups
+    # Moderation subgroup that is small enough to keep inside /mod
     mod_channel = app_commands.Group(name="channel", description="Lock and unlock channels")
-    mod_warn = app_commands.Group(name="warn", description="Warn users and view warnings")
-    mod_automod = app_commands.Group(name="automod", description="Auto-moderation configuration")
-    mod_role_tools = app_commands.Group(name="role_tools", description="Reaction roles, role menus, level roles, self-assignable")
     moderation_group.add_command(mod_channel)
-    moderation_group.add_command(mod_warn)
-    moderation_group.add_command(mod_automod)
-    moderation_group.add_command(mod_role_tools)
+
+    # Aliases used by group_mapping below — back-compat names for the promoted subgroups
+    mod_warn = warn_group
+    mod_automod = automod_group
+    mod_role_tools = roletools_group
+    economy_pets = pets_group
+    economy_shop = store_group
+    economy_xp = xp_group
+    warframe_notify = wfnotify_group
 
     bot.tree.add_command(economy_group)
     bot.tree.add_command(warframe_group)
@@ -53,6 +61,16 @@ def load_all_commands(bot):
     bot.tree.add_command(giveaways_group)
     bot.tree.add_command(trading_group)
     bot.tree.add_command(vc_group)
+    bot.tree.add_command(automod_group)
+    bot.tree.add_command(warn_group)
+    bot.tree.add_command(roletools_group)
+    bot.tree.add_command(admin_group)
+    bot.tree.add_command(pets_group)
+    bot.tree.add_command(store_group)
+    bot.tree.add_command(xp_group)
+    bot.tree.add_command(wfnotify_group)
+    bot.tree.add_command(lfg_group)
+    bot.tree.add_command(events_group)
 
     command_modules = [
         "commands.general.help",
@@ -208,57 +226,64 @@ def load_all_commands(bot):
         "commands.economy.shop_manage": economy_shop,
         "commands.economy.pets": economy_pets,
         "commands.warframe.baro": warframe_group,
-        "commands.warframe.baro_notify": warframe_notify,
-        "commands.warframe.lfg": warframe_group,
-        "commands.warframe.lfg_list": warframe_group,
+        "commands.warframe.baro_notify": wfnotify_group,
+        # /lfg promoted to its own top-level group
+        "commands.warframe.lfg": lfg_group,
+        "commands.warframe.lfg_list": lfg_group,
         "commands.warframe.cycles": warframe_group,
-        "commands.warframe.cycle_notify": warframe_notify,
+        "commands.warframe.cycle_notify": wfnotify_group,
         "commands.warframe.invasions": warframe_group,
-        "commands.warframe.invasion_notify": warframe_notify,
+        "commands.warframe.invasion_notify": wfnotify_group,
         "commands.warframe.archon": warframe_group,
-        "commands.warframe.archon_notify": warframe_notify,
-        "commands.warframe.warframe_event_notify": warframe_notify,
+        "commands.warframe.archon_notify": wfnotify_group,
+        "commands.warframe.warframe_event_notify": wfnotify_group,
         "commands.warframe.resource": warframe_group,
         "commands.warframe.duviri": warframe_group,
         "commands.warframe.alerts": warframe_group,
-        "commands.warframe.alerts_notify": warframe_notify,
+        "commands.warframe.alerts_notify": wfnotify_group,
         "commands.warframe.fissures": warframe_group,
         "commands.warframe.sortie": warframe_group,
         "commands.warframe.daily_ops": warframe_group,
         "commands.warframe.status": warframe_group,
-        "commands.warframe.devstream_notify": warframe_notify,
-        "commands.warframe.forum_notify": warframe_notify,
-        "commands.warframe.youtube_notify": warframe_notify,
-        "commands.warframe.tennogen_notify": warframe_notify,
-        "commands.warframe.notify_status": warframe_notify,
+        "commands.warframe.devstream_notify": wfnotify_group,
+        "commands.warframe.forum_notify": wfnotify_group,
+        "commands.warframe.youtube_notify": wfnotify_group,
+        "commands.warframe.tennogen_notify": wfnotify_group,
+        "commands.warframe.notify_status": wfnotify_group,
         "commands.warframe.dojo": warframe_group,
         "commands.warframe.warframe_link": warframe_group,
         "commands.warframe.warframe_roles": warframe_group,
         "commands.warframe.subscribe": warframe_group,
-        "commands.warframe.notify_setup": warframe_notify,
-        "commands.warframe.notify_panel": warframe_notify,
+        "commands.warframe.notify_setup": wfnotify_group,
+        "commands.warframe.notify_panel": wfnotify_group,
+        # /mod = lightweight, frequently-used moderation
         "commands.moderation.purge": moderation_group,
-        "commands.moderation.logging": moderation_group,
         "commands.moderation.snipe": moderation_group,
         "commands.moderation.starboard": moderation_group,
-        "commands.moderation.backup": moderation_group,
-        "commands.moderation.data_retention": moderation_group,
-        "commands.moderation.incident_mode": moderation_group,
-        "commands.moderation.kpis": moderation_group,
         "commands.moderation.raid_protection": moderation_group,
         "commands.moderation.embed_builder": moderation_group,
         "commands.moderation.schedule": moderation_group,
-        "commands.moderation.dashboard": moderation_group,
-        "commands.moderation.ticket_config": tools_group,  # Moved: moderation_group at 25-cmd limit
-        "commands.moderation.reaction_roles": mod_role_tools,
-        "commands.moderation.automod_setup": mod_automod,
-        "commands.moderation.automod_status": mod_automod,
-        "commands.moderation.roles": mod_role_tools,
-        "commands.moderation.level_roles": mod_role_tools,
-        "commands.moderation.role_menu": mod_role_tools,
-        "commands.moderation.warn": mod_warn,
-        "commands.moderation.mod_notes": mod_warn,
+        "commands.moderation.logging": moderation_group,
         "commands.moderation.lock": mod_channel,
+        # /admin = heavier server-admin tooling (split out so /mod stays under Discord's 8000-byte cap)
+        "commands.moderation.backup": admin_group,
+        "commands.moderation.data_retention": admin_group,
+        "commands.moderation.incident_mode": admin_group,
+        "commands.moderation.kpis": admin_group,
+        "commands.moderation.dashboard": admin_group,
+        "commands.moderation.ticket_config": admin_group,
+        "commands.suggestions.manage_suggestions": admin_group,
+        "commands.applications.application_setup": admin_group,
+        "commands.applications.manage_applications": admin_group,
+        # Promoted top-level groups (formerly /mod automod, /mod warn, /mod role_tools)
+        "commands.moderation.reaction_roles": roletools_group,
+        "commands.moderation.automod_setup": automod_group,
+        "commands.moderation.automod_status": automod_group,
+        "commands.moderation.roles": roletools_group,
+        "commands.moderation.level_roles": roletools_group,
+        "commands.moderation.role_menu": roletools_group,
+        "commands.moderation.warn": warn_group,
+        "commands.moderation.mod_notes": warn_group,
         "commands.general.help": general_group,
         "commands.general.links": general_group,
         "commands.general.about": general_group,
@@ -269,40 +294,37 @@ def load_all_commands(bot):
         "commands.general.setup_docket": general_group,
         "commands.general.sync_commands": general_group,
         "commands.general.welcome_setup": general_group,
-        "commands.general.milestones": general_group,
-        "commands.general.achievements": tools_group,  # Moved: general_group at 25-cmd limit
-        "commands.general.webhooks": general_group,
+        "commands.general.milestones": admin_group,           # Moved: general_group payload >8000 bytes
+        "commands.general.achievements": tools_group,          # Moved: general_group at 25-cmd limit
+        "commands.general.webhooks": admin_group,             # Moved: general_group payload >8000 bytes
         "commands.general.rules": general_group,
         "commands.general.polls": general_group,
-        "commands.general.reminder": tools_group,  # Moved: community at 25 limit, general full
+        "commands.general.reminder": tools_group,              # Moved: community at 25 limit, general full
         "commands.general.preferences": general_group,
-        "commands.general.whatsnew": tools_group,  # tools_group has room; /whatsnew top-level shortcut also registered
+        "commands.general.whatsnew": tools_group,              # tools_group has room; /whatsnew top-level shortcut also registered
         "commands.general.reputation": community_group,
         "commands.general.twitch": community_group,
         "commands.general.afk": tools_group,
-        "commands.general.server_stats": tools_group,   # Moved: community at 25 limit
+        "commands.general.server_stats": tools_group,          # Moved: community at 25 limit
         "commands.general.profile": general_group,
         "commands.general.me": general_group,
         "commands.general.bot_status": general_group,
-        "commands.general.badges": tools_group,        # Moved: community at 25 limit
-        "commands.general.announcements": general_group,
-        "commands.general.cross_server": tools_group,  # Moved: general_group at 25-cmd limit
+        "commands.general.badges": tools_group,                # Moved: community at 25 limit
+        "commands.general.announcements": admin_group,        # Moved: general_group payload >8000 bytes
+        "commands.general.cross_server": tools_group,          # Moved: general_group at 25-cmd limit
         "commands.general.voice_leaderboard": tools_group,
-        "commands.general.coinflip": tools_group,  # Moved: community at 25 limit
+        "commands.general.coinflip": tools_group,              # Moved: community at 25 limit
         "commands.general.activity_heatmap": tools_group,
-        "commands.general.trivia": tools_group,  # Moved: general_group at 25-cmd limit
+        "commands.general.trivia": tools_group,                # Moved: general_group at 25-cmd limit
         "commands.warframe.build": warframe_group,
         "commands.warframe.drop_tables": warframe_group,
         "commands.music.music": music_group,
-        "commands.events.event_create": community_group,
+        "commands.events.event_create": events_group,         # Moved: community_group payload >8000 bytes
         "commands.complaints.submit_complaint": community_group,
         "commands.complaints.request_help": community_group,
         "commands.tickets.ticket": community_group,
         "commands.suggestions.suggest": community_group,
-        "commands.suggestions.manage_suggestions": moderation_group,  # Mod-only, moved from community (25 limit)
         "commands.applications.application": community_group,
-        "commands.applications.application_setup": moderation_group,  # Mod-only, moved from community (25 limit)
-        "commands.applications.manage_applications": moderation_group,  # Mod-only, moved from community (25 limit)
         "commands.trading.trade": trading_group,
         "commands.trading.trade_price": trading_group,
         "commands.trading.trade_search": trading_group,

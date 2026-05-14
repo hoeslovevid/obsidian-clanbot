@@ -206,7 +206,7 @@ class PetShopView(discord.ui.View):
             lines.append(f"**{pet_type}** • {price:,} coins • Max Lv.{max_level}\n{desc}")
 
         desc = "Browse pets below. Use the buttons to change pages.\n\n" + "\n\n".join(lines)
-        footer = f"Page {self.page + 1}/{self.total_pages} • Use /economy pets buy to purchase"
+        footer = f"Page {self.page + 1}/{self.total_pages} • Use /pets buy to purchase"
         return obsidian_embed(
             "🐾 Pet Shop",
             desc,
@@ -624,7 +624,7 @@ def setup(bot, group=None):
                 return await interaction.followup.send(
                     embed=obsidian_embed(
                         "❌ Invalid Pet Type",
-                        f"Pet type '{pet_type}' not found. Use `/economy pets shop` to see available pets.",
+                        f"Pet type '{pet_type}' not found. Use `/pets shop` to see available pets.",
                         color=discord.Color.red(),
                         client=interaction.client,
                     )
@@ -700,7 +700,7 @@ def setup(bot, group=None):
             return await interaction.followup.send(
                 embed=obsidian_embed(
                     "🐾 No Pet",
-                    "You don't have a pet yet! Use `/economy pets shop` to see available pets and `/economy pets buy` to buy one.",
+                    "You don't have a pet yet! Use `/pets shop` to see available pets and `/pets buy` to buy one.",
                     color=discord.Color.blue(),
                     client=interaction.client,
                 )
@@ -778,7 +778,7 @@ def setup(bot, group=None):
             row = await cur.fetchone()
             if not row:
                 return await interaction.followup.send(
-                    embed=obsidian_embed("❌ No Pet", "You don't have a pet! Use `/economy pets buy` to buy one.", color=discord.Color.red(), client=interaction.client),
+                    embed=obsidian_embed("❌ No Pet", "You don't have a pet! Use `/pets buy` to buy one.", color=discord.Color.red(), client=interaction.client),
                 )
             await db.execute(
                 "UPDATE pets SET pet_name=? WHERE guild_id=? AND user_id=?",
@@ -894,7 +894,7 @@ def setup(bot, group=None):
                 return await interaction.followup.send(
                     embed=obsidian_embed(
                         "❌ No Pet",
-                        "You don't have a pet! Use `/economy pets buy` to buy one.",
+                        "You don't have a pet! Use `/pets buy` to buy one.",
                         color=discord.Color.red(),
                         client=interaction.client,
                     )
@@ -982,7 +982,7 @@ def setup(bot, group=None):
                 return await interaction.followup.send(
                     embed=obsidian_embed(
                         "❌ No Pet",
-                        "You don't have a pet! Use `/economy pets buy` to buy one.",
+                        "You don't have a pet! Use `/pets buy` to buy one.",
                         color=discord.Color.red(),
                         client=interaction.client,
                     )
@@ -1073,7 +1073,7 @@ def setup(bot, group=None):
                 return await interaction.followup.send(
                     embed=obsidian_embed(
                         "❌ No Pet",
-                        "You don't have a pet! Use `/economy pets buy` to buy one.",
+                        "You don't have a pet! Use `/pets buy` to buy one.",
                         color=discord.Color.red(),
                         client=interaction.client,
                     )
@@ -1146,7 +1146,7 @@ def setup(bot, group=None):
             row1 = await cur.fetchone()
             if not row1:
                 return await interaction.followup.send(
-                    embed=obsidian_embed("❌ No Pet", "You need a pet to battle! Use `/economy pets buy` to get one.", color=discord.Color.red(), client=interaction.client),
+                    embed=obsidian_embed("❌ No Pet", "You need a pet to battle! Use `/pets buy` to get one.", color=discord.Color.red(), client=interaction.client),
                 )
             # Check defender has pet
             cur = await db.execute("""
@@ -1293,7 +1293,7 @@ def setup(bot, group=None):
             )
             await db.commit()
         await interaction.followup.send(
-            embed=obsidian_embed("✅ Pet Listed", f"**{pet_name}** ({pet_type}) Lv.{level} listed for {price:,} coins. Use `/economy pets marketplace` to browse.", color=discord.Color.green(), client=interaction.client),
+            embed=obsidian_embed("✅ Pet Listed", f"**{pet_name}** ({pet_type}) Lv.{level} listed for {price:,} coins. Use `/pets marketplace` to browse.", color=discord.Color.green(), client=interaction.client),
         )
 
     # Pet marketplace (browse and buy)
@@ -1319,21 +1319,21 @@ def setup(bot, group=None):
             rows = await cur.fetchall()
         if not rows:
             return await interaction.followup.send(
-                embed=obsidian_embed("📦 Pet Marketplace", "No pets are listed for sale. Use `/economy pets list` to list yours!", color=discord.Color.blue(), client=interaction.client),
+                embed=obsidian_embed("📦 Pet Marketplace", "No pets are listed for sale. Use `/pets list` to list yours!", color=discord.Color.blue(), client=interaction.client),
             )
         fields = []
         for listing_id, pet_id, seller_id, price, pet_name, pet_type, level in rows:
             seller = interaction.guild.get_member(seller_id)
             seller_name = seller.display_name if seller else f"User {seller_id}"
-            fields.append((f"#{listing_id} {pet_name} ({pet_type}) Lv.{level}", f"💰 {price:,} coins\n👤 Seller: {seller_name}\n`/economy pets buy_listed {listing_id}`", True))
+            fields.append((f"#{listing_id} {pet_name} ({pet_type}) Lv.{level}", f"💰 {price:,} coins\n👤 Seller: {seller_name}\n`/pets buy_listed {listing_id}`", True))
         await interaction.followup.send(
-            embed=obsidian_embed("📦 Pet Marketplace", "Pets for sale. Use `/economy pets buy_listed listing_id:N` to purchase.", color=discord.Color.gold(), fields=fields, client=interaction.client),
+            embed=obsidian_embed("📦 Pet Marketplace", "Pets for sale. Use `/pets buy_listed listing_id:N` to purchase.", color=discord.Color.gold(), fields=fields, client=interaction.client),
         )
 
     # Pet buy listed
     command_decorator = group.command(name="buy_listed", description="Buy a pet from the marketplace.") if group else bot.tree.command(name="buy_listed", description="Buy a pet from the marketplace.")
     @command_decorator
-    @app_commands.describe(listing_id="The listing ID from /economy pets marketplace")
+    @app_commands.describe(listing_id="The listing ID from /pets marketplace")
     async def pet_buy_listed(interaction: discord.Interaction, listing_id: int):
         """Buy a listed pet."""
         if not interaction.guild:

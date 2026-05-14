@@ -264,7 +264,7 @@ def setup(bot, group=None):
             return await interaction.followup.send(
                 embed=obsidian_embed(
                     "📅 No Events",
-                    f"No {label} events. Use `/community event_create` to create one.",
+                    f"No {label} events. Use `/events event_create` to create one.",
                     color=discord.Color.blue(),
                     client=interaction.client,
                 ),

@@ -21,7 +21,7 @@ KEYWORD_RESPONSES = [
     (r"\b(balance|bal|coins)\b", "Check balance with **`/balance`** or **`/economy transactions`**."),
     (r"\b(leaderboard|leader|rank)\b", "View rankings with **`/leaderboard`** or **`/economy leaderboard`**."),
     (r"\b(profile|stats)\b", "View your profile with **`/profile`** or **`/general profile`**."),
-    (r"\b(lfg|looking for group)\b", "Create an LFG post with **`/warframe lfg`** or right-click a message → Create LFG."),
+    (r"\b(lfg|looking for group)\b", "Create an LFG post with **`/lfg`** or right-click a message → Create LFG."),
     (r"\b(price|plat|market)\b", "Check prices with **`/trading trade_price`** or right-click a message → Check Price."),
     (r"\b(invasion|invasions)\b", "View invasions with **`/warframe invasions`**."),
     (r"\b(duviri|circuit)\b", "Check Duviri Circuit with **`/warframe duviri`**."),

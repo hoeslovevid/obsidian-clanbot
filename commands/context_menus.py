@@ -243,7 +243,7 @@ def setup(bot, group=None):
         content = (message.content or "").strip()
         if not content or len(content) < 3:
             return await interaction.response.send_message(
-                embed=error_embed("No Content", "Message has no usable text. Try a message with a title or description.", action_hint="Use /community event_create to create an event manually.", client=interaction.client),
+                embed=error_embed("No Content", "Message has no usable text. Try a message with a title or description.", action_hint="Use /events event_create to create an event manually.", client=interaction.client),
                 ephemeral=True,
             )
         from core.modals import AddAsEventModal

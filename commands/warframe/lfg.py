@@ -318,7 +318,7 @@ class LFGView(discord.ui.View):
 
 
 async def create_lfg_post(bot, interaction, mission_type: str, max_players: int, duration_hours: int, description: str, ping_role_id: int | None):
-    """Create an LFG post. Used by both /warframe lfg and the Quick LFG context menu."""
+    """Create an LFG post. Used by both /lfg and the Quick LFG context menu."""
     from core.utils import get_mod_role
 
     if not interaction.guild:

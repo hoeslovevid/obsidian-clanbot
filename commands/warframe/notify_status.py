@@ -60,7 +60,7 @@ def setup(bot, group=None):
             "📢 Notification Settings",
             "\n".join(lines),
             color=discord.Color.blue(),
-            footer="Use /warframe notify <type> enable/disable to configure",
+            footer="Use /wfnotify <type> enable/disable to configure",
             client=interaction.client,
         )
         await interaction.followup.send(embed=embed, ephemeral=True)

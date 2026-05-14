@@ -40,7 +40,7 @@ async def _warn_broken_channel(
         await owner.send(
             f"\u26a0\ufe0f **{guild.name}** \u2014 the **{feature}** notification channel "
             f"(ID: `{channel_id}`) could not be found or is no longer accessible.\n"
-            f"Please reconfigure it with the appropriate `/warframe notify` or setup command."
+            f"Please reconfigure it with the appropriate `/wfnotify` or setup command."
         )
     except Exception:
         pass  # DMs disabled or bot can't reach owner
