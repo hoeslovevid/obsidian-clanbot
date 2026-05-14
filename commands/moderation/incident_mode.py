@@ -8,6 +8,25 @@ from core.utils import obsidian_embed, is_mod
 from database import get_guild_setting, set_guild_setting, now_utc
 
 
+async def get_incident_mode(guild_id: int) -> bool:
+    """Return True when incident mode is currently enabled for ``guild_id``."""
+    return (await get_guild_setting(guild_id, "incident_mode_enabled") or "0") == "1"
+
+
+async def toggle_incident_mode(guild_id: int, *, duration_minutes: int = 60) -> bool:
+    """Flip incident mode on/off for ``guild_id``. Returns the new state."""
+    new_state = not await get_incident_mode(guild_id)
+    if new_state:
+        until = int((now_utc() + timedelta(minutes=max(5, min(duration_minutes, 24 * 60)))).timestamp())
+        await set_guild_setting(guild_id, "incident_mode_enabled", "1")
+        await set_guild_setting(guild_id, "incident_mode_until_ts", str(until))
+    else:
+        await set_guild_setting(guild_id, "incident_mode_enabled", "0")
+        await set_guild_setting(guild_id, "incident_mode_until_ts", "0")
+        await set_guild_setting(guild_id, "incident_mode_message", "")
+    return new_state
+
+
 def setup(bot, group=None):
     """Register incident mode command."""
     command_decorator = group.command(

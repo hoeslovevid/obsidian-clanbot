@@ -605,6 +605,7 @@ async def on_message(message: discord.Message):
                 message.content,
                 message.guild.me.id,
                 OPENAI_API_KEY,
+                bot=bot,
             )
             await message.reply(reply, mention_author=False)
             return  # Don't process economy for mention-only messages
@@ -1064,7 +1065,7 @@ async def on_member_join(member: discord.Member):
             member_count % 100 == 0
             or member_count in [50, 250, 500, 1000, 2500, 5000, 10000]
         ):
-            await check_and_celebrate_milestone(member.guild, "member_count", member_count)
+            await check_and_celebrate_milestone(member.guild, "member_count", member_count, bot=bot)
     except Exception as e:
         logger.error(f"[milestones] Error checking member count milestone: {e}")
     
@@ -1096,6 +1097,13 @@ async def on_member_join(member: discord.Member):
             await member.send(dm_text[:2000])
     except (discord.Forbidden, discord.HTTPException):
         pass  # User may have DMs disabled
+
+    # Item 8: first-run onboarding DM (additive — runs alongside the welcome DM above).
+    try:
+        from commands.general.onboarding import maybe_send_onboarding_on_join
+        await maybe_send_onboarding_on_join(member, bot)
+    except Exception as e:
+        logger.debug(f"[onboarding] join hook failed: {e}")
     
     # Format message
     formatted_message = message_template.replace("{user}", member.mention)

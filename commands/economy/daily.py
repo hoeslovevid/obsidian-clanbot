@@ -23,6 +23,25 @@ def _streak_multiplier(streak: int) -> tuple[float, str | None]:
     return 1.0, None
 
 
+def _streak_emblem(streak: int) -> str:
+    """Tiered streak emblem: caps the fire icons at 7 and adds a tier badge past 6.
+
+    Replaces the older "🔥 × min(streak, 10) + ' +N'" pattern. The numeric
+    streak is still displayed alongside, so users see the exact count.
+    """
+    if streak <= 0:
+        return ""
+    if streak <= 6:
+        return "🔥" * streak
+    if streak < 14:
+        return "🔥" * 7 + " 🌟"
+    if streak < 30:
+        return "🔥" * 7 + " 💎"
+    if streak < 100:
+        return "🔥" * 7 + " 🏆"
+    return "🔥" * 7 + " 💯"
+
+
 def _streak_calendar(streak: int) -> str:
     """
     Build a compact 7-day calendar ending today.
@@ -169,7 +188,7 @@ async def _run_daily(interaction: discord.Interaction, force_reset: bool = False
                 from datetime import timedelta as _td
                 tomorrow_dt = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0) + _td(days=1)
                 next_ts = int(tomorrow_dt.timestamp())
-                streak_fire = "🔥" * min(streak_days, 10) + (f" +{streak_days - 10}" if streak_days > 10 else "")
+                streak_fire = _streak_emblem(streak_days)
                 fields = [
                     ("🔥 Current Streak", f"{streak_fire}\n{streak_days} day(s)", True),
                     ("⏰ Next Claim", f"<t:{next_ts}:R>", True),
@@ -286,7 +305,7 @@ async def _run_daily(interaction: discord.Interaction, force_reset: bool = False
     # Success message with streak calendar and next claim time
     streak_mult, streak_label = _streak_multiplier(new_streak)
     coins_awarded = int(COINS_DAILY_REWARD * streak_mult)
-    streak_fire = "🔥" * min(new_streak, 10) + (f" +{new_streak - 10}" if new_streak > 10 else "")
+    streak_fire = _streak_emblem(new_streak)
     tomorrow = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
     next_ts = int(tomorrow.timestamp())
     next_line = f"<t:{next_ts}:R>"

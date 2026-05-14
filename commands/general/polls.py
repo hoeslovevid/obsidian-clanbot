@@ -1,18 +1,138 @@
 """Poll system commands."""
+import asyncio
 import discord
 from discord import app_commands
 from typing import Optional, List
 from datetime import datetime, timezone
 import json
+import time
+import logging
 
-from core.utils import obsidian_embed, is_mod
+from core.utils import obsidian_embed, is_mod, render_bar
 from database import DB_PATH, now_utc
 import aiosqlite
 import dateparser
 
+logger = logging.getLogger(__name__)
+
+# Item 50: throttle live edits to ~once per 5 s per poll to avoid Discord ratelimits.
+_LIVE_POLL_LAST_EDIT: dict[int, float] = {}
+_LIVE_POLL_PENDING: dict[int, asyncio.Task] = {}
+_LIVE_POLL_MIN_INTERVAL = 5.0
+
+_NUMBER_REACTIONS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
+
+
+def _build_live_poll_embed(question: str, options_list: list, counts: list[int], ends_at: Optional[str]) -> discord.Embed:
+    total = sum(counts) or 0
+    body_lines: list[str] = []
+    for idx, opt in enumerate(options_list):
+        c = counts[idx] if idx < len(counts) else 0
+        pct = (c / total * 100) if total > 0 else 0.0
+        bar = render_bar(pct, length=10, show_pct=False)
+        body_lines.append(
+            f"{_NUMBER_REACTIONS[idx] if idx < len(_NUMBER_REACTIONS) else f'{idx + 1}.'} "
+            f"**{opt}** — {bar} {pct:.0f}% ({c})"
+        )
+    desc = f"**{question}**\n\n" + "\n".join(body_lines)
+    if total == 0:
+        desc += "\n\n_No votes yet — react below to vote._"
+    if ends_at:
+        try:
+            end_dt = dateparser.parse(
+                ends_at, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True}
+            )
+            if end_dt:
+                desc += f"\n\n**Ends:** <t:{int(end_dt.timestamp())}:R>"
+        except Exception:
+            pass
+    return obsidian_embed("📊 Poll", desc, color=discord.Color.blue())
+
+
+async def _refresh_live_poll(channel: discord.abc.Messageable, message_id: int) -> None:
+    """Recompute counts from reactions and edit the poll embed."""
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT question, options, ends_at FROM polls WHERE message_id=?",
+                (message_id,),
+            )
+            row = await cur.fetchone()
+        if not row:
+            return
+        question, options_json, ends_at = row
+        options_list = json.loads(options_json)
+        if not isinstance(channel, (discord.TextChannel, discord.Thread)):
+            return
+        message = await channel.fetch_message(message_id)
+        counts: list[int] = []
+        for i, _opt in enumerate(options_list):
+            if i >= len(_NUMBER_REACTIONS):
+                counts.append(0)
+                continue
+            reaction = discord.utils.get(message.reactions, emoji=_NUMBER_REACTIONS[i])
+            counts.append(max(0, (reaction.count - 1) if reaction else 0))
+        new_embed = _build_live_poll_embed(question, options_list, counts, ends_at)
+        # Preserve original footer if present
+        original = message.embeds[0] if message.embeds else None
+        if original and original.footer and original.footer.text:
+            new_embed.set_footer(text=original.footer.text)
+        await message.edit(embed=new_embed)
+    except (discord.NotFound, discord.Forbidden):
+        return
+    except Exception as e:
+        logger.debug(f"[poll-live] refresh failed for {message_id}: {e}")
+
+
+async def _throttled_refresh(channel, message_id: int) -> None:
+    """Coalesce burst votes into at most one edit per ``_LIVE_POLL_MIN_INTERVAL``."""
+    now = time.monotonic()
+    last = _LIVE_POLL_LAST_EDIT.get(message_id, 0.0)
+    wait = max(0.0, _LIVE_POLL_MIN_INTERVAL - (now - last))
+    if wait > 0:
+        await asyncio.sleep(wait)
+    _LIVE_POLL_LAST_EDIT[message_id] = time.monotonic()
+    _LIVE_POLL_PENDING.pop(message_id, None)
+    await _refresh_live_poll(channel, message_id)
+
+
+def _schedule_live_refresh(client: discord.Client, channel_id: int, message_id: int) -> None:
+    if message_id in _LIVE_POLL_PENDING:
+        return  # one refresh already queued
+    channel = client.get_channel(channel_id)
+    if channel is None:
+        return
+    task = asyncio.create_task(_throttled_refresh(channel, message_id))
+    _LIVE_POLL_PENDING[message_id] = task
+
+
+async def _is_poll_message(message_id: int) -> bool:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            "SELECT 1 FROM polls WHERE message_id=?", (message_id,)
+        )
+        return (await cur.fetchone()) is not None
+
 
 def setup(bot, group=None):
     """Register poll commands."""
+
+    # Item 50: live results bar. Listen for reaction add/remove on poll messages.
+    async def _on_poll_reaction(payload: discord.RawReactionActionEvent):
+        if not payload.guild_id or not payload.message_id:
+            return
+        if not await _is_poll_message(payload.message_id):
+            return
+        _schedule_live_refresh(bot, payload.channel_id, payload.message_id)
+
+    @bot.listen("on_raw_reaction_add")
+    async def _poll_reaction_add(payload: discord.RawReactionActionEvent):
+        await _on_poll_reaction(payload)
+
+    @bot.listen("on_raw_reaction_remove")
+    async def _poll_reaction_remove(payload: discord.RawReactionActionEvent):
+        await _on_poll_reaction(payload)
+
     
     command_decorator = group.command(name="poll", description="Create a poll.") if group else bot.tree.command(name="poll", description="Create a poll.")
     

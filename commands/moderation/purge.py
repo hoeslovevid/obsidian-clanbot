@@ -1,7 +1,8 @@
 """Purge command."""
 import asyncio
 import io
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from typing import Optional
 import discord  # type: ignore
 from discord import app_commands  # type: ignore
 
@@ -176,3 +177,225 @@ def setup(bot, group=None):
 
             view = ConfirmView(on_confirm)
             await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+    # --- Filtered purge (Item 42) ----------------------------------------------------
+    filter_decorator = group.command(
+        name="purge_filter",
+        description="Delete messages matching user/text/age/bot filters (mods only)."
+    ) if group else bot.tree.command(
+        name="purge_filter",
+        description="Delete messages matching user/text/age/bot filters (mods only).",
+    )
+
+    @filter_decorator
+    @app_commands.describe(
+        limit="How many recent messages to scan (default 100, max 500)",
+        user="Only delete messages from this user",
+        contains="Only delete messages containing this text (case-insensitive)",
+        older_than_hours="Only delete messages older than this many hours",
+        from_bots="Only delete bot messages (True) or only humans (False); omit for both",
+    )
+    async def purge_filter(
+        interaction: discord.Interaction,
+        limit: app_commands.Range[int, 1, 500] = 100,
+        user: Optional[discord.Member] = None,
+        contains: Optional[str] = None,
+        older_than_hours: Optional[app_commands.Range[int, 0, 24 * 90]] = None,
+        from_bots: Optional[bool] = None,
+    ):
+        if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
+            return await interaction.response.send_message(
+                embed=error_embed("Permission Denied", "Administrators only.", client=interaction.client),
+                ephemeral=True,
+            )
+        if not interaction.guild or not isinstance(interaction.channel, discord.TextChannel):
+            return await interaction.response.send_message(
+                embed=error_embed("Invalid Context", "Run this in a server text channel.", client=interaction.client),
+                ephemeral=True,
+            )
+        if not interaction.channel.permissions_for(interaction.guild.me).manage_messages:
+            return await interaction.response.send_message(
+                embed=error_embed("Missing Permissions", "I need **Manage Messages** in this channel.", client=interaction.client),
+                ephemeral=True,
+            )
+        # At least one filter must be set to avoid surprise mass deletes.
+        if user is None and not contains and older_than_hours is None and from_bots is None:
+            return await interaction.response.send_message(
+                embed=error_embed(
+                    "No filters set",
+                    "Provide at least one filter (user / contains / older_than_hours / from_bots).",
+                    action_hint="Use `/mod purge` for a plain bulk delete.",
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+
+        await interaction.response.defer(ephemeral=True)
+
+        contains_lower = (contains or "").lower().strip()
+        age_cutoff = None
+        if older_than_hours is not None:
+            age_cutoff = datetime.now(timezone.utc) - timedelta(hours=int(older_than_hours))
+        fourteen_days_ago = datetime.now(timezone.utc) - timedelta(days=14)
+
+        def _matches(m: discord.Message) -> bool:
+            if m.pinned:
+                return False
+            if user is not None and m.author.id != user.id:
+                return False
+            if from_bots is True and not m.author.bot:
+                return False
+            if from_bots is False and m.author.bot:
+                return False
+            if contains_lower and contains_lower not in (m.content or "").lower():
+                return False
+            if age_cutoff is not None and (m.created_at or datetime.now(timezone.utc)) > age_cutoff:
+                return False
+            return True
+
+        # Scan and collect candidates BEFORE deleting so we can show a preview.
+        matched: list[discord.Message] = []
+        try:
+            async for m in interaction.channel.history(limit=int(limit)):
+                if _matches(m):
+                    matched.append(m)
+        except discord.Forbidden:
+            return await interaction.followup.send(
+                embed=permission_hint_embed("Manage Messages", client=interaction.client),
+                ephemeral=True,
+            )
+
+        if not matched:
+            return await interaction.followup.send(
+                embed=obsidian_embed(
+                    "No matches",
+                    "No messages match those filters in the last "
+                    f"{format_number(int(limit))} scanned.",
+                    color=discord.Color.orange(),
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+
+        # Build preview
+        filt_lines = []
+        if user:
+            filt_lines.append(f"• user = {user.mention}")
+        if contains:
+            filt_lines.append(f"• contains = `{contains[:80]}`")
+        if older_than_hours is not None:
+            filt_lines.append(f"• older_than = {older_than_hours}h")
+        if from_bots is True:
+            filt_lines.append("• from_bots = yes")
+        elif from_bots is False:
+            filt_lines.append("• from_bots = humans only")
+
+        old_count = sum(1 for m in matched if (m.created_at or datetime.now(timezone.utc)) < fourteen_days_ago)
+        preview = obsidian_embed(
+            "⚠️ Confirm filtered purge",
+            (
+                f"About to delete **{format_number(len(matched))}** "
+                f"{pluralize(len(matched), 'message')} from {interaction.channel.mention}.\n\n"
+                + "\n".join(filt_lines)
+                + (
+                    f"\n\n_{old_count} of these are >14 days old — will be deleted one-by-one "
+                    "(slower)._" if old_count else ""
+                )
+                + "\n\nThis cannot be undone."
+            ),
+            color=discord.Color.orange(),
+            client=interaction.client,
+        )
+
+        # Capture matched ids for the confirm closure
+        target_ids = {m.id for m in matched}
+
+        async def on_confirm(btn_interaction: discord.Interaction, confirmed: bool):
+            if btn_interaction.user.id != interaction.user.id:
+                return await btn_interaction.followup.send(
+                    "Only the person who started this can confirm.", ephemeral=True
+                )
+            if not confirmed:
+                return await btn_interaction.followup.send("Cancelled.", ephemeral=True)
+
+            # Recollect from history to make sure we have fresh Message objects.
+            to_delete: list[discord.Message] = []
+            try:
+                async for m in interaction.channel.history(limit=max(int(limit), 100)):
+                    if m.id in target_ids:
+                        to_delete.append(m)
+            except discord.Forbidden:
+                return await btn_interaction.followup.send(
+                    embed=permission_hint_embed("Manage Messages", client=interaction.client),
+                    ephemeral=True,
+                )
+
+            bulk_deletable = [m for m in to_delete if (m.created_at or datetime.now(timezone.utc)) >= fourteen_days_ago]
+            single_deletable = [m for m in to_delete if m not in bulk_deletable]
+            deleted = 0
+            skipped = 0
+
+            # Bulk delete in chunks of 100 (Discord API limit).
+            for i in range(0, len(bulk_deletable), 100):
+                chunk = bulk_deletable[i : i + 100]
+                if len(chunk) == 1:
+                    try:
+                        await chunk[0].delete()
+                        deleted += 1
+                    except discord.HTTPException:
+                        skipped += 1
+                    continue
+                try:
+                    await interaction.channel.delete_messages(chunk)
+                    deleted += len(chunk)
+                except discord.HTTPException as e:
+                    if e.status == 429:
+                        await asyncio.sleep(float(getattr(e, "retry_after", 1.5)))
+                        try:
+                            await interaction.channel.delete_messages(chunk)
+                            deleted += len(chunk)
+                            continue
+                        except Exception:
+                            skipped += len(chunk)
+                    else:
+                        skipped += len(chunk)
+                await asyncio.sleep(1.1)
+
+            # Old messages: delete one-by-one with a tiny gap.
+            for m in single_deletable:
+                try:
+                    await m.delete()
+                    deleted += 1
+                except discord.HTTPException:
+                    skipped += 1
+                await asyncio.sleep(0.6)
+
+            summary = (
+                f"Deleted **{format_number(deleted)}** {pluralize(deleted, 'message')} "
+                f"in {interaction.channel.mention}."
+            )
+            if skipped:
+                summary += f"\nSkipped **{format_number(skipped)}** (couldn't bulk-delete or rate-limited)."
+
+            await btn_interaction.followup.send(
+                embed=obsidian_embed(
+                    "Filtered Purge Complete",
+                    summary,
+                    color=discord.Color.green(),
+                    footer="Mod only • See also: /mod purge",
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+            try:
+                from core.audit import log_audit
+                await log_audit(
+                    interaction.guild.id, "purge_filter", interaction.user.id,
+                    details=f"{deleted} matched / {skipped} skipped in #{interaction.channel.name}",
+                    bot=interaction.client,
+                )
+            except Exception:
+                pass
+
+        view = ConfirmView(on_confirm)
+        await interaction.followup.send(embed=preview, view=view, ephemeral=True)

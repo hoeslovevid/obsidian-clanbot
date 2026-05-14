@@ -158,6 +158,13 @@ def setup_events(bot, config):
         # Post panel
         from bot import post_vc_panel
         await post_vc_panel(guild, vc, member)
+
+        # Item 45: apply a queued VC preset on creation if the user opted in
+        try:
+            from commands.voice.vc import maybe_apply_pending_preset
+            await maybe_apply_pending_preset(member, vc)
+        except Exception as e:
+            logger.debug(f"[vc] pending preset hook failed: {e}")
     
     @bot.event
     async def on_member_join(member: discord.Member):

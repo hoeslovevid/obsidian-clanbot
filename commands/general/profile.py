@@ -4,7 +4,7 @@ from discord import app_commands
 from typing import Optional
 from datetime import datetime, timezone
 
-from core.utils import obsidian_embed, is_mod, format_timestamp_readable, EMBED_FOOTER_DEFAULT, render_bar
+from core.utils import obsidian_embed, is_mod, format_timestamp_readable, EMBED_FOOTER_DEFAULT, render_bar, EMBED_COLORS
 from database import (
     DB_PATH, now_utc, get_user_balance, get_user_xp, 
     calculate_level, xp_for_next_level
@@ -376,6 +376,13 @@ def setup(bot, group=None):
         if profile_data["achievements_count"] > 0:
             footer_parts.append("/achievements for full list")
         footer_text = " · ".join(footer_parts) if footer_parts else EMBED_FOOTER_DEFAULT
+
+        # Prepend pet emoji + name when the user has a pet (tiny personal touch).
+        if profile_data.get("pet"):
+            from commands.economy.pets import get_pet_emoji
+            _pet = profile_data["pet"]
+            _pname = _pet.get("name") or _pet.get("type") or "Pet"
+            footer_text = f"{get_pet_emoji(_pet.get('type'))} {_pname} · {footer_text}"
 
         member_color = target_user.color if target_user.color.value != 0 else EMBED_COLORS["general"]
 

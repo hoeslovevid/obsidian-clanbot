@@ -4,10 +4,56 @@ from discord import app_commands
 from typing import Optional
 import dateparser
 
-from core.utils import obsidian_embed, error_embed, is_mod, channel_jump_url, copy_friendly_id, format_number, pluralize, EMBED_COLORS
+from core.utils import obsidian_embed, success_embed, error_embed, is_mod, channel_jump_url, copy_friendly_id, format_number, pluralize, EMBED_COLORS, AUTOCOMPLETE_MAX_CHOICES
 from database import DB_PATH, now_utc, get_log_channel_id
 from views import EmbedPaginator
 import aiosqlite
+
+
+# Item 38: saved warn reason templates. Created lazily — schema.py untouched.
+_TEMPLATES_READY = False
+
+
+async def _ensure_template_table() -> None:
+    global _TEMPLATES_READY
+    if _TEMPLATES_READY:
+        return
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS warn_reason_templates (
+                guild_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                template TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                created_by INTEGER NOT NULL,
+                PRIMARY KEY (guild_id, name)
+            )
+            """
+        )
+        await db.commit()
+    _TEMPLATES_READY = True
+
+
+async def _list_templates(guild_id: int) -> list[tuple[str, str]]:
+    await _ensure_template_table()
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            "SELECT name, template FROM warn_reason_templates WHERE guild_id=? ORDER BY name",
+            (guild_id,),
+        )
+        return [(str(n), str(t)) for n, t in await cur.fetchall()]
+
+
+async def _get_template(guild_id: int, name: str) -> Optional[str]:
+    await _ensure_template_table()
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            "SELECT template FROM warn_reason_templates WHERE guild_id=? AND name=?",
+            (guild_id, name),
+        )
+        row = await cur.fetchone()
+    return str(row[0]) if row else None
 
 
 async def execute_warn(interaction: discord.Interaction, user: discord.Member, reason: str):
@@ -303,4 +349,133 @@ def setup(bot, group=None):
                 client=interaction.client,
             ),
             ephemeral=True
+        )
+
+    # ----- Item 38: warn reason templates ---------------------------------------
+    if group is None:
+        return  # template commands only register under the warn group
+
+    async def _reason_autocomplete(
+        interaction: discord.Interaction, current: str
+    ) -> list[app_commands.Choice[str]]:
+        if not interaction.guild:
+            return []
+        rows = await _list_templates(interaction.guild.id)
+        cur_lower = (current or "").lower()
+        choices: list[app_commands.Choice[str]] = []
+        for name, template in rows:
+            if cur_lower and cur_lower not in name.lower() and cur_lower not in template.lower():
+                continue
+            preview = template[:60] + ("…" if len(template) > 60 else "")
+            label = f"{name} — {preview}"[:100]
+            # value = name; the command body resolves to full template text.
+            choices.append(app_commands.Choice(name=label, value=name[:100]))
+            if len(choices) >= AUTOCOMPLETE_MAX_CHOICES:
+                break
+        return choices
+
+    @group.command(name="quick", description="Warn a user using a saved reason template (or any text).")
+    @app_commands.describe(user="User to warn", reason="Saved reason name OR raw text")
+    @app_commands.autocomplete(reason=_reason_autocomplete)
+    async def warn_quick(interaction: discord.Interaction, user: discord.Member, reason: str):
+        if not interaction.guild or not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
+            return await interaction.response.send_message(
+                embed=error_embed("Mods only", "Administrators only.", client=interaction.client),
+                ephemeral=True,
+            )
+        # If `reason` is a saved template name, expand it. Otherwise treat as raw text.
+        resolved = await _get_template(interaction.guild.id, reason) or reason
+        await execute_warn(interaction, user, resolved)
+
+    @group.command(name="template_add", description="Add or update a saved warn reason template (mods only).")
+    @app_commands.describe(name="Short name (autocompleted later)", template="Full warning text")
+    async def template_add(interaction: discord.Interaction, name: str, template: str):
+        if not interaction.guild or not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
+            return await interaction.response.send_message(
+                embed=error_embed("Mods only", "Administrators only.", client=interaction.client),
+                ephemeral=True,
+            )
+        name = name.strip()
+        template = template.strip()
+        if not (1 <= len(name) <= 60):
+            return await interaction.response.send_message(
+                embed=error_embed("Bad name", "Name must be 1–60 chars.", client=interaction.client),
+                ephemeral=True,
+            )
+        if not (1 <= len(template) <= 1500):
+            return await interaction.response.send_message(
+                embed=error_embed("Bad template", "Template must be 1–1500 chars.", client=interaction.client),
+                ephemeral=True,
+            )
+        await _ensure_template_table()
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute(
+                """
+                INSERT INTO warn_reason_templates(guild_id, name, template, created_at, created_by)
+                VALUES(?,?,?,?,?)
+                ON CONFLICT(guild_id, name) DO UPDATE SET template=excluded.template
+                """,
+                (interaction.guild.id, name, template, now_utc().isoformat(), interaction.user.id),
+            )
+            await db.commit()
+        await interaction.response.send_message(
+            embed=success_embed("Template saved", f"`{name}` → _{template[:120]}_", client=interaction.client),
+            ephemeral=True,
+        )
+
+    @group.command(name="template_remove", description="Delete a saved warn reason template (mods only).")
+    @app_commands.describe(name="Template name to delete")
+    @app_commands.autocomplete(name=_reason_autocomplete)
+    async def template_remove(interaction: discord.Interaction, name: str):
+        if not interaction.guild or not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
+            return await interaction.response.send_message(
+                embed=error_embed("Mods only", "Administrators only.", client=interaction.client),
+                ephemeral=True,
+            )
+        await _ensure_template_table()
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "DELETE FROM warn_reason_templates WHERE guild_id=? AND name=?",
+                (interaction.guild.id, name),
+            )
+            await db.commit()
+            removed = (cur.rowcount or 0) > 0
+        if not removed:
+            return await interaction.response.send_message(
+                embed=error_embed("Not found", f"No template named `{name[:40]}`.", client=interaction.client),
+                ephemeral=True,
+            )
+        await interaction.response.send_message(
+            embed=success_embed("Template removed", f"`{name}` deleted.", client=interaction.client),
+            ephemeral=True,
+        )
+
+    @group.command(name="template_list", description="List saved warn reason templates for this server.")
+    async def template_list(interaction: discord.Interaction):
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=error_embed("Invalid Context", "Use this in a server.", client=interaction.client),
+                ephemeral=True,
+            )
+        rows = await _list_templates(interaction.guild.id)
+        if not rows:
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "No templates",
+                    "No saved warn reasons yet. Mods can add one with `/mod warn template_add`.",
+                    color=EMBED_COLORS["moderation"],
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+        lines = [f"• `{name}` — {tmpl[:120]}{'…' if len(tmpl) > 120 else ''}" for name, tmpl in rows[:25]]
+        await interaction.response.send_message(
+            embed=obsidian_embed(
+                "Saved warn reason templates",
+                "\n".join(lines),
+                color=EMBED_COLORS["moderation"],
+                footer="Use the name in /mod warn quick reason:<name>",
+                client=interaction.client,
+            ),
+            ephemeral=True,
         )

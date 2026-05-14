@@ -13,7 +13,7 @@ from database import DB_PATH, now_utc
 logger = logging.getLogger(__name__)
 
 
-# --- Context menu modals (Transfer, Warn, Give Rep) ---
+# --- Context menu modals (Transfer, Warn) ---
 
 class TransferCoinsModal(discord.ui.Modal, title="Transfer Coins"):
     amount = discord.ui.TextInput(label="Amount", placeholder="e.g. 100", max_length=12)
@@ -67,18 +67,6 @@ class WarnUserModal(discord.ui.Modal, title="Warn User"):
 
         view = ConfirmView(on_confirm)
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-
-
-class GiveRepModal(discord.ui.Modal, title="Give Reputation"):
-    reason = discord.ui.TextInput(label="Reason (optional)", placeholder="Why are you giving rep?", required=False, max_length=200)
-
-    def __init__(self, member: discord.Member):
-        super().__init__(timeout=300)
-        self.target_member = member
-
-    async def on_submit(self, interaction: discord.Interaction):
-        from commands.general.reputation import execute_give_rep
-        await execute_give_rep(interaction, self.target_member, self.reason.value or None)
 
 
 class RenameVCModal(discord.ui.Modal, title="Recalibrate Comms Node"):  # type: ignore

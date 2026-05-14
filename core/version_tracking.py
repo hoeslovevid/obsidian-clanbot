@@ -433,7 +433,26 @@ async def check_and_post_updates(bot):
             
             try:
                 await channel.send(embed=embed)
-                
+
+                # DM users that opted into changelog DMs (Item 27).
+                try:
+                    from commands.general.whatsnew import get_changelog_subscribers
+                    subscribers = await get_changelog_subscribers(guild_id)
+                    sent = 0
+                    for uid in subscribers:
+                        try:
+                            member = guild.get_member(uid)
+                            if not member or member.bot:
+                                continue
+                            await member.send(embed=embed)
+                            sent += 1
+                        except (discord.Forbidden, discord.HTTPException):
+                            continue
+                    if subscribers:
+                        logger.info(f"[update_log] DMed changelog v{version_to_use} to {sent}/{len(subscribers)} subscribers in {guild.name}")
+                except Exception as dm_err:
+                    logger.debug(f"[update_log] changelog DM step failed: {dm_err}")
+
                 # Mark as posted
                 async with aiosqlite.connect(DB_PATH) as db:
                     await db.execute("""

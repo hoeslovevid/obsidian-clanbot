@@ -1,4 +1,5 @@
 """Devstream notification setup command."""
+import logging
 import discord
 from discord import app_commands
 from typing import Optional
@@ -8,6 +9,55 @@ import dateparser  # type: ignore
 from core.utils import obsidian_embed, setup_missing_embed, is_mod
 from database import get_guild_setting, set_guild_setting, DB_PATH
 import aiosqlite  # type: ignore
+
+logger = logging.getLogger(__name__)
+
+# Canonical key for the devstream notification channel. Older releases wrote to
+# "devstream_channel_id"; _migrate_devstream_channel_key() copies legacy rows on
+# startup so existing guilds keep their configured channel. Safe to remove the
+# fallback + migration after one release cycle.
+_DEVSTREAM_CHANNEL_KEY = "devstream_notify_channel_id"
+_DEVSTREAM_CHANNEL_LEGACY_KEY = "devstream_channel_id"
+
+
+async def _migrate_devstream_channel_key() -> None:
+    """One-time migration: copy devstream_channel_id → devstream_notify_channel_id.
+
+    Only copies when the new key is empty/missing so we never clobber a fresh
+    value. The old key is left in place for one release cycle as a safety net.
+    """
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                """
+                SELECT old.guild_id, old.value
+                FROM guild_settings old
+                LEFT JOIN guild_settings new
+                  ON new.guild_id = old.guild_id AND new.key = ?
+                WHERE old.key = ?
+                  AND old.value IS NOT NULL AND old.value <> ''
+                  AND (new.value IS NULL OR new.value = '')
+                """,
+                (_DEVSTREAM_CHANNEL_KEY, _DEVSTREAM_CHANNEL_LEGACY_KEY),
+            )
+            rows = await cur.fetchall()
+            if not rows:
+                return
+            for guild_id, value in rows:
+                await db.execute(
+                    """
+                    INSERT INTO guild_settings (guild_id, key, value)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(guild_id, key) DO UPDATE SET value=excluded.value
+                    """,
+                    (guild_id, _DEVSTREAM_CHANNEL_KEY, value),
+                )
+            await db.commit()
+            logger.info(
+                f"[migration] Copied {len(rows)} devstream_channel_id row(s) to {_DEVSTREAM_CHANNEL_KEY}"
+            )
+    except Exception as e:
+        logger.warning(f"[migration] devstream channel key migration failed: {e}")
 
 
 def setup(bot, group=None):
@@ -62,7 +112,7 @@ def setup(bot, group=None):
                     ephemeral=True
                 )
             
-            await set_guild_setting(interaction.guild.id, "devstream_channel_id", str(channel.id))
+            await set_guild_setting(interaction.guild.id, _DEVSTREAM_CHANNEL_KEY, str(channel.id))
             
             await interaction.followup.send(
                 embed=obsidian_embed(
@@ -77,7 +127,9 @@ def setup(bot, group=None):
             )
         
         elif action.lower() == "remove":
-            await set_guild_setting(interaction.guild.id, "devstream_channel_id", "")
+            await set_guild_setting(interaction.guild.id, _DEVSTREAM_CHANNEL_KEY, "")
+            # Clear the legacy key too so a removed channel stays removed.
+            await set_guild_setting(interaction.guild.id, _DEVSTREAM_CHANNEL_LEGACY_KEY, "")
             
             await interaction.followup.send(
                 embed=obsidian_embed(
@@ -90,7 +142,12 @@ def setup(bot, group=None):
             )
         
         elif action.lower() == "status":
-            channel_id_str = await get_guild_setting(interaction.guild.id, "devstream_channel_id")
+            channel_id_str = await get_guild_setting(interaction.guild.id, _DEVSTREAM_CHANNEL_KEY)
+            if not channel_id_str:
+                # Fall back to the legacy key for guilds that haven't been
+                # migrated yet (e.g. status check before the startup migration
+                # ran).
+                channel_id_str = await get_guild_setting(interaction.guild.id, _DEVSTREAM_CHANNEL_LEGACY_KEY)
             next_devstream = await get_guild_setting(interaction.guild.id, "next_devstream_date")
             
             if not channel_id_str:

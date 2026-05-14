@@ -22,6 +22,7 @@ def load_all_commands(bot):
     updates_group = app_commands.Group(name="updates", description="📝 Update log and version management")
     giveaways_group = app_commands.Group(name="giveaways", description="🎁 Create, manage, and enter giveaways")
     trading_group = app_commands.Group(name="trading", description="💼 Trading post, prices, and Warframe market lookup")
+    vc_group = app_commands.Group(name="vc", description="🎙️ Temp voice channel tools (transfer, presets)")
 
     # Economy subgroups (stays under 25 items: commands + subgroups)
     economy_pets = app_commands.Group(name="pets", description="Pet shop, care, battles, evolutions, and trading")
@@ -51,6 +52,7 @@ def load_all_commands(bot):
     bot.tree.add_command(updates_group)
     bot.tree.add_command(giveaways_group)
     bot.tree.add_command(trading_group)
+    bot.tree.add_command(vc_group)
 
     command_modules = [
         "commands.general.help",
@@ -70,6 +72,8 @@ def load_all_commands(bot):
         "commands.general.polls",
         "commands.general.reminder",
         "commands.general.preferences",
+        "commands.general.onboarding",
+        "commands.general.whatsnew",
         "commands.general.reputation",
         "commands.general.twitch",
         "commands.music.music",
@@ -157,6 +161,9 @@ def load_all_commands(bot):
         "commands.warframe.dojo",
         "commands.warframe.warframe_link",
         "commands.warframe.warframe_roles",
+        "commands.warframe.subscribe",
+        "commands.warframe.notify_setup",
+        "commands.warframe.notify_panel",
         "commands.activity.activity",
         "commands.activity.activity_leaderboard",
         "commands.giveaways.giveaway",
@@ -166,6 +173,7 @@ def load_all_commands(bot):
         "commands.general.afk",
         "commands.general.server_stats",
         "commands.general.profile",
+        "commands.general.me",
         "commands.general.bot_status",
         "commands.general.badges",
         "commands.general.announcements",
@@ -177,6 +185,7 @@ def load_all_commands(bot):
         "commands.warframe.build",
         "commands.warframe.drop_tables",
         "commands.context_menus",
+        "commands.voice.vc",
     ]
 
     group_mapping = {
@@ -225,6 +234,9 @@ def load_all_commands(bot):
         "commands.warframe.dojo": warframe_group,
         "commands.warframe.warframe_link": warframe_group,
         "commands.warframe.warframe_roles": warframe_group,
+        "commands.warframe.subscribe": warframe_group,
+        "commands.warframe.notify_setup": warframe_notify,
+        "commands.warframe.notify_panel": warframe_notify,
         "commands.moderation.purge": moderation_group,
         "commands.moderation.logging": moderation_group,
         "commands.moderation.snipe": moderation_group,
@@ -237,7 +249,7 @@ def load_all_commands(bot):
         "commands.moderation.embed_builder": moderation_group,
         "commands.moderation.schedule": moderation_group,
         "commands.moderation.dashboard": moderation_group,
-        "commands.moderation.ticket_config": moderation_group,
+        "commands.moderation.ticket_config": tools_group,  # Moved: moderation_group at 25-cmd limit
         "commands.moderation.reaction_roles": mod_role_tools,
         "commands.moderation.automod_setup": mod_automod,
         "commands.moderation.automod_status": mod_automod,
@@ -264,19 +276,21 @@ def load_all_commands(bot):
         "commands.general.polls": general_group,
         "commands.general.reminder": tools_group,  # Moved: community at 25 limit, general full
         "commands.general.preferences": general_group,
+        "commands.general.whatsnew": tools_group,  # tools_group has room; /whatsnew top-level shortcut also registered
         "commands.general.reputation": community_group,
         "commands.general.twitch": community_group,
         "commands.general.afk": tools_group,
         "commands.general.server_stats": tools_group,   # Moved: community at 25 limit
         "commands.general.profile": general_group,
+        "commands.general.me": general_group,
         "commands.general.bot_status": general_group,
         "commands.general.badges": tools_group,        # Moved: community at 25 limit
         "commands.general.announcements": general_group,
-        "commands.general.cross_server": general_group,
+        "commands.general.cross_server": tools_group,  # Moved: general_group at 25-cmd limit
         "commands.general.voice_leaderboard": tools_group,
         "commands.general.coinflip": tools_group,  # Moved: community at 25 limit
         "commands.general.activity_heatmap": tools_group,
-        "commands.general.trivia": general_group,
+        "commands.general.trivia": tools_group,  # Moved: general_group at 25-cmd limit
         "commands.warframe.build": warframe_group,
         "commands.warframe.drop_tables": warframe_group,
         "commands.music.music": music_group,
@@ -304,6 +318,7 @@ def load_all_commands(bot):
         "commands.updates.update_log_setup": updates_group,
         "commands.updates.force_version_update": updates_group,
         "commands.context_menus": general_group,
+        "commands.voice.vc": vc_group,
     }
 
     loaded_count = 0

@@ -9,7 +9,12 @@ from database import DB_PATH, now_utc
 import aiosqlite
 
 
-async def check_and_celebrate_milestone(guild: discord.Guild, milestone_type: str, milestone_value: int) -> bool:
+async def check_and_celebrate_milestone(
+    guild: discord.Guild,
+    milestone_type: str,
+    milestone_value: int,
+    bot: Optional[discord.Client] = None,
+) -> bool:
     """Check if a milestone should be celebrated and celebrate it. Returns True if celebrated."""
     async with aiosqlite.connect(DB_PATH) as db:
         # Check if already celebrated
@@ -46,7 +51,8 @@ async def check_and_celebrate_milestone(guild: discord.Guild, milestone_type: st
                             f"**{guild.name}** has reached **{milestone_value:,} members**!\n\n"
                             f"Thank you to everyone who has joined our community! 🎊",
                             color=discord.Color.gold(),
-                            client=None,
+                            brand=True,
+                            client=bot,
                         )
                     elif milestone_type == "anniversary":
                         embed = obsidian_embed(
@@ -54,7 +60,8 @@ async def check_and_celebrate_milestone(guild: discord.Guild, milestone_type: st
                             f"**{guild.name}** is celebrating **{milestone_value} year(s)** of existence!\n\n"
                             f"Thank you to all members for being part of this amazing community! 🎊",
                             color=discord.Color.gold(),
-                            client=None,
+                            brand=True,
+                            client=bot,
                         )
                     else:
                         embed = obsidian_embed(
@@ -63,7 +70,8 @@ async def check_and_celebrate_milestone(guild: discord.Guild, milestone_type: st
                             f"**Type:** {milestone_type}\n"
                             f"**Value:** {milestone_value:,}",
                             color=discord.Color.gold(),
-                            client=None,
+                            brand=True,
+                            client=bot,
                         )
                     
                     await channel.send(embed=embed)

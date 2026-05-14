@@ -12,8 +12,16 @@ from typing import Any
 
 from core.config import DB_PATH
 from database import init_db
+from core.channels import ensure_core_channels, ensure_join_to_create_channel
+from views import VCPanelView, ComplaintPanel, ComplaintModView, RSVPView
 
 logger = logging.getLogger(__name__)
+
+
+def _channel_name_safe(channel: Any) -> str:
+    """Return a printable channel name (mirror of bot._channel_name_safe)."""
+    name = getattr(channel, "name", None)
+    return str(name) if name else f"<id:{getattr(channel, 'id', '?')}>"
 
 
 def _update_status_presence(bot: discord.Client) -> discord.Activity:
@@ -72,6 +80,30 @@ async def run_startup(bot: discord.Client) -> None:
         # Basic views
         bot.add_view(ComplaintPanel())
         bot.add_view(RSVPView())
+
+        # Item 47: re-register pending VC revival vote buttons.
+        try:
+            from commands.voice.vc import RevivalView
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute(
+                    "SELECT token FROM vc_revivals WHERE resolved=0"
+                )
+                tokens = [r[0] for r in await cur.fetchall()]
+            for tok in tokens:
+                try:
+                    bot.add_view(RevivalView(token=str(tok)))
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.debug(f"[ready] could not register vc_revival views: {e}")
+
+        # Warframe self-subscribe panel (Item 21) — static custom_ids so a
+        # single instance is enough to route every panel's buttons.
+        try:
+            from commands.warframe.notify_panel import NotifyPanelView
+            bot.add_view(NotifyPanelView())
+        except Exception as e:
+            logger.debug(f"[ready] Could not register NotifyPanelView: {e}")
 
         # Collect all view data in parallel
         async def get_all_view_data():
@@ -241,6 +273,19 @@ async def run_startup(bot: discord.Client) -> None:
         except Exception as e:
             logger.error(f"[ready] Error initializing achievements: {e}", exc_info=True)
 
+    async def run_one_time_migrations():
+        """Run cheap, idempotent migrations once at startup."""
+        try:
+            from commands.warframe.alerts_notify import _migrate_alerts_channel_key
+            await _migrate_alerts_channel_key()
+        except Exception as e:
+            logger.debug(f"[ready] alerts channel key migration skipped: {e}")
+        try:
+            from commands.warframe.devstream_notify import _migrate_devstream_channel_key
+            await _migrate_devstream_channel_key()
+        except Exception as e:
+            logger.debug(f"[ready] devstream channel key migration skipped: {e}")
+
     # Update application profile (description, tags) for bot profile display
     async def update_app_profile():
         try:
@@ -254,6 +299,7 @@ async def run_startup(bot: discord.Client) -> None:
         verify_settings(),
         init_achievements(),
         update_app_profile(),
+        run_one_time_migrations(),
         return_exceptions=True
     )
 

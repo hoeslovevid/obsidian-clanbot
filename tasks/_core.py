@@ -180,9 +180,17 @@ async def check_and_notify_baro_arrival(bot):
             embed = build_baro_embed(data_to_use, True, bot)
             embed.title = "🛒 Baro Ki'Teer Has Arrived!"
             embed.color = discord.Color.gold()
-            
+
+            # Item 2: append per-user subscriber pings (or a configured opt-in
+            # role mention if set, which is cheaper for big guilds).
             try:
-                await ch.send(embed=embed)
+                from core.utils import build_wf_subscriber_ping
+                sub_ping = await build_wf_subscriber_ping(guild, "baro")
+            except Exception:
+                sub_ping = None
+
+            try:
+                await ch.send(content=sub_ping, embed=embed)
                 
                 # Mark as notified
                 if visit_id:
@@ -201,6 +209,13 @@ def setup_tasks(bot):
     
     @tasks.loop(minutes=VC_CLEANUP_INTERVAL_MINUTES)
     async def temp_vc_cleanup():
+        # Item 47: expire stale revival vote messages each cycle.
+        try:
+            from commands.voice.vc import expire_pending_revivals
+            await expire_pending_revivals(bot)
+        except Exception as e:
+            logger.debug(f"[vc-revival] expire pass failed: {e}")
+
         cutoff = now_utc() - timedelta(minutes=VOICE_IDLE_DELETE_MINUTES)
 
         for guild in bot.guilds:
@@ -228,6 +243,21 @@ def setup_tasks(bot):
                     last_dt = now_utc()
 
                 if len(vc.members) == 0 and last_dt < cutoff:
+                    # Item 47: post a revival-vote message in the panel channel
+                    # BEFORE we delete the VC, so the metadata is still readable.
+                    try:
+                        from commands.voice.vc import _record_revival_intent
+                        from core.channels import resolve_channel_id
+                        from bot import VOICE_PANEL_CHANNEL_ID, VOICE_PANEL_CHANNEL_NAME
+                        panel_ch_id = await resolve_channel_id(
+                            guild, "voice_panel_channel_id",
+                            VOICE_PANEL_CHANNEL_ID, VOICE_PANEL_CHANNEL_NAME,
+                        )
+                        panel_ch = guild.get_channel(panel_ch_id) if panel_ch_id else None
+                        if isinstance(panel_ch, discord.TextChannel):
+                            await _record_revival_intent(guild, vc, log_channel=panel_ch)
+                    except Exception as e:
+                        logger.debug(f"[vc-revival] could not record revival intent: {e}")
                     await delete_temp_vc_and_panel(guild, vc.id, reason="Temp VC idle cleanup")
 
     @temp_vc_cleanup.before_loop
@@ -953,7 +983,8 @@ def setup_tasks(bot):
                         except Exception:
                             continue
 
-                    streak_fire = "🔥" * min(streak_days, 10) + (f" +{streak_days - 10}" if streak_days > 10 else "")
+                    from commands.economy.daily import _streak_emblem
+                    streak_fire = _streak_emblem(streak_days)
                     reset_ts = int(next_midnight.timestamp())
                     embed = obsidian_embed(
                         "⏰ Daily Streak Reminder",
@@ -976,6 +1007,106 @@ def setup_tasks(bot):
 
     @daily_streak_reminder_loop.before_loop
     async def before_daily_streak_reminder_loop():
+        await bot.wait_until_ready()
+
+    @tasks.loop(minutes=5)
+    async def investment_maturity_dm_loop():
+        """DM opted-in users when their investment has matured (Item 6).
+
+        Uses a tiny guard table ``investment_dm_sent(investment_id PRIMARY KEY)``
+        so we never DM the same investment twice — much safer than a schema
+        migration on the existing ``investments`` table.
+        """
+        try:
+            if not bot.is_ready():
+                return
+
+            async with aiosqlite.connect(DB_PATH) as db:
+                await db.execute(
+                    "CREATE TABLE IF NOT EXISTS investment_dm_sent (investment_id INTEGER PRIMARY KEY, sent_at TEXT)"
+                )
+                await db.commit()
+
+                cur = await db.execute(
+                    """
+                    SELECT i.id, i.guild_id, i.user_id, i.amount, i.interest_rate, i.maturity_date
+                    FROM investments i
+                    LEFT JOIN investment_dm_sent s ON s.investment_id = i.id
+                    WHERE i.collected = 0
+                      AND s.investment_id IS NULL
+                      AND datetime(i.maturity_date) <= datetime('now')
+                    LIMIT 200
+                    """
+                )
+                rows = await cur.fetchall()
+
+            for inv_id, guild_id, user_id, amount, rate, maturity_iso in rows:
+                try:
+                    opted_in = await get_guild_setting(guild_id, f"user_investment_dm:{user_id}")
+                    if opted_in != "1":
+                        # Still record so we don't keep scanning forever — but
+                        # only when the user is not opted in. We use a separate
+                        # marker row by inserting with sent_at=None? Simpler:
+                        # just skip; the row remains, but it's a cheap query.
+                        continue
+
+                    user = bot.get_user(user_id)
+                    if not user:
+                        try:
+                            user = await bot.fetch_user(user_id)
+                        except Exception:
+                            continue
+
+                    payout = int((amount or 0) * (1 + (rate or 0.0)))
+                    profit = payout - (amount or 0)
+                    try:
+                        mat_dt = dateparser.parse(
+                            maturity_iso, settings={"TIMEZONE": "UTC", "RETURN_AS_TIMEZONE_AWARE": True}
+                        )
+                    except Exception:
+                        mat_dt = None
+                    when = (
+                        f"<t:{int(mat_dt.timestamp())}:R>" if mat_dt else "just now"
+                    )
+
+                    embed = obsidian_embed(
+                        "📈 Investment Matured!",
+                        f"Your investment matured {when}.\n\n"
+                        f"Use **`/economy invest_collect`** to claim your payout.",
+                        category="economy",
+                        fields=[
+                            ("💰 Principal", f"{(amount or 0):,} coins", True),
+                            ("💎 Payout", f"{payout:,} coins", True),
+                            ("✨ Profit", f"+{profit:,} coins", True),
+                        ],
+                        footer="Turn this off with /general preferences investment_dm:Off",
+                        client=bot,
+                    )
+
+                    try:
+                        await user.send(embed=embed)
+                    except discord.Forbidden:
+                        # Mark sent anyway — user can re-open DMs and check
+                        # via /economy invest_status; we don't want to retry
+                        # forever and rate-limit ourselves.
+                        pass
+                    except Exception as e:
+                        logger.debug(f"investment_maturity_dm: failed to DM {user_id}: {e}")
+                        continue
+
+                    async with aiosqlite.connect(DB_PATH) as db:
+                        await db.execute(
+                            "INSERT OR IGNORE INTO investment_dm_sent (investment_id, sent_at) VALUES (?, ?)",
+                            (inv_id, now_utc().isoformat()),
+                        )
+                        await db.commit()
+                except Exception as e:
+                    logger.debug(f"investment_maturity_dm for {user_id}: {e}")
+        except Exception as e:
+            logger.error(f"Error in investment_maturity_dm_loop: {e}", exc_info=True)
+
+    @investment_maturity_dm_loop.before_loop
+    async def before_investment_maturity_dm_loop():
         await bot.wait_until_ready()
 
     @tasks.loop(minutes=5)  # Check every 5 minutes for cycle changes
@@ -1071,6 +1202,22 @@ def setup_tasks(bot):
                                 role = guild.get_role(int(ping_role_id))
                                 if role:
                                     ping_content = role.mention
+
+                            # Item 2: append per-user subscriber pings on top
+                            # of any guild-configured role ping.
+                            try:
+                                from core.utils import (
+                                    get_wf_subscribers,
+                                    format_wf_subscriber_mentions,
+                                )
+                                _subs = await get_wf_subscribers(guild.id, "cycles")
+                                _sub_text = format_wf_subscriber_mentions(guild, _subs)
+                                if _sub_text:
+                                    ping_content = (
+                                        f"{ping_content} {_sub_text}" if ping_content else _sub_text
+                                    )
+                            except Exception:
+                                pass
                             
                             # Check if we've already notified for this cycle change
                             async with aiosqlite.connect(DB_PATH) as db:
@@ -1584,9 +1731,14 @@ def setup_tasks(bot):
             # Send notifications to all guilds that have it enabled
             for guild in bot.guilds:
                 try:
-                    # Check if alerts are enabled (using guild_settings table)
+                    # Check if alerts are enabled (using guild_settings table).
+                    # Canonical key is alerts_notify_channel_id; fall back to
+                    # the legacy alerts_channel_id for guilds whose migration
+                    # hasn't run yet.
                     from database import get_guild_setting
-                    channel_id_str = await get_guild_setting(guild.id, "alerts_channel_id")
+                    channel_id_str = await get_guild_setting(guild.id, "alerts_notify_channel_id")
+                    if not channel_id_str:
+                        channel_id_str = await get_guild_setting(guild.id, "alerts_channel_id")
                     
                     if not channel_id_str or not channel_id_str.isdigit():
                         continue  # Not configured or disabled
@@ -1662,9 +1814,14 @@ def setup_tasks(bot):
             # Check all guilds that have devstream notifications enabled
             for guild in bot.guilds:
                 try:
-                    # Check if devstream notifications are enabled (using guild_settings table)
+                    # Check if devstream notifications are enabled (using guild_settings table).
+                    # Canonical key is devstream_notify_channel_id; fall back to
+                    # the legacy devstream_channel_id for guilds whose migration
+                    # hasn't run yet.
                     from database import get_guild_setting, set_guild_setting
-                    channel_id_str = await get_guild_setting(guild.id, "devstream_channel_id")
+                    channel_id_str = await get_guild_setting(guild.id, "devstream_notify_channel_id")
+                    if not channel_id_str:
+                        channel_id_str = await get_guild_setting(guild.id, "devstream_channel_id")
                     next_devstream_date_str = await get_guild_setting(guild.id, "next_devstream_date")
                     
                     if not channel_id_str or not channel_id_str.isdigit():
@@ -2276,21 +2433,6 @@ def setup_tasks(bot):
     async def before_youtube_check_loop():
         await bot.wait_until_ready()
 
-    @tasks.loop(minutes=1)  # Check every minute for ended giveaways
-    async def giveaway_check_loop():
-        """Check for ended giveaways and select winners."""
-        try:
-            await check_ended_giveaways(bot)
-        except Exception as e:
-            logger.error(f"[giveaway] Error in giveaway check loop: {e}", exc_info=True)
-    
-    async def before_giveaway_check_loop():
-        await bot.wait_until_ready()
-    
-    giveaway_check_loop.before_loop(before_giveaway_check_loop)
-    giveaway_check_loop.start()
-    logger.info("[tasks] Started giveaway check loop")
-
     # Start all tasks with error handling
     tasks_to_start = [
         ('temp_vc_cleanup', temp_vc_cleanup),
@@ -2304,6 +2446,7 @@ def setup_tasks(bot):
         ('lfg_expire_loop', lfg_expire_loop),
         ('pet_decay_reminder_loop', pet_decay_reminder_loop),
         ('daily_streak_reminder_loop', daily_streak_reminder_loop),
+        ('investment_maturity_dm_loop', investment_maturity_dm_loop),
         ('cycle_check_loop', cycle_check_loop),
         ('invasion_check_loop', invasion_check_loop),
         ('archon_check_loop', archon_check_loop),

@@ -160,22 +160,171 @@ async def _build_stats_dashboard_embed(
     )
 
 
+class _LockChannelPicker(discord.ui.View):
+    """Stage 2 for the 🔒 Lock quick-action — pick a channel to lock."""
+
+    def __init__(self, invoker_id: int):
+        super().__init__(timeout=120)
+        self.invoker_id = invoker_id
+        select = discord.ui.ChannelSelect(
+            channel_types=[discord.ChannelType.text],
+            placeholder="Pick a channel to lock…",
+            min_values=1,
+            max_values=1,
+        )
+        select.callback = self._on_select  # type: ignore[assignment]
+        self.add_item(select)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return interaction.user.id == self.invoker_id
+
+    async def _on_select(self, interaction: discord.Interaction):
+        select: discord.ui.ChannelSelect = self.children[0]  # type: ignore[assignment]
+        channel = select.values[0]
+        # ChannelSelect returns app_commands.AppCommandChannel — resolve to a real channel
+        ch = interaction.guild.get_channel(int(channel.id))
+        if not isinstance(ch, discord.TextChannel):
+            return await interaction.response.send_message("Channel not found.", ephemeral=True)
+        from commands.moderation.lock import apply_channel_lock
+        try:
+            await apply_channel_lock(ch, actor=interaction.user, lock=True)
+        except discord.Forbidden:
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Missing Permission",
+                    f"I can't change permissions on {ch.mention}.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+        await interaction.response.send_message(
+            embed=obsidian_embed(
+                "🔒 Channel Locked",
+                f"{ch.mention} is now locked for @everyone. Use `/unlock` in that channel to restore.",
+                color=discord.Color.green(),
+                client=interaction.client,
+            ),
+            ephemeral=True,
+        )
+
+
 class ModDashboardView(discord.ui.View):
-    """Refresh button for the mod dashboard."""
+    """Refresh + quick-action buttons for the mod dashboard (Item 22)."""
 
     def __init__(self, guild: discord.Guild):
         super().__init__(timeout=300)
         self.guild = guild
 
+    async def _require_mod(self, interaction: discord.Interaction) -> bool:
+        if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
+            await interaction.response.send_message(
+                "You must be a moderator to use this.", ephemeral=True
+            )
+            return False
+        return True
+
     @discord.ui.button(label="🔄 Refresh", style=discord.ButtonStyle.secondary)
     async def refresh(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
-            return await interaction.response.send_message(
-                "You must be a moderator to refresh this.", ephemeral=True
-            )
+        if not await self._require_mod(interaction):
+            return
         await interaction.response.defer()
         embed = await _build_mod_dashboard_embed(self.guild, interaction.client)
         await interaction.edit_original_response(embed=embed, view=self)
+
+    @discord.ui.button(label="Lock #channel", style=discord.ButtonStyle.danger, emoji="🔒")
+    async def lock_channel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self._require_mod(interaction):
+            return
+        await interaction.response.send_message(
+            embed=obsidian_embed(
+                "🔒 Lock a Channel",
+                "Pick a channel below to lock @everyone out of sending messages.",
+                category="moderation",
+                client=interaction.client,
+            ),
+            view=_LockChannelPicker(interaction.user.id),
+            ephemeral=True,
+        )
+
+    @discord.ui.button(label="Incident Mode", style=discord.ButtonStyle.primary, emoji="🚨")
+    async def incident_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self._require_mod(interaction):
+            return
+        from commands.moderation.incident_mode import toggle_incident_mode
+        new_state = await toggle_incident_mode(self.guild.id)
+        await interaction.response.send_message(
+            embed=obsidian_embed(
+                "🚨 Incident Mode " + ("Enabled" if new_state else "Disabled"),
+                "Incident mode is now **{}**. Default duration: 60 minutes.".format("ON" if new_state else "OFF"),
+                color=discord.Color.orange() if new_state else discord.Color.green(),
+                client=interaction.client,
+            ),
+            ephemeral=True,
+        )
+
+    @discord.ui.button(label="Raid Protection", style=discord.ButtonStyle.primary, emoji="🛡️")
+    async def raid_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self._require_mod(interaction):
+            return
+        from commands.moderation.raid_protection import toggle_raid_protection
+        new_state = await toggle_raid_protection(self.guild.id)
+        await interaction.response.send_message(
+            embed=obsidian_embed(
+                "🛡️ Raid Protection " + ("Enabled" if new_state else "Disabled"),
+                "Raid protection is now **{}**. Configure thresholds with `/mod raid_protection`.".format(
+                    "ON" if new_state else "OFF"
+                ),
+                color=discord.Color.green() if new_state else discord.Color.orange(),
+                client=interaction.client,
+            ),
+            ephemeral=True,
+        )
+
+    @discord.ui.button(label="Recent Warns", style=discord.ButtonStyle.secondary, emoji="📝")
+    async def warns_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self._require_mod(interaction):
+            return
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                """
+                SELECT user_id, reason, moderator_id, created_at
+                FROM warnings
+                WHERE guild_id=?
+                ORDER BY created_at DESC
+                LIMIT 10
+                """,
+                (self.guild.id,),
+            )
+            warns = await cur.fetchall()
+        if not warns:
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "📝 Recent Warnings",
+                    "No recent warnings on record.",
+                    category="moderation",
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+        lines = []
+        for uid, reason, mod_id, _created in warns:
+            user = self.guild.get_member(uid)
+            mod = self.guild.get_member(mod_id)
+            uname = user.display_name if user else f"User {uid}"
+            mname = mod.display_name if mod else f"Mod {mod_id}"
+            r = (reason or "—").strip()
+            r = r[:80] + ("…" if len(r) > 80 else "")
+            lines.append(f"• **{uname}** by {mname} — _{r}_")
+        await interaction.response.send_message(
+            embed=obsidian_embed(
+                "📝 Recent Warnings (last 10)",
+                "\n".join(lines),
+                category="moderation",
+                client=interaction.client,
+            ),
+            ephemeral=True,
+        )
 
     async def on_timeout(self) -> None:
         for item in self.children:

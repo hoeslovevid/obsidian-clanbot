@@ -168,6 +168,14 @@ def setup(bot, group=None):
         elif next_daily_ts:
             footer = f"Next daily: <t:{next_daily_ts}:R> • Right-click user → Transfer Coins"
 
+        # Prepend pet emoji + name when the user has a pet so the footer feels
+        # personal without bloating the embed body.
+        if pet_row:
+            from commands.economy.pets import get_pet_emoji
+            _pet_type = pet_row[0]
+            _pet_name = pet_row[1] or _pet_type
+            footer = f"{get_pet_emoji(_pet_type)} {_pet_name} • {footer}"
+
         owner = "Your" if is_self else f"{target.display_name}'s"
         embed = obsidian_embed(
             f"💰 {owner} Balance",

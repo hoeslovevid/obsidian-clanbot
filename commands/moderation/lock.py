@@ -6,6 +6,24 @@ from core.utils import obsidian_embed, error_embed, is_mod
 from views import ConfirmView
 
 
+async def apply_channel_lock(channel: discord.TextChannel, *, actor: discord.Member, lock: bool = True) -> bool:
+    """Apply (or undo) the @everyone send-messages lock on ``channel``.
+
+    Extracted from the slash callback so dashboard quick-actions can reuse it
+    without duplicating the overwrite math.
+    """
+    if not isinstance(channel, discord.TextChannel) or not channel.guild:
+        return False
+    overwrites = dict(channel.overwrites)
+    default_role = channel.guild.default_role
+    current = overwrites.get(default_role, discord.PermissionOverwrite())
+    current.send_messages = False if lock else None
+    overwrites[default_role] = current
+    reason = f"Channel {'locked' if lock else 'unlocked'} by {actor}"
+    await channel.edit(overwrites=overwrites, reason=reason)
+    return True
+
+
 def setup(bot, group=None):
     """Register lock and unlock commands."""
     lock_decorator = (
@@ -56,12 +74,7 @@ def setup(bot, group=None):
             if btn_interaction.user.id != interaction.user.id:
                 await btn_interaction.followup.send("Only the person who started this can confirm.", ephemeral=True)
                 return
-            overwrites = dict(interaction.channel.overwrites)
-            default_role = interaction.guild.default_role
-            current = overwrites.get(default_role, discord.PermissionOverwrite())
-            current.send_messages = False
-            overwrites[default_role] = current
-            await interaction.channel.edit(overwrites=overwrites, reason=f"Channel locked by {interaction.user}")
+            await apply_channel_lock(interaction.channel, actor=interaction.user, lock=True)
             await btn_interaction.followup.send(
                 embed=obsidian_embed("🔒 Channel Locked", "Only members with overwrites can send messages. Use `/unlock` to restore.", color=discord.Color.green(), client=interaction.client),
             )
@@ -92,16 +105,7 @@ def setup(bot, group=None):
                 ephemeral=True,
             )
 
-        overwrites = dict(interaction.channel.overwrites)
-        default_role = interaction.guild.default_role
-        current = overwrites.get(default_role, discord.PermissionOverwrite())
-        current.send_messages = None  # Restore to default (allow)
-        overwrites[default_role] = current
-
-        await interaction.channel.edit(
-            overwrites=overwrites,
-            reason=f"Channel unlocked by {interaction.user}",
-        )
+        await apply_channel_lock(interaction.channel, actor=interaction.user, lock=False)
         await interaction.response.send_message(
             embed=obsidian_embed(
                 "🔓 Channel Unlocked",

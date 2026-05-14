@@ -262,6 +262,7 @@ def obsidian_embed(
     fields: Optional[list] = None,
     client: Optional[discord.Client] = None,
     timestamp: bool = True,
+    brand: bool = False,
 ) -> discord.Embed:
     """Create a standardized Obsidian-themed embed.
 
@@ -273,13 +274,16 @@ def obsidian_embed(
         author:      Discord member shown as embed author (avatar + display name).
         author_name: Custom author name (used when author member not available).
         author_icon: Custom author icon URL.
-        thumbnail:   Thumbnail image URL (top-right corner).
+        thumbnail:   Thumbnail image URL (top-right corner). Explicit overrides brand.
         image:       Large banner image URL (bottom of embed).
         footer:      Custom footer text.
         footer_icon: Custom footer icon URL (defaults to bot avatar when client given).
         fields:      List of (name, value) or (name, value, inline) tuples.
-        client:      Bot client — enables bot-avatar thumbnail and footer icon.
+        client:      Bot client — enables footer icon (and brand thumbnail when brand=True).
         timestamp:   Whether to include current UTC timestamp (default True).
+        brand:       When True (and no explicit thumbnail), auto-attach the bot avatar as
+                     the embed thumbnail. Reserve for help/about/welcome/onboarding/level-up
+                     and other "showcase" embeds — keep off for transactional embeds.
     """
     # Resolve color: explicit > category > default brand color
     if color is None:
@@ -302,10 +306,12 @@ def obsidian_embed(
     elif author_name:
         e.set_author(name=author_name, icon_url=author_icon)
     
-    # Set thumbnail (default to bot avatar for help/success when client provided)
+    # Thumbnail: explicit URL takes priority; otherwise only auto-attach the bot
+    # avatar when the caller has opted in via brand=True. This keeps transactional
+    # embeds visually quiet and reserves the avatar thumbnail for showcase embeds.
     if thumbnail:
         e.set_thumbnail(url=thumbnail)
-    elif client and client.user:
+    elif brand and client and client.user:
         bot_avatar = client.user.display_avatar.url if hasattr(client.user, "display_avatar") else (client.user.avatar.url if client.user.avatar else None)
         if bot_avatar:
             e.set_thumbnail(url=bot_avatar)
@@ -452,6 +458,93 @@ def see_also_footer(*commands: str) -> str:
     return f"See also: " + ", ".join(f"`/{c}`" for c in commands)
 
 
+# ---------------------------------------------------------------------------
+# Warframe per-user notification subscriptions (Item 2)
+# ---------------------------------------------------------------------------
+# Categories the user can opt into. Add new categories here when a new notify
+# stream supports per-user ping. Stay in lock-step with notify_panel buttons.
+WF_SUB_CATEGORIES: tuple[str, ...] = (
+    "baro", "archon", "cycles", "alerts", "invasions", "devstream",
+)
+
+
+async def get_wf_subscribers(guild_id: int, category: str) -> list[int]:
+    """Return user ids that opted into ``category`` notifications in ``guild_id``.
+
+    Implementation choice: we scan ``guild_settings`` for keys matching
+    ``wfsub:{category}:%``. Notifications fire infrequently (hourly/daily) and
+    ``guild_settings`` rows are small, so a single LIKE scan is cheaper than
+    maintaining a denormalised JSON list that we'd have to keep in sync.
+    """
+    import aiosqlite  # local import — avoids a hard dep at module import time
+    from database import DB_PATH
+
+    prefix = f"wfsub:{category}:"
+    out: list[int] = []
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            "SELECT key, value FROM guild_settings WHERE guild_id=? AND key LIKE ?",
+            (guild_id, prefix + "%"),
+        )
+        rows = await cur.fetchall()
+    for key, value in rows:
+        if value != "1":
+            continue
+        try:
+            out.append(int(str(key).split(":", 2)[2]))
+        except (ValueError, IndexError):
+            continue
+    return out
+
+
+def format_wf_subscriber_mentions(
+    guild: "discord.Guild",
+    user_ids: list[int],
+    *,
+    max_mentions: int = 90,
+) -> str:
+    """Build a mention string for opted-in users that are still in the guild.
+
+    Discord caps role/user mentions at 100 per message; we stop at 90 to leave
+    room for any role mention that may also be appended. Returns ``""`` when no
+    eligible users are present.
+    """
+    if not user_ids or not guild:
+        return ""
+    mentions: list[str] = []
+    for uid in user_ids:
+        member = guild.get_member(uid)
+        if member is None:
+            continue
+        mentions.append(member.mention)
+        if len(mentions) >= max_mentions:
+            break
+    return " ".join(mentions)
+
+
+async def build_wf_subscriber_ping(
+    guild: "discord.Guild", category: str
+) -> Optional[str]:
+    """Return the best ping string for this guild+category.
+
+    Prefers a configured opt-in role (``wfsub_role:{category}``) because a role
+    mention is one message-mention regardless of audience size. Falls back to a
+    space-joined list of subscriber mentions, capped by Discord's limits.
+    Returns ``None`` when there's nothing to ping.
+    """
+    if not guild:
+        return None
+    from database import get_guild_setting
+    role_id_raw = await get_guild_setting(guild.id, f"wfsub_role:{category}")
+    if role_id_raw and str(role_id_raw).isdigit():
+        role = guild.get_role(int(role_id_raw))
+        if role:
+            return role.mention
+    subscribers = await get_wf_subscribers(guild.id, category)
+    text = format_wf_subscriber_mentions(guild, subscribers)
+    return text or None
+
+
 async def send_levelup_announcement(
     guild: discord.Guild,
     member: discord.Member,
@@ -492,6 +585,7 @@ async def send_levelup_announcement(
             fields=fields,
             footer=f"Total XP: {total_xp:,}",
             client=None,
+            brand=True,
         )
         try:
             await member.send(embed=embed)
@@ -519,6 +613,7 @@ async def send_levelup_announcement(
         fields=fields,
         footer=f"Total XP: {total_xp:,}",
         client=None,
+        brand=True,
     )
 
     try:

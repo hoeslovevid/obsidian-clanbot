@@ -47,6 +47,133 @@ PET_ICONS = {
 }
 DEFAULT_PET_ICON = "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/512x512/1f43e.png"
 
+# Compact emoji per pet type (for tight UI like footers / inline lines).
+# Keep aligned with PET_ICONS keys above.
+PET_EMOJIS: dict[str, str] = {
+    "Dog": "🐶",
+    "Cat": "🐱",
+    "Bird": "🐦",
+    "Fish": "🐠",
+    "Rabbit": "🐰",
+    "Fox": "🦊",
+    "Robot": "🤖",
+    "Wolf": "🐺",
+    "Dragon": "🐉",
+    "Phoenix": "🔥",
+}
+DEFAULT_PET_EMOJI = "🐾"
+
+
+def get_pet_emoji(pet_type: Optional[str]) -> str:
+    """Return a compact emoji for a pet type (falls back to 🐾)."""
+    if not pet_type:
+        return DEFAULT_PET_EMOJI
+    return PET_EMOJIS.get(str(pet_type).strip(), DEFAULT_PET_EMOJI)
+
+
+# --- Item 56: Pet evolution stages -----------------------------------------
+PET_STAGE_NAMES: tuple[str, ...] = ("Baby", "Young", "Adult", "Elder")
+PET_STAGE_SUFFIX: tuple[str, ...] = ("", "✨", "🌟", "💫")
+
+
+def _pet_age_days(created_at: Optional[str]) -> int:
+    if not created_at:
+        return 0
+    try:
+        dt = datetime.fromisoformat(str(created_at).replace("Z", "+00:00"))
+        return max(0, (datetime.now(timezone.utc) - dt).days)
+    except Exception:
+        return 0
+
+
+def pet_stage(created_at: Optional[str]) -> int:
+    """Return 0..3 for Baby/Young/Adult/Elder based on age in days."""
+    days = _pet_age_days(created_at)
+    if days >= 90:
+        return 3
+    if days >= 30:
+        return 2
+    if days >= 7:
+        return 1
+    return 0
+
+
+def get_pet_emoji_with_stage(pet_type: Optional[str], created_at: Optional[str]) -> str:
+    """Stage-aware variant used by pet card / leaderboards."""
+    base = get_pet_emoji(pet_type)
+    suffix = PET_STAGE_SUFFIX[pet_stage(created_at)]
+    return f"{base}{suffix}" if suffix else base
+
+
+async def _maybe_announce_stage_change(
+    interaction: discord.Interaction,
+    user_id: int,
+    created_at: Optional[str],
+    pet_name: Optional[str] = None,
+    pet_type: Optional[str] = None,
+) -> None:
+    """If the pet's stage advanced since we last recorded it, celebrate (Item 56)."""
+    if not interaction.guild:
+        return
+    from database import get_guild_setting, set_guild_setting
+    # Lazy fill-in: caller can pass None for name/type and we fetch.
+    if not pet_name or not pet_type:
+        try:
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute(
+                    "SELECT pet_name, pet_type FROM pets WHERE guild_id=? AND user_id=?",
+                    (interaction.guild.id, user_id),
+                )
+                row = await cur.fetchone()
+            if row:
+                pet_name = pet_name or str(row[0])
+                pet_type = pet_type or str(row[1])
+        except Exception:
+            pass
+    pet_name = pet_name or "Your pet"
+    stage_now = pet_stage(created_at)
+    raw_prev = await get_guild_setting(interaction.guild.id, f"pet_stage:{user_id}")
+    try:
+        stage_prev = int(raw_prev) if raw_prev is not None else -1
+    except ValueError:
+        stage_prev = -1
+    if stage_now <= stage_prev:
+        return
+    await set_guild_setting(interaction.guild.id, f"pet_stage:{user_id}", str(stage_now))
+    stage_name = PET_STAGE_NAMES[stage_now]
+    emoji = get_pet_emoji_with_stage(pet_type, created_at)
+    embed = obsidian_embed(
+        f"🎂 {pet_name} evolved!",
+        f"{emoji} **{pet_name}** has matured into a **{stage_name}** pet!",
+        category="prestige",
+        client=interaction.client,
+    )
+    # Respect achievement_notify preference for the DM fallback.
+    pref = await get_guild_setting(interaction.guild.id, f"user_achievement_notify:{user_id}")
+    use_dm = pref != "0"
+    member = interaction.guild.get_member(user_id)
+    posted_anywhere = False
+    try:
+        if interaction.channel and hasattr(interaction.channel, "send"):
+            await interaction.channel.send(embed=embed)
+            posted_anywhere = True
+    except Exception:
+        posted_anywhere = False
+    if not posted_anywhere and use_dm and member:
+        try:
+            await member.send(embed=embed)
+        except Exception:
+            pass
+
+    # Achievement hook: ignore failures — the bot's achievement system
+    # uses pre-defined IDs, so we just keep the embed-only celebration.
+    try:
+        from database import check_and_unlock_achievement  # type: ignore
+        await check_and_unlock_achievement(interaction.guild.id, user_id, f"pet_evolved_{stage_name.lower()}")
+    except Exception:
+        pass
+
+
 PETS_PER_PAGE = 4
 
 
@@ -586,10 +713,26 @@ def setup(bot, group=None):
         happiness = _apply_decay(happiness, last_played, created_at, HAPPINESS_DECAY_PER_HOUR)
         
         exp_needed = _exp_needed_for_level(level)
-        pet_text = f"**Name:** {pet_name}\n**Type:** {pet_type}\n**Level:** {level} / {max_level}\n"
+        stage_idx = pet_stage(created_at)
+        stage_name = PET_STAGE_NAMES[stage_idx]
+        stage_emoji = get_pet_emoji_with_stage(pet_type, created_at)
+        pet_text = (
+            f"**Name:** {pet_name}\n"
+            f"**Type:** {pet_type} {stage_emoji}\n"
+            f"**Stage:** {stage_name} ({_pet_age_days(created_at)}d old)\n"
+            f"**Level:** {level} / {max_level}\n"
+        )
         pet_text += f"**Experience:** {exp}/{exp_needed}\n"
         pet_text += f"**Hunger:** {hunger}/100 {'🍽️' if hunger < 50 else '✅'}\n"
         pet_text += f"**Happiness:** {happiness}/100 {'😢' if happiness < 50 else '😊'}\n"
+
+        # Item 56: announce stage change if applicable.
+        try:
+            await _maybe_announce_stage_change(
+                interaction, interaction.user.id, created_at, pet_name, pet_type
+            )
+        except Exception:
+            pass
         
         if last_fed:
             try:
@@ -773,7 +916,12 @@ def setup(bot, group=None):
                 UPDATE pets SET hunger=?, experience=?, level=?, last_fed_at=? WHERE guild_id=? AND user_id=?
             """, (hunger, exp, new_level, now_utc().isoformat(), interaction.guild.id, interaction.user.id))
             await db.commit()
-        
+
+        try:
+            await _maybe_announce_stage_change(interaction, interaction.user.id, created_at, None, pet_type)
+        except Exception:
+            pass
+
         if new_level >= 25 and level < 25:
             try:
                 from database import check_and_unlock_achievement
@@ -860,6 +1008,11 @@ def setup(bot, group=None):
             """, (hunger, happiness, exp, new_level, now_str, now_str, interaction.guild.id, interaction.user.id))
             await db.commit()
 
+        try:
+            await _maybe_announce_stage_change(interaction, interaction.user.id, created_at)
+        except Exception:
+            pass
+
         if new_level >= 25 and level < 25:
             try:
                 from database import check_and_unlock_achievement
@@ -943,7 +1096,12 @@ def setup(bot, group=None):
                 WHERE guild_id=? AND user_id=?
             """, (happiness, exp, new_level, now_utc().isoformat(), interaction.guild.id, interaction.user.id))
             await db.commit()
-        
+
+        try:
+            await _maybe_announce_stage_change(interaction, interaction.user.id, created_at)
+        except Exception:
+            pass
+
         if new_level >= 25 and level < 25:
             try:
                 from database import check_and_unlock_achievement

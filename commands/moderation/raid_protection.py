@@ -47,6 +47,34 @@ async def get_raid_settings(guild_id: int) -> dict:
         }
 
 
+async def toggle_raid_protection(guild_id: int) -> bool:
+    """Flip the raid-protection ``enabled`` flag and return the new state."""
+    current = await get_raid_settings(guild_id)
+    new_state = not bool(current["enabled"])
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """
+            INSERT INTO raid_protection_settings
+                (guild_id, enabled, join_threshold, time_window_seconds, action,
+                 lockdown_duration_minutes, alert_channel_id, alert_role_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(guild_id) DO UPDATE SET enabled = excluded.enabled
+            """,
+            (
+                guild_id,
+                1 if new_state else 0,
+                current["join_threshold"],
+                current["time_window_seconds"],
+                current["action"],
+                current["lockdown_duration_minutes"],
+                current["alert_channel_id"],
+                current["alert_role_id"],
+            ),
+        )
+        await db.commit()
+    return new_state
+
+
 async def record_join(guild_id: int, user_id: int, account_age_days: Optional[int] = None):
     """Record a member join for raid detection."""
     async with aiosqlite.connect(DB_PATH) as db:

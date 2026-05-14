@@ -1,11 +1,87 @@
 """LFG (Looking for Group) command for Warframe missions."""
+import logging
 import discord
 from discord import app_commands
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 from core.utils import obsidian_embed, get_mod_role, extract_id
 from database import DB_PATH, get_guild_setting, set_guild_setting
 import aiosqlite
+
+logger = logging.getLogger(__name__)
+
+
+# Item 35: cycle-aware nudges.
+# Mission type -> (cycle key, desired state, friendly noun).
+# desired state == None means "we only need to surface the current cycle".
+_CYCLE_HINTS: dict[str, tuple[str, Optional[str], str]] = {
+    "Eidolon Hunt":   ("cetus",   "night", "Plains"),
+    "Plains":         ("cetus",   None,    "Plains"),
+    "Profit-Taker":   ("vallis",  None,    "Vallis"),
+    "Exploiter Orb":  ("vallis",  "cold",  "Vallis"),
+    "Vallis":         ("vallis",  None,    "Vallis"),
+    "Cambion Drift":  ("cambion", None,    "Cambion"),
+}
+
+
+def _cycle_hint_for(mission_type: str) -> Optional[tuple[str, Optional[str], str]]:
+    if mission_type in _CYCLE_HINTS:
+        return _CYCLE_HINTS[mission_type]
+    # Sub-string match for things like "Plains - Bounty" if anyone adds them later.
+    for key, payload in _CYCLE_HINTS.items():
+        if key.lower() in mission_type.lower():
+            return payload
+    return None
+
+
+async def _build_cycle_nudge(mission_type: str) -> Optional[str]:
+    """Return a single-line cycle nudge for this mission type, or None when irrelevant."""
+    hint = _cycle_hint_for(mission_type)
+    if hint is None:
+        return None
+    cycle_key, desired_state, friendly = hint
+
+    try:
+        from api.warframe_api import get_all_cycles
+        cycles = await get_all_cycles()
+    except Exception as e:
+        logger.debug(f"[lfg] cycle fetch failed: {e}")
+        return None
+    if not cycles:
+        return None
+    cycle = cycles.get(cycle_key)
+    if not cycle:
+        return None
+    state = str(cycle.get("state") or "").lower()
+    expiry_raw = cycle.get("expiry") or cycle.get("timeLeft") or ""
+
+    expiry_ts: Optional[int] = None
+    if expiry_raw and isinstance(expiry_raw, str):
+        try:
+            import dateparser  # type: ignore
+            dt = dateparser.parse(
+                expiry_raw,
+                settings={"TIMEZONE": "UTC", "RETURN_AS_TIMEZONE_AWARE": True},
+            )
+            if dt:
+                expiry_ts = int(dt.timestamp())
+        except Exception:
+            expiry_ts = None
+
+    emoji_map = {
+        "day": "☀️", "night": "🌙",
+        "warm": "🔥", "cold": "❄️",
+        "vome": "🌑", "fass": "🌕",
+    }
+    emoji = emoji_map.get(state, "⏳")
+    when_part = f" ends <t:{expiry_ts}:R>" if expiry_ts else ""
+
+    if desired_state is None:
+        return f"{emoji} {friendly}: {state.title() or 'Unknown'}{when_part}."
+    if state == desired_state:
+        return f"{emoji} {friendly}: {state.title()} — great for {mission_type}!{when_part}"
+    return f"{emoji} {friendly}: {state.title()} (need {desired_state.title()} for {mission_type}){when_part}."
 
 
 # Common Warframe mission types
@@ -304,6 +380,15 @@ async def create_lfg_post(bot, interaction, mission_type: str, max_players: int,
     if description:
         fields.append(("📝 Notes", description[:500], False))
     fields.append(("👥 Players", f"1. {interaction.user.display_name}\n\n_{max_players - 1} slot(s) remaining_", False))
+
+    # Item 35: cycle-aware nudge for location-coupled missions. Silent on failure.
+    cycle_nudge: Optional[str] = None
+    try:
+        cycle_nudge = await _build_cycle_nudge(mission_type)
+    except Exception as e:
+        logger.debug(f"[lfg] cycle nudge skipped: {e}")
+    if cycle_nudge:
+        fields.append(("🌍 World cycle", cycle_nudge, False))
 
     embed = obsidian_embed(
         "🔍 Looking for Group",
