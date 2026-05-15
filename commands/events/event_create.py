@@ -22,6 +22,43 @@ EVENT_TEMPLATES = {
 }
 
 
+async def _maybe_create_event_thread(
+    event_message: discord.Message,
+    parent_channel: discord.TextChannel,
+    event_name: str,
+    start_time: datetime,
+) -> Optional[int]:
+    """Item 65 — best-effort: create a discussion thread off the event embed.
+
+    Returns the thread id when created, otherwise ``None``. Silently no-ops
+    when the bot is missing Manage Threads or the channel doesn't support
+    thread creation. The thread name is truncated to Discord's 100-char cap.
+    """
+    if not isinstance(parent_channel, discord.TextChannel):
+        return None
+    me = parent_channel.guild.me
+    if me is None:
+        return None
+    perms = parent_channel.permissions_for(me)
+    if not (perms.create_public_threads or perms.manage_threads):
+        return None
+
+    name = f"{event_name} • {discord.utils.format_dt(start_time, 'R')}"
+    if len(name) > 100:
+        name = name[:99] + "…"
+    try:
+        thread = await event_message.create_thread(name=name, auto_archive_duration=1440)
+    except discord.HTTPException:
+        return None
+    try:
+        await thread.send(
+            f"Discuss the event here. RSVP with the buttons in the parent message.\n{event_message.jump_url}"
+        )
+    except Exception:
+        pass
+    return thread.id
+
+
 async def time_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
     """Autocomplete for natural time strings."""
     current_lower = (current or "").lower()
@@ -72,13 +109,7 @@ async def create_event_from_modal(interaction: discord.Interaction, title: str, 
     embed.set_author(name=f"Filed by {interaction.user}", icon_url=interaction.user.display_avatar.url)
     embed.set_footer(text="✅ 0  |  ❔ 0  |  ❌ 0")
     msg = await ch.send(embed=embed, view=RSVPView())
-    thread_id = None
-    try:
-        thread = await msg.create_thread(name=f"{title} • Ops Thread", auto_archive_duration=1440)
-        thread_id = thread.id
-        await thread.send(embed=obsidian_embed("Ops Thread", "Coordinate here. Keep it clean, keep it sharp."))
-    except Exception:
-        pass
+    thread_id = await _maybe_create_event_thread(msg, ch, title, dt)
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
             "INSERT INTO events(guild_id,message_id,creator_id,title,start_ts,end_ts,description,role_id,created_at,reminder_sent,ended,recap_posted,recap_message_id,thread_id) "
@@ -119,6 +150,14 @@ def setup(bot, group=None):
         from bot import EVENTS_CHANNEL_ID, EVENTS_CHANNEL_NAME, DB_PATH
         from database import get_configured_channel_id
         import aiosqlite
+
+        if interaction.guild:
+            from core.utils import feature_enabled, feature_off_embed  # Item 85
+            if not await feature_enabled(interaction.guild.id, "events"):
+                return await interaction.response.send_message(
+                    embed=feature_off_embed("Events", client=interaction.client),
+                    ephemeral=True,
+                )
 
         if template and template.value in EVENT_TEMPLATES:
             t_title, t_desc = EVENT_TEMPLATES[template.value]
@@ -164,14 +203,8 @@ def setup(bot, group=None):
 
         msg = await ch.send(content=mention if mention else None, embed=embed, view=RSVPView())
 
-        # Event thread for chatter
-        thread_id = None
-        try:
-            thread = await msg.create_thread(name=f"{title} • Ops Thread", auto_archive_duration=1440)
-            thread_id = thread.id
-            await thread.send(embed=obsidian_embed("Ops Thread", "Coordinate here. Keep it clean, keep it sharp."))
-        except Exception:
-            pass
+        # Auto-thread for discussion (Item 65)
+        thread_id = await _maybe_create_event_thread(msg, ch, title, dt)
 
         async with aiosqlite.connect(DB_PATH) as db:
             await db.execute(

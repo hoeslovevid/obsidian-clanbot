@@ -662,6 +662,45 @@ async def update_activity_voice_minutes(guild_id: int, user_id: int, minutes: in
         await db.commit()
 
 
+async def increment_activity_voice_minutes(guild_id: int, user_id: int, delta_minutes: int) -> int:
+    """Increment lifetime voice minutes in ``activity_stats`` (persists after voice sessions end).
+
+    Returns the user's new cumulative ``voice_minutes`` for this guild.
+    """
+    if delta_minutes <= 0:
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT voice_minutes FROM activity_stats WHERE guild_id=? AND user_id=?",
+                (guild_id, user_id),
+            )
+            row = await cur.fetchone()
+            return int(row[0]) if row and row[0] is not None else 0
+
+    today = now_utc().date().isoformat()
+    points = delta_minutes // 10  # mirrors per-minute voice rewards
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """
+            INSERT INTO activity_stats (guild_id, user_id, voice_minutes, last_activity_date, weekly_score, monthly_score)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(guild_id, user_id) DO UPDATE SET
+                voice_minutes = voice_minutes + excluded.voice_minutes,
+                last_activity_date = excluded.last_activity_date,
+                weekly_score = weekly_score + ?,
+                monthly_score = monthly_score + ?
+            """,
+            (guild_id, user_id, delta_minutes, today, points, points, points, points),
+        )
+        await db.commit()
+        cur = await db.execute(
+            "SELECT voice_minutes FROM activity_stats WHERE guild_id=? AND user_id=?",
+            (guild_id, user_id),
+        )
+        row = await cur.fetchone()
+        return int(row[0]) if row and row[0] is not None else delta_minutes
+
+
 async def reset_weekly_scores():
     """Reset weekly scores (should be called weekly)."""
     async with aiosqlite.connect(DB_PATH) as db:
@@ -1193,17 +1232,27 @@ async def check_and_unlock_achievement(
         if await cur.fetchone():
             return False  # Already unlocked
 
-        # Fetch full achievement definition (name, description, rewards)
-        cur = await db.execute("""
-            SELECT name, description, reward_coins, reward_xp FROM achievement_definitions
-            WHERE achievement_id=?
-        """, (achievement_id,))
-        row = await cur.fetchone()
+        # Fetch full achievement definition (name, description, rewards, optional title)
+        try:
+            cur = await db.execute("""
+                SELECT name, description, reward_coins, reward_xp, unlock_title_id
+                FROM achievement_definitions WHERE achievement_id=?
+            """, (achievement_id,))
+            row = await cur.fetchone()
+        except Exception:
+            # Older DB without unlock_title_id column — fall back to legacy schema.
+            cur = await db.execute("""
+                SELECT name, description, reward_coins, reward_xp FROM achievement_definitions
+                WHERE achievement_id=?
+            """, (achievement_id,))
+            row = await cur.fetchone()
+            row = (row[0], row[1], row[2], row[3], None) if row else None
 
-        ach_name        = row[0] if row else achievement_id.replace("_", " ").title()
-        ach_description = row[1] if row else ""
-        reward_coins    = row[2] if row else 0
-        reward_xp       = row[3] if row else 0
+        ach_name         = row[0] if row else achievement_id.replace("_", " ").title()
+        ach_description  = row[1] if row else ""
+        reward_coins     = row[2] if row else 0
+        reward_xp        = row[3] if row else 0
+        unlock_title_id  = row[4] if row and len(row) > 4 else None
 
         # Unlock achievement
         await db.execute("""
@@ -1226,6 +1275,78 @@ async def check_and_unlock_achievement(
             await add_coins(guild_id, user_id, reward_coins, "ACHIEVEMENT", f"Achievement: {achievement_id}")
         if reward_xp > 0:
             await add_xp(guild_id, user_id, reward_xp, f"ACHIEVEMENT_{achievement_id}")
+
+        # Item 107 — auto-unlock paired title (and equip if user has none).
+        unlocked_title_name: Optional[str] = None
+        if unlock_title_id:
+            try:
+                cur = await db.execute(
+                    "SELECT name FROM title_definitions WHERE id=?",
+                    (unlock_title_id,),
+                )
+                t_row = await cur.fetchone()
+                if t_row:
+                    cur = await db.execute(
+                        "SELECT 1 FROM user_unlocked_titles WHERE guild_id=? AND user_id=? AND title_id=?",
+                        (guild_id, user_id, unlock_title_id),
+                    )
+                    already = await cur.fetchone()
+                    if not already:
+                        await db.execute(
+                            "INSERT OR IGNORE INTO user_unlocked_titles (guild_id, user_id, title_id, unlocked_at) "
+                            "VALUES (?, ?, ?, ?)",
+                            (guild_id, user_id, unlock_title_id, now_utc().isoformat()),
+                        )
+                        # Auto-equip only when nothing is currently equipped.
+                        cur = await db.execute(
+                            "SELECT title FROM user_titles WHERE guild_id=? AND user_id=?",
+                            (guild_id, user_id),
+                        )
+                        eq_row = await cur.fetchone()
+                        currently_equipped = eq_row[0] if eq_row else None
+                        if not currently_equipped:
+                            await db.execute(
+                                "INSERT INTO user_titles (guild_id, user_id, title) VALUES (?, ?, ?) "
+                                "ON CONFLICT(guild_id, user_id) DO UPDATE SET title=excluded.title",
+                                (guild_id, user_id, unlock_title_id),
+                            )
+                        await db.commit()
+                        unlocked_title_name = str(t_row[0])
+            except Exception as _e:
+                logger.debug(f"[achievement] title auto-unlock failed for {achievement_id}: {_e}")
+
+        # Item 107 — DM the unlocked title (subject to user_achievement_notify opt-out).
+        if unlocked_title_name and bot is not None:
+            try:
+                _an_val = await get_guild_setting(guild_id, f"user_achievement_notify:{user_id}")
+                if _an_val != "0":
+                    member = None
+                    try:
+                        guild_obj = bot.get_guild(guild_id) if hasattr(bot, "get_guild") else None
+                        if guild_obj:
+                            member = guild_obj.get_member(user_id)
+                    except Exception:
+                        member = None
+                    if member is None:
+                        try:
+                            member = await bot.fetch_user(user_id)
+                        except Exception:
+                            member = None
+                    if member is not None:
+                        from core.utils import obsidian_embed
+                        title_embed = obsidian_embed(
+                            "🏅 Title unlocked!",
+                            f"You unlocked the **{unlocked_title_name}** title from your latest achievement.",
+                            category="prestige",
+                            client=bot,
+                            footer="Equip with /general profile or /badges title.",
+                        )
+                        try:
+                            await member.send(embed=title_embed)
+                        except Exception:
+                            pass
+            except Exception as _e:
+                logger.debug(f"[achievement] title DM failed: {_e}")
 
         # Ephemeral notification via interaction followup (when available)
         if interaction is not None:
@@ -1261,47 +1382,85 @@ async def check_and_unlock_achievement(
         return True  # Newly unlocked
 
 
-async def initialize_achievement_definitions():
-    """Initialize default achievement definitions if they don't exist."""
-    default_achievements = [
-        ("first_message", "First Message", "Send your first message", "social", "Send 1 message", 10, 5),
-        ("hundred_messages", "Century", "Send 100 messages", "social", "Send 100 messages", 100, 50),
-        ("thousand_messages", "Millennium", "Send 1,000 messages", "social", "Send 1,000 messages", 500, 250),
-        ("ten_thousand_messages", "Legend", "Send 10,000 messages", "social", "Send 10,000 messages", 2000, 1000),
-        ("level_10", "Rising Star", "Reach level 10", "leveling", "Reach level 10", 200, 100),
-        ("level_25", "Veteran", "Reach level 25", "leveling", "Reach level 25", 500, 250),
-        ("level_50", "Master", "Reach level 50", "leveling", "Reach level 50", 1000, 500),
-        ("level_100", "Grandmaster", "Reach level 100", "leveling", "Reach level 100", 5000, 2500),
-        ("join_anniversary_1", "One Year", "Celebrate 1 year in the server", "milestone", "1 year anniversary", 500, 250),
-        ("join_anniversary_2", "Two Years", "Celebrate 2 years in the server", "milestone", "2 year anniversary", 1000, 500),
-        ("voice_hour", "Voice Active", "Spend 1 hour in voice", "voice", "1 hour in voice", 50, 25),
-        ("voice_ten_hours", "Voice Veteran", "Spend 10 hours in voice", "voice", "10 hours in voice", 200, 100),
-        ("pet_first", "Pet Owner", "Get your first pet", "pets", "Own a pet", 50, 25),
-        ("pet_battle_win", "Pet Fighter", "Win your first pet battle", "pets", "Win 1 pet battle", 75, 50),
-        ("pet_battle_5", "Pet Champion", "Win 5 pet battles", "pets", "Win 5 pet battles", 200, 100),
-        ("pet_level_25", "Pet Trainer", "Level your pet to 25", "pets", "Pet reaches level 25", 150, 75),
-        ("pet_evolved", "Pet Evolver", "Evolve your pet", "pets", "Evolve a pet", 250, 125),
-        ("daily_streak_10", "Dedicated", "10-day daily streak", "economy", "10 day streak", 200, 100),
-        ("first_transfer", "Trader", "Complete your first coin transfer", "economy", "Transfer coins once", 25, 10),
-        ("first_million", "Millionaire", "Reach 1,000,000 coins", "economy", "Balance reaches 1M", 500, 250),
-        ("gambling_first_win", "Lucky", "Win your first gambling game", "economy", "Win slots or dice once", 50, 25),
-        ("gambling_jackpot", "High Roller", "Hit a slots jackpot (1000 coins)", "economy", "Slots jackpot", 100, 50),
-        ("event_first", "First Ops", "RSVP to your first event", "milestone", "RSVP GOING to 1 event", 50, 25),
-        ("event_10", "Regular", "RSVP to 10 events", "milestone", "RSVP to 10 events", 150, 75),
-        ("event_50", "Veteran Attendee", "RSVP to 50 events", "milestone", "RSVP to 50 events", 500, 250),
-        ("months_3", "Three Months", "3 months in the server", "milestone", "3 month anniversary", 100, 50),
-        ("months_6", "Half Year", "6 months in the server", "milestone", "6 month anniversary", 200, 100),
-        ("ticket_creator", "Ticket Opener", "Create your first support ticket", "social", "Open 1 ticket", 25, 10),
-        ("suggestion_first", "Idea Person", "Submit your first suggestion", "social", "Submit 1 suggestion", 25, 10),
-    ]
-    
+async def check_voice_lifetime_achievements(guild_id: int, user_id: int, bot: Optional[Any] = None) -> None:
+    """Unlock voice-time achievements (and linked badges) from cumulative ``activity_stats.voice_minutes``."""
     async with aiosqlite.connect(DB_PATH) as db:
-        for achievement_id, name, description, category, requirement, reward_coins, reward_xp in default_achievements:
+        cur = await db.execute(
+            "SELECT voice_minutes FROM activity_stats WHERE guild_id=? AND user_id=?",
+            (guild_id, user_id),
+        )
+        row = await cur.fetchone()
+    total_mins = int(row[0]) if row and row[0] is not None else 0
+    milestones = [
+        (60, "voice_hour"),
+        (600, "voice_ten_hours"),
+        (6000, "voice_100_hours"),
+        (60000, "voice_1000_hours"),
+    ]
+    for need, ach_id in milestones:
+        if total_mins >= need:
+            try:
+                await check_and_unlock_achievement(guild_id, user_id, ach_id, bot)
+            except Exception:
+                pass
+
+
+async def initialize_achievement_definitions():
+    """Initialize default achievement definitions if they don't exist.
+
+    Item 107: each row may include an ``unlock_title_id`` (8th element)
+    that maps to ``title_definitions.id``. When the achievement unlocks,
+    the linked title is also unlocked (and auto-equipped if the user has
+    no title set yet).
+    """
+    default_achievements = [
+        ("first_message", "First Message", "Send your first message", "social", "Send 1 message", 10, 5, None),
+        ("hundred_messages", "Century", "Send 100 messages", "social", "Send 100 messages", 100, 50, None),
+        ("thousand_messages", "Millennium", "Send 1,000 messages", "social", "Send 1,000 messages", 500, 250, None),
+        ("ten_thousand_messages", "Legend", "Send 10,000 messages", "social", "Send 10,000 messages", 2000, 1000, "chatterbox"),
+        ("level_10", "Rising Star", "Reach level 10", "leveling", "Reach level 10", 200, 100, None),
+        ("level_25", "Veteran", "Reach level 25", "leveling", "Reach level 25", 500, 250, None),
+        ("level_50", "Master", "Reach level 50", "leveling", "Reach level 50", 1000, 500, None),
+        ("level_100", "Grandmaster", "Reach level 100", "leveling", "Reach level 100", 5000, 2500, None),
+        ("join_anniversary_1", "One Year", "Celebrate 1 year in the server", "milestone", "1 year anniversary", 500, 250, "early_bird"),
+        ("join_anniversary_2", "Two Years", "Celebrate 2 years in the server", "milestone", "2 year anniversary", 1000, 500, None),
+        ("voice_hour", "Voice Active", "Spend 1 hour in voice", "voice", "1 hour in voice", 50, 25, None),
+        ("voice_ten_hours", "Voice Veteran", "Spend 10 hours in voice", "voice", "10 hours in voice", 200, 100, None),
+        ("voice_100_hours", "Voice Centurion", "Spend 100 hours in voice", "voice", "100 hours in voice", 1000, 500, None),
+        ("voice_1000_hours", "Voice Legend", "Spend 1,000 hours in voice", "voice", "1000 hours in voice", 5000, 2500, None),
+        ("pet_first", "Pet Owner", "Get your first pet", "pets", "Own a pet", 50, 25, None),
+        ("pet_battle_win", "Pet Fighter", "Win your first pet battle", "pets", "Win 1 pet battle", 75, 50, None),
+        ("pet_battle_5", "Pet Champion", "Win 5 pet battles", "pets", "Win 5 pet battles", 200, 100, None),
+        ("pet_level_25", "Pet Trainer", "Level your pet to 25", "pets", "Pet reaches level 25", 150, 75, None),
+        ("pet_evolved", "Pet Evolver", "Evolve your pet", "pets", "Evolve a pet", 250, 125, None),
+        ("daily_streak_10", "Dedicated", "10-day daily streak", "economy", "10 day streak", 200, 100, None),
+        ("first_transfer", "Trader", "Complete your first coin transfer", "economy", "Transfer coins once", 25, 10, None),
+        ("first_million", "Millionaire", "Reach 1,000,000 coins", "economy", "Balance reaches 1M", 500, 250, "millionaire"),
+        ("gambling_first_win", "Lucky", "Win your first gambling game", "economy", "Win slots or dice once", 50, 25, None),
+        ("gambling_jackpot", "High Roller", "Hit a slots jackpot (1000 coins)", "economy", "Slots jackpot", 100, 50, None),
+        ("event_first", "First Ops", "RSVP to your first event", "milestone", "RSVP GOING to 1 event", 50, 25, None),
+        ("event_10", "Regular", "RSVP to 10 events", "milestone", "RSVP to 10 events", 150, 75, None),
+        ("event_50", "Veteran Attendee", "RSVP to 50 events", "milestone", "RSVP to 50 events", 500, 250, None),
+        ("months_3", "Three Months", "3 months in the server", "milestone", "3 month anniversary", 100, 50, None),
+        ("months_6", "Half Year", "6 months in the server", "milestone", "6 month anniversary", 200, 100, "veteran"),
+        ("ticket_creator", "Ticket Opener", "Create your first support ticket", "social", "Open 1 ticket", 25, 10, None),
+        ("suggestion_first", "Idea Person", "Submit your first suggestion", "social", "Submit 1 suggestion", 25, 10, None),
+    ]
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        for achievement_id, name, description, category, requirement, reward_coins, reward_xp, unlock_title_id in default_achievements:
             await db.execute("""
-                INSERT OR IGNORE INTO achievement_definitions 
-                (achievement_id, name, description, category, requirement, reward_coins, reward_xp)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (achievement_id, name, description, category, requirement, reward_coins, reward_xp))
+                INSERT OR IGNORE INTO achievement_definitions
+                (achievement_id, name, description, category, requirement, reward_coins, reward_xp, unlock_title_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (achievement_id, name, description, category, requirement, reward_coins, reward_xp, unlock_title_id))
+            # Idempotent backfill so existing rows pick up new title links on bot upgrade.
+            if unlock_title_id:
+                await db.execute(
+                    "UPDATE achievement_definitions SET unlock_title_id=? "
+                    "WHERE achievement_id=? AND (unlock_title_id IS NULL OR unlock_title_id='')",
+                    (unlock_title_id, achievement_id),
+                )
         await db.commit()
 
 
@@ -1425,6 +1584,10 @@ async def initialize_badge_definitions():
         ("event_first", "First Ops", "RSVP to first event", "📅", "common"),
         ("event_10", "Regular", "RSVP to 10 events", "🎯", "rare"),
         ("event_50", "Veteran Attendee", "RSVP to 50 events", "🏅", "epic"),
+        ("voice_hour", "Voice Active", "1 hour in voice", "🎙️", "common"),
+        ("voice_ten_hours", "Voice Veteran", "10 hours in voice", "🎧", "rare"),
+        ("voice_100_hours", "Voice Centurion", "100 hours in voice", "📻", "epic"),
+        ("voice_1000_hours", "Voice Legend", "1000 hours in voice", "🛰️", "legendary"),
         ("months_3", "Three Months", "3 months in server", "📆", "common"),
         ("months_6", "Half Year", "6 months in server", "⏱️", "rare"),
         ("ticket_creator", "Ticket Opener", "Create first ticket", "🎫", "common"),

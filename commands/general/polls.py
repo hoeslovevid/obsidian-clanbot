@@ -150,7 +150,10 @@ def setup(bot, group=None):
                 ),
                 ephemeral=True
             )
-        
+        from core.utils import feature_enabled, feature_off_embed  # Item 85
+        if not await feature_enabled(interaction.guild.id, "polls"):
+            return await interaction.response.send_message(embed=feature_off_embed("Polls", client=interaction.client), ephemeral=True)
+
         await interaction.response.defer()
         
         # Parse options

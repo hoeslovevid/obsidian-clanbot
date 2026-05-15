@@ -654,7 +654,15 @@ async def on_message(message: discord.Message):
     # Check if economy is enabled
     if not ECONOMY_ENABLED:
         return
-    
+
+    # Item 85 — per-guild kill switch overrides global flag.
+    try:
+        from core.utils import feature_enabled
+        if not await feature_enabled(message.guild.id, "economy_passive"):
+            return
+    except Exception:
+        pass
+
     # Ignore commands (they're handled separately)
     if message.content.startswith("!"):
         return
@@ -681,22 +689,25 @@ async def on_message(message: discord.Message):
         """, (message.guild.id, message.author.id, now_utc().isoformat(), now_utc().isoformat()))
         await db.commit()
     
-    # Award coins
+    # Award coins (Item 72 — apply active server-goal multiplier when present)
+    from core.utils import get_active_multiplier
+    coins_mult = await get_active_multiplier(message.guild.id, "coins")
     await add_coins(
         message.guild.id,
         message.author.id,
-        COINS_PER_MESSAGE,
+        max(1, int(round(COINS_PER_MESSAGE * coins_mult))),
         "MESSAGE",
         f"Message in #{_channel_name_safe(message.channel)}",
     )
-    
+
     # Award XP (if enabled)
     from core.utils import XP_ENABLED, XP_PER_MESSAGE
     if XP_ENABLED:
+        xp_mult = await get_active_multiplier(message.guild.id, "xp")
         leveled_up = await add_xp(
             message.guild.id,
             message.author.id,
-            XP_PER_MESSAGE,
+            max(1, int(round(XP_PER_MESSAGE * xp_mult))),
             "MESSAGE",
         )
         if leveled_up and isinstance(message.author, discord.Member):
@@ -790,6 +801,14 @@ async def on_message(message: discord.Message):
                             message.guild.id, message.author.id, achievement_map[milestone_count], bot
                         )
     
+    # Item 83 — proactively clear the inactive role when a tagged member returns.
+    if isinstance(message.author, discord.Member):
+        try:
+            from commands.moderation.inactive_role import maybe_clear_inactive_role
+            await maybe_clear_inactive_role(message.author)
+        except Exception:
+            pass
+
     # Handle AFK system
     from database import get_afk_status, remove_afk
     # Check if message author is mentioned and they're AFK
@@ -847,6 +866,12 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
         # User joined a voice channel - start tracking (if not muted/deafened)
         ch_after = getattr(after, "channel", None)
         if ch_after is not None and isinstance(ch_after, discord.VoiceChannel):
+            # Item 83 — joining voice clears the inactive role too.
+            try:
+                from commands.moderation.inactive_role import maybe_clear_inactive_role
+                await maybe_clear_inactive_role(member)
+            except Exception:
+                pass
             if not (after.self_mute or after.self_deaf):
                 async with aiosqlite.connect(DB_PATH) as db:
                     # First, get existing total_minutes if any

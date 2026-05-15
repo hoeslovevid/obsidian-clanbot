@@ -469,6 +469,9 @@ def setup(bot, group=None):
                 ),
                 ephemeral=True,
             )
+        from core.utils import feature_enabled, feature_off_embed  # Item 85
+        if not await feature_enabled(interaction.guild.id, "gambling"):
+            return await interaction.response.send_message(embed=feature_off_embed("Gambling", client=interaction.client), ephemeral=True)
         resolved_bet = bet if bet is not None else _recall_bet(interaction.guild.id, interaction.user.id, "slots", _DEFAULT_BET)
         if not (MIN_SLOTS_BET <= resolved_bet <= MAX_SLOTS_BET):
             return await interaction.response.send_message(
@@ -499,6 +502,9 @@ def setup(bot, group=None):
                 ),
                 ephemeral=True,
             )
+        from core.utils import feature_enabled, feature_off_embed  # Item 85
+        if not await feature_enabled(interaction.guild.id, "gambling"):
+            return await interaction.response.send_message(embed=feature_off_embed("Gambling", client=interaction.client), ephemeral=True)
         resolved_bet = bet if bet is not None else _recall_bet(interaction.guild.id, interaction.user.id, "dice", _DEFAULT_BET)
         if resolved_bet < 1:
             return await interaction.response.send_message(
@@ -534,6 +540,9 @@ def setup(bot, group=None):
                 ),
                 ephemeral=True,
             )
+        from core.utils import feature_enabled, feature_off_embed  # Item 85
+        if not await feature_enabled(interaction.guild.id, "gambling"):
+            return await interaction.response.send_message(embed=feature_off_embed("Gambling", client=interaction.client), ephemeral=True)
         resolved_bet = bet if bet is not None else _recall_bet(interaction.guild.id, interaction.user.id, "roulette", _DEFAULT_BET)
         if resolved_bet < 1:
             return await interaction.response.send_message(

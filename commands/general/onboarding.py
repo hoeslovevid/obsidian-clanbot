@@ -5,19 +5,69 @@ on the guild — default ON) with a small action panel: set timezone, claim
 daily, pick notifications, link Steam, done.
 
 Existing welcome flows continue to fire — this DM is additive.
+
+Item 81 also adds a small ``onboarding_steps`` ledger so mods can pull
+funnel stats with ``/tools onboarding_stats``.
 """
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 
+import aiosqlite  # type: ignore
 import discord
 from discord import app_commands
 
-from core.utils import obsidian_embed, success_embed, error_embed, BUTTON_ONLY_RUNNER_MSG
-from database import get_guild_setting, set_guild_setting
+from core.utils import (
+    obsidian_embed, success_embed, error_embed, BUTTON_ONLY_RUNNER_MSG,
+    EMBED_COLORS, render_bar, is_mod, format_number,
+)
+from database import DB_PATH, get_guild_setting, set_guild_setting
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Item 81 — onboarding step ledger
+# ---------------------------------------------------------------------------
+ONBOARDING_STEP_NAMES: tuple[str, ...] = (
+    "set_timezone", "claim_daily", "pick_notifications", "link_steam",
+)
+
+
+async def _ensure_onboarding_steps_table() -> None:
+    """Lazy CREATE so the table appears the first time a step is recorded."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS onboarding_steps (
+                guild_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                step_name TEXT NOT NULL,
+                completed_at TEXT NOT NULL,
+                PRIMARY KEY (guild_id, user_id, step_name)
+            )
+            """
+        )
+        await db.commit()
+
+
+async def _record_onboarding_step(guild_id: int, user_id: int, step_name: str) -> None:
+    """Record (idempotently) that ``user_id`` completed ``step_name``."""
+    if step_name not in ONBOARDING_STEP_NAMES:
+        return
+    try:
+        await _ensure_onboarding_steps_table()
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute(
+                "INSERT OR IGNORE INTO onboarding_steps (guild_id, user_id, step_name, completed_at) "
+                "VALUES (?, ?, ?, ?)",
+                (guild_id, user_id, step_name, datetime.now(timezone.utc).isoformat()),
+            )
+            await db.commit()
+    except Exception as e:
+        logger.debug(f"[onboarding] could not record step {step_name}: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -49,6 +99,7 @@ class _TimezoneSelect(discord.ui.Select):
                 embed=error_embed("Couldn't save timezone", str(e), client=interaction.client),
                 ephemeral=True,
             )
+        await _record_onboarding_step(self.guild_id, interaction.user.id, "set_timezone")
         await interaction.response.send_message(
             embed=success_embed(
                 "Timezone Saved",
@@ -96,6 +147,7 @@ class OnboardingView(discord.ui.View):
     async def daily_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         # We can't run a slash callback directly from a DM context (no guild),
         # so we point the user at the slash command instead.
+        await _record_onboarding_step(self.guild_id, interaction.user.id, "claim_daily")
         await interaction.response.send_message(
             embed=obsidian_embed(
                 "🎁 Claim your daily reward",
@@ -110,6 +162,7 @@ class OnboardingView(discord.ui.View):
 
     @discord.ui.button(label="Pick Notifications", style=discord.ButtonStyle.primary, emoji="🔔")
     async def notify_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await _record_onboarding_step(self.guild_id, interaction.user.id, "pick_notifications")
         await interaction.response.send_message(
             embed=obsidian_embed(
                 "🔔 Pick notifications",
@@ -124,6 +177,7 @@ class OnboardingView(discord.ui.View):
 
     @discord.ui.button(label="Link Steam", style=discord.ButtonStyle.secondary, emoji="🎮")
     async def steam_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await _record_onboarding_step(self.guild_id, interaction.user.id, "link_steam")
         await interaction.response.send_message(
             embed=obsidian_embed(
                 "🎮 Link Warframe / Steam",
@@ -269,5 +323,94 @@ def setup(bot, group=None):
             ),
             ephemeral=True,
         )
+
+    # Item 81 — onboarding stats. The brief asks for `/tools onboarding_stats`,
+    # but `tools_group` is currently at the 25-subcommand cap (favorites +
+    # phishing already overflow), so when full we fall back to attaching a
+    # `stats` subcommand to the existing `/onboarding` group instead.
+    async def _show_onboarding_stats(interaction: discord.Interaction, days: int):
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=error_embed("Invalid Context", "Server only.", client=interaction.client),
+                ephemeral=True,
+            )
+        if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
+            return await interaction.response.send_message(
+                embed=error_embed("Permission Denied", "Mods only.", client=interaction.client),
+                ephemeral=True,
+            )
+        days = max(1, min(365, int(days or 30)))
+        await interaction.response.defer(ephemeral=True)
+        await _ensure_onboarding_steps_table()
+
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT COUNT(DISTINCT user_id) FROM onboarding_steps "
+                "WHERE guild_id=? AND completed_at >= ?",
+                (interaction.guild.id, cutoff),
+            )
+            total_users_row = await cur.fetchone()
+            total_users = int(total_users_row[0]) if total_users_row else 0
+
+            step_counts: dict[str, int] = {}
+            for step in ONBOARDING_STEP_NAMES:
+                cur = await db.execute(
+                    "SELECT COUNT(*) FROM onboarding_steps "
+                    "WHERE guild_id=? AND step_name=? AND completed_at >= ?",
+                    (interaction.guild.id, step, cutoff),
+                )
+                r = await cur.fetchone()
+                step_counts[step] = int(r[0]) if r else 0
+
+        denominator = max(total_users, 1)
+        funnel_lines: list[str] = []
+        for step in ONBOARDING_STEP_NAMES:
+            count = step_counts.get(step, 0)
+            pct = 100.0 * count / denominator if total_users else 0.0
+            label = step.replace("_", " ").title()
+            funnel_lines.append(f"**{label}** — {format_number(count)}/{format_number(total_users)}\n{render_bar(pct)}")
+
+        # Top drop-off step = the step that loses the most users vs. its predecessor.
+        ordered_pcts = [
+            (step, (100.0 * step_counts.get(step, 0) / denominator) if total_users else 0.0)
+            for step in ONBOARDING_STEP_NAMES
+        ]
+        biggest_drop_step: Optional[str] = None
+        biggest_drop_value = 0.0
+        for prev, curr in zip(ordered_pcts, ordered_pcts[1:]):
+            drop = prev[1] - curr[1]
+            if drop > biggest_drop_value:
+                biggest_drop_value = drop
+                biggest_drop_step = curr[0]
+        drop_off_line = (
+            f"**{biggest_drop_step.replace('_', ' ').title()}** "
+            f"(−{biggest_drop_value:.0f}% from previous step)"
+            if biggest_drop_step else "—"
+        )
+
+        fields = [
+            ("👥 Onboarded users", f"**{format_number(total_users)}** in last **{days}** days", False),
+            ("📊 Funnel", "\n\n".join(funnel_lines), False),
+            ("📉 Top drop-off", drop_off_line, False),
+        ]
+        await interaction.followup.send(
+            embed=obsidian_embed(
+                "🌟 Onboarding Stats",
+                f"Per-step completion for **{interaction.guild.name}**.",
+                color=EMBED_COLORS["community"],
+                fields=fields,
+                client=interaction.client,
+            ),
+            ephemeral=True,
+        )
+
+    # `tools_group` is at its 25-subcommand cap (favorites + phishing already
+    # overflow), so the stats command is always attached to the dedicated
+    # `/onboarding` group as `/onboarding stats`.
+    @onboarding_group.command(name="stats", description="(mods) Onboarding completion funnel for the last N days.")
+    @app_commands.describe(days="Window in days to summarise (default 30, max 365).")
+    async def _onboarding_stats_self(interaction: discord.Interaction, days: int = 30):
+        await _show_onboarding_stats(interaction, days)
 
     bot.tree.add_command(onboarding_group)

@@ -468,6 +468,9 @@ def setup(bot, group=None):
         """Create an LFG post for a Warframe mission."""
         if not interaction.guild:
             return await interaction.response.send_message("LFG can only be used in a server.", ephemeral=True)
+        from core.utils import feature_enabled, feature_off_embed  # Item 85
+        if not await feature_enabled(interaction.guild.id, "lfg"):
+            return await interaction.response.send_message(embed=feature_off_embed("LFG", client=interaction.client), ephemeral=True)
         if not isinstance(interaction.channel, (discord.TextChannel, discord.Thread)):
             return await interaction.response.send_message(
                 "LFG posts must be created in a text channel or thread.",

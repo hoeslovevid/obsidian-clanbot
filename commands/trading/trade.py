@@ -54,7 +54,10 @@ def setup(bot, group=None):
                 ),
                 ephemeral=True
             )
-        
+        from core.utils import feature_enabled, feature_off_embed  # Item 85
+        if not await feature_enabled(interaction.guild.id, "trade"):
+            return await interaction.response.send_message(embed=feature_off_embed("Trading", client=interaction.client), ephemeral=True)
+
         await interaction.response.defer(ephemeral=True)
         
         listing_type_val = listing_type.value

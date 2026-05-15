@@ -574,7 +574,10 @@ def setup(bot, group=None):
                 ),
                 ephemeral=True
             )
-        
+        from core.utils import feature_enabled, feature_off_embed  # Item 85
+        if not await feature_enabled(interaction.guild.id, "pets"):
+            return await interaction.response.send_message(embed=feature_off_embed("Pets", client=interaction.client), ephemeral=True)
+
         await interaction.response.defer()
         
         # Check if user already has a pet
@@ -1130,6 +1133,9 @@ def setup(bot, group=None):
                 embed=obsidian_embed("❌ Invalid Context", "This can only be used in a server.", color=discord.Color.red(), client=interaction.client),
                 ephemeral=True,
             )
+        from core.utils import feature_enabled, feature_off_embed  # Item 85
+        if not await feature_enabled(interaction.guild.id, "pets"):
+            return await interaction.response.send_message(embed=feature_off_embed("Pets", client=interaction.client), ephemeral=True)
         if opponent.id == interaction.user.id:
             return await interaction.response.send_message("You can't battle your own pet!", ephemeral=True)
         if opponent.bot:
@@ -1369,3 +1375,443 @@ def setup(bot, group=None):
         await interaction.followup.send(
             embed=obsidian_embed("✅ Pet Purchased", f"You bought **{pet_name}** ({pet_type}) Lv.{level} for {price:,} coins!", color=discord.Color.green(), client=interaction.client),
         )
+
+    # ------------------------------------------------------------------
+    # Item 75 — Pet gifting (two-step confirm + recipient accept/decline)
+    # ------------------------------------------------------------------
+    command_decorator = group.command(
+        name="gift",
+        description="Gift your pet to another member (they must accept within 24h)."
+    ) if group else bot.tree.command(name="gift", description="Gift your pet to another member.")
+
+    @command_decorator
+    @app_commands.describe(recipient="Who should receive your pet?")
+    async def pet_gift(interaction: discord.Interaction, recipient: discord.Member):
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=obsidian_embed("❌ Invalid Context", "Server only.", color=discord.Color.red(), client=interaction.client),
+                ephemeral=True,
+            )
+        if recipient.bot or recipient.id == interaction.user.id:
+            return await interaction.response.send_message(
+                embed=obsidian_embed("❌ Invalid Recipient", "You can't gift a pet to yourself or a bot.", color=discord.Color.red(), client=interaction.client),
+                ephemeral=True,
+            )
+
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT id, pet_name, pet_type, level FROM pets WHERE guild_id=? AND user_id=?",
+                (interaction.guild.id, interaction.user.id),
+            )
+            mine = await cur.fetchone()
+            if not mine:
+                return await interaction.response.send_message(
+                    embed=obsidian_embed("❌ No Pet", "You don't own a pet to gift.", color=discord.Color.red(), client=interaction.client),
+                    ephemeral=True,
+                )
+            cur = await db.execute(
+                "SELECT 1 FROM pets WHERE guild_id=? AND user_id=?",
+                (interaction.guild.id, recipient.id),
+            )
+            if await cur.fetchone():
+                return await interaction.response.send_message(
+                    embed=obsidian_embed(
+                        "❌ Recipient Already Has a Pet",
+                        f"{recipient.display_name} already has a pet. They must release theirs (`/pets abandon`) before they can accept a gifted one.",
+                        color=discord.Color.red(),
+                        client=interaction.client,
+                    ),
+                    ephemeral=True,
+                )
+            cur = await db.execute(
+                "SELECT 1 FROM pet_listings WHERE pet_id=?",
+                (mine[0],),
+            )
+            if await cur.fetchone():
+                return await interaction.response.send_message(
+                    embed=obsidian_embed(
+                        "❌ Pet Is Listed",
+                        "Unlist your pet from the marketplace before gifting it.",
+                        color=discord.Color.red(),
+                        client=interaction.client,
+                    ),
+                    ephemeral=True,
+                )
+
+        pet_id, pet_name, pet_type, pet_level = mine
+        preview = obsidian_embed(
+            "🎁 Confirm Gift",
+            f"Gift **{pet_name}** ({pet_type}) Lv.{pet_level} to {recipient.mention}?\n\n"
+            "They will receive a DM (or fall back to a server ping) and must accept within **24 hours**.",
+            color=discord.Color.gold(),
+            thumbnail=PET_ICONS.get(pet_type, DEFAULT_PET_ICON),
+            client=interaction.client,
+        )
+
+        async def on_giver_confirm(btn_inter: discord.Interaction, confirmed: bool):
+            if btn_inter.user.id != interaction.user.id:
+                try:
+                    await btn_inter.response.send_message("Only the gifter can confirm.", ephemeral=True)
+                except Exception:
+                    pass
+                return
+            if not confirmed:
+                try:
+                    await btn_inter.followup.send("Gift cancelled.", ephemeral=True)
+                except Exception:
+                    pass
+                return
+            await _send_pet_gift_offer(
+                btn_inter, interaction.guild, interaction.user, recipient,
+                pet_id, pet_name, pet_type, pet_level,
+            )
+
+        view = ConfirmView(on_giver_confirm)
+        await interaction.response.send_message(embed=preview, view=view, ephemeral=True)
+
+    command_decorator = group.command(
+        name="care_all",
+        description="Feed and play with all of your pets in one go (costs 15 coins)."
+    ) if group else bot.tree.command(name="care_all", description="Feed and play with all of your pets in one go.")
+
+    @command_decorator
+    async def pet_care_all(interaction: discord.Interaction):
+        """Item 77 — batch care. Single-pet schema means this is functionally
+        identical to `/pets care`, but presents a per-pet summary."""
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=obsidian_embed("❌ Invalid Context", "Server only.", color=discord.Color.red(), client=interaction.client),
+                ephemeral=True,
+            )
+        await interaction.response.defer()
+
+        cost = 15
+        balance = await get_user_balance(interaction.guild.id, interaction.user.id)
+        if balance < cost:
+            return await interaction.followup.send(
+                embed=obsidian_embed(
+                    "❌ Insufficient Funds",
+                    f"Caring for all pets costs **{cost} coins**. You have **{balance:,}**.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                )
+            )
+
+        results, total_cost = await _care_all_user_pets(
+            interaction.guild.id, interaction.user.id, cost,
+        )
+        if not results:
+            return await interaction.followup.send(
+                embed=obsidian_embed("❌ No Pets", "You don't own any pets yet. Use `/pets buy` to get one!", color=discord.Color.red(), client=interaction.client),
+            )
+
+        bullet_lines: list[str] = []
+        for r in results:
+            line = (
+                f"• **{r['pet_name']}** ({r['pet_type']}) — "
+                f"Fed (+{r['hunger_delta']} hunger), Played (+{r['happiness_delta']} happiness)"
+            )
+            if r["leveled_up"]:
+                line += f" · 🎉 Lv.{r['old_level']}→**Lv.{r['new_level']}**"
+            bullet_lines.append(line)
+
+        await interaction.followup.send(
+            embed=obsidian_embed(
+                "🐾 Pet Care Complete",
+                "\n".join(bullet_lines) + f"\n\n**Cost:** {total_cost:,} coins",
+                color=discord.Color.green(),
+                client=interaction.client,
+            )
+        )
+
+
+# ---------------------------------------------------------------------------
+# Helpers shared by Item 75 (gift) and Item 77 (care_all)
+# ---------------------------------------------------------------------------
+class _PetGiftAcceptView(discord.ui.View):
+    """Recipient-side Accept/Decline view for Item 75 pet gifting.
+
+    Persistent-friendly: uses `timeout=24h` so a stale DM expires; the
+    actual ownership swap happens on the Accept callback.
+    """
+
+    def __init__(
+        self,
+        *,
+        guild_id: int,
+        giver_id: int,
+        recipient_id: int,
+        pet_id: int,
+        pet_name: str,
+        pet_type: str,
+        pet_level: int,
+    ):
+        super().__init__(timeout=24 * 3600)
+        self.guild_id = guild_id
+        self.giver_id = giver_id
+        self.recipient_id = recipient_id
+        self.pet_id = pet_id
+        self.pet_name = pet_name
+        self.pet_type = pet_type
+        self.pet_level = pet_level
+        self.resolved = False
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.recipient_id:
+            try:
+                await interaction.response.send_message(
+                    "Only the gift recipient can use these buttons.", ephemeral=True,
+                )
+            except Exception:
+                pass
+            return False
+        return True
+
+    @discord.ui.button(label="Accept", style=discord.ButtonStyle.success, emoji="✅")
+    async def accept_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.resolved:
+            return await interaction.response.send_message("This gift was already resolved.", ephemeral=True)
+        self.resolved = True
+        for c in self.children:
+            c.disabled = True
+        try:
+            await interaction.response.edit_message(view=self)
+        except Exception:
+            pass
+
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT user_id FROM pets WHERE id=? AND guild_id=?",
+                (self.pet_id, self.guild_id),
+            )
+            row = await cur.fetchone()
+            if not row or int(row[0]) != self.giver_id:
+                try:
+                    await interaction.followup.send("Sorry — this pet is no longer available to gift.", ephemeral=True)
+                except Exception:
+                    pass
+                return
+            cur = await db.execute(
+                "SELECT 1 FROM pets WHERE guild_id=? AND user_id=?",
+                (self.guild_id, self.recipient_id),
+            )
+            if await cur.fetchone():
+                try:
+                    await interaction.followup.send(
+                        "You already have a pet — release it first if you want to accept this gift.",
+                        ephemeral=True,
+                    )
+                except Exception:
+                    pass
+                return
+            await db.execute(
+                "UPDATE pets SET user_id=? WHERE id=?",
+                (self.recipient_id, self.pet_id),
+            )
+            now_iso = now_utc().isoformat()
+            desc = f"Gifted {self.pet_name} ({self.pet_type}) Lv.{self.pet_level} to user {self.recipient_id}"
+            await db.execute(
+                "INSERT INTO economy_transactions (guild_id, user_id, amount, transaction_type, description, created_at) "
+                "VALUES (?, ?, 0, 'PET_GIFT', ?, ?)",
+                (self.guild_id, self.giver_id, desc, now_iso),
+            )
+            await db.execute(
+                "INSERT INTO economy_transactions (guild_id, user_id, amount, transaction_type, description, created_at) "
+                "VALUES (?, ?, 0, 'PET_GIFT', ?, ?)",
+                (self.guild_id, self.recipient_id, f"Received {self.pet_name} ({self.pet_type}) from user {self.giver_id}", now_iso),
+            )
+            await db.commit()
+
+        try:
+            await interaction.followup.send(
+                embed=obsidian_embed(
+                    "🎉 Pet Accepted",
+                    f"**{self.pet_name}** ({self.pet_type}) is now yours! Use `/pets view` to say hi.",
+                    color=discord.Color.green(),
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+        except Exception:
+            pass
+
+        try:
+            giver = interaction.client.get_user(self.giver_id) or await interaction.client.fetch_user(self.giver_id)
+            if giver:
+                await giver.send(
+                    embed=obsidian_embed(
+                        "🎁 Gift Accepted",
+                        f"<@{self.recipient_id}> accepted **{self.pet_name}**. Take care, parting is hard!",
+                        color=discord.Color.green(),
+                        client=interaction.client,
+                    )
+                )
+        except Exception:
+            pass
+
+    @discord.ui.button(label="Decline", style=discord.ButtonStyle.secondary, emoji="✖")
+    async def decline_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.resolved:
+            return await interaction.response.send_message("Already resolved.", ephemeral=True)
+        self.resolved = True
+        for c in self.children:
+            c.disabled = True
+        try:
+            await interaction.response.edit_message(view=self)
+        except Exception:
+            pass
+        try:
+            giver = interaction.client.get_user(self.giver_id) or await interaction.client.fetch_user(self.giver_id)
+            if giver:
+                await giver.send(
+                    embed=obsidian_embed(
+                        "💔 Gift Declined",
+                        f"<@{self.recipient_id}> declined **{self.pet_name}**. Your pet stays with you.",
+                        color=discord.Color.orange(),
+                        client=interaction.client,
+                    )
+                )
+        except Exception:
+            pass
+
+    async def on_timeout(self):
+        for c in self.children:
+            c.disabled = True
+
+
+async def _send_pet_gift_offer(
+    btn_interaction: discord.Interaction,
+    guild: discord.Guild,
+    giver: discord.abc.User,
+    recipient: discord.Member,
+    pet_id: int,
+    pet_name: str,
+    pet_type: str,
+    pet_level: int,
+) -> None:
+    """Send the recipient an Accept/Decline offer (DM first, in-channel fallback)."""
+    offer_embed = obsidian_embed(
+        "🎁 You've received a pet gift!",
+        f"**{giver.display_name}** wants to gift you **{pet_name}** "
+        f"({pet_type}) Lv.{pet_level} in **{guild.name}**.\n\n"
+        "Tap **Accept** within 24 hours to take ownership, or **Decline** to refuse.",
+        color=discord.Color.gold(),
+        thumbnail=PET_ICONS.get(pet_type, DEFAULT_PET_ICON),
+        client=btn_interaction.client,
+    )
+    view = _PetGiftAcceptView(
+        guild_id=guild.id,
+        giver_id=giver.id,
+        recipient_id=recipient.id,
+        pet_id=pet_id,
+        pet_name=pet_name,
+        pet_type=pet_type,
+        pet_level=pet_level,
+    )
+    delivered = False
+    try:
+        await recipient.send(embed=offer_embed, view=view)
+        delivered = True
+    except (discord.Forbidden, discord.HTTPException):
+        delivered = False
+
+    if delivered:
+        try:
+            await btn_interaction.followup.send(
+                embed=obsidian_embed(
+                    "📬 Gift Sent",
+                    f"Sent a gift offer to {recipient.mention} — they have 24 hours to accept.",
+                    color=discord.Color.green(),
+                    client=btn_interaction.client,
+                ),
+                ephemeral=True,
+            )
+        except Exception:
+            pass
+        return
+
+    try:
+        ch = btn_interaction.channel if hasattr(btn_interaction, "channel") else None
+        if isinstance(ch, discord.TextChannel):
+            await ch.send(
+                content=recipient.mention,
+                embed=offer_embed,
+                view=view,
+            )
+            await btn_interaction.followup.send(
+                "Couldn't DM them — posted the offer in this channel instead.",
+                ephemeral=True,
+            )
+            return
+    except Exception:
+        pass
+    try:
+        await btn_interaction.followup.send(
+            embed=obsidian_embed(
+                "❌ Couldn't Deliver Gift",
+                f"{recipient.mention} has DMs disabled and I couldn't post here either. Try again from a channel I can post in.",
+                color=discord.Color.red(),
+                client=btn_interaction.client,
+            ),
+            ephemeral=True,
+        )
+    except Exception:
+        pass
+
+
+async def _care_all_user_pets(guild_id: int, user_id: int, cost: int) -> tuple[list[dict], int]:
+    """Apply feed+play to every pet owned by `user_id` in `guild_id`.
+
+    Single-pet-per-user schema today, but written as a loop so the helper
+    keeps working if multi-pet ownership lands later. Returns
+    `(per_pet_results, total_cost_charged)`.
+    """
+    HUNGER_GAIN = 20
+    HAPPINESS_GAIN = 15
+
+    results: list[dict] = []
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("""
+            SELECT p.id, p.pet_name, p.pet_type, p.hunger, p.happiness, p.experience, p.level,
+                   p.last_fed_at, p.last_played_at, p.created_at, pt.max_level
+            FROM pets p
+            JOIN pet_types pt ON p.pet_type = pt.pet_type
+            WHERE p.guild_id=? AND p.user_id=?
+        """, (guild_id, user_id))
+        rows = await cur.fetchall()
+        if not rows:
+            return [], 0
+
+        await remove_coins(guild_id, user_id, cost, "PET", "Care-all (feed + play)")
+        now_str = now_utc().isoformat()
+
+        for row in rows:
+            pet_id, pet_name, pet_type, hunger, happiness, exp, level, last_fed, last_played, created_at, max_level = row
+            hunger_eff = _apply_decay(hunger, last_fed, created_at, HUNGER_DECAY_PER_HOUR)
+            happiness_eff = _apply_decay(happiness, last_played, created_at, HAPPINESS_DECAY_PER_HOUR)
+            new_hunger = min(100, hunger_eff + HUNGER_GAIN)
+            new_happiness = min(100, happiness_eff + HAPPINESS_GAIN)
+            hunger_delta = new_hunger - hunger_eff
+            happiness_delta = new_happiness - happiness_eff
+            new_exp = exp + EXP_FEED + EXP_PLAY
+            new_level = level
+            while new_level < max_level and new_exp >= _exp_needed_for_level(new_level):
+                new_exp -= _exp_needed_for_level(new_level)
+                new_level += 1
+            await db.execute(
+                "UPDATE pets SET hunger=?, happiness=?, experience=?, level=?, "
+                "last_fed_at=?, last_played_at=? WHERE id=?",
+                (new_hunger, new_happiness, new_exp, new_level, now_str, now_str, pet_id),
+            )
+            results.append({
+                "pet_id": pet_id,
+                "pet_name": pet_name,
+                "pet_type": pet_type,
+                "hunger_delta": hunger_delta,
+                "happiness_delta": happiness_delta,
+                "old_level": level,
+                "new_level": new_level,
+                "leveled_up": new_level > level,
+            })
+        await db.commit()
+    return results, cost

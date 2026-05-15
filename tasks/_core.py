@@ -12,7 +12,7 @@ import dateparser  # type: ignore
 import discord
 from discord.ext import tasks  # type: ignore
 
-from database import DB_PATH, now_utc, get_guild_setting, set_guild_setting, get_quieter_mode, add_coins, add_xp, get_user_xp
+from database import DB_PATH, now_utc, get_guild_setting, set_guild_setting, get_quieter_mode, add_coins, add_xp, get_user_xp, increment_activity_voice_minutes, check_voice_lifetime_achievements
 from core.channels import resolve_channel_id, delete_temp_vc_and_panel
 from api.warframe_api import get_baro_status, get_all_cycles, fetch_invasions, fetch_archon_hunt_data, fetch_events_data, fetch_alerts, fetch_duviri_circuit
 from core.utils import obsidian_embed, ECONOMY_ENABLED, COINS_PER_MINUTE_VOICE, MIN_VOICE_MINUTES_FOR_REWARD, XP_ENABLED, XP_PER_MINUTE_VOICE
@@ -393,10 +393,11 @@ def setup_tasks(bot):
                             msg = await ch.send(content=mention or None, embed=embed, view=RSVPView())
                             thread_id = 0
                             try:
-                                thread = await msg.create_thread(name=f"{title} • Ops Thread", auto_archive_duration=1440)
-                                thread_id = thread.id
+                                from commands.events.event_create import _maybe_create_event_thread
+                                tid_val = await _maybe_create_event_thread(msg, ch, title, datetime.fromtimestamp(ts, tz=timezone.utc))
+                                thread_id = tid_val or 0
                             except Exception:
-                                pass
+                                thread_id = 0
 
                             async with aiosqlite.connect(DB_PATH) as db:
                                 await db.execute("""
@@ -510,6 +511,17 @@ def setup_tasks(bot):
                         except Exception:
                             pass
 
+                        # Item 65 — archive the discussion thread with an [ENDED] prefix
+                        if thread_id:
+                            try:
+                                thread = guild.get_thread(int(thread_id)) or await bot.fetch_channel(int(thread_id))
+                                if isinstance(thread, discord.Thread):
+                                    new_name = thread.name if thread.name.startswith("[ENDED]") else f"[ENDED] {thread.name}"
+                                    new_name = new_name[:100]
+                                    await thread.edit(name=new_name, archived=True, locked=False)
+                            except Exception as _e:
+                                logger.debug(f"[events] could not archive thread {thread_id}: {_e}")
+
                         # Mark ended in DB
                         async with aiosqlite.connect(DB_PATH) as db:
                             await db.execute(
@@ -527,15 +539,218 @@ def setup_tasks(bot):
     async def before_event_end_loop():
         await bot.wait_until_ready()
 
+    @tasks.loop(minutes=5)
+    async def event_rsvp_reminder_loop():
+        """Item 66 — DM ✅ RSVPed users when their event is 30-35 minutes away.
+
+        Guild toggle: ``event_rsvp_dm_reminders_enabled`` (default ON).
+        User opt-out: ``user_event_dm:{user_id}`` (default ON).
+        Tracked in ``event_dm_reminders_sent`` so a 5-minute loop overlap
+        can't DM the same user twice for the same event.
+        """
+        try:
+            now = now_utc()
+            window_start = int((now + timedelta(minutes=30)).timestamp())
+            window_end = int((now + timedelta(minutes=35)).timestamp())
+
+            async with aiosqlite.connect(DB_PATH) as db:
+                await db.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS event_dm_reminders_sent (
+                        event_id INTEGER NOT NULL,
+                        user_id INTEGER NOT NULL,
+                        sent_at TEXT NOT NULL,
+                        PRIMARY KEY (event_id, user_id)
+                    )
+                    """
+                )
+                await db.commit()
+
+            from core.utils import feature_enabled  # Item 85 — kill switch
+            for guild in bot.guilds:
+                guild_toggle = await get_guild_setting(guild.id, "event_rsvp_dm_reminders_enabled")
+                if guild_toggle == "0":
+                    continue
+                if not await feature_enabled(guild.id, "notifications"):
+                    continue
+                if not await feature_enabled(guild.id, "events"):
+                    continue
+
+                async with aiosqlite.connect(DB_PATH) as db:
+                    cur = await db.execute(
+                        """
+                        SELECT message_id, title, start_ts
+                        FROM events
+                        WHERE guild_id=? AND ended=0 AND start_ts BETWEEN ? AND ?
+                        """,
+                        (guild.id, window_start, window_end),
+                    )
+                    upcoming = await cur.fetchall()
+
+                events_id = await resolve_channel_id(guild, "events_channel_id", EVENTS_CHANNEL_ID, EVENTS_CHANNEL_NAME)
+                events_channel = guild.get_channel(events_id) if events_id else None
+
+                for message_id, title, start_ts in upcoming:
+                    async with aiosqlite.connect(DB_PATH) as db:
+                        cur = await db.execute(
+                            "SELECT user_id FROM event_rsvps WHERE guild_id=? AND message_id=? AND response='GOING'",
+                            (guild.id, int(message_id)),
+                        )
+                        going_users = [int(r[0]) for r in await cur.fetchall()]
+
+                    if not going_users:
+                        continue
+
+                    jump_url = None
+                    if isinstance(events_channel, discord.TextChannel):
+                        jump_url = f"https://discord.com/channels/{guild.id}/{events_channel.id}/{int(message_id)}"
+
+                    for user_id in going_users:
+                        async with aiosqlite.connect(DB_PATH) as db:
+                            cur = await db.execute(
+                                "SELECT 1 FROM event_dm_reminders_sent WHERE event_id=? AND user_id=?",
+                                (int(message_id), user_id),
+                            )
+                            if await cur.fetchone():
+                                continue
+
+                        opt = await get_guild_setting(guild.id, f"user_event_dm:{user_id}")
+                        if opt == "0":
+                            continue
+
+                        member = guild.get_member(user_id)
+                        if not member or member.bot:
+                            continue
+
+                        embed = obsidian_embed(
+                            "⏰ Event Reminder",
+                            f"**{title}** in **{guild.name}** starts <t:{int(start_ts)}:R> (<t:{int(start_ts)}:F>).",
+                            color=discord.Color.orange(),
+                            client=bot,
+                            footer="You can opt out via /general preferences.",
+                        )
+                        if events_channel:
+                            embed.add_field(
+                                name="Location",
+                                value=f"<#{events_channel.id}>",
+                                inline=False,
+                            )
+
+                        view = None
+                        if jump_url:
+                            view = discord.ui.View(timeout=None)
+                            view.add_item(discord.ui.Button(label="View Event", style=discord.ButtonStyle.link, url=jump_url))
+
+                        try:
+                            if view is not None:
+                                await member.send(embed=embed, view=view)
+                            else:
+                                await member.send(embed=embed)
+                            async with aiosqlite.connect(DB_PATH) as db:
+                                await db.execute(
+                                    "INSERT OR IGNORE INTO event_dm_reminders_sent (event_id, user_id, sent_at) VALUES (?, ?, ?)",
+                                    (int(message_id), user_id, now.isoformat()),
+                                )
+                                await db.commit()
+                        except (discord.Forbidden, discord.HTTPException):
+                            # Still mark as sent so we don't keep retrying every 5 min
+                            async with aiosqlite.connect(DB_PATH) as db:
+                                await db.execute(
+                                    "INSERT OR IGNORE INTO event_dm_reminders_sent (event_id, user_id, sent_at) VALUES (?, ?, ?)",
+                                    (int(message_id), user_id, now.isoformat()),
+                                )
+                                await db.commit()
+        except Exception as e:
+            logger.error(f"[events] Error in event_rsvp_reminder_loop: {e}", exc_info=True)
+
+    @event_rsvp_reminder_loop.before_loop
+    async def before_event_rsvp_reminder_loop():
+        await bot.wait_until_ready()
+
+    @tasks.loop(hours=24)
+    async def inactive_role_sweep_loop():
+        """Item 83 — daily sweep that adds the configured inactive role to
+        members whose ``activity_stats.last_activity_date`` (or join date when
+        no activity row exists) is older than the per-guild threshold."""
+        try:
+            from commands.moderation.inactive_role import (
+                get_inactive_role_id, get_inactive_threshold_days, _last_activity_for,
+            )
+            for guild in bot.guilds:
+                try:
+                    role_id = await get_inactive_role_id(guild.id)
+                    if not role_id:
+                        continue
+                    role = guild.get_role(role_id)
+                    if role is None:
+                        continue
+                    me = guild.me
+                    if me is None or role >= me.top_role:
+                        # Discord won't let us assign a role at/above our top role
+                        continue
+                    threshold = await get_inactive_threshold_days(guild.id)
+                    cutoff = now_utc() - timedelta(days=threshold)
+                    tagged = 0
+                    for member in guild.members:
+                        if member.bot or role in member.roles:
+                            continue
+                        last = await _last_activity_for(guild.id, member.id)
+                        if last is None:
+                            joined = member.joined_at
+                            if joined is None:
+                                continue
+                            ref_dt = joined if joined.tzinfo else joined.replace(tzinfo=timezone.utc)
+                        else:
+                            ref_dt = last
+                        if ref_dt < cutoff:
+                            try:
+                                await member.add_roles(role, reason=f"Inactive {threshold}d (auto-sweep)")
+                                tagged += 1
+                            except (discord.Forbidden, discord.HTTPException) as e:
+                                logger.debug(f"[inactive_role] could not tag {member.id}: {e}")
+                    if tagged:
+                        logger.info(f"[inactive_role] tagged {tagged} member(s) in {guild.name}")
+                except Exception as e:
+                    logger.warning(f"[inactive_role] guild {guild.id} sweep failed: {e}")
+        except Exception as e:
+            logger.error(f"[inactive_role] sweep loop error: {e}", exc_info=True)
+
+    @inactive_role_sweep_loop.before_loop
+    async def before_inactive_role_sweep_loop():
+        await bot.wait_until_ready()
+
+    @tasks.loop(minutes=15)
+    async def goal_progress_loop():
+        """Item 72 — recompute server-wide goal progress every 15 minutes."""
+        try:
+            from commands.general.server_goals import evaluate_active_goal
+            for guild in bot.guilds:
+                try:
+                    await evaluate_active_goal(guild, bot)
+                except Exception as e:
+                    logger.debug(f"[server_goals] guild {guild.id} eval failed: {e}")
+        except Exception as e:
+            logger.error(f"[server_goals] goal_progress_loop error: {e}", exc_info=True)
+
+    @goal_progress_loop.before_loop
+    async def before_goal_progress_loop():
+        await bot.wait_until_ready()
+
     @tasks.loop(minutes=VOICE_REWARD_INTERVAL_MINUTES)
     async def voice_reward_loop():
         """Award coins to users based on voice channel activity."""
         if not ECONOMY_ENABLED:
             return
-        
+
+        from core.utils import feature_enabled  # Item 85 — per-guild kill switch
         now = now_utc()
-        
+
         for guild in bot.guilds:
+            try:
+                if not await feature_enabled(guild.id, "economy_passive"):
+                    continue
+            except Exception:
+                pass
             async with aiosqlite.connect(DB_PATH) as db:
                 # Get all active voice sessions
                 cur = await db.execute("""
@@ -579,8 +794,12 @@ def setup_tasks(bot):
                         # Award coins for full minutes
                         if minutes_since >= MIN_VOICE_MINUTES_FOR_REWARD:
                             minutes_to_reward = int(minutes_since)
-                            coins = minutes_to_reward * COINS_PER_MINUTE_VOICE
-                            
+                            # Item 72 — server-goal multipliers (≥ 1.0)
+                            from core.utils import get_active_multiplier as _get_mult
+                            coins_mult = await _get_mult(guild.id, "coins")
+                            xp_mult = await _get_mult(guild.id, "xp")
+                            coins = int(round(minutes_to_reward * COINS_PER_MINUTE_VOICE * coins_mult))
+
                             if coins > 0:
                                 await add_coins(
                                     guild.id,
@@ -589,10 +808,10 @@ def setup_tasks(bot):
                                     "VOICE",
                                     f"Voice activity in #{channel.name}",
                                 )
-                                
+
                                 # Award XP (if enabled)
                                 if XP_ENABLED:
-                                    xp_amount = minutes_to_reward * XP_PER_MINUTE_VOICE
+                                    xp_amount = int(round(minutes_to_reward * XP_PER_MINUTE_VOICE * xp_mult))
                                     if xp_amount > 0:
                                         leveled_up = await add_xp(
                                             guild.id,
@@ -614,6 +833,48 @@ def setup_tasks(bot):
                                     WHERE guild_id=? AND user_id=? AND channel_id=?
                                 """, (now.isoformat(), new_total, guild.id, user_id, channel_id))
                                 await db.commit()
+
+                                try:
+                                    await increment_activity_voice_minutes(
+                                        guild.id, user_id, minutes_to_reward
+                                    )
+                                    await check_voice_lifetime_achievements(
+                                        guild.id, user_id, bot
+                                    )
+                                except Exception:
+                                    pass
+
+                                # Item 106 — passive pet happiness boost while owner is in voice.
+                                # +1/min < 80, +0.5/min 80–95, +0.1/min above 95, capped at 100.
+                                try:
+                                    async with aiosqlite.connect(DB_PATH) as pdb:
+                                        pcur = await pdb.execute(
+                                            "SELECT id, happiness FROM pets WHERE guild_id=? AND user_id=?",
+                                            (guild.id, user_id),
+                                        )
+                                        pet_row = await pcur.fetchone()
+                                    if pet_row:
+                                        pet_id, happiness = pet_row
+                                        new_h = float(happiness or 0)
+                                        for _ in range(int(minutes_to_reward)):
+                                            if new_h >= 100:
+                                                break
+                                            if new_h < 80:
+                                                new_h += 1.0
+                                            elif new_h < 95:
+                                                new_h += 0.5
+                                            else:
+                                                new_h += 0.1
+                                        new_h_int = min(100, int(round(new_h)))
+                                        if new_h_int > int(happiness or 0):
+                                            async with aiosqlite.connect(DB_PATH) as pdb:
+                                                await pdb.execute(
+                                                    "UPDATE pets SET happiness=?, last_played_at=? WHERE id=?",
+                                                    (new_h_int, now.isoformat(), pet_id),
+                                                )
+                                                await pdb.commit()
+                                except Exception as _pe:
+                                    logger.debug(f"[pet_voice_happiness] {_pe}")
                     
                     except Exception as e:
                         logger.error(f"[economy] Error processing voice reward for {user_id} in {guild.id}: {e}")
@@ -2439,6 +2700,9 @@ def setup_tasks(bot):
         ('event_reminder_loop', event_reminder_loop),
         ('recurring_event_loop', recurring_event_loop),
         ('event_end_loop', event_end_loop),
+        ('event_rsvp_reminder_loop', event_rsvp_reminder_loop),
+        ('inactive_role_sweep_loop', inactive_role_sweep_loop),
+        ('goal_progress_loop', goal_progress_loop),
         ('voice_reward_loop', voice_reward_loop),
         ('baro_check_loop', baro_check_loop),
         ('baro_live_update_loop', baro_live_update_loop),

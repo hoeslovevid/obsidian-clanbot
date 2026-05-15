@@ -130,6 +130,74 @@ def feature_off_embed(feature: str, action_hint: Optional[str] = None, client=No
     return error_embed("Feature Disabled", msg, action_hint=(action_hint or "Ask a moderator to enable it."), client=client)
 
 
+# ---------------------------------------------------------------------------
+# Item 85 — Per-feature kill switch
+# ---------------------------------------------------------------------------
+# Features a mod can flip off per-guild. Stored as guild_settings rows of the
+# form ``feature:{name} = "off"``; absence (or any other value) means ON.
+# This complements env-var feature flags like ``ECONOMY_ENABLED`` /
+# ``XP_ENABLED`` (those are global; this is per-guild and overrides them).
+TOGGLEABLE_FEATURES: tuple[str, ...] = (
+    "pets",
+    "gambling",
+    "lfg",
+    "trade",
+    "polls",
+    "events",
+    "economy_passive",
+    "notifications",
+)
+
+
+async def feature_enabled(guild_id: int, feature: str) -> bool:
+    """Return ``True`` unless an explicit ``feature:{feature}`` toggle is off."""
+    if not guild_id:
+        return True
+    if feature not in TOGGLEABLE_FEATURES:
+        return True
+    try:
+        from database import get_guild_setting
+        val = await get_guild_setting(int(guild_id), f"feature:{feature}")
+    except Exception:
+        return True
+    return val != "off"
+
+
+# ---------------------------------------------------------------------------
+# Item 72 — server-wide weekly goal multipliers
+# ---------------------------------------------------------------------------
+# Stored in guild_settings as ``xp_multiplier_until`` / ``coins_multiplier_until``
+# with the value formatted as ``"{iso8601_utc_until}:{multiplier_float}"``.
+async def get_active_multiplier(guild_id: int, kind: str) -> float:
+    """Return the active XP/coins multiplier (≥ 1.0).
+
+    ``kind`` is ``"xp"`` or ``"coins"``. Returns ``1.0`` when no goal-reward
+    multiplier is active for this guild.
+    """
+    if not guild_id or kind not in ("xp", "coins"):
+        return 1.0
+    try:
+        from database import get_guild_setting
+        raw = await get_guild_setting(int(guild_id), f"{kind}_multiplier_until")
+    except Exception:
+        return 1.0
+    if not raw or ":" not in str(raw):
+        return 1.0
+    iso, mult = str(raw).split(":", 1)
+    try:
+        until = datetime.fromisoformat(iso)
+        if until.tzinfo is None:
+            until = until.replace(tzinfo=timezone.utc)
+    except Exception:
+        return 1.0
+    if now_utc() > until:
+        return 1.0
+    try:
+        return max(1.0, float(mult))
+    except Exception:
+        return 1.0
+
+
 def bullet_list(items: list[str], bullet: str = "•") -> str:
     """Format items as a bullet list (mobile-friendly)."""
     return "\n".join(f"{bullet} {item}" for item in items if item)

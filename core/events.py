@@ -60,6 +60,10 @@ def setup_events(bot, config):
                 except Exception:
                     pass
                 await add_xp(message.guild.id, message.author.id, xp)
+
+        if message.guild:
+            from core.phishing_guard import maybe_flag_phishing_message
+            await maybe_flag_phishing_message(message, bot)
         
         # Auto-moderation
         if message.guild:

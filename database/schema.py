@@ -731,8 +731,18 @@ async def init_db() -> None:
             requirement TEXT,
             reward_coins INTEGER DEFAULT 0,
             reward_xp INTEGER DEFAULT 0,
+            unlock_title_id TEXT,
             UNIQUE(achievement_id)
         )""")
+        # Item 107 — older DBs may not have unlock_title_id yet
+        try:
+            cur = await db.execute("PRAGMA table_info(achievement_definitions)")
+            cols = [row[1] for row in await cur.fetchall()]
+            if "unlock_title_id" not in cols:
+                await db.execute("ALTER TABLE achievement_definitions ADD COLUMN unlock_title_id TEXT")
+                await db.commit()
+        except Exception as e:
+            logger.warning(f"[db] achievement_definitions.unlock_title_id migration: {e}")
 
         await db.execute("""
         CREATE TABLE IF NOT EXISTS music_queues (
