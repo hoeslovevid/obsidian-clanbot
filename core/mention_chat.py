@@ -103,6 +103,10 @@ def _collect_command_paths(bot) -> list[str]:
 
     try:
         for top in bot.tree.get_commands(guild=None):
+            # Context menus aren't slash commands, skip so suggestions never
+            # render an invalid `/View Profile` path.
+            if isinstance(top, app_commands.ContextMenu):
+                continue
             if isinstance(top, app_commands.Group):
                 _walk(top, [top.name])
             else:

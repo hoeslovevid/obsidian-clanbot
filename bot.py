@@ -641,7 +641,16 @@ async def on_message(message: discord.Message):
     violation_handled = await check_auto_mod(message)
     if violation_handled:
         return  # Message was deleted/punished, don't process economy
-    
+
+    # Passive typo helper: catches !command / /command / .command attempts and
+    # suggests the closest registered slash command. Cheap pre-filter, falls
+    # through to economy/XP if nothing matches.
+    try:
+        from core.typo_helper import maybe_suggest_command
+        await maybe_suggest_command(message, bot)
+    except Exception as _typo_err:
+        logger.debug(f"[typo_helper] error: {_typo_err}")
+
     # Check if economy is enabled
     if not ECONOMY_ENABLED:
         return

@@ -452,7 +452,7 @@ def setup(bot, group=None):
                 "general set_bio": ["/general set_bio"],
                 "tools achievements": ["/tools achievements", "/tools achievements user:@Member"],
                 "tools achievements_leaderboard": ["/tools achievements_leaderboard"],
-                "general preferences": ["/general preferences daily_reminder:On levelup_dm:On achievement_notify:Off"],
+                "general preferences": ["/general preferences daily_reminder:On levelup_dm:On achievement_notify:Off", "/general preferences typo_helper:Off"],
                 "general trivia": ["/general trivia", "/general trivia difficulty:Hard"],
                 "general links": ["/general links"],
                 "general about": ["/general about"],

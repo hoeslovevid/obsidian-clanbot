@@ -47,35 +47,35 @@ def setup(bot, group=None):
         levelup_dm="Get a DM (instead of a public post) when you level up",
         achievement_notify="Show a private notification when you unlock an achievement",
         investment_dm="Get a DM when your investment matures and is ready to collect",
+        typo_helper="Reply with a slash-command suggestion when you mis-type one in chat",
     )
     @app_commands.choices(timezone=[
         app_commands.Choice(name=label, value=tz) for tz, label in COMMON_TIMEZONES
     ])
     @app_commands.choices(platform=PLATFORM_CHOICES)
     @app_commands.choices(quieter=[
-        app_commands.Choice(name="On - fewer pings", value="1"),
-        app_commands.Choice(name="Off - normal pings", value="0"),
-        app_commands.Choice(name="(no change)", value="-"),
+        app_commands.Choice(name="On", value="1"),
+        app_commands.Choice(name="Off", value="0"),
     ])
     @app_commands.choices(daily_reminder=[
-        app_commands.Choice(name="On - DM me before my streak resets", value="1"),
-        app_commands.Choice(name="Off - no reminder", value="0"),
-        app_commands.Choice(name="(no change)", value="-"),
+        app_commands.Choice(name="On", value="1"),
+        app_commands.Choice(name="Off", value="0"),
     ])
     @app_commands.choices(levelup_dm=[
-        app_commands.Choice(name="On - DM me when I level up (private)", value="1"),
-        app_commands.Choice(name="Off - post in level-up channel (public)", value="0"),
-        app_commands.Choice(name="(no change)", value="-"),
+        app_commands.Choice(name="On (DM)", value="1"),
+        app_commands.Choice(name="Off (public channel)", value="0"),
     ])
     @app_commands.choices(achievement_notify=[
-        app_commands.Choice(name="On - show notification when I unlock an achievement", value="1"),
-        app_commands.Choice(name="Off - no notification", value="0"),
-        app_commands.Choice(name="(no change)", value="-"),
+        app_commands.Choice(name="On", value="1"),
+        app_commands.Choice(name="Off", value="0"),
     ])
     @app_commands.choices(investment_dm=[
-        app_commands.Choice(name="On - DM me when my investment matures", value="1"),
-        app_commands.Choice(name="Off - no DM", value="0"),
-        app_commands.Choice(name="(no change)", value="-"),
+        app_commands.Choice(name="On", value="1"),
+        app_commands.Choice(name="Off", value="0"),
+    ])
+    @app_commands.choices(typo_helper=[
+        app_commands.Choice(name="On", value="1"),
+        app_commands.Choice(name="Off", value="0"),
     ])
     async def preferences(
         interaction: discord.Interaction,
@@ -86,6 +86,7 @@ def setup(bot, group=None):
         levelup_dm: Optional[app_commands.Choice[str]] = None,
         achievement_notify: Optional[app_commands.Choice[str]] = None,
         investment_dm: Optional[app_commands.Choice[str]] = None,
+        typo_helper: Optional[app_commands.Choice[str]] = None,
     ):
         """Set timezone or quieter mode."""
         if not interaction.guild:
@@ -110,7 +111,7 @@ def setup(bot, group=None):
             await set_user_platform(interaction.guild.id, interaction.user.id, "")
             updated.append("**Trading platform:** cleared (defaults to PC)")
 
-        if quieter and quieter.value != "-":
+        if quieter:
             if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
                 lines.append("⚠️ Only moderators can change quieter mode.")
             else:
@@ -118,29 +119,36 @@ def setup(bot, group=None):
                 await set_quieter_mode(interaction.guild.id, enabled)
                 updated.append(f"**Quieter mode:** {'On' if enabled else 'Off'}")
 
-        if daily_reminder and daily_reminder.value != "-":
+        if daily_reminder:
             from database import set_guild_setting
             await set_guild_setting(interaction.guild.id, f"user_daily_reminder:{interaction.user.id}", daily_reminder.value)
             state = "On" if daily_reminder.value == "1" else "Off"
             updated.append(f"**Daily streak reminder:** {state}")
 
-        if levelup_dm and levelup_dm.value != "-":
+        if levelup_dm:
             from database import set_guild_setting
             await set_guild_setting(interaction.guild.id, f"user_levelup_dm:{interaction.user.id}", levelup_dm.value)
             state = "On (DM)" if levelup_dm.value == "1" else "Off (public)"
             updated.append(f"**Level-up notification:** {state}")
 
-        if achievement_notify and achievement_notify.value != "-":
+        if achievement_notify:
             from database import set_guild_setting
             await set_guild_setting(interaction.guild.id, f"user_achievement_notify:{interaction.user.id}", achievement_notify.value)
             state = "On" if achievement_notify.value == "1" else "Off"
             updated.append(f"**Achievement notifications:** {state}")
 
-        if investment_dm and investment_dm.value != "-":
+        if investment_dm:
             from database import set_guild_setting
             await set_guild_setting(interaction.guild.id, f"user_investment_dm:{interaction.user.id}", investment_dm.value)
             state = "On" if investment_dm.value == "1" else "Off"
             updated.append(f"**Investment maturity DM:** {state}")
+
+        if typo_helper:
+            from database import set_guild_setting
+            # Stored under user_typo_helper:{uid}; "0" = off, anything else = on (default).
+            await set_guild_setting(interaction.guild.id, f"user_typo_helper:{interaction.user.id}", typo_helper.value)
+            state = "On" if typo_helper.value == "1" else "Off"
+            updated.append(f"**Typo helper:** {state}")
 
         if not lines and not updated:
             # Show current preferences
@@ -156,12 +164,15 @@ def setup(bot, group=None):
             an_on = an_val != "0"  # default ON when unset
             inv_val = await get_guild_setting(interaction.guild.id, f"user_investment_dm:{interaction.user.id}")
             inv_on = inv_val == "1"  # default OFF when unset
+            th_val = await get_guild_setting(interaction.guild.id, f"user_typo_helper:{interaction.user.id}")
+            th_on = th_val != "0"  # default ON when unset
             lines.append(f"**Your timezone:** {current_tz or 'Not set (uses server default)'}")
             lines.append(f"**Trading platform:** {current_platform.upper() if current_platform else 'Not set (defaults to PC)'}")
             lines.append(f"**Daily streak reminder:** {'On 🔔' if dr_on else 'Off'}")
             lines.append(f"**Level-up notification:** {'DM (private) 📬' if lu_dm else 'Public channel'}")
             lines.append(f"**Achievement notifications:** {'On 🏆' if an_on else 'Off'}")
             lines.append(f"**Investment maturity DM:** {'On 📈' if inv_on else 'Off'}")
+            lines.append(f"**Typo helper:** {'On 💡' if th_on else 'Off'}")
             if isinstance(interaction.user, discord.Member) and is_mod(interaction.user):
                 lines.append(f"**Quieter mode:** {'On' if quieter_on else 'Off'}")
             embed = obsidian_embed(
@@ -193,6 +204,7 @@ def setup(bot, group=None):
         "user_investment_dm",
         "user_changelog_dm",
         "user_pet_alerts",
+        "user_typo_helper",
     )
     # When the user clicks "Restore Defaults", these are the values we set
     # (matches the comments documented next to /preferences fields above).
@@ -203,6 +215,7 @@ def setup(bot, group=None):
         "user_investment_dm": "0",
         "user_changelog_dm": "0",
         "user_pet_alerts": "1",
+        "user_typo_helper": "1",
     }
 
     async def _set_all_dm_prefs(guild_id: int, user_id: int, value: str) -> list[str]:
