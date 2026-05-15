@@ -74,8 +74,8 @@ def setup(bot, group=None) -> None:
             ephemeral=True,
         )
 
-    allowlist = app_commands.Group(name="allowlist", description="Trusted hostnames (URLs using only these may be skipped)")
-
+    # NOTE: Nested Group under another Group (/tools phishing allowlist *) is invalid
+    # on Discord—SUB_COMMAND_GROUP may only contain SUB_COMMAND (type 1), not groups.
     async def _load_allow(interaction: discord.Interaction) -> list[str]:
         raw = await get_guild_setting(interaction.guild.id, "phishing_allowlist") or ""
         if not raw:
@@ -88,7 +88,7 @@ def setup(bot, group=None) -> None:
             return [p.strip() for p in raw.split(",") if p.strip()]
         return []
 
-    @allowlist.command(name="add", description="Allowlist a domain (hostname only, e.g. steamcommunity.com)")
+    @phishing.command(name="allowlist_add", description="Trust a hostname (e.g. steamcommunity.com)")
     @app_commands.describe(domain="Domain to trust for URL allowlisting")
     async def allowlist_add(interaction: discord.Interaction, domain: str) -> None:
         if not interaction.guild or not isinstance(interaction.user, discord.Member):
@@ -118,7 +118,7 @@ def setup(bot, group=None) -> None:
             ephemeral=True,
         )
 
-    @allowlist.command(name="remove", description="Remove a domain from the allowlist")
+    @phishing.command(name="allowlist_remove", description="Remove a hostname from the trust list")
     @app_commands.describe(domain="Hostname to remove")
     async def allowlist_remove(interaction: discord.Interaction, domain: str) -> None:
         if not interaction.guild or not isinstance(interaction.user, discord.Member):
@@ -151,7 +151,7 @@ def setup(bot, group=None) -> None:
             ephemeral=True,
         )
 
-    @allowlist.command(name="list", description="Show allowlisted domains")
+    @phishing.command(name="allowlist_list", description="Show trusted hostnames")
     async def allowlist_list(interaction: discord.Interaction) -> None:
         if not interaction.guild or not isinstance(interaction.user, discord.Member):
             return await interaction.response.send_message("Use this in a server.", ephemeral=True)
@@ -175,5 +175,4 @@ def setup(bot, group=None) -> None:
             ephemeral=True,
         )
 
-    phishing.add_command(allowlist)
     group.add_command(phishing)
