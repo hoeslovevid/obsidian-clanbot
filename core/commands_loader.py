@@ -124,6 +124,7 @@ def load_all_commands(bot):
         "commands.moderation.mod_notes",
         "commands.moderation.starboard",
         "commands.moderation.role_menu",
+        "commands.moderation.role_panel",
         "commands.moderation.backup",
         "commands.moderation.data_retention",
         "commands.moderation.incident_mode",
@@ -200,6 +201,8 @@ def load_all_commands(bot):
         "commands.general.coinflip",
         "commands.general.activity_heatmap",
         "commands.general.trivia",
+        "commands.general.my_stats",
+        "commands.general.favorites",
         "commands.warframe.build",
         "commands.warframe.drop_tables",
         "commands.context_menus",
@@ -282,6 +285,7 @@ def load_all_commands(bot):
         "commands.moderation.roles": roletools_group,
         "commands.moderation.level_roles": roletools_group,
         "commands.moderation.role_menu": roletools_group,
+        "commands.moderation.role_panel": roletools_group,
         "commands.moderation.warn": warn_group,
         "commands.moderation.mod_notes": warn_group,
         "commands.general.help": general_group,
@@ -316,6 +320,8 @@ def load_all_commands(bot):
         "commands.general.coinflip": tools_group,              # Moved: community at 25 limit
         "commands.general.activity_heatmap": tools_group,
         "commands.general.trivia": tools_group,                # Moved: general_group at 25-cmd limit
+        "commands.general.my_stats": tools_group,
+        "commands.general.favorites": tools_group,
         "commands.warframe.build": warframe_group,
         "commands.warframe.drop_tables": warframe_group,
         "commands.music.music": music_group,

@@ -144,6 +144,88 @@ async def delete_guild_setting(guild_id: int, key: str) -> None:
         await db.commit()
 
 
+async def record_command_usage(guild_id: int, user_id: int, command_name: str, weekday: int) -> None:
+    """Bump the per-user / per-command / per-weekday counter used by /tools my_stats.
+
+    Aggregated by ``(guild_id, user_id, command_name, weekday)`` so the table
+    stays small even for very active servers — at most 7 rows per command
+    per user.
+    """
+    if not command_name:
+        return
+    weekday = max(0, min(6, int(weekday)))
+    now_iso = now_utc().isoformat()
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """
+            INSERT INTO command_usage_stats (guild_id, user_id, command_name, weekday, count, last_used_at)
+            VALUES (?, ?, ?, ?, 1, ?)
+            ON CONFLICT(guild_id, user_id, command_name, weekday)
+            DO UPDATE SET count = count + 1, last_used_at = excluded.last_used_at
+            """,
+            (guild_id, user_id, command_name, weekday, now_iso),
+        )
+        await db.commit()
+
+
+async def get_user_command_stats(guild_id: int, user_id: int, *, top_n: int = 10) -> dict:
+    """Return aggregated command-usage stats for ``user_id`` in this guild.
+
+    Shape: ``{"top": [(command, count), …], "total": int, "by_weekday": [int]*7,
+    "first_used": iso_or_None, "last_used": iso_or_None}``.
+    """
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            """
+            SELECT command_name, SUM(count) AS total
+            FROM command_usage_stats
+            WHERE guild_id=? AND user_id=?
+            GROUP BY command_name
+            ORDER BY total DESC
+            LIMIT ?
+            """,
+            (guild_id, user_id, max(1, int(top_n))),
+        )
+        top = [(r[0], int(r[1] or 0)) for r in await cur.fetchall()]
+
+        cur = await db.execute(
+            "SELECT COALESCE(SUM(count),0) FROM command_usage_stats WHERE guild_id=? AND user_id=?",
+            (guild_id, user_id),
+        )
+        total_row = await cur.fetchone()
+        total = int(total_row[0] or 0) if total_row else 0
+
+        cur = await db.execute(
+            """
+            SELECT weekday, COALESCE(SUM(count),0)
+            FROM command_usage_stats
+            WHERE guild_id=? AND user_id=?
+            GROUP BY weekday
+            """,
+            (guild_id, user_id),
+        )
+        weekday_counts = [0] * 7
+        for wd, cnt in await cur.fetchall():
+            wd = max(0, min(6, int(wd)))
+            weekday_counts[wd] = int(cnt or 0)
+
+        cur = await db.execute(
+            "SELECT MIN(last_used_at), MAX(last_used_at) FROM command_usage_stats WHERE guild_id=? AND user_id=?",
+            (guild_id, user_id),
+        )
+        ts_row = await cur.fetchone()
+        first_used = ts_row[0] if ts_row else None
+        last_used = ts_row[1] if ts_row else None
+
+    return {
+        "top": top,
+        "total": total,
+        "by_weekday": weekday_counts,
+        "first_used": first_used,
+        "last_used": last_used,
+    }
+
+
 async def get_user_timezone(guild_id: int, user_id: int) -> Optional[str]:
     """Get a user's timezone preference (e.g. America/New_York). Uses guild_settings key 'user_tz:{user_id}'."""
     return await get_guild_setting(guild_id, f"user_tz:{user_id}")

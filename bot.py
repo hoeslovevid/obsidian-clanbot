@@ -1583,6 +1583,26 @@ def _find_similar_commands(typed: str, all_commands: list[str], max_suggestions:
     return suggestions[:max_suggestions]
 
 
+@bot.event
+async def on_app_command_completion(interaction: discord.Interaction, command):
+    """Record per-user slash command usage for /tools my_stats. Best-effort, never raises."""
+    try:
+        if interaction.guild is None or interaction.user is None:
+            return
+        full_name = command.qualified_name if hasattr(command, "qualified_name") else getattr(command, "name", None)
+        if not full_name:
+            return
+        from database import record_command_usage
+        await record_command_usage(
+            interaction.guild.id,
+            interaction.user.id,
+            str(full_name),
+            now_utc().weekday(),
+        )
+    except Exception as _err:
+        logger.debug(f"[my_stats] failed to record usage: {_err}")
+
+
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
     """Handle application command errors with user-friendly messages."""

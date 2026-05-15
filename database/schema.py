@@ -1572,6 +1572,34 @@ async def init_db() -> None:
             PRIMARY KEY (guild_id, period_type, user_id)
         )""")
 
+        # Per-user slash command usage counters powering /tools my_stats.
+        # We aggregate (rather than logging every single invocation) so the
+        # table stays tiny — one row per (guild, user, command, weekday).
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS command_usage_stats (
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            command_name TEXT NOT NULL,
+            weekday INTEGER NOT NULL,
+            count INTEGER NOT NULL DEFAULT 0,
+            last_used_at TEXT NOT NULL,
+            PRIMARY KEY (guild_id, user_id, command_name, weekday)
+        )""")
+
+        # Self-assignable role panels persisted across restarts (#10).
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS role_panels (
+            panel_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            channel_id INTEGER NOT NULL,
+            message_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT,
+            roles_json TEXT NOT NULL,
+            created_by INTEGER NOT NULL,
+            created_at TEXT NOT NULL
+        )""")
+
         # Create indexes for common queries to improve performance
         logger.info("[db] Creating indexes for performance optimization...")
         
@@ -1592,6 +1620,8 @@ async def init_db() -> None:
             await db.execute("CREATE INDEX IF NOT EXISTS idx_trading_posts_guild_status ON trading_posts(guild_id, status)")
             await db.execute("CREATE INDEX IF NOT EXISTS idx_log_channels_guild_type ON log_channels(guild_id, log_type)")
             await db.execute("CREATE INDEX IF NOT EXISTS idx_auto_mod_settings_guild ON auto_mod_settings(guild_id)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_command_usage_user ON command_usage_stats(guild_id, user_id)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_role_panels_msg ON role_panels(guild_id, message_id)")
             await db.execute("CREATE INDEX IF NOT EXISTS idx_auto_mod_spam_tracking_guild_user ON auto_mod_spam_tracking(guild_id, user_id)")
 
             # Tickets

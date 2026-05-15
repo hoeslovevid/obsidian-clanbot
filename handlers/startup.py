@@ -222,6 +222,21 @@ async def run_startup(bot: discord.Client) -> None:
             except Exception:
                 pass
 
+        # Self-assign role panels (#10) — bind each persistent view to its message id
+        # so Discord routes button clicks back to the correct panel after a restart.
+        try:
+            from commands.moderation.role_panel import RolePanelView, fetch_all_panels
+            for panel in await fetch_all_panels():
+                try:
+                    bot.add_view(
+                        RolePanelView(panel_id=panel["panel_id"], roles=panel["roles"]),
+                        message_id=panel["message_id"],
+                    )
+                except Exception as exc:
+                    logger.debug(f"[ready] role_panel re-register failed for {panel.get('panel_id')}: {exc}")
+        except Exception as exc:
+            logger.debug(f"[ready] Could not register role_panel views: {exc}")
+
     # Run setup tasks in parallel
     await asyncio.gather(
         setup_guild_channels(),

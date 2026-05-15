@@ -460,6 +460,12 @@ def setup(bot, group=None):
                 "tools activity_heatmap": ["/tools activity_heatmap", "/tools activity_heatmap days:30 days", "/tools activity_heatmap user:@Member days:7 days"],
                 "tools voice_leaderboard": ["/tools voice_leaderboard"],
                 "tools coinflip": ["/tools coinflip"],
+                "tools my_stats": ["/tools my_stats", "/tools my_stats user:@Member"],
+                "tools favorite_add": ["/tools favorite_add command:economy daily"],
+                "tools favorite_remove": ["/tools favorite_remove command:economy daily"],
+                "tools favorites": ["/tools favorites"],
+                "roletools panel_create": ["/roletools panel_create channel:#roles"],
+                "roletools panel_delete": ["/roletools panel_delete panel_id:1"],
                 # Warframe
                 "warframe baro": ["/warframe baro"],
                 "warframe cycles": ["/warframe cycles"],
