@@ -69,148 +69,188 @@ class WarnUserModal(discord.ui.Modal, title="Warn User"):
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
 
+async def process_rename_vc(interaction: discord.Interaction, vc_id: int, new_name: str) -> None:
+    vc = interaction.guild.get_channel(vc_id)
+    if not isinstance(vc, discord.VoiceChannel):
+        await interaction.followup.send("Channel not found.", ephemeral=True)
+        return
+    await vc.edit(name=new_name, reason="VC rename")
+    await interaction.followup.send("Renamed.", ephemeral=True)
+
+
 class RenameVCModal(discord.ui.Modal, title="Recalibrate Comms Node"):  # type: ignore
-    new_name = discord.ui.TextInput(label="New designation", max_length=80)
+    new_name = discord.ui.TextInput(label="New designation", max_length=80, custom_id="new_name")
 
     def __init__(self, vc_id: int):
-        super().__init__(timeout=300)
+        super().__init__(timeout=300, custom_id=f"rename_vc_{vc_id}")
         self.vc_id = vc_id
 
     async def on_submit(self, interaction: discord.Interaction):
-        vc = interaction.guild.get_channel(self.vc_id)
-        if not isinstance(vc, discord.VoiceChannel):
-            return await interaction.response.send_message("Channel not found.", ephemeral=True)
-        await vc.edit(name=str(self.new_name), reason="VC rename")
-        await interaction.response.send_message("Renamed.", ephemeral=True)
+        try:
+            await interaction.response.defer(ephemeral=True)
+        except (discord.errors.NotFound, discord.errors.InteractionResponded, discord.errors.HTTPException):
+            pass
+
+
+async def process_invite_vc(interaction: discord.Interaction, vc_id: int, target: str) -> None:
+    uid = extract_id(target)
+    if not uid:
+        await interaction.followup.send("Couldn't read that user. Use @mention or ID.", ephemeral=True)
+        return
+
+    vc = interaction.guild.get_channel(vc_id)
+    if not isinstance(vc, discord.VoiceChannel):
+        await interaction.followup.send("Channel not found.", ephemeral=True)
+        return
+
+    member = interaction.guild.get_member(uid)
+    if not member:
+        await interaction.followup.send("User not in server.", ephemeral=True)
+        return
+
+    overwrites = vc.overwrites
+    ow = overwrites.get(member, discord.PermissionOverwrite())
+    ow.view_channel = True
+    ow.connect = True
+    overwrites[member] = ow
+    await vc.edit(overwrites=overwrites, reason="VC invite")
+    await interaction.followup.send(f"Invited {member.mention}.", ephemeral=True)
 
 
 class InviteModal(discord.ui.Modal, title="Grant Access"):  # type: ignore
-    target = discord.ui.TextInput(label="User (@mention or ID)", max_length=60)
+    target = discord.ui.TextInput(label="User (@mention or ID)", max_length=60, custom_id="target")
 
     def __init__(self, vc_id: int):
-        super().__init__(timeout=300)
+        super().__init__(timeout=300, custom_id=f"invite_vc_{vc_id}")
         self.vc_id = vc_id
 
     async def on_submit(self, interaction: discord.Interaction):
-        uid = extract_id(str(self.target))
-        if not uid:
-            return await interaction.response.send_message("Couldn't read that user. Use @mention or ID.", ephemeral=True)
+        try:
+            await interaction.response.defer(ephemeral=True)
+        except (discord.errors.NotFound, discord.errors.InteractionResponded, discord.errors.HTTPException):
+            pass
 
-        vc = interaction.guild.get_channel(self.vc_id)
-        if not isinstance(vc, discord.VoiceChannel):
-            return await interaction.response.send_message("Channel not found.", ephemeral=True)
 
-        member = interaction.guild.get_member(uid)
-        if not member:
-            return await interaction.response.send_message("User not in server.", ephemeral=True)
+async def process_remove_vc_access(interaction: discord.Interaction, vc_id: int, target: str) -> None:
+    uid = extract_id(target)
+    if not uid:
+        await interaction.followup.send("Couldn't read that user. Use @mention or ID.", ephemeral=True)
+        return
 
-        overwrites = vc.overwrites
-        ow = overwrites.get(member, discord.PermissionOverwrite())
-        ow.view_channel = True
-        ow.connect = True
-        overwrites[member] = ow
-        await vc.edit(overwrites=overwrites, reason="VC invite")
-        await interaction.response.send_message(f"Invited {member.mention}.", ephemeral=True)
+    vc = interaction.guild.get_channel(vc_id)
+    if not isinstance(vc, discord.VoiceChannel):
+        await interaction.followup.send("Channel not found.", ephemeral=True)
+        return
+
+    member = interaction.guild.get_member(uid)
+    if not member:
+        await interaction.followup.send("User not in server.", ephemeral=True)
+        return
+
+    overwrites = vc.overwrites
+    if member in overwrites:
+        del overwrites[member]
+        await vc.edit(overwrites=overwrites, reason="VC remove access")
+    await interaction.followup.send(f"Access removed for {member.mention}.", ephemeral=True)
 
 
 class RemoveAccessModal(discord.ui.Modal, title="Revoke Access"):  # type: ignore
-    target = discord.ui.TextInput(label="User (@mention or ID)", max_length=60)
+    target = discord.ui.TextInput(label="User (@mention or ID)", max_length=60, custom_id="target")
 
     def __init__(self, vc_id: int):
-        super().__init__(timeout=300)
+        super().__init__(timeout=300, custom_id=f"remove_vc_{vc_id}")
         self.vc_id = vc_id
 
     async def on_submit(self, interaction: discord.Interaction):
-        uid = extract_id(str(self.target))
-        if not uid:
-            return await interaction.response.send_message("Couldn't read that user. Use @mention or ID.", ephemeral=True)
+        try:
+            await interaction.response.defer(ephemeral=True)
+        except (discord.errors.NotFound, discord.errors.InteractionResponded, discord.errors.HTTPException):
+            pass
 
-        vc = interaction.guild.get_channel(self.vc_id)
-        if not isinstance(vc, discord.VoiceChannel):
-            return await interaction.response.send_message("Channel not found.", ephemeral=True)
 
-        member = interaction.guild.get_member(uid)
-        if not member:
-            return await interaction.response.send_message("User not in server.", ephemeral=True)
+async def process_transfer_vc_owner(interaction: discord.Interaction, vc_id: int, target: str) -> None:
+    vc = interaction.guild.get_channel(vc_id)
+    if not isinstance(vc, discord.VoiceChannel):
+        await interaction.followup.send("Channel not found.", ephemeral=True)
+        return
 
-        overwrites = vc.overwrites
-        if member in overwrites:
-            del overwrites[member]
-            await vc.edit(overwrites=overwrites, reason="VC remove access")
-        await interaction.response.send_message(f"Access removed for {member.mention}.", ephemeral=True)
+    new_owner_id = extract_id(target)
+    if not new_owner_id:
+        await interaction.followup.send("Couldn't read that user. Use @mention or ID.", ephemeral=True)
+        return
+
+    new_owner = interaction.guild.get_member(new_owner_id)
+    if not new_owner:
+        await interaction.followup.send("User not in server.", ephemeral=True)
+        return
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("SELECT owner_id FROM temp_vcs WHERE guild_id=? AND channel_id=?", (interaction.guild.id, vc.id))
+        row = await cur.fetchone()
+    if not row:
+        await interaction.followup.send("Owner record missing.", ephemeral=True)
+        return
+
+    current_owner_id = int(row[0])
+    actor = interaction.user
+    if not isinstance(actor, discord.Member):
+        await interaction.followup.send("Not allowed.", ephemeral=True)
+        return
+    if not (is_mod(actor) or actor.id == current_owner_id):
+        await interaction.followup.send("Only the owner (or an Administrator) can transfer.", ephemeral=True)
+        return
+
+    overwrites = vc.overwrites
+
+    old_owner = interaction.guild.get_member(current_owner_id)
+    if old_owner:
+        ow = overwrites.get(old_owner, discord.PermissionOverwrite())
+        ow.manage_channels = False
+        ow.move_members = False
+        ow.mute_members = False
+        ow.deafen_members = False
+        overwrites[old_owner] = ow
+
+    ow2 = overwrites.get(new_owner, discord.PermissionOverwrite())
+    ow2.view_channel = True
+    ow2.connect = True
+    ow2.manage_channels = True
+    ow2.move_members = True
+    ow2.mute_members = True
+    ow2.deafen_members = True
+    overwrites[new_owner] = ow2
+
+    mod_role = get_mod_role(interaction.guild)
+    if mod_role:
+        m = overwrites.get(mod_role, discord.PermissionOverwrite())
+        m.view_channel = True
+        m.connect = True
+        overwrites[mod_role] = m
+
+    await vc.edit(overwrites=overwrites, reason="Transfer ownership")
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE temp_vcs SET owner_id=? WHERE guild_id=? AND channel_id=?",
+            (new_owner.id, interaction.guild.id, vc.id),
+        )
+        await db.commit()
+
+    await interaction.followup.send(f"Ownership transferred to {new_owner.mention}.", ephemeral=True)
 
 
 class TransferOwnerModal(discord.ui.Modal, title="Pass Command"):  # type: ignore
-    target = discord.ui.TextInput(label="New owner (@mention or ID)", max_length=60)
+    target = discord.ui.TextInput(label="New owner (@mention or ID)", max_length=60, custom_id="target")
 
     def __init__(self, vc_id: int):
-        super().__init__(timeout=300)
+        super().__init__(timeout=300, custom_id=f"transfer_vc_{vc_id}")
         self.vc_id = vc_id
 
     async def on_submit(self, interaction: discord.Interaction):
-        vc = interaction.guild.get_channel(self.vc_id)
-        if not isinstance(vc, discord.VoiceChannel):
-            return await interaction.response.send_message("Channel not found.", ephemeral=True)
-
-        new_owner_id = extract_id(str(self.target))
-        if not new_owner_id:
-            return await interaction.response.send_message("Couldn't read that user. Use @mention or ID.", ephemeral=True)
-
-        new_owner = interaction.guild.get_member(new_owner_id)
-        if not new_owner:
-            return await interaction.response.send_message("User not in server.", ephemeral=True)
-
-        # Only current owner or mods can transfer
-        async with aiosqlite.connect(DB_PATH) as db:
-            cur = await db.execute("SELECT owner_id FROM temp_vcs WHERE guild_id=? AND channel_id=?", (interaction.guild.id, vc.id))
-            row = await cur.fetchone()
-        if not row:
-            return await interaction.response.send_message("Owner record missing.", ephemeral=True)
-
-        current_owner_id = int(row[0])
-        actor = interaction.user
-        if not isinstance(actor, discord.Member):
-            return await interaction.response.send_message("Not allowed.", ephemeral=True)
-        if not (is_mod(actor) or actor.id == current_owner_id):
-            return await interaction.response.send_message("Only the owner (or an Administrator) can transfer.", ephemeral=True)
-
-        overwrites = vc.overwrites
-
-        old_owner = interaction.guild.get_member(current_owner_id)
-        if old_owner:
-            ow = overwrites.get(old_owner, discord.PermissionOverwrite())
-            ow.manage_channels = False
-            ow.move_members = False
-            ow.mute_members = False
-            ow.deafen_members = False
-            overwrites[old_owner] = ow
-
-        ow2 = overwrites.get(new_owner, discord.PermissionOverwrite())
-        ow2.view_channel = True
-        ow2.connect = True
-        ow2.manage_channels = True
-        ow2.move_members = True
-        ow2.mute_members = True
-        ow2.deafen_members = True
-        overwrites[new_owner] = ow2
-
-        mod_role = get_mod_role(interaction.guild)
-        if mod_role:
-            m = overwrites.get(mod_role, discord.PermissionOverwrite())
-            m.view_channel = True
-            m.connect = True
-            overwrites[mod_role] = m
-
-        await vc.edit(overwrites=overwrites, reason="Transfer ownership")
-
-        async with aiosqlite.connect(DB_PATH) as db:
-            await db.execute(
-                "UPDATE temp_vcs SET owner_id=? WHERE guild_id=? AND channel_id=?",
-                (new_owner.id, interaction.guild.id, vc.id),
-            )
-            await db.commit()
-
-        await interaction.response.send_message(f"Ownership transferred to {new_owner.mention}.", ephemeral=True)
+        try:
+            await interaction.response.defer(ephemeral=True)
+        except (discord.errors.NotFound, discord.errors.InteractionResponded, discord.errors.HTTPException):
+            pass
 
 
 class ReportUserModal(discord.ui.Modal, title="Report User"):  # type: ignore

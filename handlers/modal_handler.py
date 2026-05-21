@@ -23,6 +23,28 @@ logger = logging.getLogger(__name__)
 _processed_modal_submissions: set[str] = set()
 
 
+def _extract_modal_values(interaction_data: dict) -> dict[str, str]:
+    """Extract text input values from modal interaction data."""
+    values: dict[str, str] = {}
+    components = interaction_data.get("components", [])
+    for row in components:
+        if "components" in row:
+            for component in row["components"]:
+                comp_id = component.get("custom_id", "")
+                comp_value = component.get("value", "")
+                if comp_id:
+                    values[comp_id] = comp_value
+    return values
+
+
+async def _defer_modal_if_needed(interaction: discord.Interaction) -> None:
+    if not interaction.response.is_done():
+        try:
+            await interaction.response.defer(ephemeral=True)
+        except (discord.errors.NotFound, discord.errors.InteractionResponded, discord.errors.HTTPException):
+            pass
+
+
 async def handle_modal_submit(bot: discord.Client, interaction: discord.Interaction) -> None:
     """Route a modal_submit interaction to the appropriate handler."""
     from views import ComplaintModView
@@ -526,28 +548,93 @@ async def handle_modal_submit(bot: discord.Client, interaction: discord.Interact
                 pass
         return
 
+    # Voice channel panel modals (stable custom_ids; logic in core.modals)
+    if cid and cid.startswith("rename_vc_"):
+        from core.modals import process_rename_vc
+        try:
+            vc_id = int(cid.replace("rename_vc_", ""))
+            values = _extract_modal_values(interaction.data or {})
+            await _defer_modal_if_needed(interaction)
+            await process_rename_vc(interaction, vc_id, values.get("new_name", "").strip())
+        except Exception as e:
+            logger.error(f"[modal] Error in rename_vc modal: {e}", exc_info=True)
+            try:
+                if interaction.response.is_done():
+                    await interaction.followup.send("Error renaming channel.", ephemeral=True)
+                else:
+                    await interaction.response.send_message("Error renaming channel.", ephemeral=True)
+            except Exception:
+                pass
+        return
+
+    if cid and cid.startswith("invite_vc_"):
+        from core.modals import process_invite_vc
+        try:
+            vc_id = int(cid.replace("invite_vc_", ""))
+            values = _extract_modal_values(interaction.data or {})
+            await _defer_modal_if_needed(interaction)
+            await process_invite_vc(interaction, vc_id, values.get("target", "").strip())
+        except Exception as e:
+            logger.error(f"[modal] Error in invite_vc modal: {e}", exc_info=True)
+            try:
+                if interaction.response.is_done():
+                    await interaction.followup.send("Error inviting user.", ephemeral=True)
+                else:
+                    await interaction.response.send_message("Error inviting user.", ephemeral=True)
+            except Exception:
+                pass
+        return
+
+    if cid and cid.startswith("remove_vc_"):
+        from core.modals import process_remove_vc_access
+        try:
+            vc_id = int(cid.replace("remove_vc_", ""))
+            values = _extract_modal_values(interaction.data or {})
+            await _defer_modal_if_needed(interaction)
+            await process_remove_vc_access(interaction, vc_id, values.get("target", "").strip())
+        except Exception as e:
+            logger.error(f"[modal] Error in remove_vc modal: {e}", exc_info=True)
+            try:
+                if interaction.response.is_done():
+                    await interaction.followup.send("Error removing access.", ephemeral=True)
+                else:
+                    await interaction.response.send_message("Error removing access.", ephemeral=True)
+            except Exception:
+                pass
+        return
+
+    if cid and cid.startswith("transfer_vc_"):
+        from core.modals import process_transfer_vc_owner
+        try:
+            vc_id = int(cid.replace("transfer_vc_", ""))
+            values = _extract_modal_values(interaction.data or {})
+            await _defer_modal_if_needed(interaction)
+            await process_transfer_vc_owner(interaction, vc_id, values.get("target", "").strip())
+        except Exception as e:
+            logger.error(f"[modal] Error in transfer_vc modal: {e}", exc_info=True)
+            try:
+                if interaction.response.is_done():
+                    await interaction.followup.send("Error transferring ownership.", ephemeral=True)
+                else:
+                    await interaction.response.send_message("Error transferring ownership.", ephemeral=True)
+            except Exception:
+                pass
+        return
+
     # For other modals (with auto-generated custom_ids from previous bot sessions),
     # try to extract data from the interaction and process it as a complaint
     # This handles cases where the modal was created before the bot restarted
     logger.info(f"[modal] Unknown modal custom_id: {cid} - attempting to extract as complaint modal")
 
-    # Extract modal data - helper function to get values from any modal submission
-    def extract_modal_values(interaction_data):
-        """Extract text input values from modal interaction data"""
-        values = {}
-        components = interaction_data.get("components", [])
-        for row in components:
-            if "components" in row:
-                for component in row["components"]:
-                    comp_id = component.get("custom_id", "")
-                    comp_value = component.get("value", "")
-                    if comp_id:
-                        values[comp_id] = comp_value
-        return values
-
     # Try to extract complaint data from the modal submission
     try:
-        values = extract_modal_values(interaction.data or {})
+        values = _extract_modal_values(interaction.data or {})
+
+        # VC panel modals opened before stable custom_ids were deployed — let discord.py handle live sessions
+        if values and not ("category" in values or "details" in values):
+            if "new_name" in values or ("target" in values and len(values) == 1):
+                logger.info(f"[modal] Skipping unknown modal {cid} — likely handled by Modal.on_submit")
+                return
 
         # Check if this looks like a complaint modal (has category, details fields)
         if "category" in values or "details" in values:
