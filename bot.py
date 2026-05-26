@@ -951,12 +951,39 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
         )
         await db.commit()
 
-    # Move member into new VC
+    # Move member into new VC (they may disconnect while we create the channel).
+    voice = member.voice
+    if voice is None or voice.channel is None or voice.channel.id != create_id:
+        logger.debug("[vc] %s left create channel before move; cleaning up %s", member.id, new_vc.id)
+        try:
+            await delete_temp_vc_and_panel(guild, new_vc.id, reason="Join-to-create aborted (user left)")
+        except Exception:
+            pass
+        return
+
+    moved = False
     try:
         await member.move_to(new_vc, reason="Move to created squad VC")
+        moved = True
     except discord.Forbidden:
-        # Needs Move Members permission
-        pass
+        logger.debug("[vc] Missing Move Members permission for join-to-create")
+    except discord.HTTPException as exc:
+        if exc.code == 40032:  # Target user is not connected to voice
+            logger.debug("[vc] move_to failed (not in voice) for %s; cleaning up %s", member.id, new_vc.id)
+            try:
+                await delete_temp_vc_and_panel(guild, new_vc.id, reason="Join-to-create aborted (user disconnected)")
+            except Exception:
+                pass
+            return
+        logger.warning("[vc] move_to failed for %s: %s", member.id, exc)
+
+    if not moved:
+        if not new_vc.members:
+            try:
+                await delete_temp_vc_and_panel(guild, new_vc.id, reason="Join-to-create aborted (move failed)")
+            except Exception:
+                pass
+        return
 
     # Post control panel
     try:

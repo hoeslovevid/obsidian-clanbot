@@ -153,11 +153,39 @@ def setup_events(bot, config):
             )
             await db.commit()
 
-        # Move user
+        # Move user (may disconnect while the channel is being created)
+        voice = member.voice
+        if voice is None or voice.channel is None or voice.channel.id != create_id:
+            logger.debug("[vc] %s left create channel before move; cleaning up %s", member.id, vc.id)
+            try:
+                await delete_temp_vc_and_panel(guild, vc.id, reason="Join-to-create aborted (user left)")
+            except Exception:
+                pass
+            return
+
+        moved = False
         try:
             await member.move_to(vc, reason="Join-to-create VC")
+            moved = True
         except discord.Forbidden:
             logger.warning(f"[vc] Could not move {member} to new VC")
+        except discord.HTTPException as exc:
+            if exc.code == 40032:
+                logger.debug("[vc] move_to failed (not in voice) for %s; cleaning up %s", member.id, vc.id)
+                try:
+                    await delete_temp_vc_and_panel(guild, vc.id, reason="Join-to-create aborted (user disconnected)")
+                except Exception:
+                    pass
+                return
+            logger.warning("[vc] move_to failed for %s: %s", member.id, exc)
+
+        if not moved:
+            if not vc.members:
+                try:
+                    await delete_temp_vc_and_panel(guild, vc.id, reason="Join-to-create aborted (move failed)")
+                except Exception:
+                    pass
+            return
 
         # Post panel
         from bot import post_vc_panel
