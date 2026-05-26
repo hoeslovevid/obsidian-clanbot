@@ -4,6 +4,7 @@ import discord
 from discord import app_commands
 
 from core.utils import obsidian_embed, EMBED_COLORS, is_mod
+from core.config import BOT_WEBSITE
 from database import get_guild_setting, set_guild_setting
 
 DEFAULT_LINKS = [
@@ -20,7 +21,10 @@ def setup(bot, group=None):
     @cmd
     async def links(interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
-        links_list = list(DEFAULT_LINKS)
+        links_list: list[tuple[str, str]] = []
+        if BOT_WEBSITE:
+            links_list.append(("Obsidian Overseer", BOT_WEBSITE))
+        links_list.extend(DEFAULT_LINKS)
         custom_json = await get_guild_setting(interaction.guild.id, "custom_links") if interaction.guild else None
         if custom_json:
             try:
@@ -39,7 +43,7 @@ def setup(bot, group=None):
             "Quick Links",
             desc,
             color=EMBED_COLORS["general"],
-            footer="Use /help for more commands",
+            footer="Use /general about for bot info • /help for commands",
             client=interaction.client,
         )
         await interaction.followup.send(embed=embed, ephemeral=True)

@@ -6,6 +6,8 @@ from discord import app_commands  # type: ignore
 from typing import Optional, cast
 
 from core.utils import obsidian_embed, is_mod, ECONOMY_ENABLED, COINS_PER_MESSAGE, COINS_DAILY_REWARD, MESSAGE_COOLDOWN_SECONDS, COINS_PER_MINUTE_VOICE, EMBED_COLORS
+from core.config import BOT_WEBSITE
+from core.presence import website_host
 
 
 def _collect_group_commands(group: app_commands.Group, prefix: list[str]) -> list[tuple[str, str]]:
@@ -616,15 +618,22 @@ def setup(bot, group=None):
         desc += "• Warframe: Baro, cycles, alerts, link account, achievement roles"
         if ECONOMY_ENABLED:
             desc += f"\n• Economy: {COINS_PER_MESSAGE} coins/msg, {COINS_DAILY_REWARD:,} daily, {COINS_PER_MINUTE_VOICE}/min voice ({MESSAGE_COOLDOWN_SECONDS}s msg cooldown)"
+        if BOT_WEBSITE:
+            host = website_host() or BOT_WEBSITE
+            desc += f"\n\n**🌐 Website:** [{host}]({BOT_WEBSITE}) — also in **`/general links`** and **`/general about`**"
         
         desc += "\n\n**💡 Tip:** Use the dropdown below to browse commands by category, or use `/help <command>` for specific help!"
+        
+        help_footer = "Select a category below or use /help <command> for specific help"
+        if BOT_WEBSITE:
+            help_footer += f" • {website_host() or 'Website'}"
         
         embed = obsidian_embed(
             "Command Reference",
             desc,
             color=discord.Color.blurple(),
             thumbnail=interaction.guild.icon.url if interaction.guild and interaction.guild.icon else (interaction.client.user.display_avatar.url if interaction.client and interaction.client.user else None),
-            footer="Select a category below or use /help <command> for specific help",
+            footer=help_footer,
             client=interaction.client,
         )
         

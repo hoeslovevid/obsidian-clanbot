@@ -1056,13 +1056,9 @@ async def on_guild_remove(guild: discord.Guild):
 
 
 def _update_status_presence():
-    """Update bot presence with /help hint and guild count."""
-    guild_count = len(bot.guilds)
-    activity = discord.Activity(
-        type=discord.ActivityType.playing,
-        name=f"/help • {guild_count} server{'s' if guild_count != 1 else ''}"
-    )
-    return activity
+    """Update bot presence with website, /help hint, and guild count."""
+    from core.presence import build_bot_activity
+    return build_bot_activity(bot)
 
 
 @bot.event

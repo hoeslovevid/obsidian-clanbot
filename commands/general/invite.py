@@ -3,6 +3,7 @@ import discord  # type: ignore
 from discord import app_commands  # type: ignore
 
 from core.utils import obsidian_embed
+from core.config import BOT_WEBSITE
 
 
 def setup(bot, group=None):
@@ -26,12 +27,18 @@ def setup(bot, group=None):
         scope = "bot%20applications.commands"
         url = f"https://discord.com/api/oauth2/authorize?client_id={client.user.id}&permissions={permissions}&scope={scope}"
 
-        embed = obsidian_embed(
-            "🔗 Invite Link",
+        body = (
             f"[**Click here to add me to another server**]({url})\n\n"
             "• You need *Manage Server* permission to add bots.\n"
             "• This link **never expires** — you can bookmark it.\n"
-            "• Permissions are pre-selected for full bot functionality.",
+            "• Permissions are pre-selected for full bot functionality."
+        )
+        if BOT_WEBSITE:
+            body += f"\n• **Website:** {BOT_WEBSITE}"
+
+        embed = obsidian_embed(
+            "🔗 Invite Link",
+            body,
             color=discord.Color.blurple(),
             client=client,
         )

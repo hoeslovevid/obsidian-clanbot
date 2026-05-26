@@ -8,12 +8,18 @@ import difflib
 import logging
 from typing import Optional
 
+from core.config import BOT_WEBSITE
+from core.presence import website_host
+
 logger = logging.getLogger(__name__)
+
+_site = website_host()
+_WEBSITE_HINT = f" · 🌐 **{_site}** (`/general links`)" if _site and BOT_WEBSITE else ""
 
 # Canned responses for common phrases (case-insensitive partial match)
 KEYWORD_RESPONSES = [
-    (r"\b(hi|hey|hello|sup|yo)\b", "Hey! 👋 Use **`/help`** to explore. Quick: **`/balance`** · **`/daily`** · **`/warframe status`**"),
-    (r"\bhelp\b", "Use **`/help`** to see all commands! Quick: **`/balance`** · **`/profile`** · **`/warframe status`**"),
+    (r"\b(hi|hey|hello|sup|yo)\b", f"Hey! 👋 Use **`/help`** to explore. Quick: **`/balance`** · **`/daily`** · **`/warframe status`**{_WEBSITE_HINT}"),
+    (r"\bhelp\b", f"Use **`/help`** to see all commands! Quick: **`/balance`** · **`/profile`** · **`/warframe status`**{_WEBSITE_HINT}"),
     (r"\bbaro\b", "Check Baro with **`/warframe baro`** or **`/warframe status`** for Baro + Alerts + Cycles."),
     (r"\b(alert|alerts)\b", "View alerts with **`/warframe alerts`** or **`/warframe status`**."),
     (r"\b(cycle|cycles|cetus|fortuna|deimos)\b", "Check cycles with **`/warframe cycles`** or **`/warframe status`**."),
@@ -27,7 +33,7 @@ KEYWORD_RESPONSES = [
     (r"\b(duviri|circuit)\b", "Check Duviri Circuit with **`/warframe duviri`**."),
     (r"\b(fissure|fissures)\b", "View fissures with **`/warframe fissures`**."),
     (r"\b(sortie)\b", "Check today's sortie with **`/warframe sortie`**."),
-    (r"\b(links?|wiki|market)\b", "Quick links: **`/general links`** – Wiki, Market, Drop Tables."),
+    (r"\b(links?|wiki|market)\b", f"Quick links: **`/general links`** – Website, Wiki, Market, Drop Tables."),
     (r"\b(drop|drops?|where.*drop)\b", "Find where items drop: **`/warframe drop`** – links to Wiki drop tables."),
     (r"\b(bount(y|ies))\b", "Daily bounties for bonus coins: **`/economy bounties`**."),
     (r"\bwho are you\b", "I'm the **Obsidian Clan Bot** – your Warframe clan assistant! Use **`/help`** to explore."),

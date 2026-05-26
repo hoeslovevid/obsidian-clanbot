@@ -25,12 +25,9 @@ def _channel_name_safe(channel: Any) -> str:
 
 
 def _update_status_presence(bot: discord.Client) -> discord.Activity:
-    """Build a presence Activity reflecting guild count."""
-    guild_count = len(bot.guilds)
-    return discord.Activity(
-        type=discord.ActivityType.playing,
-        name=f"/help \u2022 {guild_count} server{'s' if guild_count != 1 else ''}",
-    )
+    """Build a presence Activity reflecting website, /help, and guild count."""
+    from core.presence import build_bot_activity
+    return build_bot_activity(bot)
 
 
 async def run_startup(bot: discord.Client) -> None:
