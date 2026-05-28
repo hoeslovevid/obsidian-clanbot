@@ -1229,11 +1229,10 @@ async def on_member_remove(member: discord.Member):
     if not isinstance(channel, discord.TextChannel):
         return
     
-    # Format message
-    formatted_message = message_template.replace("{user}", str(member))
-    formatted_message = formatted_message.replace("{server}", member.guild.name)
-    formatted_message = formatted_message.replace("{member_count}", str(member.guild.member_count or 0))
-    
+    from core.leave_messages import format_leave_message
+
+    formatted_message = format_leave_message(member, message_template)
+
     try:
         await channel.send(formatted_message)
     except Exception as e:

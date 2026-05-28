@@ -3,6 +3,7 @@ import discord
 from discord import app_commands
 from typing import Optional
 
+from core.leave_messages import FIXED_PREFIX, RANDOM_SENTINEL
 from core.utils import obsidian_embed, is_mod
 from database import DB_PATH, get_guild_setting, set_guild_setting
 import aiosqlite
@@ -96,7 +97,7 @@ def setup(bot, group=None):
     @command_decorator
     @app_commands.describe(
         channel="The channel to send leave messages to",
-        message="Custom leave message (use {user} for username, {server} for server name, {member_count} for member count)",
+        message="Custom static leave message, or {random} for varied messages (use {user}, {server}, {member_count})",
         enabled="Enable or disable leave messages"
     )
     async def leave_setup(
@@ -132,7 +133,16 @@ def setup(bot, group=None):
             
             # Update settings
             new_channel_id = channel.id if channel else current_channel_id
-            new_message = message if message is not None else (current_message if current_message else "{user} has left {server}. We now have {member_count} members.")
+            if message is not None:
+                stripped = message.strip()
+                if stripped == RANDOM_SENTINEL:
+                    new_message = RANDOM_SENTINEL
+                elif stripped.startswith(FIXED_PREFIX):
+                    new_message = message
+                else:
+                    new_message = f"{FIXED_PREFIX} {message}"
+            else:
+                new_message = current_message if current_message else RANDOM_SENTINEL
             new_enabled = enabled if enabled is not None else current_enabled
             
             await db.execute("""
@@ -154,7 +164,9 @@ def setup(bot, group=None):
                 f"**Variables:**\n"
                 f"• `{{user}}` - Username\n"
                 f"• `{{server}}` - Server name\n"
-                f"• `{{member_count}}` - Total member count",
+                f"• `{{member_count}}` - Total member count\n"
+                f"• `{{random}}` - Different line each time (default)\n\n"
+                f"Custom static text is stored with a `{FIXED_PREFIX}` prefix automatically.",
                 color=discord.Color.green(),
                 client=interaction.client,
             ),
