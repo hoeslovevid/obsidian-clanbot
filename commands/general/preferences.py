@@ -48,6 +48,7 @@ def setup(bot, group=None):
         achievement_notify="Show a private notification when you unlock an achievement",
         investment_dm="Get a DM when your investment matures and is ready to collect",
         typo_helper="Reply with a slash-command suggestion when you mis-type one in chat",
+        hide_leaderboards="Show as Hidden on coin, XP, voice, and achievement leaderboards",
     )
     @app_commands.choices(timezone=[
         app_commands.Choice(name=label, value=tz) for tz, label in COMMON_TIMEZONES
@@ -77,6 +78,10 @@ def setup(bot, group=None):
         app_commands.Choice(name="On", value="1"),
         app_commands.Choice(name="Off", value="0"),
     ])
+    @app_commands.choices(hide_leaderboards=[
+        app_commands.Choice(name="On (hidden)", value="1"),
+        app_commands.Choice(name="Off (show name)", value="0"),
+    ])
     async def preferences(
         interaction: discord.Interaction,
         timezone: Optional[app_commands.Choice[str]] = None,
@@ -87,6 +92,7 @@ def setup(bot, group=None):
         achievement_notify: Optional[app_commands.Choice[str]] = None,
         investment_dm: Optional[app_commands.Choice[str]] = None,
         typo_helper: Optional[app_commands.Choice[str]] = None,
+        hide_leaderboards: Optional[app_commands.Choice[str]] = None,
     ):
         """Set timezone or quieter mode."""
         if not interaction.guild:
@@ -150,6 +156,16 @@ def setup(bot, group=None):
             state = "On" if typo_helper.value == "1" else "Off"
             updated.append(f"**Typo helper:** {state}")
 
+        if hide_leaderboards:
+            from database import set_guild_setting
+            await set_guild_setting(
+                interaction.guild.id,
+                f"user_hide_leaderboards:{interaction.user.id}",
+                hide_leaderboards.value,
+            )
+            state = "On (hidden)" if hide_leaderboards.value == "1" else "Off (visible)"
+            updated.append(f"**Leaderboard privacy:** {state}")
+
         if not lines and not updated:
             # Show current preferences
             current_tz = await get_user_timezone(interaction.guild.id, interaction.user.id)
@@ -166,6 +182,8 @@ def setup(bot, group=None):
             inv_on = inv_val == "1"  # default OFF when unset
             th_val = await get_guild_setting(interaction.guild.id, f"user_typo_helper:{interaction.user.id}")
             th_on = th_val != "0"  # default ON when unset
+            lb_val = await get_guild_setting(interaction.guild.id, f"user_hide_leaderboards:{interaction.user.id}")
+            lb_hidden = lb_val == "1"
             lines.append(f"**Your timezone:** {current_tz or 'Not set (uses server default)'}")
             lines.append(f"**Trading platform:** {current_platform.upper() if current_platform else 'Not set (defaults to PC)'}")
             lines.append(f"**Daily streak reminder:** {'On 🔔' if dr_on else 'Off'}")
@@ -173,6 +191,7 @@ def setup(bot, group=None):
             lines.append(f"**Achievement notifications:** {'On 🏆' if an_on else 'Off'}")
             lines.append(f"**Investment maturity DM:** {'On 📈' if inv_on else 'Off'}")
             lines.append(f"**Typo helper:** {'On 💡' if th_on else 'Off'}")
+            lines.append(f"**Leaderboard privacy:** {'On 🕵️' if lb_hidden else 'Off (name shown)'}")
             if isinstance(interaction.user, discord.Member) and is_mod(interaction.user):
                 lines.append(f"**Quieter mode:** {'On' if quieter_on else 'Off'}")
             embed = obsidian_embed(

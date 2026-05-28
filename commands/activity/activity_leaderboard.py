@@ -4,6 +4,7 @@ from discord import app_commands
 from datetime import datetime, timezone, timedelta
 
 from core.utils import obsidian_embed
+from core.leaderboard_privacy import leaderboard_display_name
 from core.config import DB_PATH
 import aiosqlite  # type: ignore
 
@@ -95,8 +96,7 @@ def setup(bot, group=None):
         
         for i, row in enumerate(rows):
             user_id = row[0]
-            user = interaction.guild.get_member(user_id)
-            username = user.display_name if user else f"User {user_id}"
+            username = await leaderboard_display_name(interaction.guild, user_id)
             
             if period == "all-time":
                 commands_used, events_attended, voice_minutes, messages_sent = row[1], row[2], row[3], row[4]

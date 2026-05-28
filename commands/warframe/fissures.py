@@ -2,11 +2,21 @@
 import discord
 from discord import app_commands
 from datetime import datetime, timezone
+from typing import Optional
 
 from core.utils import obsidian_embed, EMBED_COLORS, format_number, warframe_data_unavailable_embed, BUTTON_ONLY_RUNNER_MSG
 from api.warframe_api import fetch_fissures
 from views import RetryView, RefreshView
 from core.cache_utils import invalidate
+
+FISSURE_TIER_CHOICES = [
+    app_commands.Choice(name="All tiers", value="all"),
+    app_commands.Choice(name="Lith", value="Lith"),
+    app_commands.Choice(name="Meso", value="Meso"),
+    app_commands.Choice(name="Neo", value="Neo"),
+    app_commands.Choice(name="Axi", value="Axi"),
+    app_commands.Choice(name="Requiem", value="Requiem"),
+]
 
 
 def _fmt_time(expiry_str: str) -> str:
@@ -32,7 +42,10 @@ def setup(bot, group=None):
     cmd = group.command(name="fissures", description="View active Void Fissure missions.") if group else bot.tree.command(name="fissures", description="View active Void Fissure missions.")
 
     @cmd
-    async def fissures(interaction: discord.Interaction):
+    @app_commands.describe(tier="Filter by relic tier (default: all)")
+    @app_commands.choices(tier=FISSURE_TIER_CHOICES)
+    async def fissures(interaction: discord.Interaction, tier: Optional[app_commands.Choice[str]] = None):
+        tier_filter = tier.value if tier else "all"
         await interaction.response.defer()
         data = await fetch_fissures()
         if data is None:
@@ -46,7 +59,7 @@ def setup(bot, group=None):
                         "Still can't load fissures. Try **Try again** again in a bit.",
                         ephemeral=True,
                     )
-                emb = _build_embed(nd, interaction.client)
+                emb = _build_embed(nd, interaction.client, tier_filter=tier_filter)
                 await btn_i.message.edit(embed=emb, view=None)
             return await interaction.followup.send(
                 embed=warframe_data_unavailable_embed(interaction.client),
@@ -56,7 +69,7 @@ def setup(bot, group=None):
             return await interaction.followup.send(
                 embed=obsidian_embed("⚡ Void Fissures", "No active fissures.", color=EMBED_COLORS["warframe"], client=interaction.client),
             )
-        embed = _build_embed(data, interaction.client)
+        embed = _build_embed(data, interaction.client, tier_filter=tier_filter)
 
         async def on_refresh(btn_i: discord.Interaction):
             if btn_i.user.id != interaction.user.id:
@@ -69,13 +82,29 @@ def setup(bot, group=None):
                     "Couldn't refresh fissures yet — stats API is still having issues.",
                     ephemeral=True,
                 )
-            emb = _build_embed(nd, interaction.client)
+            emb = _build_embed(nd, interaction.client, tier_filter=tier_filter)
             await btn_i.message.edit(embed=emb, view=RefreshView(on_refresh, timeout=300))
 
         await interaction.followup.send(embed=embed, view=RefreshView(on_refresh, timeout=300))
 
 
-def _build_embed(fissures_list, client):
+def _filter_by_tier(fissures_list: list, tier_filter: str) -> list:
+    if not tier_filter or tier_filter == "all":
+        return fissures_list
+    return [f for f in fissures_list if (f.get("tier") or "").lower() == tier_filter.lower()]
+
+
+def _build_embed(fissures_list, client, *, tier_filter: str = "all"):
+    fissures_list = _filter_by_tier(fissures_list, tier_filter)
+    if tier_filter and tier_filter != "all" and not fissures_list:
+        return obsidian_embed(
+            "⚡ Void Fissures",
+            f"No active **{tier_filter}** fissures right now.\n\nTry another tier or check back later.",
+            color=EMBED_COLORS["warframe"],
+            footer="See also: /warframe sortie, /warframe baro",
+            client=client,
+        )
+
     lines = []
     tier_emoji = {"Lith": "🟢", "Meso": "🟡", "Neo": "🔵", "Axi": "🟣"}
 
@@ -117,6 +146,8 @@ def _build_embed(fissures_list, client):
     desc = "\n".join(lines) if lines else "No active fissures."
 
     note = " • ⚠️ Approx. locations (API unavailable)" if is_fallback else ""
+    if tier_filter and tier_filter != "all":
+        note = f" • Filter: {tier_filter}{note}"
     return obsidian_embed(
         "⚡ Void Fissures",
         desc,

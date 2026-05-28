@@ -3,6 +3,7 @@ import discord
 from discord import app_commands
 
 from core.utils import obsidian_embed, feature_off_embed, ECONOMY_ENABLED
+from core.leaderboard_privacy import leaderboard_display_name, user_hides_from_leaderboards
 from views import EmbedPaginator
 
 
@@ -118,8 +119,7 @@ def setup(bot, group=None):
             page_rows = rows[p:p + per_page]
             leaderboard_text = ""
             for i, (user_id, balance, total_earned) in enumerate(page_rows, p + 1):
-                user = interaction.guild.get_member(user_id)
-                username = user.display_name if user else f"User {user_id}"
+                username = await leaderboard_display_name(interaction.guild, user_id)
                 medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"`{i}.`"
                 leaderboard_text += f"{medal} **{username}** — 💰 {balance:,} • 📊 {total_earned:,}\n"
 
@@ -127,7 +127,8 @@ def setup(bot, group=None):
             if not in_top and user_rank is not None and urow and (urow[0] or 0) + (urow[1] or 0) > 0 and p == 0:
                 val = urow[1] if order_col == "total_earned" else urow[0]
                 lbl = "total earned" if order_col == "total_earned" else "coins"
-                you_line = f"\n_You're here: **#{user_rank}** • {val:,} {lbl}_"
+                you_label = "🕵️ Hidden" if await user_hides_from_leaderboards(interaction.guild.id, interaction.user.id) else "You're here"
+                you_line = f"\n_{you_label}: **#{user_rank}** • {val:,} {lbl}_"
 
             thumb_url = None
             if page_rows:

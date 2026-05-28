@@ -4,6 +4,7 @@ from discord import app_commands
 from typing import Optional
 
 from core.utils import obsidian_embed, render_bar
+from core.leaderboard_privacy import leaderboard_display_name, user_hides_from_leaderboards
 from database import DB_PATH, add_coins, add_xp
 import aiosqlite  # type: ignore
 
@@ -129,8 +130,7 @@ def setup(bot, group=None):
         medals = {1: "🥇", 2: "🥈", 3: "🥉"}
         viewer_rank = None
         for pos, (uid, cnt) in enumerate(rows, 1):
-            member = interaction.guild.get_member(uid)
-            name = member.display_name if member else f"User {uid}"
+            name = await leaderboard_display_name(interaction.guild, uid)
             medal = medals.get(pos, f"**#{pos}**")
             bar = render_bar(int(100 * cnt / total_ach) if total_ach else 0, length=8, show_pct=False)
             lines.append(f"{medal} **{name}** — {cnt}/{total_ach} {bar}")
@@ -149,7 +149,9 @@ def setup(bot, group=None):
                 """, (interaction.guild.id, interaction.guild.id, interaction.user.id))
                 rank_row = await cur.fetchone()
                 viewer_rank = rank_row[0] if rank_row else None
-            rank_suffix = f"\n-# Your rank: #{viewer_rank}" if viewer_rank else ""
+            hidden = await user_hides_from_leaderboards(interaction.guild.id, interaction.user.id)
+            rank_label = "Your rank (hidden)" if hidden else "Your rank"
+            rank_suffix = f"\n-# {rank_label}: #{viewer_rank}" if viewer_rank else ""
         else:
             rank_suffix = f"\n-# Your rank: #{viewer_rank}"
 

@@ -119,27 +119,13 @@ async def handle_modal_submit(bot: discord.Client, interaction: discord.Interact
 
             user_id = int(row[0])
 
-            # Set status, DM user
             view = ComplaintModView(case_id)
-            await view.set_status(interaction, "NEEDS INFO", bot=bot, dm_override=False)
-
-            user = guild_ri.get_member(user_id) or await bot.fetch_user(user_id)
-            evidence_dm_ok = False
-            if user:
-                try:
-                    e = obsidian_embed(
-                        f"Evidence Requested • {case_id}",
-                        f"**Staff request:**\n{question_val}\n\n"
-                        "Respond using:\n"
-                        f"**/submit_complaint** (case_id: `{case_id}`)\n\n"
-                        "_If you don't get this in DMs, enable DMs from this server and ask staff._",
-                        color=discord.Color.orange(),
-                        client=bot,
-                    )
-                    await user.send(embed=e)
-                    evidence_dm_ok = True
-                except discord.Forbidden:
-                    pass
+            _, evidence_dm_ok = await view.set_status(
+                interaction,
+                "NEEDS INFO",
+                bot=bot,
+                note=question_val,
+            )
 
             await log_complaint_action(guild_ri, case_id, interaction.user.id, "REQUEST_INFO", question_val)
 

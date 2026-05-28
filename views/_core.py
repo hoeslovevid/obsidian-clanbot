@@ -293,19 +293,38 @@ class ComplaintModView(discord.ui.View):
         member = interaction.user
         return isinstance(member, discord.Member) and is_mod(member)
 
-    async def dm_user(self, guild: discord.Guild, user_id: int, status: str, bot) -> bool:
+    async def dm_user(
+        self,
+        guild: discord.Guild,
+        user_id: int,
+        status: str,
+        bot,
+        *,
+        mod_name: Optional[str] = None,
+        note: Optional[str] = None,
+    ) -> bool:
         """Returns True if DM sent or not needed, False if user exists but DMs blocked."""
-        user = guild.get_member(user_id) or await bot.fetch_user(user_id)
-        if not user:
-            return True
-        try:
-            e = obsidian_embed(f"Docket Update • {self.case_id}", f"Status: **{display_case_status(status)}**", client=bot)
-            await user.send(embed=e)
-            return True
-        except discord.Forbidden:
-            return False
+        from core.complaint_notify import send_complaint_status_dm
 
-    async def set_status(self, interaction: discord.Interaction, status: str, *, bot, dm_override: bool = True) -> Tuple[Optional[int], bool]:
+        return await send_complaint_status_dm(
+            guild,
+            user_id,
+            self.case_id,
+            status,
+            bot,
+            mod_name=mod_name,
+            note=note,
+        )
+
+    async def set_status(
+        self,
+        interaction: discord.Interaction,
+        status: str,
+        *,
+        bot,
+        dm_override: bool = True,
+        note: Optional[str] = None,
+    ) -> Tuple[Optional[int], bool]:
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute(
                 "SELECT user_id FROM complaints WHERE guild_id=? AND case_id=?",
@@ -324,7 +343,15 @@ class ComplaintModView(discord.ui.View):
 
         dm_ok = True
         if dm_override:
-            dm_ok = await self.dm_user(interaction.guild, user_id, status, bot)
+            mod_name = interaction.user.display_name if isinstance(interaction.user, discord.Member) else None
+            dm_ok = await self.dm_user(
+                interaction.guild,
+                user_id,
+                status,
+                bot,
+                mod_name=mod_name,
+                note=note,
+            )
 
         await log_complaint_action(interaction.guild.id, self.case_id, interaction.user.id, f"STATUS:{status}", guild=interaction.guild, bot=bot)
         return (user_id, dm_ok)

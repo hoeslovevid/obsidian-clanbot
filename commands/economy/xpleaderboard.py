@@ -3,6 +3,7 @@ import discord
 from discord import app_commands
 
 from core.utils import obsidian_embed, XP_ENABLED
+from core.leaderboard_privacy import leaderboard_display_name, user_hides_from_leaderboards
 
 
 def setup(bot, group=None):
@@ -100,14 +101,14 @@ def setup(bot, group=None):
         
         leaderboard_text = ""
         for i, (user_id, xp, level, total_xp) in enumerate(rows, 1):
-            user = interaction.guild.get_member(user_id)
-            username = user.display_name if user else f"User {user_id}"
+            username = await leaderboard_display_name(interaction.guild, user_id)
             medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"`{i}.`"
             leaderboard_text += f"{medal} **{username}** — ⭐ Lv{level} • 💎 {xp:,} XP • 📊 {total_xp:,} total\n"
         
         you_line = ""
         if not in_top and user_rank is not None and urow and (urow[0] or 0) > 0:
-            you_line = f"\n_You're here: **#{user_rank}** • {urow[0]:,} XP_"
+            you_label = "🕵️ Hidden" if await user_hides_from_leaderboards(interaction.guild.id, interaction.user.id) else "You're here"
+            you_line = f"\n_{you_label}: **#{user_rank}** • {urow[0]:,} XP_"
         
         thumb_url = None
         if rows:

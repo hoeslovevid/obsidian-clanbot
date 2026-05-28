@@ -4,6 +4,7 @@ from discord import app_commands
 from typing import Optional
 
 from core.utils import obsidian_embed
+from core.leaderboard_privacy import leaderboard_display_name
 from database import DB_PATH
 import aiosqlite
 
@@ -97,8 +98,7 @@ def setup(bot, group=None):
         leaderboard_text = ""
         medals = ["🥇", "🥈", "🥉"]
         for i, (user_id, score) in enumerate(leaderboard):
-            user = interaction.guild.get_member(user_id)
-            username = user.display_name if user else f"User {user_id}"
+            username = await leaderboard_display_name(interaction.guild, user_id)
             medal = medals[i] if i < 3 else f"`{i+1}.`"
             if period == "all_time":
                 hours = score // 60
