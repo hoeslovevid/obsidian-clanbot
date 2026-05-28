@@ -93,6 +93,7 @@ def load_all_commands(bot):
         "commands.general.preferences",
         "commands.general.onboarding",
         "commands.general.milestones_next",
+        "commands.general.menu",
         "commands.general.whatsnew",
         "commands.general.reputation",
         "commands.general.twitch",
@@ -336,6 +337,7 @@ def load_all_commands(bot):
         "commands.general.server_about": general_group,
         "commands.general.onboarding": tools_group,
         "commands.general.milestones_next": tools_group,
+        "commands.general.menu": tools_group,
         "commands.general.server_goals": tools_group,
         "commands.warframe.build": warframe_group,
         "commands.warframe.drop_tables": warframe_group,
@@ -400,6 +402,11 @@ def load_all_commands(bot):
     print(f"[commands] Loaded {loaded_count}/{len(command_modules)} command modules")
     if failed_modules:
         print(f"[commands] WARNING: {len(failed_modules)} failed: {', '.join(failed_modules)}")
+
+    from core.command_shortcuts import register_all_shortcuts
+    shortcut_count = register_all_shortcuts(bot)
+    print(f"[commands] Registered {shortcut_count} top-level shortcut(s)")
+
     total_subcommands = sum(
         len(cmd.commands) for cmd in bot.tree.get_commands(guild=None)
         if isinstance(cmd, app_commands.Group)

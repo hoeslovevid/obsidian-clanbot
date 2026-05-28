@@ -39,7 +39,7 @@ def _fmt_time(expiry_str: str) -> str:
 
 
 def setup(bot, group=None):
-    cmd = group.command(name="fissures", description="View active Void Fissure missions.") if group else bot.tree.command(name="fissures", description="View active Void Fissure missions.")
+    cmd = group.command(name="fissures", description="Void fissure missions — Lith, Meso, Neo, Axi, Requiem tiers.") if group else bot.tree.command(name="fissures", description="View active Void Fissure missions.")
 
     @cmd
     @app_commands.describe(tier="Filter by relic tier (default: all)")

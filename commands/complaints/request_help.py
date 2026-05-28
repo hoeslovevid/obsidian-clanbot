@@ -55,12 +55,12 @@ def setup(bot, group=None):
             color=discord.Color.blurple(),
             fields=fields,
             thumbnail=guild.icon.url if guild.icon else None,
-            footer="Use /community case_status to check again",
+            footer="Use /case or /community case_status to check again",
             client=interaction.client,
         )
         return await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    case_status_decorator = group.command(name="case_status", description="Look up the status of your complaint or help case.") if group else None
+    case_status_decorator = group.command(name="case_status", description="Complaint/help case status — check by case ID (OBS-...).") if group else None
     if case_status_decorator:
         @case_status_decorator
         @app_commands.autocomplete(case_id=case_id_autocomplete)
@@ -95,7 +95,7 @@ def setup(bot, group=None):
                 ephemeral=True,
             )
 
-    command_decorator = group.command(name="request_help", description="Request help or check the status of your help request case.") if group else bot.tree.command(name="request_help", description="Request help or check the status of your help request case.")
+    command_decorator = group.command(name="request_help", description="Report an issue or ask staff for help — trade, harassment, voice.") if group else bot.tree.command(name="request_help", description="Report an issue or ask staff for help.")
     
     @command_decorator
     @app_commands.describe(
@@ -286,7 +286,31 @@ def setup(bot, group=None):
             f"Your help request has been sealed as **`{case_id}`**.\n\nYou'll receive DM updates as it progresses.",
             color=discord.Color.green(),
             thumbnail=guild.icon.url if guild.icon else None,
-            footer=f"Case: {case_id} • Save this ID to check status",
+            footer=f"Case: {case_id} • Save this ID — check with /case",
             client=interaction.client,
         )
         await interaction.followup.send(embed=embed, ephemeral=True)
+
+    # Top-level /case shortcut (same handler + autocomplete as case_status)
+    @app_commands.command(name="case", description="Complaint/help case status — check by case ID (OBS-...).")
+    @app_commands.autocomplete(case_id=case_id_autocomplete)
+    @app_commands.describe(case_id="Your case ID — autocompletes open cases")
+    async def case_shortcut(interaction: discord.Interaction, case_id: str):
+        await _lookup_case_status(interaction, case_id)
+
+    try:
+        bot.tree.add_command(case_shortcut)
+    except Exception:
+        pass
+
+    # Top-level /case shortcut (same handler + autocomplete as case_status)
+    @app_commands.command(name="case", description="Complaint/help case status — check by case ID (OBS-...).")
+    @app_commands.autocomplete(case_id=case_id_autocomplete)
+    @app_commands.describe(case_id="Your case ID — autocompletes open cases")
+    async def case_shortcut(interaction: discord.Interaction, case_id: str):
+        await _lookup_case_status(interaction, case_id)
+
+    try:
+        bot.tree.add_command(case_shortcut)
+    except Exception:
+        pass

@@ -602,7 +602,7 @@ def setup(bot, group=None):
                 rows = await cur.fetchall()
             if not rows:
                 return await interaction.followup.send(
-                    embed=obsidian_embed("📋 No Open Tickets", "You have no open tickets. Use `/community ticket` to create one.", color=discord.Color.blue(), client=interaction.client),
+                    embed=obsidian_embed("📋 No Open Tickets", "You have no open tickets. Use **`/ticket`** to create one.", color=discord.Color.blue(), client=interaction.client),
                     ephemeral=True,
                 )
             lines = []
@@ -615,7 +615,7 @@ def setup(bot, group=None):
                 ephemeral=True,
             )
 
-    command_decorator = group.command(name="ticket", description="Create a support ticket.") if group else bot.tree.command(name="ticket", description="Create a support ticket.")
+    command_decorator = group.command(name="ticket", description="Open a support ticket — roles, bugs, questions, staff help.") if group else bot.tree.command(name="ticket", description="Open a support ticket.")
     
     @command_decorator
     @app_commands.describe(

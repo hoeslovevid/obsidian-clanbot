@@ -12,7 +12,7 @@ import aiosqlite  # type: ignore
 
 def setup(bot, group=None):
     """Register the trade command."""
-    command_decorator = group.command(name="trade", description="Post a WTS (Want To Sell) or WTB (Want To Buy) listing.") if group else bot.tree.command(name="trade", description="Post a WTS (Want To Sell) or WTB (Want To Buy) listing.")
+    command_decorator = group.command(name="trade", description="Post WTS/WTB listing — platinum items, Warframe market prices.") if group else bot.tree.command(name="trade", description="Post a WTS or WTB trading listing.")
     
     @command_decorator
     @app_commands.autocomplete(item=item_autocomplete)

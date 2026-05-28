@@ -13,7 +13,7 @@ import aiosqlite
 def setup(bot, group=None):
     """Register dojo tracker commands."""
     
-    command_decorator = group.command(name="dojo_research", description="Track clan dojo research progress.") if group else bot.tree.command(name="dojo_research", description="Track clan dojo research progress.")
+    command_decorator = group.command(name="dojo_research", description="Clan dojo research tracker — add, update, list with progress bars.") if group else bot.tree.command(name="dojo_research", description="Track clan dojo research progress.")
     
     @command_decorator
     @app_commands.describe(

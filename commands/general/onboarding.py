@@ -227,7 +227,7 @@ def _build_dm_embed(member: discord.Member, client) -> discord.Embed:
         "**🎁 Claim Daily** · start your coin streak\n"
         "**🔔 Pick Notifications** · Baro, alerts, cycles\n"
         "**🎮 Link Steam** · for trading & roles\n\n"
-        "_You can re-open this any time with `/onboarding send_me` or `/onboarding resume`._",
+        "_You can re-open this any time with `/onboarding send_me`, `/onboarding resume`, or `/menu`._",
         category="general",
         client=client,
         brand=True,

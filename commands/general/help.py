@@ -364,7 +364,7 @@ class HelpSelect(discord.ui.Select):
 
 def setup(bot, group=None):
     """Register the help command."""
-    command_decorator = group.command(name="help", description="Browse commands or get help for a specific command. Example: /general help command:economy daily") if group else bot.tree.command(name="help", description="Browse commands or get help for a specific command. Example: /general help command:economy daily")
+    command_decorator = group.command(name="help", description="Browse commands — categories, shortcuts, and examples. Try /help or /menu.") if group else bot.tree.command(name="help", description="Browse all bot commands.")
     
     async def _help_command_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
         """Autocomplete command paths for help."""
@@ -459,7 +459,11 @@ def setup(bot, group=None):
                 "general trivia": ["/general trivia", "/general trivia difficulty:Hard"],
                 "general links": ["/general links"],
                 "general about": ["/general about"],
-                "general help_search": ["/general help_search query:pet", "/general help_search query:baro"],
+                "general help_search": ["/search query:pet", "/search query:baro", "/general help_search query:ticket"],
+                "search": ["/search query:daily", "/search query:trade"],
+                "case": ["/case case_id:OBS-..."],
+                "community case_status": ["/case case_id:OBS-..."],
+                "menu": ["/menu"],
                 # Tools
                 "tools activity_heatmap": ["/tools activity_heatmap", "/tools activity_heatmap days:30 days", "/tools activity_heatmap user:@Member days:7 days"],
                 "tools voice_leaderboard": ["/tools voice_leaderboard"],
@@ -568,7 +572,7 @@ def setup(bot, group=None):
                 await interaction.followup.send(
                     embed=obsidian_embed(
                         "❌ Command Not Found",
-                        f"Could not find command: `{command}`.{hint}\n\nUse `/help` without arguments to browse all commands.",
+                        f"Could not find command: `{command}`.{hint}\n\nUse **`/help`** or **`/search`** to browse commands.",
                         color=discord.Color.red(),
                         client=interaction.client,
                     ),
@@ -583,9 +587,18 @@ def setup(bot, group=None):
             if isinstance(cmd, app_commands.Group):
                 groups.append(cmd)
         
-        # Build initial embed
-        desc = "Select a command group from the dropdown below to view all commands in that group.\n\n"
-        desc += "**Available Groups:**\n"
+        # Build initial embed — "Start here" mental model + full group list
+        desc = (
+            "**Start here** — the commands members use most:\n\n"
+            "👤 **Me** — `/daily` · `/profile` · `/me` · `/preferences` · `/tools favorites`\n"
+            "🎮 **Warframe** — `/baro` · `/fissures` · `/lfg` · `/trade`\n"
+            "👥 **Community** — `/ticket` · `/case` · `/poll` · `/community suggest`\n"
+            "🔍 **Find anything** — `/search` keyword · `/menu` quick picker · `/help` full list\n"
+        )
+        if is_user_mod:
+            desc += "\n🛡️ **Mods** — `/mod purge` · `/warn warn` · `/automod status` · `/admin dashboard`\n"
+
+        desc += "\n**All categories** (dropdown below):\n"
         
         group_info = {
             "general": ("📋 General", "General bot commands"),
@@ -624,9 +637,10 @@ def setup(bot, group=None):
             host = website_host() or BOT_WEBSITE
             desc += f"\n\n**🌐 Website:** [{host}]({BOT_WEBSITE}) — also in **`/general links`** and **`/general about`**"
         
-        desc += "\n\n**💡 Tip:** Use the dropdown below to browse commands by category, or use `/help <command>` for specific help!"
+        desc += "\n\n**💡 Tips:** Type `/` and start typing (Discord searches names + descriptions). "
+        desc += "Pin favorites with **`/tools favorite_add`**. New? Try **`/menu`**."
         
-        help_footer = "Select a category below or use /help <command> for specific help"
+        help_footer = "Shortcuts: /help /search /menu • /help command:<name> for details"
         if BOT_WEBSITE:
             help_footer += f" • {website_host() or 'Website'}"
         
@@ -645,7 +659,7 @@ def setup(bot, group=None):
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
     search_decorator = (
-        group.command(name="help_search", description="Search slash commands by keyword.")
+        group.command(name="help_search", description="Search commands by keyword — coins, baro, ticket, trade.")
         if group
         else bot.tree.command(name="help_search", description="Search slash commands by keyword.")
     )
@@ -672,7 +686,7 @@ def setup(bot, group=None):
             return await interaction.response.send_message(
                 embed=obsidian_embed(
                     "No matches",
-                    f"No commands matched **`{q}`**.\nTry `/general help` to browse by category.",
+                    f"No commands matched **`{q}`**.\nTry **`/help`** to browse by category or **`/menu`** for quick picks.",
                     category="general",
                     client=interaction.client,
                 ),
@@ -690,7 +704,7 @@ def setup(bot, group=None):
             f"🔍 Command search — `{q}`",
             "\n".join(lines[:12]),
             color=discord.Color.blurple(),
-            footer=f"{len(matches)} match{'es' if len(matches) != 1 else ''} • Use /general help command:<name> for details",
+            footer=f"{len(matches)} match{'es' if len(matches) != 1 else ''} • /search or /help command:<name> for details",
             client=interaction.client,
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)

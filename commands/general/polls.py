@@ -132,7 +132,7 @@ def setup(bot, group=None):
         await _on_poll_reaction(payload)
 
     
-    command_decorator = group.command(name="poll", description="Create a poll.") if group else bot.tree.command(name="poll", description="Create a poll.")
+    command_decorator = group.command(name="poll", description="Create a server poll — members vote with number reactions.") if group else bot.tree.command(name="poll", description="Create a poll.")
     
     @command_decorator
     @app_commands.describe(question="The poll question", options="Comma-separated options (max 10)", duration="How long the poll should last (e.g., '1 hour', '30 minutes')")
