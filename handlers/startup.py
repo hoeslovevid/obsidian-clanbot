@@ -39,12 +39,11 @@ async def run_startup(bot: discord.Client) -> None:
     await bot.change_presence(activity=activity, status=discord.Status.online)
     print(f"[ready] Status set: Watching {activity.name}")
 
-    guild_list = list(bot.guilds)
+    guild_list = sorted(bot.guilds, key=lambda g: (g.name or "").lower())
     guild_count = len(guild_list)
-    guilds_shown = [(g.name, g.id) for g in guild_list[:15]]
-    suffix = f", ... and {guild_count - 15} more" if guild_count > 15 else ""
-    parts = [f"{name} ({gid})" for name, gid in guilds_shown]
-    print(f"[ready] Servers ({guild_count}): {', '.join(parts)}{suffix}")
+    print(f"[ready] Servers ({guild_count}):")
+    for i, g in enumerate(guild_list, start=1):
+        print(f"[ready]   {i:>3}. {g.name} ({g.id})")
 
     # Parallelize startup tasks for faster initialization
     async def setup_guild_channels():
