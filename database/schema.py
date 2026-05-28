@@ -997,8 +997,17 @@ async def init_db() -> None:
             options TEXT NOT NULL,
             ends_at TEXT,
             created_at TEXT NOT NULL,
+            closed INTEGER NOT NULL DEFAULT 0,
             UNIQUE(guild_id, message_id)
         )""")
+        try:
+            cur = await db.execute("PRAGMA table_info(polls)")
+            poll_cols = [row[1] for row in await cur.fetchall()]
+            if "closed" not in poll_cols:
+                await db.execute("ALTER TABLE polls ADD COLUMN closed INTEGER NOT NULL DEFAULT 0")
+                await db.commit()
+        except Exception as e:
+            logger.warning(f"[db] polls closed migration: {e}")
 
         await db.execute("""
         CREATE TABLE IF NOT EXISTS poll_votes (

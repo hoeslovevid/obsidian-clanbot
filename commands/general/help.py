@@ -458,6 +458,7 @@ def setup(bot, group=None):
                 "general trivia": ["/general trivia", "/general trivia difficulty:Hard"],
                 "general links": ["/general links"],
                 "general about": ["/general about"],
+                "general help_search": ["/general help_search query:pet", "/general help_search query:baro"],
                 # Tools
                 "tools activity_heatmap": ["/tools activity_heatmap", "/tools activity_heatmap days:30 days", "/tools activity_heatmap user:@Member days:7 days"],
                 "tools voice_leaderboard": ["/tools voice_leaderboard"],
@@ -641,3 +642,54 @@ def setup(bot, group=None):
         view = HelpSelectView(bot, is_user_mod)
         
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+    search_decorator = (
+        group.command(name="help_search", description="Search slash commands by keyword.")
+        if group
+        else bot.tree.command(name="help_search", description="Search slash commands by keyword.")
+    )
+
+    @search_decorator
+    @app_commands.describe(query="Keyword to search (command name or description)")
+    async def help_search(interaction: discord.Interaction, query: str):
+        from core.command_search import search_commands
+
+        q = (query or "").strip()
+        if len(q) < 2:
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "Search too short",
+                    "Use at least **2 characters** (e.g. `pet`, `baro`, `ticket`).",
+                    category="warning",
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+
+        matches = search_commands(interaction.client, q, limit=12)
+        if not matches:
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "No matches",
+                    f"No commands matched **`{q}`**.\nTry `/general help` to browse by category.",
+                    category="general",
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+
+        lines = []
+        for path, desc, _score in matches:
+            line = f"`/{path}`"
+            if desc:
+                line += f" — {desc[:90]}{'…' if len(desc) > 90 else ''}"
+            lines.append(line)
+
+        embed = obsidian_embed(
+            f"🔍 Command search — `{q}`",
+            "\n".join(lines[:12]),
+            color=discord.Color.blurple(),
+            footer=f"{len(matches)} match{'es' if len(matches) != 1 else ''} • Use /general help command:<name> for details",
+            client=interaction.client,
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)

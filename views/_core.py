@@ -236,6 +236,10 @@ class VCPanelView(discord.ui.View):
         self.add_item(discord.ui.Button(label="Revoke", style=discord.ButtonStyle.secondary, emoji="⛓️", custom_id=f"vc:{vc_id}:remove"))
         self.add_item(discord.ui.Button(label="Pass Command", style=discord.ButtonStyle.secondary, emoji="🔄", custom_id=f"vc:{vc_id}:transfer"))
         self.add_item(discord.ui.Button(label="Dissolve", style=discord.ButtonStyle.danger, emoji="🗑️", custom_id=f"vc:{vc_id}:disband"))
+        # Privacy presets (QoL #17)
+        self.add_item(discord.ui.Button(label="Public", style=discord.ButtonStyle.success, emoji="🌐", custom_id=f"vc:{vc_id}:privacy_public", row=2))
+        self.add_item(discord.ui.Button(label="Friends", style=discord.ButtonStyle.primary, emoji="👥", custom_id=f"vc:{vc_id}:privacy_friends", row=2))
+        self.add_item(discord.ui.Button(label="Private", style=discord.ButtonStyle.secondary, emoji="🔐", custom_id=f"vc:{vc_id}:privacy_private", row=2))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         # Only owner or mods can use most controls

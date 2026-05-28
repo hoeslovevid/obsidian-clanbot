@@ -54,29 +54,27 @@ async def _refresh_live_poll(channel: discord.abc.Messageable, message_id: int) 
     try:
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute(
-                "SELECT question, options, ends_at FROM polls WHERE message_id=?",
+                "SELECT question, options, ends_at, closed FROM polls WHERE message_id=?",
                 (message_id,),
             )
             row = await cur.fetchone()
         if not row:
             return
-        question, options_json, ends_at = row
+        question, options_json, ends_at, closed = row
+        if closed:
+            return
         options_list = json.loads(options_json)
         if not isinstance(channel, (discord.TextChannel, discord.Thread)):
             return
         message = await channel.fetch_message(message_id)
-        counts: list[int] = []
-        for i, _opt in enumerate(options_list):
-            if i >= len(_NUMBER_REACTIONS):
-                counts.append(0)
-                continue
-            reaction = discord.utils.get(message.reactions, emoji=_NUMBER_REACTIONS[i])
-            counts.append(max(0, (reaction.count - 1) if reaction else 0))
-        new_embed = _build_live_poll_embed(question, options_list, counts, ends_at)
-        # Preserve original footer if present
+        from core.poll_utils import fetch_poll_reaction_counts, build_poll_results_embed
+        counts = await fetch_poll_reaction_counts(message, options_list)
+        new_embed = build_poll_results_embed(question, options_list, counts, closed=False)
         original = message.embeds[0] if message.embeds else None
-        if original and original.footer and original.footer.text:
-            new_embed.set_footer(text=original.footer.text)
+        if original and original.footer and original.footer.text and "Poll by" in original.footer.text:
+            creator_part = original.footer.text.split("Poll by", 1)[-1].strip()
+            if creator_part:
+                new_embed.set_footer(text=f"Live results — react to vote • Poll by {creator_part}")
         await message.edit(embed=new_embed)
     except (discord.NotFound, discord.Forbidden):
         return

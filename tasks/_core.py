@@ -2268,6 +2268,36 @@ def setup_tasks(bot):
         await bot.wait_until_ready()
 
     @tasks.loop(minutes=1)
+    async def poll_close_loop():
+        """Close expired polls and post final results embeds (QoL #20)."""
+        try:
+            if not bot.is_ready():
+                return
+            from core.poll_utils import close_expired_poll
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute("""
+                    SELECT id, guild_id, channel_id, message_id, question, options, creator_id
+                    FROM polls
+                    WHERE COALESCE(closed, 0) = 0
+                      AND ends_at IS NOT NULL
+                      AND TRIM(ends_at) != ''
+                      AND datetime(ends_at) <= datetime('now')
+                    LIMIT 25
+                """)
+                rows = await cur.fetchall()
+            for row in rows:
+                try:
+                    await close_expired_poll(bot, row)
+                except Exception as exc:
+                    logger.debug("[poll] auto-close failed: %s", exc)
+        except Exception as e:
+            logger.error(f"Error in poll_close_loop: {e}", exc_info=True)
+
+    @poll_close_loop.before_loop
+    async def before_poll_close_loop():
+        await bot.wait_until_ready()
+
+    @tasks.loop(minutes=1)
     async def scheduled_messages_loop():
         """Send scheduled messages when due."""
         try:
@@ -2719,6 +2749,7 @@ def setup_tasks(bot):
         ('alert_check_loop', alert_check_loop),
         ('devstream_check_loop', devstream_check_loop),
         ('reminder_check_loop', reminder_check_loop),
+        ('poll_close_loop', poll_close_loop),
         ('scheduled_messages_loop', scheduled_messages_loop),
         ('twitch_check_loop', twitch_check_loop),
         ('stale_ticket_reminder_loop', stale_ticket_reminder_loop),

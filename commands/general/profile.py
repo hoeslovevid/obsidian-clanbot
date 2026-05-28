@@ -324,6 +324,22 @@ def setup(bot, group=None):
                     ach_name = name or ach_id.replace("_", " ").title()
                     achievements_text += f"• {ach_name}\n"
             fields.append(("🏆 Achievements", achievements_text, True))
+
+        # Near-miss achievement nudges (QoL #18)
+        if is_self:
+            try:
+                from core.achievement_nudges import get_achievement_nudges
+                nudges = await get_achievement_nudges(
+                    interaction.guild.id, target_user.id, profile_data
+                )
+                if nudges:
+                    fields.append((
+                        "🎯 Almost there",
+                        "\n".join(f"• {n}" for n in nudges),
+                        False,
+                    ))
+            except Exception:
+                pass
         
         # Moderation section (only if warnings > 0 or user is mod viewing)
         if profile_data["warnings"] > 0 or (is_mod(interaction.user) and target_user.id != interaction.user.id):

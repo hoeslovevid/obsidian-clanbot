@@ -264,6 +264,58 @@ async def handle_component(bot: discord.Client, interaction: discord.Interaction
                     await delete_temp_vc_and_panel(guild_vc, vc_id, reason="Disband via panel")
                     return
 
+                if action in ("privacy_public", "privacy_friends", "privacy_private"):
+                    mode = action.replace("privacy_", "")
+                    owner_id = member.id
+                    async with aiosqlite.connect(DB_PATH) as db:
+                        cur = await db.execute(
+                            "SELECT owner_id FROM temp_vcs WHERE guild_id=? AND channel_id=?",
+                            (guild_vc.id, vc_id),
+                        )
+                        row = await cur.fetchone()
+                        if row:
+                            owner_id = int(row[0])
+                    owner = guild_vc.get_member(owner_id) or member
+                    overwrites = dict(vc.overwrites)
+                    if mode == "public":
+                        overwrites[guild_vc.default_role] = discord.PermissionOverwrite(
+                            view_channel=True, connect=True
+                        )
+                    elif mode == "friends":
+                        overwrites[guild_vc.default_role] = discord.PermissionOverwrite(
+                            view_channel=True, connect=False
+                        )
+                        for occupant in vc.members:
+                            if occupant.bot:
+                                continue
+                            ow = overwrites.get(occupant, discord.PermissionOverwrite())
+                            ow.view_channel = True
+                            ow.connect = True
+                            overwrites[occupant] = ow
+                    else:  # private
+                        overwrites[guild_vc.default_role] = discord.PermissionOverwrite(
+                            view_channel=False, connect=False
+                        )
+                    owner_ow = overwrites.get(owner, discord.PermissionOverwrite())
+                    owner_ow.view_channel = True
+                    owner_ow.connect = True
+                    owner_ow.manage_channels = True
+                    owner_ow.move_members = True
+                    overwrites[owner] = owner_ow
+                    mod_role = get_mod_role(guild_vc)
+                    if mod_role:
+                        overwrites[mod_role] = discord.PermissionOverwrite(
+                            view_channel=True, connect=True
+                        )
+                    await vc.edit(overwrites=overwrites, reason=f"VC privacy preset: {mode}")
+                    labels = {
+                        "public": "🌐 **Public** — anyone can see and join.",
+                        "friends": "👥 **Friends** — squad in the channel can stay; others need **Grant**.",
+                        "private": "🔐 **Private** — hidden from everyone except you and mods.",
+                    }
+                    await interaction.response.send_message(labels.get(mode, "Privacy updated."), ephemeral=True)
+                    return
+
         # Trading posts (trade:{id}:sold|delete): handled by TradingPostView callbacks.
         # Those buttons defer and update the message; do not route here — discord.py invokes the
         # persistent view first, and a second defer in this handler caused 40060 already acknowledged.
