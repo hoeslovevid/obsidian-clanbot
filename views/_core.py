@@ -240,6 +240,11 @@ class VCPanelView(discord.ui.View):
         self.add_item(discord.ui.Button(label="Public", style=discord.ButtonStyle.success, emoji="🌐", custom_id=f"vc:{vc_id}:privacy_public", row=2))
         self.add_item(discord.ui.Button(label="Friends", style=discord.ButtonStyle.primary, emoji="👥", custom_id=f"vc:{vc_id}:privacy_friends", row=2))
         self.add_item(discord.ui.Button(label="Private", style=discord.ButtonStyle.secondary, emoji="🔐", custom_id=f"vc:{vc_id}:privacy_private", row=2))
+        # Capacity quick presets
+        self.add_item(discord.ui.Button(label="Cap 2", style=discord.ButtonStyle.secondary, emoji="2️⃣", custom_id=f"vc:{vc_id}:cap_2", row=3))
+        self.add_item(discord.ui.Button(label="Cap 4", style=discord.ButtonStyle.secondary, emoji="4️⃣", custom_id=f"vc:{vc_id}:cap_4", row=3))
+        self.add_item(discord.ui.Button(label="Cap 8", style=discord.ButtonStyle.secondary, emoji="8️⃣", custom_id=f"vc:{vc_id}:cap_8", row=3))
+        self.add_item(discord.ui.Button(label="No Cap", style=discord.ButtonStyle.secondary, emoji="♾️", custom_id=f"vc:{vc_id}:cap_0", row=3))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         # Only owner or mods can use most controls
@@ -560,45 +565,44 @@ class GiveawayView(discord.ui.View):
         
         giveaway_id, prize, winner_count, end_time_str, ended, required_role_id, min_level = row
         
-        # Check if ended
+        failures: list[str] = []
         if ended:
-            return await interaction.response.send_message(
-                embed=obsidian_embed(
-                    "❌ Giveaway Ended",
-                    "This giveaway has already ended.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
-            )
+            failures.append("This giveaway has already ended.")
+        if end_time_str:
+            try:
+                from datetime import datetime, timezone as _tz
+                end_dt = datetime.fromisoformat(end_time_str.replace("Z", "+00:00"))
+                if end_dt.tzinfo is None:
+                    end_dt = end_dt.replace(tzinfo=_tz.utc)
+                if end_dt <= now_utc():
+                    failures.append(f"Giveaway ended <t:{int(end_dt.timestamp())}:R>.")
+            except Exception:
+                pass
         
-        # Check requirements
         if required_role_id:
             role = interaction.guild.get_role(required_role_id)
             if role and role not in interaction.user.roles:
-                return await interaction.response.send_message(
-                    embed=obsidian_embed(
-                        "❌ Requirement Not Met",
-                        f"You need the {role.mention} role to enter this giveaway.",
-                        color=discord.Color.red(),
-                        client=interaction.client,
-                    ),
-                    ephemeral=True
-                )
+                failures.append(f"Missing role: {role.mention}")
+            elif role is None:
+                failures.append("Required role is no longer available on this server.")
         
         if min_level:
             from database import get_user_xp
             _, user_level, _ = await get_user_xp(interaction.guild.id, interaction.user.id)
             if user_level < min_level:
-                return await interaction.response.send_message(
-                    embed=obsidian_embed(
-                        "❌ Level Requirement",
-                        f"You need to be at least level {min_level} to enter this giveaway. Your current level: {user_level}",
-                        color=discord.Color.red(),
-                        client=interaction.client,
-                    ),
-                    ephemeral=True
-                )
+                failures.append(f"Need level **{min_level}** (you're **{user_level}**).")
+        
+        if failures:
+            body = "**You can't enter yet:**\n" + "\n".join(f"• {line}" for line in failures)
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Entry Requirements Not Met",
+                    body,
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
         
         # Check if already entered
         async with aiosqlite.connect(DB_PATH) as db:

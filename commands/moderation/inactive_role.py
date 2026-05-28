@@ -20,14 +20,31 @@ import discord
 from discord import app_commands
 
 from core.utils import EMBED_COLORS, error_embed, is_mod, obsidian_embed, success_embed
-from database import DB_PATH, get_guild_setting, set_guild_setting
+from database import DB_PATH, delete_guild_setting, get_guild_setting, set_guild_setting
 
 logger = logging.getLogger(__name__)
 
 
 SETTING_ROLE_ID = "inactive_role_id"
 SETTING_THRESHOLD_DAYS = "inactive_threshold_days"
+WARN_SENT_PREFIX = "inactive_warn_sent:"
 DEFAULT_THRESHOLD_DAYS = 60
+
+
+def _warn_key(user_id: int) -> str:
+    return f"{WARN_SENT_PREFIX}{user_id}"
+
+
+async def was_inactive_warned(guild_id: int, user_id: int) -> bool:
+    return await get_guild_setting(guild_id, _warn_key(user_id)) == "1"
+
+
+async def mark_inactive_warned(guild_id: int, user_id: int) -> None:
+    await set_guild_setting(guild_id, _warn_key(user_id), "1")
+
+
+async def clear_inactive_warning(guild_id: int, user_id: int) -> None:
+    await delete_guild_setting(guild_id, _warn_key(user_id))
 
 
 async def get_inactive_role_id(guild_id: int) -> Optional[int]:
@@ -87,6 +104,7 @@ async def maybe_clear_inactive_role(member: discord.Member) -> None:
     """Hook for on_message / on_voice — strip the inactive role if present."""
     if member.bot or member.guild is None:
         return
+    await clear_inactive_warning(member.guild.id, member.id)
     role_id = await get_inactive_role_id(member.guild.id)
     if not role_id:
         return
@@ -95,6 +113,7 @@ async def maybe_clear_inactive_role(member: discord.Member) -> None:
         return
     try:
         await member.remove_roles(role, reason="Inactive role auto-clear: member is active again")
+        await clear_inactive_warning(member.guild.id, member.id)
     except (discord.Forbidden, discord.HTTPException) as e:
         logger.debug(f"[inactive_role] could not remove role from {member.id}: {e}")
 

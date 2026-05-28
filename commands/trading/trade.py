@@ -127,14 +127,16 @@ def setup(bot, group=None):
             logging.getLogger(__name__).warning(f"Could not fetch price info: {e}")
         
         # Create listing
+        from datetime import timedelta
         created_at = now_utc().isoformat()
+        expires_at = (now_utc() + timedelta(days=14)).isoformat()
         listing_id = None
         
         async with aiosqlite.connect(DB_PATH) as db:
             await db.execute("""
-                INSERT INTO trading_posts (guild_id, user_id, listing_type, item_name, price, quantity, description, status, created_at, platform)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?)
-            """, (interaction.guild.id, interaction.user.id, listing_type_val, item, price, quantity, description, created_at, platform_val))
+                INSERT INTO trading_posts (guild_id, user_id, listing_type, item_name, price, quantity, description, status, created_at, platform, expires_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?, ?)
+            """, (interaction.guild.id, interaction.user.id, listing_type_val, item, price, quantity, description, created_at, platform_val, expires_at))
             await db.commit()
             
             cur = await db.execute("SELECT last_insert_rowid()")
@@ -179,6 +181,13 @@ def setup(bot, group=None):
                 fields.append(("Market Prices", "\n".join(market_info), False))
         
         fields.append(("Listing ID", f"#{listing_id}", True))
+        try:
+            from datetime import datetime, timezone as _tz
+            exp_dt = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+            exp_ts = int(exp_dt.timestamp())
+            fields.append(("Expires", f"<t:{exp_ts}:R>", True))
+        except Exception:
+            pass
         
         color = discord.Color.green() if listing_type_val == "WTS" else discord.Color.blue()
         
@@ -202,8 +211,8 @@ def setup(bot, group=None):
             # Update message_id
             async with aiosqlite.connect(DB_PATH) as db:
                 await db.execute("""
-                    UPDATE trading_posts SET message_id = ? WHERE id = ?
-                """, (message.id, listing_id))
+                    UPDATE trading_posts SET message_id = ?, channel_id = ? WHERE id = ?
+                """, (message.id, trading_channel.id, listing_id))
                 await db.commit()
             
             await interaction.followup.send(

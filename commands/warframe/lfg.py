@@ -140,46 +140,32 @@ class LFGView(discord.ui.View):
     @discord.ui.button(label="Mark as Filled", style=discord.ButtonStyle.primary, emoji="✅")
     async def mark_filled(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Mark the group as filled (creator only) — keeps post visible with [FILLED] label."""
-        async with aiosqlite.connect(DB_PATH) as db:
-            cur = await db.execute(
-                "SELECT creator_id, status FROM lfg_posts WHERE id=?",
-                (self.lfg_id,)
-            )
-            post = await cur.fetchone()
+        from core.lfg_fill import mark_lfg_filled
 
-            if not post:
-                return await interaction.response.send_message("LFG post not found.", ephemeral=True)
-
-            creator_id, status = post
-            if interaction.user.id != creator_id:
-                return await interaction.response.send_message("Only the creator can mark the group as filled.", ephemeral=True)
-
-            if status == "COMPLETED":
-                return await interaction.response.send_message("This LFG post is already marked as filled.", ephemeral=True)
-
-            await db.execute("UPDATE lfg_posts SET status='COMPLETED' WHERE id=?", (self.lfg_id,))
-            await db.commit()
-
-        # Edit the embed to show [FILLED] and disable Join/Filled buttons
         await interaction.response.defer(ephemeral=True)
+        ok, msg = await mark_lfg_filled(
+            self.lfg_id,
+            interaction.user.id,
+            client=interaction.client,
+            guild=interaction.guild,
+        )
+        if not ok:
+            return await interaction.followup.send(msg, ephemeral=True)
         try:
-            msg = interaction.message
-            if msg and msg.embeds:
-                embed = msg.embeds[0]
+            if interaction.message and interaction.message.embeds:
+                embed = interaction.message.embeds[0]
                 embed.color = discord.Color.green()
-                # Prefix title with [FILLED]
                 old_title = embed.title or "Looking for Group"
-                if not old_title.startswith("[FILLED]"):
+                if not old_title.startswith("[FILLED"):
                     embed.title = f"[FILLED ✅] {old_title}"
                 embed.set_footer(text="✅ Group filled — post will auto-archive soon")
-                # Disable Join and Mark as Filled buttons; keep Leave
                 for item in self.children:
                     if isinstance(item, discord.ui.Button) and item.label in ("Join", "Mark as Filled"):
                         item.disabled = True
-                await msg.edit(embed=embed, view=self)
+                await interaction.message.edit(embed=embed, view=self)
         except Exception:
             pass
-        await interaction.followup.send("Group marked as filled! The post now shows [FILLED ✅].", ephemeral=True)
+        await interaction.followup.send(msg, ephemeral=True)
     
     async def _handle_rsvp(self, interaction: discord.Interaction, response: str):
         """Handle RSVP (join/leave)."""
@@ -299,20 +285,24 @@ class LFGView(discord.ui.View):
         await interaction.followup.send(f"You {action} the group! ({current_count}/{max_players}){thread_mention}", ephemeral=True)
 
         # DM the creator when the group becomes full
-        if response == "JOIN" and current_count >= max_players and interaction.user.id != creator_id:
+        if response == "JOIN" and current_count >= max_players:
             try:
                 creator = interaction.guild.get_member(creator_id)
                 if creator:
                     from core.utils import obsidian_embed
+                    from core.lfg_fill import LFGDMMarkFilledView
+
                     dm_embed = obsidian_embed(
                         "✅ Your LFG Group is Full!",
                         f"Your **{embed.title or 'LFG'}** group has reached **{max_players}/{max_players}** players.\n\n"
                         f"The last player to join was **{interaction.user.display_name}**.\n\n"
-                        f"*Head to your LFG post to get started!*",
+                        f"*Mark the post filled when you're done recruiting.*",
                         color=discord.Color.green(),
                         client=interaction.client,
                     )
-                    await creator.send(embed=dm_embed)
+                    dm_view = LFGDMMarkFilledView(self.lfg_id)
+                    interaction.client.add_view(dm_view)
+                    await creator.send(embed=dm_embed, view=dm_view)
             except (discord.Forbidden, discord.HTTPException):
                 pass
 

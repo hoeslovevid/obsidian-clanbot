@@ -227,6 +227,16 @@ async def handle_component(bot: discord.Client, interaction: discord.Interaction
                     await interaction.response.send_message("Choose a squad limit:", view=SetLimitView(vc_id), ephemeral=True)
                     return
 
+                if action.startswith("cap_"):
+                    try:
+                        limit = int(action.split("_", 1)[1])
+                    except (IndexError, ValueError):
+                        return await interaction.response.send_message("Invalid capacity preset.", ephemeral=True)
+                    await vc.edit(user_limit=limit, reason="VC panel capacity preset")
+                    label = "Capacity removed — **no limit**." if limit == 0 else f"Capacity set to **{limit}**."
+                    await interaction.response.send_message(label, ephemeral=True)
+                    return
+
                 if action == "lock":
                     await edit_everyone(connect=False)
                     await interaction.response.send_message("Sealed.", ephemeral=True)
@@ -315,6 +325,36 @@ async def handle_component(bot: discord.Client, interaction: discord.Interaction
                     }
                     await interaction.response.send_message(labels.get(mode, "Privacy updated."), ephemeral=True)
                     return
+
+        # LFG: DM mark-as-filled button (works from DMs where guild is None)
+        if cid.startswith("lfg:"):
+            parts = cid.split(":")
+            if len(parts) >= 3 and parts[2] == "dm_fill":
+                try:
+                    lfg_id = int(parts[1])
+                except ValueError:
+                    return await interaction.response.send_message("Invalid LFG reference.", ephemeral=True)
+                from core.lfg_fill import mark_lfg_filled
+
+                await interaction.response.defer(ephemeral=True)
+                ok, msg = await mark_lfg_filled(
+                    lfg_id,
+                    interaction.user.id,
+                    client=interaction.client,
+                    guild=interaction.guild,
+                )
+                if ok:
+                    try:
+                        from core.lfg_fill import LFGDMMarkFilledView
+                        view = LFGDMMarkFilledView(lfg_id)
+                        for child in view.children:
+                            if isinstance(child, discord.ui.Button):
+                                child.disabled = True
+                        await interaction.edit_original_response(view=view)
+                    except Exception:
+                        pass
+                await interaction.followup.send(msg, ephemeral=True)
+                return
 
         # Trading posts (trade:{id}:sold|delete): handled by TradingPostView callbacks.
         # Those buttons defer and update the message; do not route here — discord.py invokes the

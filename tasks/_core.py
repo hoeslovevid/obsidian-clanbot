@@ -675,7 +675,9 @@ def setup_tasks(bot):
         try:
             from commands.moderation.inactive_role import (
                 get_inactive_role_id, get_inactive_threshold_days, _last_activity_for,
+                was_inactive_warned, mark_inactive_warned,
             )
+            from core.utils import obsidian_embed
             for guild in bot.guilds:
                 try:
                     role_id = await get_inactive_role_id(guild.id)
@@ -690,7 +692,10 @@ def setup_tasks(bot):
                         continue
                     threshold = await get_inactive_threshold_days(guild.id)
                     cutoff = now_utc() - timedelta(days=threshold)
+                    warn_days = max(1, int(threshold * 0.75))
+                    warn_cutoff = now_utc() - timedelta(days=warn_days)
                     tagged = 0
+                    warned = 0
                     for member in guild.members:
                         if member.bot or role in member.roles:
                             continue
@@ -708,8 +713,27 @@ def setup_tasks(bot):
                                 tagged += 1
                             except (discord.Forbidden, discord.HTTPException) as e:
                                 logger.debug(f"[inactive_role] could not tag {member.id}: {e}")
+                        elif ref_dt < warn_cutoff and not await was_inactive_warned(guild.id, member.id):
+                            days_left = max(1, threshold - warn_days)
+                            try:
+                                dm = obsidian_embed(
+                                    "⚠️ Inactivity Notice",
+                                    f"You haven't been active in **{guild.name}** for about **{warn_days}** days.\n\n"
+                                    f"In **~{days_left}** more days you may receive the {role.mention} role "
+                                    f"(threshold: **{threshold}** days).\n\n"
+                                    f"_Chat, use commands, or join voice to stay active._",
+                                    color=discord.Color.orange(),
+                                    client=bot,
+                                )
+                                await member.send(embed=dm)
+                                await mark_inactive_warned(guild.id, member.id)
+                                warned += 1
+                            except (discord.Forbidden, discord.HTTPException):
+                                await mark_inactive_warned(guild.id, member.id)
                     if tagged:
                         logger.info(f"[inactive_role] tagged {tagged} member(s) in {guild.name}")
+                    if warned:
+                        logger.info(f"[inactive_role] warned {warned} member(s) in {guild.name}")
                 except Exception as e:
                     logger.warning(f"[inactive_role] guild {guild.id} sweep failed: {e}")
         except Exception as e:
@@ -1132,6 +1156,67 @@ def setup_tasks(bot):
 
     @lfg_expire_loop.before_loop
     async def before_lfg_expire_loop():
+        await bot.wait_until_ready()
+
+    @tasks.loop(hours=1)
+    async def trading_expire_loop():
+        """Expire stale trading posts and DM owners to renew."""
+        try:
+            from core.utils import obsidian_embed
+            async with aiosqlite.connect(DB_PATH) as db:
+                now = datetime.now(timezone.utc).isoformat()
+                cur = await db.execute("""
+                    SELECT id, guild_id, user_id, item_name, listing_type, message_id, channel_id
+                    FROM trading_posts
+                    WHERE status='ACTIVE' AND expires_at IS NOT NULL AND expires_at < ?
+                """, (now,))
+                expired = await cur.fetchall()
+
+                for listing_id, guild_id, user_id, item_name, listing_type, message_id, channel_id in expired:
+                    try:
+                        guild = bot.get_guild(guild_id)
+                        if guild and message_id and channel_id:
+                            channel = guild.get_channel(int(channel_id))
+                            if isinstance(channel, discord.TextChannel):
+                                try:
+                                    msg = await channel.fetch_message(int(message_id))
+                                    if msg.embeds:
+                                        embed = msg.embeds[0]
+                                        embed.color = discord.Color.greyple()
+                                        embed.set_footer(text="⏰ Listing expired — repost with /trading trade")
+                                        await msg.edit(embed=embed, view=None)
+                                except discord.NotFound:
+                                    pass
+                                except discord.HTTPException:
+                                    pass
+
+                        member = guild.get_member(int(user_id)) if guild else None
+                        if member:
+                            try:
+                                dm = obsidian_embed(
+                                    "⏰ Trading Listing Expired",
+                                    f"Your **{listing_type}** listing for **{item_name}** expired after 14 days.\n\n"
+                                    f"Run **`/trading trade`** in **{guild.name if guild else 'the server'}** "
+                                    f"to post a fresh listing.",
+                                    color=discord.Color.orange(),
+                                    client=bot,
+                                )
+                                await member.send(embed=dm)
+                            except (discord.Forbidden, discord.HTTPException):
+                                pass
+
+                        await db.execute(
+                            "UPDATE trading_posts SET status='EXPIRED', updated_at=? WHERE id=?",
+                            (now, listing_id),
+                        )
+                        await db.commit()
+                    except Exception as e:
+                        logger.error(f"Error expiring trading post {listing_id}: {e}", exc_info=True)
+        except Exception as e:
+            logger.error(f"Error in trading_expire_loop: {e}", exc_info=True)
+
+    @trading_expire_loop.before_loop
+    async def before_trading_expire_loop():
         await bot.wait_until_ready()
 
     @tasks.loop(hours=6)  # Check every 6 hours for pet decay
@@ -2738,6 +2823,7 @@ def setup_tasks(bot):
         ('baro_live_update_loop', baro_live_update_loop),
         ('warframe_achievement_roles_loop', warframe_achievement_roles_loop),
         ('lfg_expire_loop', lfg_expire_loop),
+        ('trading_expire_loop', trading_expire_loop),
         ('pet_decay_reminder_loop', pet_decay_reminder_loop),
         ('daily_streak_reminder_loop', daily_streak_reminder_loop),
         ('investment_maturity_dm_loop', investment_maturity_dm_loop),

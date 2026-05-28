@@ -4,11 +4,69 @@ from discord import app_commands
 import aiosqlite
 
 from core.utils import obsidian_embed, is_mod, display_case_status, now_utc, get_mod_role
+from commands.complaints.submit_complaint import case_id_autocomplete
 from database import DB_PATH
 
 
 def setup(bot, group=None):
     """Register the request_help command."""
+
+    async def _lookup_case_status(interaction: discord.Interaction, case_id: str):
+        guild = interaction.guild
+        if not guild:
+            return await interaction.response.send_message("Use in a server.", ephemeral=True)
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT user_id, status, last_update_at, category, created_at FROM complaints WHERE guild_id=? AND case_id=?",
+                (guild.id, case_id),
+            )
+            row = await cur.fetchone()
+        if not row:
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Case Not Found",
+                    "No case with that ID. Check the ID from your confirmation DM or use `/community my_complaints`.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+        user_id, status, last_update_at, category, created_at = int(row[0]), str(row[1]), str(row[2]), row[3], row[4]
+        if user_id != interaction.user.id and not (isinstance(interaction.user, discord.Member) and is_mod(interaction.user)):
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Access Denied",
+                    "You can only view your own case status.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+        fields = [
+            ("Status", display_case_status(status), True),
+            ("Category", category or "—", True),
+            ("Filed (UTC)", created_at or "—", True),
+            ("Last Update (UTC)", last_update_at, True),
+            ("Case ID", case_id, False),
+        ]
+        embed = obsidian_embed(
+            f"📋 Case Status • {case_id}",
+            "You'll receive DM updates when staff change the status.",
+            color=discord.Color.blurple(),
+            fields=fields,
+            thumbnail=guild.icon.url if guild.icon else None,
+            footer="Use /community case_status to check again",
+            client=interaction.client,
+        )
+        return await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    case_status_decorator = group.command(name="case_status", description="Look up the status of your complaint or help case.") if group else None
+    if case_status_decorator:
+        @case_status_decorator
+        @app_commands.autocomplete(case_id=case_id_autocomplete)
+        @app_commands.describe(case_id="Your case ID (e.g., OBS-...) — autocompletes your open cases")
+        async def case_status(interaction: discord.Interaction, case_id: str):
+            await _lookup_case_status(interaction, case_id)
 
     my_complaints_decorator = group.command(name="my_complaints", description="List your open complaints/help cases.") if group else None
     if my_complaints_decorator:
@@ -33,7 +91,7 @@ def setup(bot, group=None):
             for case_id, category, status, created in rows:
                 lines.append(f"**{case_id}** — {category or '—'} ({display_case_status(status)})")
             await interaction.followup.send(
-                embed=obsidian_embed("📋 Your Open Cases", "\n".join(lines), color=discord.Color.blue(), footer="Use /community request_help case_id:<id> to check status", client=interaction.client),
+                embed=obsidian_embed("📋 Your Open Cases", "\n".join(lines), color=discord.Color.blue(), footer="Use /community case_status to check a case", client=interaction.client),
                 ephemeral=True,
             )
 

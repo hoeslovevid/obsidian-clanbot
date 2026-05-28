@@ -825,6 +825,21 @@ async def init_db() -> None:
             platform TEXT NOT NULL DEFAULT 'pc'
         )""")
 
+        try:
+            cur = await db.execute("PRAGMA table_info(trading_posts)")
+            columns = await cur.fetchall()
+            column_names = [col[1] for col in columns]
+            if "expires_at" not in column_names:
+                await db.execute("ALTER TABLE trading_posts ADD COLUMN expires_at TEXT")
+                await db.commit()
+                logger.info("[db] Added expires_at column to trading_posts table")
+            if "channel_id" not in column_names:
+                await db.execute("ALTER TABLE trading_posts ADD COLUMN channel_id INTEGER")
+                await db.commit()
+                logger.info("[db] Added channel_id column to trading_posts table")
+        except Exception as e:
+            logger.warning(f"[db] Error checking/adding trading_posts.expires_at: {e}")
+
         await db.execute("""
         CREATE TABLE IF NOT EXISTS trading_channel_settings (
             guild_id INTEGER NOT NULL PRIMARY KEY,
@@ -1637,6 +1652,7 @@ async def init_db() -> None:
             await db.execute("CREATE INDEX IF NOT EXISTS idx_complaints_guild_status ON complaints(guild_id, status)")
             await db.execute("CREATE INDEX IF NOT EXISTS idx_giveaways_ended ON giveaways(ended)")
             await db.execute("CREATE INDEX IF NOT EXISTS idx_trading_posts_guild_status ON trading_posts(guild_id, status)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_trading_posts_status_expires ON trading_posts(status, expires_at)")
             await db.execute("CREATE INDEX IF NOT EXISTS idx_log_channels_guild_type ON log_channels(guild_id, log_type)")
             await db.execute("CREATE INDEX IF NOT EXISTS idx_auto_mod_settings_guild ON auto_mod_settings(guild_id)")
             await db.execute("CREATE INDEX IF NOT EXISTS idx_command_usage_user ON command_usage_stats(guild_id, user_id)")

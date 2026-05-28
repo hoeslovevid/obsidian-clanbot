@@ -53,6 +53,20 @@ async def _ensure_onboarding_steps_table() -> None:
         await db.commit()
 
 
+async def get_user_onboarding_progress(guild_id: int, user_id: int) -> tuple[int, dict[str, bool]]:
+    """Return (completed_count, step_name -> done) for a member."""
+    await _ensure_onboarding_steps_table()
+    completed = {step: False for step in ONBOARDING_STEP_NAMES}
+    async with aiosqlite.connect(DB_PATH) as db:
+        for step in ONBOARDING_STEP_NAMES:
+            cur = await db.execute(
+                "SELECT 1 FROM onboarding_steps WHERE guild_id=? AND user_id=? AND step_name=?",
+                (guild_id, user_id, step),
+            )
+            completed[step] = bool(await cur.fetchone())
+    return sum(completed.values()), completed
+
+
 async def _record_onboarding_step(guild_id: int, user_id: int, step_name: str) -> None:
     """Record (idempotently) that ``user_id`` completed ``step_name``."""
     if step_name not in ONBOARDING_STEP_NAMES:
@@ -213,7 +227,7 @@ def _build_dm_embed(member: discord.Member, client) -> discord.Embed:
         "**🎁 Claim Daily** · start your coin streak\n"
         "**🔔 Pick Notifications** · Baro, alerts, cycles\n"
         "**🎮 Link Steam** · for trading & roles\n\n"
-        "_You can re-open this any time with `/onboarding send_me`._",
+        "_You can re-open this any time with `/onboarding send_me` or `/onboarding resume`._",
         category="general",
         client=client,
         brand=True,
@@ -263,6 +277,39 @@ def setup(bot, group=None):
     # Use a dedicated top-level group so the command path stays short and
     # discoverable; this lives outside the existing 25-cmd-limited groups.
     onboarding_group = app_commands.Group(name="onboarding", description="🌟 First-run onboarding panel.")
+
+    @onboarding_group.command(name="resume", description="See onboarding progress and continue where you left off.")
+    async def resume(interaction: discord.Interaction):
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=error_embed("Invalid Context", "Use this in a server.", client=interaction.client),
+                ephemeral=True,
+            )
+        if not isinstance(interaction.user, discord.Member):
+            return await interaction.response.send_message(
+                embed=error_embed("Invalid Context", "Member context required.", client=interaction.client),
+                ephemeral=True,
+            )
+        await interaction.response.defer(ephemeral=True)
+        done_count, completed = await get_user_onboarding_progress(interaction.guild.id, interaction.user.id)
+        total = len(ONBOARDING_STEP_NAMES)
+        pct = (100.0 * done_count / total) if total else 0.0
+        step_lines: list[str] = []
+        for step in ONBOARDING_STEP_NAMES:
+            mark = "✅" if completed[step] else "⬜"
+            label = step.replace("_", " ").title()
+            step_lines.append(f"{mark} **{label}**")
+        remaining = [s.replace("_", " ").title() for s in ONBOARDING_STEP_NAMES if not completed[s]]
+        footer = "All steps complete — nice work!" if done_count >= total else f"Next up: **{remaining[0]}**"
+        embed = obsidian_embed(
+            "🌟 Onboarding Progress",
+            f"{render_bar(pct, length=12)} · **{done_count}/{total}** steps\n\n" + "\n".join(step_lines),
+            category="general",
+            footer=footer,
+            client=interaction.client,
+        )
+        view = OnboardingView(interaction.user, guild_id=interaction.guild.id)
+        await interaction.followup.send(embed=embed, view=view, ephemeral=True)
 
     @onboarding_group.command(name="send_me", description="DM yourself the onboarding panel.")
     async def send_me(interaction: discord.Interaction):

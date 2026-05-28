@@ -4,7 +4,8 @@ from discord import app_commands
 from typing import Optional
 import json
 
-from core.utils import obsidian_embed, is_mod
+from core.utils import obsidian_embed, is_mod, render_bar
+from core.dojo_utils import compute_dojo_progress
 from database import DB_PATH, now_utc
 import aiosqlite
 
@@ -181,8 +182,12 @@ def setup(bot, group=None):
                 
                 research_text = ""
                 for name, rtype, status, current, required in research_list:
-                    status_emoji = "✅" if status == "completed" else "🔄"
-                    research_text += f"{status_emoji} **{name}** ({rtype}) - {status}\n"
+                    if status == "completed":
+                        research_text += f"✅ **{name}** ({rtype}) — complete\n"
+                        continue
+                    pct, summary = compute_dojo_progress(required, current)
+                    bar = render_bar(pct, length=10)
+                    research_text += f"🔄 **{name}** ({rtype})\n{bar} **{pct:.0f}%** · {summary}\n\n"
                 
                 await interaction.followup.send(
                     embed=obsidian_embed(
