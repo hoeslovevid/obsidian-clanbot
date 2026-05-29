@@ -1,0 +1,7 @@
+# Railway/Railpack uses mise to install Python. mise 2026.5+ verifies GitHub
+# artifact attestations; older patch releases (e.g. 3.11.4) lack them.
+[tools]
+python = "3.11.11"
+
+[settings]
+python.github_attestations = false

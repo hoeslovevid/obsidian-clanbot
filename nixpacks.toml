@@ -1,0 +1,3 @@
+# Fallback for services still on the Nixpacks builder.
+[variables]
+MISE_PYTHON_GITHUB_ATTESTATIONS = "false"

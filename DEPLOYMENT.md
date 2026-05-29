@@ -4,6 +4,20 @@ This guide will help you deploy the Obsidian Clan Bot to Railway.
 
 ## Build Errors
 
+### mise Python attestation failure
+
+If Railway diagnose mentions `MISE_PYTHON_GITHUB_ATTESTATIONS` or GitHub artifact attestations when installing Python, mise was updated and now verifies prebuilt Python binaries. Older patch releases may not have attestations.
+
+This repo pins Python in `runtime.txt` / `mise.toml` and disables attestation checks for Python installs. If you still see the error, add this **service variable** in Railway:
+
+```
+MISE_PYTHON_GITHUB_ATTESTATIONS=false
+```
+
+Then redeploy.
+
+### Transient Docker connection errors
+
 If you see errors like:
 ```
 ERROR: failed to build: listing workers for Build: failed to list workers: Unavailable: connection error
