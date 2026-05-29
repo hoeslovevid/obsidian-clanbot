@@ -26,10 +26,11 @@ def _next_member_milestone(current: int) -> int | None:
 
 
 def setup(bot, group=None):
-    cmd = (
-        group.command(name="milestones_next", description="See how close the server is to the next member milestone.")
-        if group
-        else bot.tree.command(name="milestones_next", description="Next member milestone preview.")
+    """Top-level ``/milestones_next`` only — ``/tools`` is at the 25-subcommand cap."""
+    group = None
+    cmd = bot.tree.command(
+        name="milestones_next",
+        description="Next member milestone — how close the server is to the next count.",
     )
 
     @cmd

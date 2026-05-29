@@ -469,9 +469,11 @@ def setup(bot, group=None):
                 "tools voice_leaderboard": ["/tools voice_leaderboard"],
                 "tools coinflip": ["/tools coinflip"],
                 "tools my_stats": ["/tools my_stats", "/tools my_stats user:@Member"],
-                "tools favorite_add": ["/tools favorite_add command:economy daily"],
-                "tools favorite_remove": ["/tools favorite_remove command:economy daily"],
-                "tools favorites": ["/tools favorites"],
+                "tools favorite_add": ["/favorite_add command:economy daily"],
+                "tools favorite_remove": ["/favorite_remove command:economy daily"],
+                "tools favorites": ["/favorites"],
+                "favorite_add": ["/favorite_add command:baro"],
+                "favorites": ["/favorites"],
                 "roletools panel_create": ["/roletools panel_create channel:#roles"],
                 "roletools panel_delete": ["/roletools panel_delete panel_id:1"],
                 # Warframe
@@ -590,7 +592,7 @@ def setup(bot, group=None):
         # Build initial embed — "Start here" mental model + full group list
         desc = (
             "**Start here** — the commands members use most:\n\n"
-            "👤 **Me** — `/daily` · `/profile` · `/me` · `/preferences` · `/tools favorites`\n"
+            "👤 **Me** — `/daily` · `/profile` · `/me` · `/preferences` · `/favorites`\n"
             "🎮 **Warframe** — `/baro` · `/fissures` · `/lfg` · `/trade`\n"
             "👥 **Community** — `/ticket` · `/case` · `/poll` · `/community suggest`\n"
             "🔍 **Find anything** — `/search` keyword · `/menu` quick picker · `/help` full list\n"
@@ -638,7 +640,7 @@ def setup(bot, group=None):
             desc += f"\n\n**🌐 Website:** [{host}]({BOT_WEBSITE}) — also in **`/general links`** and **`/general about`**"
         
         desc += "\n\n**💡 Tips:** Type `/` and start typing (Discord searches names + descriptions). "
-        desc += "Pin favorites with **`/tools favorite_add`**. New? Try **`/menu`**."
+        desc += "Pin favorites with **`/favorite_add`**. New? Try **`/menu`**."
         
         help_footer = "Shortcuts: /help /search /menu • /help command:<name> for details"
         if BOT_WEBSITE:

@@ -60,7 +60,8 @@ async def _command_path_autocomplete(
 
 
 def setup(bot, group=None):
-    """Register /tools favorites, favorite_add, favorite_remove."""
+    """Top-level only — ``/tools`` is at Discord's 25-subcommand cap."""
+    group = None  # force /favorites, /favorite_add, /favorite_remove
 
     async def _favorites_impl(interaction: discord.Interaction):
         if not interaction.guild:
@@ -74,7 +75,7 @@ def setup(bot, group=None):
                 embed=obsidian_embed(
                     "⭐ Your Favorites",
                     "You haven't pinned any commands yet.\n\n"
-                    "Add one with **`/tools favorite_add`** — e.g. `economy daily`, `warframe baro`, `ticket`.\n\n"
+                    "Add one with **`/favorite_add`** — e.g. `economy daily`, `baro`, `ticket`.\n\n"
                     "**Quick shortcuts:** `/daily` `/profile` `/baro` `/search` `/menu`",
                     color=EMBED_COLORS["general"],
                     client=interaction.client,
@@ -137,7 +138,7 @@ def setup(bot, group=None):
             return await interaction.response.send_message(
                 embed=error_embed(
                     "Favorites full",
-                    f"You can pin up to **{MAX_FAVORITES}** commands. Remove one with **`/tools favorite_remove`** first.",
+                    f"You can pin up to **{MAX_FAVORITES}** commands. Remove one with **`/favorite_remove`** first.",
                     client=interaction.client,
                 ),
                 ephemeral=True,

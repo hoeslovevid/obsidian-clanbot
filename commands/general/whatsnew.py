@@ -220,10 +220,4 @@ def setup(bot, group=None):
     except Exception as e:
         logger.debug(f"[whatsnew] Top-level /whatsnew not registered: {e}")
 
-    if group is not None:
-        try:
-            @group.command(name="whatsnew", description="See what's new in the bot's most recent releases.")
-            async def whatsnew_grouped(interaction: discord.Interaction):
-                await _whatsnew_impl(interaction)
-        except Exception as e:
-            logger.debug(f"[whatsnew] /{group.name} whatsnew not registered: {e}")
+    # /tools is at Discord's 25-subcommand cap — top-level /whatsnew only.

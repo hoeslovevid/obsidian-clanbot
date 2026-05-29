@@ -316,7 +316,6 @@ def load_all_commands(bot):
         "commands.general.polls": general_group,
         "commands.general.reminder": tools_group,              # Moved: community at 25 limit, general full
         "commands.general.preferences": general_group,
-        "commands.general.whatsnew": tools_group,              # tools_group has room; /whatsnew top-level shortcut also registered
         "commands.general.reputation": community_group,
         "commands.general.twitch": community_group,
         "commands.general.afk": tools_group,
@@ -332,12 +331,9 @@ def load_all_commands(bot):
         "commands.general.activity_heatmap": tools_group,
         "commands.general.trivia": tools_group,                # Moved: general_group at 25-cmd limit
         "commands.general.my_stats": tools_group,
-        "commands.general.favorites": tools_group,
         "commands.general.phishing": tools_group,
         "commands.general.server_about": general_group,
         "commands.general.onboarding": tools_group,
-        "commands.general.milestones_next": tools_group,
-        "commands.general.menu": tools_group,
         "commands.general.server_goals": tools_group,
         "commands.warframe.build": warframe_group,
         "commands.warframe.drop_tables": warframe_group,
@@ -366,12 +362,25 @@ def load_all_commands(bot):
         "commands.voice.vc": vc_group,
     }
 
+    # Loaded with setup(bot, None) — not attached to /tools (25-subcommand cap).
+    TOP_LEVEL_ONLY = {
+        "commands.general.favorites",
+        "commands.general.menu",
+        "commands.general.milestones_next",
+        "commands.general.whatsnew",
+    }
+
     loaded_count = 0
     failed_modules = []
     for module_name in command_modules:
         try:
             module = importlib.import_module(module_name)
             if hasattr(module, "setup"):
+                if module_name in TOP_LEVEL_ONLY:
+                    module.setup(bot, None)
+                    loaded_count += 1
+                    print(f"[commands] Loaded {module_name} -> top-level only")
+                    continue
                 group = group_mapping.get(module_name, general_group)
                 before_count = len(group.commands) if isinstance(group, app_commands.Group) else 0
                 try:
@@ -406,6 +415,10 @@ def load_all_commands(bot):
     from core.command_shortcuts import register_all_shortcuts
     shortcut_count = register_all_shortcuts(bot)
     print(f"[commands] Registered {shortcut_count} top-level shortcut(s)")
+
+    for cmd in bot.tree.get_commands(guild=None):
+        if isinstance(cmd, app_commands.Group) and len(cmd.commands) > 25:
+            print(f"[commands] WARNING: group '/{cmd.name}' has {len(cmd.commands)} subcommands (Discord max 25)")
 
     total_subcommands = sum(
         len(cmd.commands) for cmd in bot.tree.get_commands(guild=None)

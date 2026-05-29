@@ -103,7 +103,7 @@ def setup(bot, group=None):
             "👤 **Me** — `/daily` · `/profile` · `/me` · `/preferences`\n"
             "🎮 **Warframe** — `/baro` · `/fissures` · `/lfg` · `/trade`\n"
             "👥 **Community** — `/ticket` · `/case` · `/poll`\n"
-            "🔍 **Find anything** — `/search` · `/help` · `/tools favorites`\n"
+            "🔍 **Find anything** — `/search` · `/help` · `/favorites`\n"
         )
         embed = obsidian_embed(
             "⚡ Quick Menu",
@@ -127,11 +127,3 @@ def setup(bot, group=None):
     except Exception as e:
         import logging
         logging.getLogger(__name__).debug("[menu] top-level /menu not registered: %s", e)
-
-    if group is not None:
-        try:
-            @group.command(name="menu", description="Quick menu — daily, profile, baro, ticket, trade, and more.")
-            async def menu_grouped(interaction: discord.Interaction):
-                await menu_impl(interaction)
-        except Exception:
-            pass
