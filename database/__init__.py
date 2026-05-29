@@ -1192,21 +1192,13 @@ async def get_server_stats_channel(guild_id: int) -> Optional[dict]:
 async def check_and_record_milestone(guild_id: int, user_id: int, milestone_type: str, milestone_value: int) -> bool:
     """Check if milestone should be recorded and record it. Returns True if milestone was newly achieved."""
     async with aiosqlite.connect(DB_PATH) as db:
-        # Check if already recorded
+        # Atomic insert — avoids UNIQUE races when many messages arrive at once.
         cur = await db.execute("""
-            SELECT 1 FROM member_milestones
-            WHERE guild_id=? AND user_id=? AND milestone_type=? AND milestone_value=?
-        """, (guild_id, user_id, milestone_type, milestone_value))
-        if await cur.fetchone():
-            return False  # Already recorded
-        
-        # Record milestone
-        await db.execute("""
-            INSERT INTO member_milestones (guild_id, user_id, milestone_type, milestone_value, achieved_at, notified)
+            INSERT OR IGNORE INTO member_milestones (guild_id, user_id, milestone_type, milestone_value, achieved_at, notified)
             VALUES (?, ?, ?, ?, ?, 0)
         """, (guild_id, user_id, milestone_type, milestone_value, now_utc().isoformat()))
         await db.commit()
-        return True  # Newly achieved
+        return cur.rowcount > 0
 
 
 # --------------------- Achievement Functions ---------------------
