@@ -185,8 +185,7 @@ async def _run_daily(interaction: discord.Interaction, force_reset: bool = False
 
             # Check if already claimed today
             if last_claim_date == today:
-                from datetime import timedelta as _td
-                tomorrow_dt = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0) + _td(days=1)
+                tomorrow_dt = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
                 next_ts = int(tomorrow_dt.timestamp())
                 streak_fire = _streak_emblem(streak_days)
                 fields = [
@@ -206,7 +205,6 @@ async def _run_daily(interaction: discord.Interaction, force_reset: bool = False
 
             # Check if streak continues (claimed yesterday) or use streak freeze
             yesterday = datetime.now(timezone.utc).date()
-            from datetime import timedelta
             yesterday_str = (yesterday - timedelta(days=1)).isoformat()
 
             if last_claim_date == yesterday_str:
