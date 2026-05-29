@@ -109,6 +109,7 @@ class ClanBot(commands.Bot):
                 guild = discord.Object(id=GUILD_ID)
                 # Don't use copy_global_to to avoid duplicates - just sync guild commands directly
                 await self.tree.sync(guild=guild)
+                self._last_command_sync = now_utc()
                 # List all registered commands for verification
                 commands_list = [cmd.name for cmd in self.tree.get_commands(guild=guild)]
                 print(f"[sync] Synced {len(commands_list)} top-level commands/groups to guild {GUILD_ID}")
@@ -127,6 +128,7 @@ class ClanBot(commands.Bot):
                 print(f"[sync] Total subcommands synced: {total_subcommands}")
             else:
                 await self.tree.sync()
+                self._last_command_sync = now_utc()
                 commands_list = [cmd.name for cmd in self.tree.get_commands(guild=None)]
                 print(f"[sync] Synced {len(commands_list)} top-level commands/groups globally (may take a while to appear)")
                 print(f"[sync] Top-level: {', '.join(commands_list)}")
@@ -1600,19 +1602,6 @@ async def on_member_ban(guild: discord.Guild, user: discord.User):
                 logger.error(f"[logging] Error logging member ban: {e}")
 
 
-async def _send_error_reply(interaction: discord.Interaction, message: str, ephemeral: bool = True, action_hint: Optional[str] = None):
-    """Send an error reply with consistent embed, using followup if response was already sent."""
-    from core.utils import error_embed
-    emb = error_embed("Error", message, action_hint=action_hint, client=interaction.client)
-    try:
-        if interaction.response.is_done():
-            await interaction.followup.send(embed=emb, ephemeral=ephemeral)
-        else:
-            await interaction.response.send_message(embed=emb, ephemeral=ephemeral)
-    except Exception:
-        pass  # Silently fail if we can't send (e.g. DMs closed)
-
-
 def _find_similar_commands(typed: str, all_commands: list[str], max_suggestions: int = 3) -> list[str]:
     """Find commands similar to typed (simple prefix/substring match)."""
     typed_lower = typed.lower().strip()
@@ -1653,118 +1642,14 @@ async def on_app_command_completion(interaction: discord.Interaction, command):
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
     """Handle application command errors with user-friendly messages."""
-    error_type_name = type(error).__name__
-    
-    if error_type_name == "CommandNotFound":
-        command_name = str(error).split("'")[1] if "'" in str(error) else "unknown"
-        moved_commands = {"sync_commands": "general sync_commands"}
-        if command_name in moved_commands:
-            logger.debug(f"[commands] CommandNotFound for '{command_name}' - Discord cache will update")
-            return
-        # Typo suggestions: collect commands and find similar
-        try:
-            all_names = []
-            iclient = interaction.client
-            if not isinstance(iclient, commands.Bot):
-                raise TypeError("expected commands.Bot")
-            for cmd in iclient.tree.get_commands(guild=interaction.guild):
-                if isinstance(cmd, app_commands.Group):
-                    all_names.append(cmd.name)
-                    for sub in cmd.commands:
-                        if isinstance(sub, app_commands.Group):
-                            for g in sub.commands:
-                                all_names.append(cmd.name + " " + sub.name + " " + g.name)
-                        else:
-                            all_names.append(cmd.name + " " + sub.name)
-                else:
-                    all_names.append(cmd.name)
-            similar = _find_similar_commands(command_name, all_names)
-            if similar:
-                hint = f" Did you mean: **{'** or **'.join(similar[:3])}**?"
-                await _send_error_reply(interaction, f"Unknown command `{command_name}`.{hint}")
-                return
-        except Exception:
-            pass
-        logger.debug(f"[commands] CommandNotFound: {error}")
-        return
-    
-    if error_type_name == "CommandSignatureMismatch":
-        logger.debug(f"[commands] CommandSignatureMismatch - Discord cache is out of sync.")
-        return
-    
-    # User-friendly messages for common errors
-    # Friendlier rate limit (cooldown) messages
-    if error_type_name == "CommandOnCooldown":
-        retry_after = getattr(error, "retry_after", None) or 0
-        # Format the wait time clearly: hours / minutes / seconds
-        if retry_after >= 3600:
-            h = int(retry_after // 3600)
-            m = int((retry_after % 3600) // 60)
-            wait_str = f"**{h}h {m}m**" if m else f"**{h}h**"
-        elif retry_after >= 60:
-            m = int(retry_after // 60)
-            s = int(retry_after % 60)
-            wait_str = f"**{m}m {s}s**" if s else f"**{m}m**"
-        elif retry_after >= 1:
-            wait_str = f"**{int(retry_after)}s**"
-        else:
-            wait_str = "**a moment**"
-        # Include the command name if available
-        cmd_name = getattr(interaction.command, "qualified_name", None)
-        cmd_str = f"`/{cmd_name}` " if cmd_name else "This command "
-        msg = f"⏳ Slow down! {cmd_str}can be used again in {wait_str}."
-        await _send_error_reply(interaction, msg, action_hint="Use /help to explore other commands while you wait.")
-        return
+    from core.error_handling import handle_app_command_error
 
-    if error_type_name in ("CheckFailure", "MissingRole", "MissingAnyRole"):
-        await _send_error_reply(interaction, "You don't have permission to use this command.", action_hint="Ask an administrator if you need access.")
-        return
-
-    if error_type_name == "MissingPermissions":
-        # User lacks permissions - show which ones if available
-        perms = getattr(error, "missing_permissions", None) or []
-        if perms:
-            names = [str(p).replace("_", " ").title() for p in perms]
-            await _send_error_reply(interaction, f"You need: **{', '.join(names)}**. Ask an admin to grant them.")
-        else:
-            await _send_error_reply(interaction, "You don't have permission to use this command.")
-        return
-
-    if error_type_name in ("Forbidden", "HTTPException"):
-        err_msg = str(error)
-        if "429" in err_msg or "rate limit" in err_msg.lower():
-            await _send_error_reply(interaction, "Discord is rate limiting requests. Please wait a minute and try again.", action_hint="This usually resolves quickly.")
-        elif "Missing Access" in err_msg or "50013" in err_msg:
-            await _send_error_reply(interaction, "I need additional permissions (e.g. **Manage Messages**, **Send Messages**). Ask an admin to grant them for this channel.")
-        elif "Unknown Channel" in err_msg:
-            await _send_error_reply(interaction, "That channel no longer exists.")
-        else:
-            await _send_error_reply(interaction, "An error occurred. Please try again later.")
-        logger.warning(f"[commands] Discord API error: {error}")
-        return
-
-    # CommandInvokeError wraps the real exception (e.g. Forbidden from channel.send)
-    orig = getattr(error, "original", None) if error_type_name == "CommandInvokeError" else None
-    if orig is not None:
-        orig_name = type(orig).__name__
-        if orig_name in ("Forbidden", "HTTPException"):
-            err_msg = str(orig)
-            status = getattr(orig, "status", None)
-            if status == 429 or "429" in err_msg or "rate limit" in err_msg.lower():
-                retry_after = getattr(orig, "retry_after", 60)
-                await _send_error_reply(interaction, f"Discord is rate limiting. Wait **{int(retry_after)}s** and try again.", action_hint="This usually resolves quickly.")
-            elif "Missing Access" in err_msg or "50013" in err_msg:
-                await _send_error_reply(interaction, "I need additional permissions (e.g. **Manage Messages**, **Send Messages**). Ask an admin to grant them for this channel.")
-            elif "Unknown Channel" in err_msg:
-                await _send_error_reply(interaction, "That channel no longer exists.")
-            else:
-                await _send_error_reply(interaction, "An error occurred. Please try again later.")
-            logger.warning(f"[commands] Command invoke error: {orig}")
-            return
-    
-    # Unexpected errors: inform user and log
-    logger.error(f"[commands] Unhandled command error: {error}", exc_info=error)
-    await _send_error_reply(interaction, "Something went wrong. Please try again later.")
+    await handle_app_command_error(
+        bot,
+        interaction,
+        error,
+        find_similar_commands=_find_similar_commands,
+    )
 
 
 @bot.event

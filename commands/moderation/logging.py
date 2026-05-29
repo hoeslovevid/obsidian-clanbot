@@ -31,6 +31,7 @@ def setup(bot, group=None):
         app_commands.Choice(name="Channel Updates", value="channel_update"),
         app_commands.Choice(name="Ticket Transcripts", value="ticket_transcript"),
         app_commands.Choice(name="Audit Log", value="audit"),
+        app_commands.Choice(name="Bot Errors", value="bot_error"),
     ])
     async def logging(
         interaction: discord.Interaction,
@@ -92,6 +93,7 @@ def setup(bot, group=None):
                 "member_leave": "Member Leaves",
                 "role_change": "Role Changes",
                 "channel_update": "Channel Updates",
+                "bot_error": "Bot Errors",
             }
             
             await interaction.followup.send(

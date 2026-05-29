@@ -2865,5 +2865,7 @@ def setup_tasks(bot):
                 logger.error(f"[tasks] Failed to start {task_name} on retry: {e2}")
     
     logger.info(f"[tasks] Started {len(started_tasks)}/{len(tasks_to_start)} background tasks")
-    
+
+    bot._background_tasks = started_tasks
+
     return started_tasks
