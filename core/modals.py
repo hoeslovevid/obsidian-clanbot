@@ -7,7 +7,8 @@ import discord  # type: ignore
 import aiosqlite  # type: ignore
 from typing import Optional
 
-from core.utils import extract_id, get_mod_role, is_mod, obsidian_embed
+from core.utils import extract_id, is_mod, obsidian_embed
+from core.vc_permissions import apply_staff_overwrites_to_mapping, can_manage_temp_vc, get_vc_staff_roles
 from database import DB_PATH, now_utc
 
 logger = logging.getLogger(__name__)
@@ -196,11 +197,14 @@ async def process_transfer_vc_owner(interaction: discord.Interaction, vc_id: int
     if not isinstance(actor, discord.Member):
         await interaction.followup.send("Not allowed.", ephemeral=True)
         return
-    if not (is_mod(actor) or actor.id == current_owner_id):
-        await interaction.followup.send("Only the owner (or an Administrator) can transfer.", ephemeral=True)
+    if not await can_manage_temp_vc(actor, interaction.guild, owner_id=current_owner_id):
+        await interaction.followup.send(
+            "Only the owner or staff (configured mod roles) can transfer.",
+            ephemeral=True,
+        )
         return
 
-    overwrites = vc.overwrites
+    overwrites = dict(vc.overwrites)
 
     old_owner = interaction.guild.get_member(current_owner_id)
     if old_owner:
@@ -220,12 +224,8 @@ async def process_transfer_vc_owner(interaction: discord.Interaction, vc_id: int
     ow2.deafen_members = True
     overwrites[new_owner] = ow2
 
-    mod_role = get_mod_role(interaction.guild)
-    if mod_role:
-        m = overwrites.get(mod_role, discord.PermissionOverwrite())
-        m.view_channel = True
-        m.connect = True
-        overwrites[mod_role] = m
+    staff_roles = await get_vc_staff_roles(interaction.guild)
+    overwrites = apply_staff_overwrites_to_mapping(overwrites, staff_roles)
 
     await vc.edit(overwrites=overwrites, reason="Transfer ownership")
 

@@ -25,13 +25,19 @@ from core.utils import (
     obsidian_embed,
     success_embed,
     error_embed,
-    get_mod_role,
     is_mod,
     EMBED_COLORS,
     AUTOCOMPLETE_MAX_CHOICES,
     channel_jump_url,
 )
 from database import DB_PATH, get_guild_setting, set_guild_setting
+from core.vc_permissions import (
+    GUILD_VC_STAFF_SETTING,
+    apply_staff_overwrites_to_mapping,
+    can_manage_temp_vc,
+    env_mod_role_names,
+    get_vc_staff_roles,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -128,7 +134,7 @@ async def _do_transfer(
     new_owner: discord.Member,
 ) -> None:
     """Re-permission ``vc`` so ``new_owner`` becomes the host. Caller validates."""
-    overwrites = vc.overwrites
+    overwrites = dict(vc.overwrites)
     old_owner_id = await _get_vc_owner(interaction.guild.id, vc.id)
     old_owner = interaction.guild.get_member(old_owner_id) if old_owner_id else None
     if old_owner:
@@ -146,12 +152,8 @@ async def _do_transfer(
     new_ow.mute_members = True
     new_ow.deafen_members = True
     overwrites[new_owner] = new_ow
-    mod_role = get_mod_role(interaction.guild)
-    if mod_role:
-        mr = overwrites.get(mod_role, discord.PermissionOverwrite())
-        mr.view_channel = True
-        mr.connect = True
-        overwrites[mod_role] = mr
+    staff_roles = await get_vc_staff_roles(interaction.guild)
+    overwrites = apply_staff_overwrites_to_mapping(overwrites, staff_roles)
     await vc.edit(overwrites=overwrites, reason="VC host transfer")
     await _set_vc_owner(interaction.guild.id, vc.id, new_owner.id)
 
@@ -562,9 +564,9 @@ def setup(bot, group=None):
                 embed=error_embed("Not a temp VC", "This isn't a managed temp VC.", client=interaction.client),
                 ephemeral=True,
             )
-        if owner_id != interaction.user.id and not is_mod(interaction.user):
+        if not await can_manage_temp_vc(interaction.user, interaction.guild, owner_id=owner_id):
             return await interaction.response.send_message(
-                embed=error_embed("Permission Denied", "Only the current host (or an admin) can transfer.", client=interaction.client),
+                embed=error_embed("Permission Denied", "Only the current host or staff can transfer.", client=interaction.client),
                 ephemeral=True,
             )
         if to.id == interaction.user.id:
@@ -618,9 +620,9 @@ def setup(bot, group=None):
                 ephemeral=True,
             )
         owner_id = await _get_vc_owner(interaction.guild.id, vc.id)
-        if owner_id != interaction.user.id and not is_mod(interaction.user):
+        if not await can_manage_temp_vc(interaction.user, interaction.guild, owner_id=owner_id):
             return await interaction.response.send_message(
-                embed=error_embed("Not your VC", "Only the host can save its config as a preset.", client=interaction.client),
+                embed=error_embed("Not your VC", "Only the host or staff can save its config as a preset.", client=interaction.client),
                 ephemeral=True,
             )
         everyone_ow = vc.overwrites_for(interaction.guild.default_role)
@@ -663,9 +665,9 @@ def setup(bot, group=None):
                 ephemeral=True,
             )
         owner_id = await _get_vc_owner(interaction.guild.id, vc.id)
-        if owner_id != interaction.user.id and not is_mod(interaction.user):
+        if not await can_manage_temp_vc(interaction.user, interaction.guild, owner_id=owner_id):
             return await interaction.response.send_message(
-                embed=error_embed("Not your VC", "Only the host can apply a preset to a VC.", client=interaction.client),
+                embed=error_embed("Not your VC", "Only the host or staff can apply a preset to a VC.", client=interaction.client),
                 ephemeral=True,
             )
         try:
@@ -722,5 +724,107 @@ def setup(bot, group=None):
             )
         await interaction.response.send_message(
             embed=success_embed("Preset deleted", f"`{name}` removed.", client=interaction.client),
+            ephemeral=True,
+        )
+
+    # /vc staff_roles -------------------------------------------------------------
+    @vc_group.command(
+        name="staff_roles",
+        description="Configure roles that can manage temp VCs and use the panel (admin only).",
+    )
+    @app_commands.describe(
+        action="list, add, remove, or clear",
+        role="Role to add or remove (not needed for list/clear)",
+    )
+    @app_commands.choices(action=[
+        app_commands.Choice(name="List", value="list"),
+        app_commands.Choice(name="Add", value="add"),
+        app_commands.Choice(name="Remove", value="remove"),
+        app_commands.Choice(name="Clear", value="clear"),
+    ])
+    async def vc_staff_roles(
+        interaction: discord.Interaction,
+        action: app_commands.Choice[str],
+        role: Optional[discord.Role] = None,
+    ):
+        if not interaction.guild or not isinstance(interaction.user, discord.Member):
+            return await interaction.response.send_message(
+                embed=error_embed("Invalid Context", "Use this in a server.", client=interaction.client),
+                ephemeral=True,
+            )
+        if not is_mod(interaction.user):
+            return await interaction.response.send_message(
+                embed=error_embed("Permission Denied", "Only administrators can configure VC staff roles.", client=interaction.client),
+                ephemeral=True,
+            )
+
+        saved = await get_guild_setting(interaction.guild.id, GUILD_VC_STAFF_SETTING) or ""
+        role_ids = [int(x) for x in saved.split(",") if x.strip().isdigit()]
+        act = action.value
+
+        if act == "list":
+            guild_roles = [interaction.guild.get_role(rid) for rid in role_ids]
+            guild_lines = [
+                f"• {r.mention}" for r in guild_roles if r is not None
+            ] or ["_(none configured in this server)_"]
+            env_names = env_mod_role_names()
+            env_lines = [f"• `{name}` (env)" for name in env_names] if env_names else ["_(none)_"]
+            effective = await get_vc_staff_roles(interaction.guild)
+            effective_lines = [f"• {r.mention}" for r in effective] or ["_(fallback admin role only)_"]
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "🛡️ Temp VC staff roles",
+                    "**This server**\n" + "\n".join(guild_lines)
+                    + "\n\n**From env (`MOD_ROLE_NAME` / `MOD_ROLE_NAMES`)**\n"
+                    + "\n".join(env_lines)
+                    + "\n\n**Effective (used on new VCs + panel)**\n"
+                    + "\n".join(effective_lines),
+                    category="general",
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+
+        if act == "clear":
+            await set_guild_setting(interaction.guild.id, GUILD_VC_STAFF_SETTING, "")
+            return await interaction.response.send_message(
+                embed=success_embed(
+                    "Staff roles cleared",
+                    "Server-specific VC staff roles removed. Env roles still apply if set.",
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+
+        if role is None:
+            return await interaction.response.send_message(
+                embed=error_embed("Missing role", "Pick a role to add or remove.", client=interaction.client),
+                ephemeral=True,
+            )
+
+        if act == "add":
+            if role.id not in role_ids:
+                role_ids.append(role.id)
+            await set_guild_setting(interaction.guild.id, GUILD_VC_STAFF_SETTING, ",".join(str(rid) for rid in role_ids))
+            return await interaction.response.send_message(
+                embed=success_embed(
+                    "Staff role added",
+                    f"{role.mention} can manage temp VCs and use the panel.\n"
+                    "New VCs will copy hub/category permissions and grant this role full VC control.",
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+
+        if act == "remove":
+            role_ids = [rid for rid in role_ids if rid != role.id]
+            await set_guild_setting(interaction.guild.id, GUILD_VC_STAFF_SETTING, ",".join(str(rid) for rid in role_ids))
+            return await interaction.response.send_message(
+                embed=success_embed("Staff role removed", f"{role.mention} removed from VC staff roles.", client=interaction.client),
+                ephemeral=True,
+            )
+
+        return await interaction.response.send_message(
+            embed=error_embed("Invalid action", "Use list, add, remove, or clear.", client=interaction.client),
             ephemeral=True,
         )

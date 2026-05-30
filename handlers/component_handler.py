@@ -11,7 +11,12 @@ import aiosqlite  # type: ignore
 from typing import Any, Optional
 
 from core.config import DB_PATH
-from core.utils import is_mod, obsidian_embed, get_mod_role
+from core.utils import is_mod, obsidian_embed
+from core.vc_permissions import (
+    apply_staff_overwrites_to_mapping,
+    can_manage_temp_vc,
+    get_vc_staff_roles,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -177,18 +182,19 @@ async def handle_component(bot: discord.Client, interaction: discord.Interaction
                 if guild_vc is None:
                     return await interaction.response.send_message("Not allowed.", ephemeral=True)
 
-                allowed = is_mod(member)
-                if not allowed:
-                    async with aiosqlite.connect(DB_PATH) as db:
-                        cur = await db.execute(
-                            "SELECT owner_id FROM temp_vcs WHERE guild_id=? AND channel_id=?",
-                            (guild_vc.id, vc_id),
-                        )
-                        row = await cur.fetchone()
-                    allowed = bool(row and int(row[0]) == member.id)
+                async with aiosqlite.connect(DB_PATH) as db:
+                    cur = await db.execute(
+                        "SELECT owner_id FROM temp_vcs WHERE guild_id=? AND channel_id=?",
+                        (guild_vc.id, vc_id),
+                    )
+                    row = await cur.fetchone()
+                owner_id = int(row[0]) if row else None
 
-                if not allowed:
-                    return await interaction.response.send_message("Only the squad owner (or an Administrator) may do that.", ephemeral=True)
+                if not await can_manage_temp_vc(member, guild_vc, owner_id=owner_id):
+                    return await interaction.response.send_message(
+                        "Only the squad owner or staff (configured mod roles) may do that.",
+                        ephemeral=True,
+                    )
 
                 vc = guild_vc.get_channel(vc_id)
                 if not isinstance(vc, discord.VoiceChannel):
@@ -196,7 +202,7 @@ async def handle_component(bot: discord.Client, interaction: discord.Interaction
 
                 # Helpers for @everyone overwrite tweaks
                 async def edit_everyone(*, connect: Optional[bool] = None, view: Optional[bool] = None):
-                    overwrites = vc.overwrites
+                    overwrites = dict(vc.overwrites)
                     base = overwrites.get(guild_vc.default_role, discord.PermissionOverwrite())
                     if connect is not None:
                         base.connect = connect
@@ -204,18 +210,23 @@ async def handle_component(bot: discord.Client, interaction: discord.Interaction
                         base.view_channel = view
                     overwrites[guild_vc.default_role] = base
 
-                    mod_role = get_mod_role(guild_vc)
-                    if mod_role:
-                        m = overwrites.get(mod_role, discord.PermissionOverwrite())
-                        m.view_channel = True
-                        m.connect = True
-                        overwrites[mod_role] = m
+                    staff_roles = await get_vc_staff_roles(guild_vc)
+                    overwrites = apply_staff_overwrites_to_mapping(overwrites, staff_roles)
 
                     # Owner stays able to view/connect
-                    owner_ow = overwrites.get(member, discord.PermissionOverwrite())
-                    owner_ow.view_channel = True
-                    owner_ow.connect = True
-                    overwrites[member] = owner_ow
+                    async with aiosqlite.connect(DB_PATH) as db:
+                        cur = await db.execute(
+                            "SELECT owner_id FROM temp_vcs WHERE guild_id=? AND channel_id=?",
+                            (guild_vc.id, vc.id),
+                        )
+                        row = await cur.fetchone()
+                    owner_id = int(row[0]) if row else member.id
+                    owner = guild_vc.get_member(owner_id)
+                    if owner:
+                        owner_ow = overwrites.get(owner, discord.PermissionOverwrite())
+                        owner_ow.view_channel = True
+                        owner_ow.connect = True
+                        overwrites[owner] = owner_ow
 
                     await vc.edit(overwrites=overwrites, reason="VC panel action")
 
@@ -312,11 +323,8 @@ async def handle_component(bot: discord.Client, interaction: discord.Interaction
                     owner_ow.manage_channels = True
                     owner_ow.move_members = True
                     overwrites[owner] = owner_ow
-                    mod_role = get_mod_role(guild_vc)
-                    if mod_role:
-                        overwrites[mod_role] = discord.PermissionOverwrite(
-                            view_channel=True, connect=True
-                        )
+                    staff_roles = await get_vc_staff_roles(guild_vc)
+                    overwrites = apply_staff_overwrites_to_mapping(overwrites, staff_roles)
                     await vc.edit(overwrites=overwrites, reason=f"VC privacy preset: {mode}")
                     labels = {
                         "public": "🌐 **Public** — anyone can see and join.",

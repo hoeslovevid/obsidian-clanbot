@@ -394,7 +394,7 @@ async def post_vc_panel(guild: discord.Guild, vc: discord.VoiceChannel, owner: d
         f"**Channel:** {vc.mention}\n"
         f"**Owner:** {owner.mention}\n\n"
         "Configure your voice channel using the controls below.\n"
-        "_Administrators retain oversight._",
+        "_Squad owners and configured staff roles can use these controls._",
         color=discord.Color.dark_grey(),
         client=bot,
     )
@@ -921,23 +921,21 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
 
     guild = member.guild
     category = await resolve_temp_vc_category(guild)
-    mod_role = get_mod_role(guild)
+    create_ch = guild.get_channel(create_id)
+    template_ch = create_ch if isinstance(create_ch, discord.VoiceChannel) else None
+    from core.vc_permissions import build_temp_vc_overwrites, get_vc_staff_roles
 
-    # Create VC
+    staff_roles = await get_vc_staff_roles(guild)
+
+    # Create VC — seed hub/category overwrites, then owner + staff layers
     vc_name = f"{member.display_name} • Squad"
-    overwrites = {
-        guild.default_role: discord.PermissionOverwrite(view_channel=True, connect=True, speak=True),
-        member: discord.PermissionOverwrite(
-            view_channel=True,
-            connect=True,
-            manage_channels=True,  # lets them edit it via Discord UI
-            move_members=True,
-            mute_members=True,
-            deafen_members=True,
-        ),
-    }
-    if mod_role:
-        overwrites[mod_role] = discord.PermissionOverwrite(view_channel=True, connect=True)
+    overwrites = build_temp_vc_overwrites(
+        guild,
+        member,
+        category=category,
+        template_channel=template_ch,
+        staff_roles=staff_roles,
+    )
 
     new_vc = await guild.create_voice_channel(
         name=vc_name,

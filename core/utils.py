@@ -455,17 +455,10 @@ def dm_blocked_help_embed(title: str, what_failed: str, client=None) -> discord.
 
 
 def get_mod_role(guild: discord.Guild) -> Optional[discord.Role]:
-    """Get a role with Administrator permission for VC overwrites. Uses MOD_ROLE_NAME if set, else first role with admin."""
-    if MOD_ROLE_NAME:
-        role = discord.utils.get(guild.roles, name=MOD_ROLE_NAME)
-        if role:
-            return role
-    for role in sorted(guild.roles, key=lambda r: -r.position):
-        if role.is_default():
-            continue
-        if role.permissions.administrator:
-            return role
-    return None
+    """First configured temp VC staff role (see core.vc_permissions.get_vc_staff_roles)."""
+    from core.vc_permissions import get_mod_role as _vc_mod_role
+
+    return _vc_mod_role(guild)
 
 
 def is_mod(member: discord.Member) -> bool:

@@ -7,7 +7,8 @@ import discord  # type: ignore
 import aiosqlite  # type: ignore
 from typing import Optional, Callable, Awaitable, Any, Tuple
 
-from core.utils import is_mod, display_case_status, obsidian_embed
+from core.utils import display_case_status, is_mod, obsidian_embed
+from core.vc_permissions import can_manage_temp_vc
 from database import DB_PATH, now_utc, log_complaint_action
 
 logger = logging.getLogger(__name__)
@@ -213,7 +214,21 @@ class SetLimitSelect(discord.ui.Select):
 class SetLimitView(discord.ui.View):
     def __init__(self, vc_id: int):
         super().__init__(timeout=120)
+        self.vc_id = vc_id
         self.add_item(SetLimitSelect(vc_id))
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        member = interaction.user
+        if not isinstance(member, discord.Member) or not interaction.guild:
+            return False
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT owner_id FROM temp_vcs WHERE guild_id=? AND channel_id=?",
+                (interaction.guild.id, self.vc_id),
+            )
+            row = await cur.fetchone()
+        owner_id = int(row[0]) if row else None
+        return await can_manage_temp_vc(member, interaction.guild, owner_id=owner_id)
 
 
 class VCPanelView(discord.ui.View):
@@ -247,12 +262,9 @@ class VCPanelView(discord.ui.View):
         self.add_item(discord.ui.Button(label="No Cap", style=discord.ButtonStyle.secondary, emoji="♾️", custom_id=f"vc:{vc_id}:cap_0", row=3))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        # Only owner or mods can use most controls
         member = interaction.user
-        if not isinstance(member, discord.Member):
+        if not isinstance(member, discord.Member) or not interaction.guild:
             return False
-        if is_mod(member):
-            return True
 
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute(
@@ -260,7 +272,8 @@ class VCPanelView(discord.ui.View):
                 (interaction.guild.id, self.vc_id),
             )
             row = await cur.fetchone()
-        return bool(row and int(row[0]) == member.id)
+        owner_id = int(row[0]) if row else None
+        return await can_manage_temp_vc(member, interaction.guild, owner_id=owner_id)
 
     async def on_timeout(self):
         return

@@ -20,8 +20,13 @@ if not TOKEN:
 GUILD_ID = int(os.getenv("GUILD_ID", "0") or "0")
 
 # --- Moderation ---
-# Optional: role name for VC overwrites; if unset, uses first role with Administrator permission
+# Optional: role name(s) for temp VC staff access (comma-separated in MOD_ROLE_NAMES)
 MOD_ROLE_NAME = os.getenv("MOD_ROLE_NAME", "").strip() or None
+MOD_ROLE_NAMES = [
+    n.strip()
+    for n in os.getenv("MOD_ROLE_NAMES", "").split(",")
+    if n.strip()
+]
 
 # --- Bot branding (optional) ---
 BOT_STATUS = os.getenv("BOT_STATUS", "Discord")  # Custom status text (e.g. "Watching Discord")
