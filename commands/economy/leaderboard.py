@@ -2,7 +2,7 @@
 import discord
 from discord import app_commands
 
-from core.utils import obsidian_embed, feature_off_embed, ECONOMY_ENABLED
+from core.utils import obsidian_embed, feature_off_embed, ECONOMY_ENABLED, EMBED_COLORS
 from core.leaderboard_privacy import leaderboard_display_name, user_hides_from_leaderboards
 from views import EmbedPaginator
 
