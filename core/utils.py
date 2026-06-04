@@ -250,6 +250,33 @@ def error_embed(title: str, message: str, *, action_hint: Optional[str] = None, 
     )
 
 
+def validate_channel_name(name: str, *, max_length: int = 100) -> tuple[Optional[str], Optional[str]]:
+    """Return ``(cleaned_name, error_message)``. *error_message* is set when invalid."""
+    cleaned = (name or "").strip()
+    if not cleaned:
+        return None, "Name cannot be empty."
+    if len(cleaned) > max_length:
+        return None, f"Name must be {max_length} characters or fewer."
+    return cleaned, None
+
+
+def channel_name_edit_error(exc: Exception) -> Optional[str]:
+    """Map Discord channel rename/create failures to a user-facing message."""
+    text = str(exc)
+    lower = text.lower()
+    if "server discovery" in lower or "words not allowed" in lower:
+        return (
+            "Discord blocked that name. Some words are disallowed on **all** servers "
+            "— try rephrasing without slang, NSFW terms, or spammy wording."
+        )
+    status = getattr(exc, "status", None)
+    if status == 403 or "50013" in text:
+        return "I don't have permission to rename that channel."
+    if status == 404 or "Unknown Channel" in text:
+        return "That channel no longer exists."
+    return None
+
+
 _THREAD_NAME_MAX = 100
 
 

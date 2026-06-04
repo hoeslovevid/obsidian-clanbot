@@ -7,7 +7,14 @@ import discord  # type: ignore
 import aiosqlite  # type: ignore
 from typing import Optional
 
-from core.utils import extract_id, is_mod, obsidian_embed
+from core.utils import (
+    extract_id,
+    is_mod,
+    obsidian_embed,
+    error_embed,
+    validate_channel_name,
+    channel_name_edit_error,
+)
 from core.vc_permissions import apply_staff_overwrites_to_mapping, can_manage_temp_vc, get_vc_staff_roles
 from database import DB_PATH, now_utc
 
@@ -71,11 +78,41 @@ class WarnUserModal(discord.ui.Modal, title="Warn User"):
 
 
 async def process_rename_vc(interaction: discord.Interaction, vc_id: int, new_name: str) -> None:
+    if not interaction.guild:
+        await interaction.followup.send("Not allowed.", ephemeral=True)
+        return
+
+    cleaned, validation_error = validate_channel_name(new_name, max_length=100)
+    if validation_error:
+        await interaction.followup.send(
+            embed=error_embed("Invalid name", validation_error, client=interaction.client),
+            ephemeral=True,
+        )
+        return
+
     vc = interaction.guild.get_channel(vc_id)
     if not isinstance(vc, discord.VoiceChannel):
         await interaction.followup.send("Channel not found.", ephemeral=True)
         return
-    await vc.edit(name=new_name, reason="VC rename")
+
+    try:
+        await vc.edit(name=cleaned, reason="VC rename")
+    except discord.HTTPException as exc:
+        friendly = channel_name_edit_error(exc)
+        if friendly:
+            logger.warning("[vc] Rename rejected by Discord for %s: %s", vc_id, exc)
+            await interaction.followup.send(
+                embed=error_embed(
+                    "Rename blocked",
+                    friendly,
+                    action_hint="Short, neutral names usually work best.",
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+            return
+        raise
+
     await interaction.followup.send("Renamed.", ephemeral=True)
 
 

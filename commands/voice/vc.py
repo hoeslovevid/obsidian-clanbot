@@ -677,6 +677,21 @@ def setup(bot, group=None):
                 embed=error_embed("Can't edit channel", "I lack the channel-edit permission.", client=interaction.client),
                 ephemeral=True,
             )
+        except discord.HTTPException as exc:
+            from core.utils import channel_name_edit_error
+
+            friendly = channel_name_edit_error(exc)
+            if friendly:
+                return await interaction.response.send_message(
+                    embed=error_embed(
+                        "Preset name blocked",
+                        friendly,
+                        action_hint="Edit the preset name and try again.",
+                        client=interaction.client,
+                    ),
+                    ephemeral=True,
+                )
+            raise
         await interaction.response.send_message(
             embed=success_embed("Preset applied", f"`{name}` applied to {vc.mention}.", client=interaction.client),
             ephemeral=True,
