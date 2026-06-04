@@ -25,7 +25,7 @@ async def _warframe_api_hint() -> str:
 
 
 def setup(bot, group=None):
-    """Register `/general status` and top-level `/status` shortcut."""
+    """Register top-level `/status` (not under /general — group is at 25-subcommand cap)."""
 
     async def status_callback(interaction: discord.Interaction):
         if not interaction.guild:
@@ -67,10 +67,13 @@ def setup(bot, group=None):
         view = LinkRowView(*help_link_buttons())
         await interaction.followup.send(embed=embed, view=view, ephemeral=True)
 
-    group.command(name="status", description="Bot version, latency, and service health.")(status_callback)
-    shortcut = app_commands.Command(
-        name="status",
-        description="Bot version and health (shortcut for /general status)",
-        callback=status_callback,
-    )
-    bot.tree.add_command(shortcut)
+    if group is not None:
+        group.command(name="status", description="Bot version, latency, and service health.")(status_callback)
+    else:
+        bot.tree.add_command(
+            app_commands.Command(
+                name="status",
+                description="Bot version, latency, and service health.",
+                callback=status_callback,
+            )
+        )

@@ -12,19 +12,27 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-04"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Clan Console** — `/general console` posts a pinned hub (Menu, Daily, Status, Ticket, Help)",
-    "**Status** — `/status` shows version, latency, and Warframe API health hint",
-    "**Embeds** — contextual footers, showcase templates on economy/community commands",
-    "**Brand** — `EMBED_LOGO_URL` footer/thumbnail; `EMBED_BANNER_URL` documented for Railway",
-    "**Confirm UX** — unified warning-style confirms for transfer, purge, and ticket close",
-    "**Release posts** — auto-announce `BOT_VERSION` to `changelog_channel_id` when configured",
-    "**V2 pilots** — optional LayoutView splash for `/profile` and `/economy wallet` (`HELP_LAYOUT_V2`)",
-    "**Mentions** — @bot replies use showcase embeds; incident mode copy improved",
-    "**Onboarding** — welcome DM uses showcase template (3-step button flow unchanged)",
+    "**Fix** — slash-command sync: `/general` exceeded Discord's 25-subcommand cap after v1.7.0",
+    "**Commands** — `/status` is top-level only; Clan Console hub is `/admin console` (mods)",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "1.7.0",
+        "date": "2026-06-04",
+        "changes": [
+            "**Clan Console** — `/admin console` posts a pinned hub (Menu, Daily, Status, Ticket, Help)",
+            "**Status** — `/status` shows version, latency, and Warframe API health hint",
+            "**Embeds** — contextual footers, showcase templates on economy/community commands",
+            "**Brand** — `EMBED_LOGO_URL` footer/thumbnail; `EMBED_BANNER_URL` documented for Railway",
+            "**Confirm UX** — unified warning-style confirms for transfer, purge, and ticket close",
+            "**Release posts** — auto-announce `BOT_VERSION` to `changelog_channel_id` when configured",
+            "**V2 pilots** — optional LayoutView splash for `/profile` and `/economy wallet` (`HELP_LAYOUT_V2`)",
+            "**Mentions** — @bot replies use showcase embeds; incident mode copy improved",
+            "**Onboarding** — welcome DM uses showcase template (3-step button flow unchanged)",
+        ],
+    },
     {
         "version": "1.6.0",
         "date": "2026-06-04",

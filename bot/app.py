@@ -262,7 +262,6 @@ async def incident_mode_check(interaction: discord.Interaction) -> bool:
             # Help / status
             "general help",
             "general bot_status",
-            "general status",
             "status",
         }
 

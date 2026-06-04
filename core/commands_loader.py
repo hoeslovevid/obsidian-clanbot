@@ -333,8 +333,8 @@ def load_all_commands(bot):
         "commands.general.profile": general_group,
         "commands.general.me": general_group,
         "commands.general.bot_status": general_group,
-        "commands.general.status": general_group,
-        "commands.general.console": general_group,
+        # status → TOP_LEVEL_ONLY (/status); console → admin (mod hub; frees /general 25-cap)
+        "commands.general.console": admin_group,
         "commands.general.badges": tools_group,                # Moved: community at 25 limit
         "commands.general.announcements": admin_group,        # Moved: general_group payload >8000 bytes
         "commands.general.cross_server": tools_group,          # Moved: general_group at 25-cmd limit
@@ -380,6 +380,7 @@ def load_all_commands(bot):
         "commands.general.menu",
         "commands.general.milestones_next",
         "commands.general.whatsnew",
+        "commands.general.status",
     }
 
     loaded_count = 0

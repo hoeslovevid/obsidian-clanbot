@@ -66,7 +66,7 @@ def _hub_embed(client) -> discord.Embed:
 
 
 def setup(bot, group=None):
-    """Register `/general console` (mods post a pinned hub)."""
+    """Register `/admin console` (mods post a pinned hub)."""
 
     @group.command(
         name="console",
