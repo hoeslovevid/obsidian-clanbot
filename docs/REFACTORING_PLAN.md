@@ -21,19 +21,8 @@
 10. **Single config source** - database.py uses config.DB_PATH
 
 ### 📋 Structure (clean)
-```
-obsidian_clanbot/
-├── run.py              # Entry point
-├── bot/app.py          # Bot class, events, orchestration
-├── core/config.py      # All env/config
-├── core/commands_loader.py
-├── core/channels.py, modals.py, utils.py
-├── database/           # DB layer
-├── views/, tasks/, api/
-├── config/.env         # Local secrets (gitignored)
-├── data/               # SQLite default location
-└── commands/           # Slash commands by category
-```
+
+See **[PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md)** for the full layout and rules for new files.
 
 ## What Stays in bot/app.py (by design)
 - ClanBot class + bot instance

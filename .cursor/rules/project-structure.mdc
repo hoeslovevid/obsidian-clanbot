@@ -1,0 +1,25 @@
+---
+description: Keep new files in folders; minimal repo root
+alwaysApply: true
+---
+
+# Project structure
+
+When adding or moving files in this repo, **use folders—avoid new loose files at the repo root**.
+
+| Add… | Folder |
+|------|--------|
+| Slash command | `commands/<category>/` |
+| Shared logic | `core/` |
+| Views / tasks / handlers / API / DB | `views/`, `tasks/`, `handlers/`, `api/`, `database/` |
+| Bot events & ClanBot | `bot/` |
+| Secrets, `.gitignore` | `config/` |
+| Database files | `data/` |
+| Deploy (requirements, Procfile, mise, railpack) | `deploy/` |
+| Documentation | `docs/` |
+
+**Allowed at root only:** `run.py`, `README.md`, `railway.toml`, `railpack.json`, and hard links to `deploy/` or `config/` (`requirements.txt`, `runtime.txt`, `mise.toml`, `.gitignore`).
+
+Edit canonical copies in `deploy/` or `config/`; do not duplicate content at root.
+
+Full layout: `docs/PROJECT_STRUCTURE.md`. Railway uses Railpack (`builder = "RAILPACK"` in `railway.toml`).

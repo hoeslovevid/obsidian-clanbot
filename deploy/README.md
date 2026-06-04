@@ -2,6 +2,8 @@
 
 Canonical copies of Python/deploy config live here. Root **`requirements.txt`**, **`runtime.txt`**, and **`mise.toml`** are hard links to these files so [Railpack](https://railpack.com) can auto-detect Python and install dependencies.
 
+Where to add new deploy-related files: see [docs/PROJECT_STRUCTURE.md](../docs/PROJECT_STRUCTURE.md).
+
 | File | Purpose |
 |------|---------|
 | `Procfile` | Heroku-style process (Worker: `python run.py` from repo root) |

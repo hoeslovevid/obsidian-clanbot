@@ -1,6 +1,6 @@
 # Obsidian Clan Bot
 
-Warframe clan Discord bot. Full setup, env vars, and deployment guides live in **[docs/README.md](docs/README.md)**. Deploy configs are in **`deploy/`**; Railway builds with **Railpack** (`railway.toml`, `railpack.json`).
+Warframe clan Discord bot. Full setup: **[docs/README.md](docs/README.md)**. Layout & where to add files: **[docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md)**. Deploy configs: **`deploy/`** (Railpack via `railway.toml`).
 
 ```bash
 pip install -r deploy/requirements.txt
