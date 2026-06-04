@@ -28,4 +28,5 @@ When editing requirements or ignore rules, change files under `deploy/` or `conf
 ## Docs & commits
 
 - Update `docs/` when setup or deploy steps change.
-- Only commit or push when the user asks.
+- **Bot releases:** update `commands/general/whatsnew.py` and `BOT_VERSION` in `core/config.py`, then commit and push (see `.cursor/rules/whatsnew-and-deploy.mdc`).
+- For other work, only commit or push when the user asks.

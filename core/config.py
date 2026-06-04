@@ -51,8 +51,12 @@ TIMEZONE = os.getenv("TIMEZONE", "America/New_York")
 DB_PATH = os.getenv("DB_PATH", str(PROJECT_ROOT / "data" / "obsidian_clanbot.db"))
 
 # --- Version ---
-BOT_VERSION = os.getenv("BOT_VERSION", "1.2.0")
-BOT_CHANGELOG = os.getenv("BOT_CHANGELOG", "")
+# Keep in sync with commands/general/whatsnew.py CHANGELOG[0] on each release.
+BOT_VERSION = os.getenv("BOT_VERSION", "1.6.0")
+BOT_CHANGELOG = os.getenv(
+    "BOT_CHANGELOG",
+    "v1.6.0 — embed system, digest 2.0, menu/help V2, Phase 5 UX, platform prefs, and stability fixes. See /whatsnew.",
+)
 
 # --- Temp VC ---
 TEMP_VC_CATEGORY_ID = int(os.getenv("TEMP_VC_CATEGORY_ID", "0") or "0")

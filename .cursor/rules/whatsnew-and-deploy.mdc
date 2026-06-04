@@ -1,0 +1,14 @@
+---
+description: Keep /whatsnew and BOT_VERSION in sync; commit and push bot changes
+alwaysApply: true
+---
+
+# What's New and release hygiene
+
+When you change bot behavior, commands, embeds, tasks, or user-visible UX:
+
+1. **Update `/whatsnew`** — Add a new entry at the **top** of `CHANGELOG` in `commands/general/whatsnew.py` (newest first). Schema: `{"version": "x.y.z", "date": "YYYY-MM-DD", "changes": ["..."]}`. Summarize user-facing changes in clear bullets; group with `**Section** — detail` when helpful.
+2. **Bump version** — Set the same version in `core/config.py` as the default `BOT_VERSION` (and refresh `BOT_CHANGELOG` default text if it no longer matches).
+3. **Ship** — `git add`, `git commit`, and `git push` unless the user explicitly says not to commit or push.
+
+`/about` previews the latest changelog entry; `BOT_VERSION` also controls whether slash commands re-sync on deploy.

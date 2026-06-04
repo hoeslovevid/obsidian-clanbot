@@ -2,7 +2,7 @@
 
 How to add a new release entry:
     Append a dict to ``CHANGELOG`` (newest first). Schema:
-        {"version": "1.5.0", "date": "2026-05-14", "changes": ["..."]}
+        {"version": "1.6.0", "date": "2026-06-04", "changes": ["..."]}
 
 The /whatsnew command shows the last 5 entries (newest first), one per
 page, with a 🔔 button that lets users opt into changelog DMs.
@@ -28,6 +28,28 @@ logger = logging.getLogger(__name__)
 # Hand-curated changelog. Add new entries to the TOP. Old entries get rolled off
 # by the 5-entry paginator but stay in this list for /whatsnew history.
 CHANGELOG: list[dict] = [
+    {
+        "version": "1.6.0",
+        "date": "2026-06-04",
+        "changes": [
+            "**Embeds** — unified `embed_template` / showcase styling across commands",
+            "**Banner** — `EMBED_BANNER_URL` env override; default GitHub raw `obsidian_embed_banner.png`",
+            "**Caches** — shared cache helpers and warmer API paths; fewer redundant fetches",
+            "**Startup** — slash sync only when `BOT_VERSION` changes (faster restarts)",
+            "**Digest 2.0** — richer mod digest loop and dashboard/health observability",
+            "**Menu V2** — categorized `/menu` with optional media-gallery banner (`HELP_LAYOUT_V2`)",
+            "**Help V2** — searchable help, link rows, and clearer command discovery",
+            "**Preferences** — DM toggles plus per-user Warframe platform preference",
+            "**Phase 5 UX** — link rows on showcase embeds; `menu_layout` command pilots",
+            "**Tickets** — ticket panel/control embeds use dedicated ticket styling",
+            "**Warframe** — Baro/status polish and platform-aware world-state lookups",
+            "**Fix** — `get_incident_mode` imported from `incident_mode` (health/dashboard)",
+            "**Fix** — VC panel embed updates debounced (`VC_PANEL_UPDATE_DEBOUNCE_SECONDS`)",
+            "**Fix** — slow-command tracking without setting attrs on frozen `Interaction`",
+            "**Fix** — `server_about` LinkRowView import on deploy",
+            "**Fix** — Help V2 no longer mixes link rows with classic `HelpSelectView`",
+        ],
+    },
     {
         "version": "1.5.0",
         "date": "2026-05-14",
