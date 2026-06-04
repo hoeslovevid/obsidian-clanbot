@@ -1,7 +1,7 @@
 # Bot.py Refactoring Plan
 
 ## Current Status
-- `bot.py`: ~2940 lines (event handlers inline; command loading extracted)
+- `bot/app.py`: event handlers inline; command loading extracted
 - Goal: Split into modular files for better performance and maintainability
 
 ## Modules Created
@@ -23,20 +23,19 @@
 ### 📋 Structure (clean)
 ```
 obsidian_clanbot/
-├── bot.py              # Bot class, events, orchestration
-├── config.py           # All env/config
-├── commands_loader.py  # Command registration
-├── channels.py         # Channel helpers
-├── database.py         # DB layer
-├── modals.py           # Modal classes
-├── views.py            # View classes
-├── tasks.py            # Background tasks
-├── utils.py            # Utilities
-├── warframe_api.py     # Warframe API
+├── run.py              # Entry point
+├── bot/app.py          # Bot class, events, orchestration
+├── core/config.py      # All env/config
+├── core/commands_loader.py
+├── core/channels.py, modals.py, utils.py
+├── database/           # DB layer
+├── views/, tasks/, api/
+├── config/.env         # Local secrets (gitignored)
+├── data/               # SQLite default location
 └── commands/           # Slash commands by category
 ```
 
-## What Stays in bot.py (by design)
+## What Stays in bot/app.py (by design)
 - ClanBot class + bot instance
 - Event handlers (@bot.event) - require bot reference
 - Helpers used by events: check_auto_mod, post_vc_panel, log_complaint_action, format_thread_name

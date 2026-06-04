@@ -2,6 +2,8 @@
 Call init_db() once at startup to initialise all tables and indexes.
 """
 import logging
+import os
+
 import aiosqlite  # type: ignore
 from core.config import DB_PATH
 
@@ -10,6 +12,10 @@ logger = logging.getLogger(__name__)
 
 async def init_db() -> None:
     """Initialize all database tables."""
+    db_dir = os.path.dirname(DB_PATH)
+    if db_dir:
+        os.makedirs(db_dir, exist_ok=True)
+
     async with aiosqlite.connect(DB_PATH) as db:
         # WAL mode: allows concurrent readers while a writer is active.
         # synchronous=NORMAL is safe with WAL and much faster than FULL.

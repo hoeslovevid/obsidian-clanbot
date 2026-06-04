@@ -8,10 +8,18 @@ This guide will help you deploy the Obsidian Clan Bot to Railway.
 
 If Railway diagnose mentions `MISE_PYTHON_GITHUB_ATTESTATIONS` or GitHub artifact attestations when installing Python, mise was updated and now verifies prebuilt Python binaries. Older patch releases may not have attestations.
 
-This repo pins Python in `runtime.txt` / `mise.toml` and disables attestation checks for Python installs. If you still see the error, add this **service variable** in Railway:
+This repo pins Python in `deploy/runtime.txt` / `deploy/mise.toml` and disables attestation checks for Python installs. Build settings live in `deploy/nixpacks.toml`; Railway reads `railway.toml` at the repo root. If you still see the error, add this **service variable** in Railway:
 
 ```
 MISE_PYTHON_GITHUB_ATTESTATIONS=false
+```
+
+Then redeploy.
+
+If Railpack cannot find `mise.toml` after it was moved into `deploy/`, add:
+
+```
+MISE_OVERRIDE_CONFIG_FILENAMES=deploy/mise.toml
 ```
 
 Then redeploy.
@@ -47,7 +55,7 @@ This can happen due to:
 ## Step 1: Prepare Your Code
 
 1. Make sure your code is in a Git repository (GitHub, GitLab, or Bitbucket)
-2. Commit all changes including the new `Procfile` and `.gitignore`
+2. Commit all changes including `deploy/Procfile`, `config/.gitignore`, and `railway.toml`
 
 ## Step 2: Create Railway Account & Project
 
@@ -78,7 +86,7 @@ This can happen due to:
 - `VOICE_PANEL_CHANNEL_ID` - Voice panel channel ID
 - `COMPLAINTS_CHANNEL_ID` - Complaints channel ID
 - `EVENTS_CHANNEL_ID` - Events channel ID
-- `DB_PATH` - Database path (default: "obsidian_clanbot.db")
+- `DB_PATH` - Database path (default: `data/obsidian_clanbot.db`)
 
 See `.env.example` for all available variables.
 
@@ -86,8 +94,8 @@ See `.env.example` for all available variables.
 
 1. Go to the "Settings" tab of your service
 2. Under "Service Type", make sure it's set to **"Worker"** (not Web Service)
-   - Railway should detect this from the Procfile automatically
-   - If not, you can change it manually
+   - Railway uses `railway.toml` → `startCommand = python run.py` (Worker)
+   - Or set start command manually to `python run.py`
 
 ## Step 5: Deploy
 

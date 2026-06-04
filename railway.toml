@@ -1,0 +1,7 @@
+# Railway reads this from the repo root (not affected by Root Directory setting).
+[build]
+builder = "nixpacks"
+nixpacksConfigPath = "deploy/nixpacks.toml"
+
+[deploy]
+startCommand = "python run.py"

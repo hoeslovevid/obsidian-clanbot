@@ -1,12 +1,25 @@
 """
 Central configuration for Obsidian Clan Bot.
-All environment variables and config values are loaded here to keep bot.py lean
+All environment variables and config values are loaded here to keep bot/app.py lean
 and avoid loading heavy modules at startup.
 """
 import os
+from pathlib import Path
+
 from dotenv import load_dotenv  # type: ignore
 
-load_dotenv()
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _load_env() -> None:
+    for env_path in (PROJECT_ROOT / "config" / ".env", PROJECT_ROOT / ".env"):
+        if env_path.is_file():
+            load_dotenv(env_path)
+            return
+    load_dotenv()
+
+
+_load_env()
 
 # --- Required ---
 TOKEN = os.getenv("DISCORD_TOKEN", "").strip()
@@ -35,7 +48,7 @@ BOT_DEVELOPER = os.getenv("BOT_DEVELOPER", "Danger!")  # Developer name/credit (
 TIMEZONE = os.getenv("TIMEZONE", "America/New_York")
 
 # --- Database ---
-DB_PATH = os.getenv("DB_PATH", "obsidian_clanbot.db")
+DB_PATH = os.getenv("DB_PATH", str(PROJECT_ROOT / "data" / "obsidian_clanbot.db"))
 
 # --- Version ---
 BOT_VERSION = os.getenv("BOT_VERSION", "1.2.0")

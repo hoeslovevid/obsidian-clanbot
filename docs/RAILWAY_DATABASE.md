@@ -74,7 +74,7 @@ If you see the database file size increasing over time, persistence is working!
 
 ## Current Database Path
 
-The bot uses the `DB_PATH` environment variable, defaulting to `obsidian_clanbot.db` in the current directory.
+The bot uses the `DB_PATH` environment variable, defaulting to `data/obsidian_clanbot.db` under the project root.
 
 **Without a persistent volume:**
 - Database is stored in the container's ephemeral filesystem
