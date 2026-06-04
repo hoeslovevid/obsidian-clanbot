@@ -56,12 +56,19 @@ class LinkRowView(discord.ui.View):
         add_link_row(self, buttons)
 
 
-def add_link_row(view: discord.ui.View, buttons: Iterable[discord.ui.Button]) -> None:
-    """Append a single ActionRow of link buttons (max 5)."""
+def add_link_row(
+    view: discord.ui.View | discord.ui.LayoutView,
+    buttons: Iterable[discord.ui.Button],
+) -> None:
+    """Append link buttons (max 5). Classic View: one item per button; LayoutView: one ActionRow."""
     items = list(buttons)[:5]
     if not items:
         return
-    row = discord.ui.ActionRow()
+    if isinstance(view, discord.ui.LayoutView):
+        row = discord.ui.ActionRow()
+        for btn in items:
+            row.add_item(btn)
+        view.add_item(row)
+        return
     for btn in items:
-        row.add_item(btn)
-    view.add_item(row)
+        view.add_item(btn)
