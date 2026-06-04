@@ -196,6 +196,8 @@ _BARO_RELAY_MAP: Dict[str, str] = {
 _ws_cache_data: Optional[Dict[str, Any]] = None
 _ws_cache_ts: float = 0.0
 _WS_CACHE_TTL = 90.0
+_ws_fetch_lock = asyncio.Lock()
+_ws_inflight: Optional[asyncio.Task] = None
 
 # Suppress repeated "fallback active" log spam
 _ws_fallback_logged = False
@@ -253,33 +255,52 @@ async def _fetch_official_world_state() -> Optional[Dict[str, Any]]:
     parses. It is not subject to the same Cloudflare bot-protection that blocks
     most datacenter IPs from warframestat.us.
     """
-    global _ws_cache_data, _ws_cache_ts, _ws_fallback_logged
+    global _ws_cache_data, _ws_cache_ts, _ws_fallback_logged, _ws_inflight
     now = time.monotonic()
     if _ws_cache_data is not None and (now - _ws_cache_ts) < _WS_CACHE_TTL:
         return _ws_cache_data
-    url = "https://content.warframe.com/dynamic/worldState.php"
+
+    if _ws_inflight is not None and not _ws_inflight.done():
+        try:
+            return await _ws_inflight
+        except Exception:
+            pass
+
+    async def _do_fetch() -> Optional[Dict[str, Any]]:
+        global _ws_cache_data, _ws_cache_ts, _ws_fallback_logged
+        url = "https://content.warframe.com/dynamic/worldState.php"
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    url,
+                    timeout=aiohttp.ClientTimeout(total=12),
+                    headers={"User-Agent": "Mozilla/5.0", "Accept": "*/*"},
+                ) as resp:
+                    if resp.status == 200:
+                        data = await resp.json(content_type=None)
+                        _ws_cache_data = data
+                        _ws_cache_ts = time.monotonic()
+                        if not _ws_fallback_logged:
+                            _ws_fallback_logged = True
+                            logger.info(
+                                "Warframe world state: using content.warframe.com fallback "
+                                "(api.warframestat.us unreachable from this IP). "
+                                "Set WARFRAME_STAT_PROXY in .env to restore full API access."
+                            )
+                        return data
+        except Exception as e:
+            logger.debug("content.warframe.com world state unavailable: %s", e)
+        return _ws_cache_data
+
+    async with _ws_fetch_lock:
+        now = time.monotonic()
+        if _ws_cache_data is not None and (now - _ws_cache_ts) < _WS_CACHE_TTL:
+            return _ws_cache_data
+        _ws_inflight = asyncio.create_task(_do_fetch())
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                url,
-                timeout=aiohttp.ClientTimeout(total=12),
-                headers={"User-Agent": "Mozilla/5.0", "Accept": "*/*"},
-            ) as resp:
-                if resp.status == 200:
-                    data = await resp.json(content_type=None)
-                    _ws_cache_data = data
-                    _ws_cache_ts = time.monotonic()
-                    if not _ws_fallback_logged:
-                        _ws_fallback_logged = True
-                        logger.info(
-                            "Warframe world state: using content.warframe.com fallback "
-                            "(api.warframestat.us unreachable from this IP). "
-                            "Set WARFRAME_STAT_PROXY in .env to restore full API access."
-                        )
-                    return data
-    except Exception as e:
-        logger.debug("content.warframe.com world state unavailable: %s", e)
-    return None
+        return await _ws_inflight
+    finally:
+        _ws_inflight = None
 
 
 def _ws_to_baro(ws: Dict[str, Any]) -> Optional[Dict[str, Any]]:

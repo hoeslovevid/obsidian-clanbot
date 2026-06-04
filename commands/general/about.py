@@ -3,7 +3,7 @@ import discord  # type: ignore
 from discord import app_commands  # type: ignore
 
 from core.embed_templates import embed_template
-from core.config import BOT_WEBSITE, BOT_DEVELOPER
+from core.config import BOT_WEBSITE, BOT_DEVELOPER, BOT_CHANGELOG
 from core.version_tracking import get_current_bot_version
 
 
@@ -45,10 +45,27 @@ def setup(bot, group=None):
             "• **Trading** – Trading post and price lookup"
         )
 
+        whats_new = ""
+        try:
+            from commands.general.whatsnew import CHANGELOG
+
+            if CHANGELOG:
+                entry = CHANGELOG[0]
+                bullets = entry.get("changes") or []
+                whats_new = "\n".join(f"• {c}" for c in bullets[:4])
+                if len(bullets) > 4:
+                    whats_new += f"\n• _+{len(bullets) - 4} more — `/whatsnew`_"
+        except Exception:
+            pass
+        if not whats_new and BOT_CHANGELOG.strip():
+            whats_new = BOT_CHANGELOG.strip()[:900]
+
         fields = [
             ("📋 Main Features", features, False),
             ("📌 Version", version, True),
         ]
+        if whats_new:
+            fields.insert(1, ("✨ What's New", whats_new, False))
         if BOT_DEVELOPER:
             fields.append(("👤 Developer", BOT_DEVELOPER, True))
         if BOT_WEBSITE:

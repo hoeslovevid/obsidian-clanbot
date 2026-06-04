@@ -118,6 +118,48 @@ async def build_health_embed(
             lines.append(f"• `{code}` · `/{cmd}` · {exc_type}")
         embed.add_field(name="Recent errors (session)", value="\n".join(lines), inline=False)
 
+    try:
+        from database import _SETTINGS_CACHE
+
+        settings_cached = len(_SETTINGS_CACHE)
+    except Exception:
+        settings_cached = 0
+
+    try:
+        from core.cache_utils import cache_stats as wf_cache_stats
+
+        wf_cached = wf_cache_stats()
+    except Exception:
+        wf_cached = "n/a"
+
+    try:
+        from bot.app import _vc_panel_update_pending
+
+        vc_pending = sum(1 for t in _vc_panel_update_pending.values() if not t.done())
+    except Exception:
+        vc_pending = 0
+
+    digest_subs = 0
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT COUNT(*) FROM guild_settings WHERE key LIKE 'user_digest_dm:%' AND value='1'"
+            )
+            digest_subs = int((await cur.fetchone())[0] or 0)
+    except Exception:
+        pass
+
+    embed.add_field(
+        name="Caches",
+        value=f"Guild settings: **{settings_cached}** entries\nWarframe: {wf_cached}",
+        inline=True,
+    )
+    embed.add_field(
+        name="VC / digest",
+        value=f"Pending VC panel updates: **{vc_pending}**\nDigest subscribers: **{digest_subs}**",
+        inline=True,
+    )
+
     if GUILD_ID and guild.id != GUILD_ID:
         embed.set_footer(text=f"Note: GUILD_ID env is {GUILD_ID} (this guild is {guild.id})")
 

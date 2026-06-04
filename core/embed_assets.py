@@ -9,7 +9,7 @@ from core.config import BOT_WEBSITE, GITHUB_RAW_REPO, PROJECT_ROOT, EMBED_BANNER
 # Default: GitHub raw after deploy; override with EMBED_BANNER_URL
 _DEFAULT_BANNER = (
     f"https://raw.githubusercontent.com/{GITHUB_RAW_REPO}/main/"
-    f"obsidian_clanbot/assets/obsidian_embed_banner.png"
+    f"assets/obsidian_embed_banner.png"
 )
 
 EMBED_BANNER_URL = _ENV_BANNER or _DEFAULT_BANNER

@@ -103,6 +103,21 @@ class ClanBot(commands.Bot):
         self.start_time = now_utc()
 
     async def setup_hook(self):
+        from core.db import attach_bot_database
+
+        attach_bot_database(self)
+
+        # Sync commands only when BOT_VERSION changes (saves Discord API churn on restarts).
+        from core.config import PROJECT_ROOT
+
+        sync_marker = PROJECT_ROOT / "data" / ".command_sync_version"
+        if sync_marker.is_file() and sync_marker.read_text(encoding="utf-8").strip() == BOT_VERSION:
+            from core.command_tree_stats import collect_command_tree_stats
+
+            self._command_tree_stats = collect_command_tree_stats(self)
+            print(f"[sync] Skipping command sync — BOT_VERSION {BOT_VERSION} unchanged")
+            return
+
         # Sync commands: to a single guild for speed if GUILD_ID set, else global.
         # Note: Commands are already loaded via load_all_commands() before bot creation
         try:
@@ -153,6 +168,11 @@ class ClanBot(commands.Bot):
                         else:
                             print(f"[sync] WARNING: Group '{cmd.name}' has NO subcommands!")
                 print(f"[sync] Total subcommands synced: {total_subcommands}")
+            try:
+                sync_marker.parent.mkdir(parents=True, exist_ok=True)
+                sync_marker.write_text(BOT_VERSION, encoding="utf-8")
+            except Exception as sync_err:
+                logger.debug("[sync] Could not write sync version marker: %s", sync_err)
         except discord.app_commands.errors.CommandSyncFailure as e:
             print(f"[sync] Failed to sync commands: {e}")
             # discord.py CommandSyncFailure attributes vary by version; use getattr for type checkers
@@ -193,6 +213,7 @@ load_all_commands(bot)
 # --------------------- Global app command checks ---------------------
 # Incident mode: block non-critical commands for non-mods.
 async def incident_mode_check(interaction: discord.Interaction) -> bool:
+    interaction._obsidian_cmd_started_at = time.perf_counter()  # type: ignore[attr-defined]
     try:
         if not interaction.guild:
             return True
@@ -784,27 +805,33 @@ async def on_message(message: discord.Message):
     if message.content.startswith("!"):
         return
     
-    # Check cooldown
+    # Check cooldown (memory first; DB only when awarding)
+    if _message_cooldown_active(message.guild.id, message.author.id):
+        return
+
     async with aiosqlite.connect(DB_PATH) as db:
         cur = await db.execute(
             "SELECT last_message_at FROM message_cooldowns WHERE guild_id=? AND user_id=?",
             (message.guild.id, message.author.id),
         )
         row = await cur.fetchone()
-        
+
         if row:
             last_message_at = datetime.fromisoformat(row[0])
             time_since = (now_utc() - last_message_at).total_seconds()
             if time_since < MESSAGE_COOLDOWN_SECONDS:
+                _message_cooldown_touch(message.guild.id, message.author.id)
                 return  # Still on cooldown
-        
-        # Update cooldown
+
+        now_iso = now_utc().isoformat()
         await db.execute("""
             INSERT INTO message_cooldowns (guild_id, user_id, last_message_at)
             VALUES (?, ?, ?)
             ON CONFLICT(guild_id, user_id) DO UPDATE SET last_message_at=?
-        """, (message.guild.id, message.author.id, now_utc().isoformat(), now_utc().isoformat()))
+        """, (message.guild.id, message.author.id, now_iso, now_iso))
         await db.commit()
+
+    _message_cooldown_touch(message.guild.id, message.author.id)
     
     # Award coins (Item 72 — apply active server-goal multiplier when present)
     from core.utils import get_active_multiplier
@@ -967,64 +994,84 @@ async def on_message(message: discord.Message):
 @bot.event
 async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
     """Track voice channel activity for economy rewards and handle join-to-create."""
-    # Economy voice tracking (if enabled)
+    guild = member.guild
+    # Economy voice tracking (if enabled) — single connection per event when possible
     if ECONOMY_ENABLED:
         now = now_utc()
-        
-        # User left a voice channel - remove tracking
-        if before.channel and isinstance(before.channel, discord.VoiceChannel):
+        ch_before = before.channel if isinstance(before.channel, discord.VoiceChannel) else None
+        ch_after = after.channel if isinstance(after.channel, discord.VoiceChannel) else None
+        needs_voice_db = bool(ch_before) or (
+            ch_after is not None and not (after.self_mute or after.self_deaf)
+        )
+        if needs_voice_db:
             async with aiosqlite.connect(DB_PATH) as db:
-                await db.execute(
-                    "DELETE FROM voice_activity WHERE guild_id=? AND user_id=? AND channel_id=?",
-                    (member.guild.id, member.id, before.channel.id),
-                )
+                if ch_before:
+                    await db.execute(
+                        "DELETE FROM voice_activity WHERE guild_id=? AND user_id=? AND channel_id=?",
+                        (guild.id, member.id, ch_before.id),
+                    )
+                if ch_after is not None and not (after.self_mute or after.self_deaf):
+                    cur = await db.execute(
+                        """
+                        SELECT total_minutes FROM voice_activity
+                        WHERE guild_id=? AND user_id=? AND channel_id=?
+                        """,
+                        (guild.id, member.id, ch_after.id),
+                    )
+                    row = await cur.fetchone()
+                    existing_minutes = row[0] if row else 0
+                    await db.execute(
+                        """
+                        INSERT OR REPLACE INTO voice_activity
+                        (guild_id, user_id, channel_id, joined_at, last_reward_at, total_minutes)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                        """,
+                        (guild.id, member.id, ch_after.id, now.isoformat(), None, existing_minutes),
+                    )
                 await db.commit()
-        
-        # User joined a voice channel - start tracking (if not muted/deafened)
-        ch_after = getattr(after, "channel", None)
-        if ch_after is not None and isinstance(ch_after, discord.VoiceChannel):
-            # Item 83 — joining voice clears the inactive role too.
+        if ch_after is not None:
             try:
                 from commands.moderation.inactive_role import maybe_clear_inactive_role
                 await maybe_clear_inactive_role(member)
             except Exception:
                 pass
-            if not (after.self_mute or after.self_deaf):
-                async with aiosqlite.connect(DB_PATH) as db:
-                    # First, get existing total_minutes if any
-                    cur = await db.execute("""
-                        SELECT total_minutes FROM voice_activity
-                        WHERE guild_id=? AND user_id=? AND channel_id=?
-                    """, (member.guild.id, member.id, ch_after.id))
-                    row = await cur.fetchone()
-                    existing_minutes = row[0] if row else 0
-                    
-                    # Now insert or replace with preserved total_minutes
-                    await db.execute("""
-                        INSERT OR REPLACE INTO voice_activity (guild_id, user_id, channel_id, joined_at, last_reward_at, total_minutes)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    """, (member.guild.id, member.id, ch_after.id, now.isoformat(), None, existing_minutes))
-                    await db.commit()
     
     # Original join-to-create logic
     guild = member.guild
 
-    async def _maybe_refresh_vc_panel(channel: Optional[discord.VoiceChannel]) -> None:
+    async def _maybe_refresh_vc_panel(
+        channel: Optional[discord.VoiceChannel],
+        *,
+        db: Optional[aiosqlite.Connection] = None,
+    ) -> None:
         if channel is None or not isinstance(channel, discord.VoiceChannel):
             return
-        async with aiosqlite.connect(DB_PATH) as db:
-            cur = await db.execute(
+
+        async def _is_temp_vc(conn: aiosqlite.Connection) -> bool:
+            cur = await conn.execute(
                 "SELECT 1 FROM temp_vcs WHERE guild_id=? AND channel_id=?",
                 (guild.id, channel.id),
             )
-            if await cur.fetchone():
-                try:
-                    await schedule_vc_panel_embed_update(guild, channel.id)
-                except Exception:
-                    pass
+            return await cur.fetchone() is not None
 
-    await _maybe_refresh_vc_panel(before.channel if isinstance(before.channel, discord.VoiceChannel) else None)
-    await _maybe_refresh_vc_panel(after.channel if isinstance(after.channel, discord.VoiceChannel) else None)
+        try:
+            if db is not None:
+                if await _is_temp_vc(db):
+                    await schedule_vc_panel_embed_update(guild, channel.id)
+                return
+            async with aiosqlite.connect(DB_PATH) as conn:
+                if await _is_temp_vc(conn):
+                    await schedule_vc_panel_embed_update(guild, channel.id)
+        except Exception:
+            pass
+
+    ch_before_vc = before.channel if isinstance(before.channel, discord.VoiceChannel) else None
+    ch_after_vc = after.channel if isinstance(after.channel, discord.VoiceChannel) else None
+    panel_channels = [c for c in (ch_before_vc, ch_after_vc) if c is not None]
+    if panel_channels:
+        async with aiosqlite.connect(DB_PATH) as vc_db:
+            for ch in panel_channels:
+                await _maybe_refresh_vc_panel(ch, db=vc_db)
 
     if not after.channel:
         return
@@ -1036,24 +1083,26 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
     create_id = int(create_id_s)
     if after.channel.id != create_id:
         # Track last non-empty times for cleanup
-        for ch in (before.channel, after.channel):
-            if ch and isinstance(ch, discord.VoiceChannel):
-                async with aiosqlite.connect(DB_PATH) as db:
-                    # Only track channels we own
+        nonempty_channels = [
+            ch
+            for ch in (before.channel, after.channel)
+            if ch and isinstance(ch, discord.VoiceChannel) and len(ch.members) > 0
+        ]
+        if nonempty_channels:
+            now_iso = now_utc().isoformat()
+            async with aiosqlite.connect(DB_PATH) as db:
+                for ch in nonempty_channels:
                     cur = await db.execute(
                         "SELECT 1 FROM temp_vcs WHERE guild_id=? AND channel_id=?",
-                        (member.guild.id, ch.id),
+                        (guild.id, ch.id),
                     )
-                    exists = await cur.fetchone()
-                    if exists and len(ch.members) > 0:
+                    if await cur.fetchone():
                         await db.execute(
                             "UPDATE temp_vcs SET last_nonempty_at=? WHERE guild_id=? AND channel_id=?",
-                            (now_utc().isoformat(), member.guild.id, ch.id),
+                            (now_iso, guild.id, ch.id),
                         )
-                        await db.commit()
+                await db.commit()
         return
-
-    guild = member.guild
     category = await resolve_temp_vc_category(guild)
     create_ch = guild.get_channel(create_id)
     template_ch = create_ch if isinstance(create_ch, discord.VoiceChannel) else None
@@ -1213,6 +1262,21 @@ async def on_ready():
 # Cache for achievement definitions (avoid repeated initialization)
 _achievement_definitions_initialized = False
 
+# In-memory message economy cooldown — skip DB when still on cooldown
+_MESSAGE_COOLDOWN_CACHE: Dict[Tuple[int, int], datetime] = {}
+
+
+def _message_cooldown_active(guild_id: int, user_id: int) -> bool:
+    """True if user is still within MESSAGE_COOLDOWN_SECONDS (memory only)."""
+    last = _MESSAGE_COOLDOWN_CACHE.get((guild_id, user_id))
+    if last is None:
+        return False
+    return (now_utc() - last).total_seconds() < MESSAGE_COOLDOWN_SECONDS
+
+
+def _message_cooldown_touch(guild_id: int, user_id: int) -> None:
+    _MESSAGE_COOLDOWN_CACHE[(guild_id, user_id)] = now_utc()
+
 @bot.event
 async def on_member_join(member: discord.Member):
     """Send welcome message when a member joins."""
@@ -1296,6 +1360,19 @@ async def on_member_join(member: discord.Member):
             await member.send(dm_text[:2000])
     except (discord.Forbidden, discord.HTTPException):
         pass  # User may have DMs disabled
+
+    # Default short welcome DM when no custom welcome_dm is configured.
+    try:
+        default_off = await get_guild_setting(member.guild.id, "welcome_dm_default_off")
+        custom_dm = await get_guild_setting(member.guild.id, "welcome_dm_enabled")
+        if default_off != "1" and custom_dm != "1":
+            short = (
+                f"Welcome to **{member.guild.name}**! "
+                "Try `/menu` for quick actions, `/help` for commands, and `/preferences` to set your timezone."
+            )
+            await member.send(short[:2000])
+    except (discord.Forbidden, discord.HTTPException):
+        pass
 
     # Item 8: first-run onboarding DM (additive — runs alongside the welcome DM above).
     try:
@@ -1762,6 +1839,25 @@ def _find_similar_commands(typed: str, all_commands: list[str], max_suggestions:
 @bot.event
 async def on_app_command_completion(interaction: discord.Interaction, command):
     """Record per-user slash command usage for /tools my_stats. Best-effort, never raises."""
+    try:
+        started = getattr(interaction, "_obsidian_cmd_started_at", None)
+        if started is not None:
+            elapsed_ms = (time.perf_counter() - started) * 1000
+            if elapsed_ms >= 3000:
+                qn = (
+                    command.qualified_name
+                    if hasattr(command, "qualified_name")
+                    else getattr(command, "name", "?")
+                )
+                logger.warning(
+                    "[slow_cmd] /%s took %.0f ms (guild=%s user=%s)",
+                    qn,
+                    elapsed_ms,
+                    getattr(interaction.guild, "id", None),
+                    getattr(interaction.user, "id", None),
+                )
+    except Exception:
+        pass
     try:
         if interaction.guild is None or interaction.user is None:
             return

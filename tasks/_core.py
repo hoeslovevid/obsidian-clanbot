@@ -4,6 +4,7 @@ Background tasks for the bot (internal module).
 All tasks are defined here as closures inside setup_tasks(bot).
 Import setup_tasks from the tasks package: ``from tasks import setup_tasks``
 """
+import asyncio
 import logging
 import os
 from datetime import datetime, timedelta, timezone
@@ -337,6 +338,7 @@ def setup_tasks(bot):
     @event_reminder_loop.before_loop
     async def before_event_reminder_loop():
         await bot.wait_until_ready()
+        await asyncio.sleep(12)
 
     @tasks.loop(hours=1)
     async def recurring_event_loop():
@@ -919,6 +921,7 @@ def setup_tasks(bot):
     @baro_check_loop.before_loop
     async def before_baro_check_loop():
         await bot.wait_until_ready()
+        await asyncio.sleep(24)
 
     @tasks.loop(minutes=1)  # Update every minute
     async def baro_live_update_loop():

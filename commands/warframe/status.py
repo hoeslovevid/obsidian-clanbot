@@ -4,7 +4,9 @@ from discord import app_commands
 from datetime import datetime, timezone
 import dateparser
 
-from core.utils import obsidian_embed, warframe_data_unavailable_embed, BUTTON_ONLY_RUNNER_MSG
+from core.embed_templates import embed_template
+from core.utils import warframe_data_unavailable_embed, BUTTON_ONLY_RUNNER_MSG
+from api.warframe_api import wf_staleness_for_path
 from api.warframe_api import get_baro_status, fetch_alerts, get_all_cycles, fetch_fissures, fetch_sortie, fetch_invasions
 from commands.warframe.alerts import format_alert_rewards
 from views import RetryView, RefreshView
@@ -155,12 +157,34 @@ def _format_sortie_summary(sortie_data: dict) -> str:
         return f"**{len(missions)}** missions"
 
 
-def build_status_embed(baro_active: bool, baro_data: dict, alerts_data: list, cycles_data: dict, fissures_data: list, sortie_data: dict, client, invasions_data: list | None = None) -> discord.Embed:
+def _status_cached_at() -> datetime | None:
+    stamps = [
+        wf_staleness_for_path("pc/voidTrader"),
+        wf_staleness_for_path("pc/alerts"),
+        wf_staleness_for_path("pc/cetusCycle"),
+    ]
+    valid = [t for t in stamps if t is not None]
+    return min(valid) if valid else None
+
+
+def build_status_embed(
+    baro_active: bool,
+    baro_data: dict,
+    alerts_data: list,
+    cycles_data: dict,
+    fissures_data: list,
+    sortie_data: dict,
+    client,
+    invasions_data: list | None = None,
+    *,
+    platform: str = "pc",
+) -> discord.Embed:
     """Build the combined status embed."""
     now = datetime.now(timezone.utc)
     footer_ts = int(now.timestamp())
-    footer = f"Last updated <t:{footer_ts}:R> • PC data • Use Refresh to update"
-    
+    plat_label = platform.upper() if platform else "PC"
+    footer = f"Last updated <t:{footer_ts}:R> · {plat_label} data · Use Refresh to update"
+
     fields = []
     
     # Baro
@@ -190,15 +214,17 @@ def build_status_embed(baro_active: bool, baro_data: dict, alerts_data: list, cy
     if invasions_data is not None:
         fields.append(("⚔️ Invasions", _format_invasions_summary(invasions_data), True))
 
-    embed = obsidian_embed(
+    return embed_template(
+        "warframe_status",
         "📋 What's Happening Now",
         "> Baro · Alerts · Cycles · Fissures · Sortie",
-        category="warframe",
+        variant="world_state",
+        platform=platform,
+        client=client,
+        cached_at=_status_cached_at(),
         fields=fields,
         footer=footer,
-        client=client,
     )
-    return embed
 
 
 def setup(bot, group=None):
@@ -212,6 +238,14 @@ def setup(bot, group=None):
     async def _status_impl(interaction: discord.Interaction):
         """Display Baro, alerts, and cycles in one embed."""
         await interaction.response.defer(ephemeral=False)
+
+        platform = "pc"
+        if interaction.guild:
+            from core.warframe_platform import resolve_warframe_platform
+
+            platform = await resolve_warframe_platform(
+                interaction.guild.id, interaction.user.id
+            )
 
         import asyncio
         baro_result, alerts_data, cycles_data, fissures_data, sortie_data, invasions_data = await asyncio.gather(
@@ -231,7 +265,9 @@ def setup(bot, group=None):
                     get_baro_status(), fetch_alerts(), get_all_cycles(), fetch_fissures(), fetch_sortie(), fetch_invasions(),
                 )
                 ia, bd = br
-                emb = build_status_embed(ia, bd, ar, cr, fr, sr, interaction.client, ir)
+                emb = build_status_embed(
+                    ia, bd, ar, cr, fr, sr, interaction.client, ir, platform=platform
+                )
                 await btn_interaction.message.edit(embed=emb, view=None)
             return await interaction.edit_original_response(
                 embed=warframe_data_unavailable_embed(interaction.client),
@@ -239,8 +275,15 @@ def setup(bot, group=None):
             )
 
         embed = build_status_embed(
-            is_active, baro_data or {}, alerts_data or [], cycles_data or {},
-            fissures_data or [], sortie_data or {}, interaction.client, invasions_data or [],
+            is_active,
+            baro_data or {},
+            alerts_data or [],
+            cycles_data or {},
+            fissures_data or [],
+            sortie_data or {},
+            interaction.client,
+            invasions_data or [],
+            platform=platform,
         )
 
         async def on_refresh(btn_interaction: discord.Interaction):
@@ -254,7 +297,10 @@ def setup(bot, group=None):
                 get_baro_status(), fetch_alerts(), get_all_cycles(), fetch_fissures(), fetch_sortie(), fetch_invasions(),
             )
             ia, bd = br
-            new_emb = build_status_embed(ia, bd or {}, ar or [], cr or {}, fr or [], sr or {}, interaction.client, ir or [])
+            new_emb = build_status_embed(
+                ia, bd or {}, ar or [], cr or {}, fr or [], sr or {},
+                interaction.client, ir or [], platform=platform,
+            )
             view = RefreshView(on_refresh)
             await btn_interaction.message.edit(embed=new_emb, view=view)
 

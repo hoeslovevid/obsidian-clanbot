@@ -1,8 +1,10 @@
 """Daily DM digest for users who opt in via /preferences digest_dm."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import aiosqlite
 import dateparser
@@ -10,10 +12,22 @@ import discord
 from discord.ext import tasks
 
 from api.warframe_api import get_baro_status
+from core.embed_templates import embed_template
 from core.utils import obsidian_embed
-from database import DB_PATH, get_digest_dm, get_guild_setting, now_utc, set_guild_setting
+from database import (
+    DB_PATH,
+    get_digest_dm,
+    get_guild_setting,
+    get_quieter_mode,
+    get_user_timezone,
+    now_utc,
+    set_guild_setting,
+)
 
 logger = logging.getLogger(__name__)
+
+_DIGEST_HOUR_START = 8
+_DIGEST_HOUR_END = 9
 
 
 async def _baro_soon_line() -> str | None:
@@ -38,11 +52,71 @@ async def _baro_soon_line() -> str | None:
     return None
 
 
-async def _build_user_digest(guild_id: int, user_id: int) -> str | None:
+async def _streak_at_risk_line(guild_id: int, user_id: int, today_str: str) -> str | None:
+    """Remind when daily is unclaimed and the user has a streak to lose."""
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT last_claim_date, streak_days FROM daily_claims WHERE guild_id=? AND user_id=?",
+                (guild_id, user_id),
+            )
+            row = await cur.fetchone()
+        if not row:
+            return None
+        last_claim, streak = row[0], int(row[1] or 0)
+        if last_claim == today_str or streak < 1:
+            return None
+        return f"🔥 **Streak at risk** — {streak} day{'s' if streak != 1 else ''} · claim `/economy daily` before reset"
+    except Exception:
+        return None
+
+
+async def _mature_investments_line(guild_id: int, user_id: int) -> str | None:
+    """List investments ready to collect, if the investments table exists."""
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='investments'"
+            )
+            if not await cur.fetchone():
+                return None
+            now_iso = now_utc().isoformat()
+            cur = await db.execute(
+                """
+                SELECT COUNT(*) FROM investments
+                WHERE guild_id=? AND user_id=? AND collected=0
+                  AND mature_at IS NOT NULL AND mature_at <= ?
+                """,
+                (guild_id, user_id, now_iso),
+            )
+            count = int((await cur.fetchone())[0] or 0)
+        if count <= 0:
+            return None
+        return f"📈 **{count}** investment{'s' if count != 1 else ''} ready — `/economy invest_collect`"
+    except Exception as e:
+        logger.debug("[digest] investments check skipped: %s", e)
+        return None
+
+
+def _in_digest_send_window(guild_id: int, user_id: int, tz_name: str | None) -> bool:
+    """True when local time is in the digest hour window (default 08:00–09:00)."""
+    try:
+        tz = ZoneInfo(tz_name or "UTC")
+    except Exception:
+        tz = ZoneInfo("UTC")
+    local = now_utc().astimezone(tz)
+    return _DIGEST_HOUR_START <= local.hour < _DIGEST_HOUR_END
+
+
+async def _build_user_digest(guild_id: int, user_id: int, *, quieter: bool) -> str | None:
     """Compose digest body or None when there is nothing worth sending."""
     today = now_utc().date()
     today_str = today.isoformat()
     lines: list[str] = []
+
+    streak_line = await _streak_at_risk_line(guild_id, user_id, today_str)
+    if streak_line:
+        lines.append(streak_line)
 
     async with aiosqlite.connect(DB_PATH) as db:
         cur = await db.execute(
@@ -54,22 +128,30 @@ async def _build_user_digest(guild_id: int, user_id: int) -> str | None:
         if last_claim != today_str:
             lines.append("💰 **Daily reward** is unclaimed — use `/economy daily` before reset.")
 
-        day_start = int(datetime.combine(today, datetime.min.time(), tzinfo=timezone.utc).timestamp())
-        day_end = day_start + 86400
-        cur = await db.execute(
-            """
-            SELECT COUNT(*) FROM events
-            WHERE guild_id=? AND start_ts >= ? AND start_ts < ? AND COALESCE(ended, 0) = 0
-            """,
-            (guild_id, day_start, day_end),
-        )
-        events_today = int((await cur.fetchone())[0] or 0)
-        if events_today:
-            lines.append(f"📅 **{events_today}** clan event{'s' if events_today != 1 else ''} scheduled today.")
+        if not quieter:
+            day_start = int(datetime.combine(today, datetime.min.time(), tzinfo=timezone.utc).timestamp())
+            day_end = day_start + 86400
+            cur = await db.execute(
+                """
+                SELECT COUNT(*) FROM events
+                WHERE guild_id=? AND start_ts >= ? AND start_ts < ? AND COALESCE(ended, 0) = 0
+                """,
+                (guild_id, day_start, day_end),
+            )
+            events_today = int((await cur.fetchone())[0] or 0)
+            if events_today:
+                lines.append(
+                    f"📅 **{events_today}** clan event{'s' if events_today != 1 else ''} scheduled today."
+                )
 
-    baro_line = await _baro_soon_line()
-    if baro_line:
-        lines.append(baro_line)
+    if not quieter:
+        baro_line = await _baro_soon_line()
+        if baro_line:
+            lines.append(baro_line)
+
+    inv_line = await _mature_investments_line(guild_id, user_id)
+    if inv_line:
+        lines.append(inv_line)
 
     if not lines:
         return None
@@ -84,12 +166,7 @@ def create_digest_loop(bot: discord.Client):
         if not bot.is_ready():
             return
 
-        now = now_utc()
-        # Send once per user per UTC day, between 12:00–13:00 UTC
-        if not (12 <= now.hour < 13):
-            return
-
-        today_str = now.date().isoformat()
+        today_str = now_utc().date().isoformat()
 
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute(
@@ -110,11 +187,16 @@ def create_digest_loop(bot: discord.Client):
             if not await get_digest_dm(guild_id, user_id):
                 continue
 
+            tz = await get_user_timezone(guild_id, user_id)
+            if not _in_digest_send_window(guild_id, user_id, tz):
+                continue
+
             sent_key = f"digest_dm_sent:{user_id}"
             if await get_guild_setting(guild_id, sent_key) == today_str:
                 continue
 
-            body = await _build_user_digest(guild_id, user_id)
+            quieter = await get_quieter_mode(guild_id)
+            body = await _build_user_digest(guild_id, user_id, quieter=quieter)
             if not body:
                 continue
 
@@ -127,12 +209,14 @@ def create_digest_loop(bot: discord.Client):
 
             guild = bot.get_guild(guild_id)
             guild_name = guild.name if guild else "your server"
-            embed = obsidian_embed(
+            embed = embed_template(
+                "showcase",
                 "☀️ Daily Digest",
                 f"Quick snapshot for **{guild_name}**:\n\n{body}",
                 category="general",
                 client=bot,
                 footer="Manage with /general preferences · digest_dm",
+                brand=True,
             )
             try:
                 await user.send(embed=embed)
@@ -143,5 +227,6 @@ def create_digest_loop(bot: discord.Client):
     @digest_dm_loop.before_loop
     async def before_digest_dm_loop():
         await bot.wait_until_ready()
+        await asyncio.sleep(45)
 
     return digest_dm_loop

@@ -151,7 +151,11 @@ def setup(bot, group=None):
 
         recent_blurb = ""
         if recent:
-            recent_blurb = "**Recent** — " + " · ".join(f"`/{cmd}`" for cmd, _ in recent) + "\n\n"
+            recent_blurb = (
+                "**Continue where you left off** — "
+                + " · ".join(f"`/{cmd}`" for cmd, _ in recent)
+                + "\n\n"
+            )
 
         desc = (
             recent_blurb

@@ -1,4 +1,5 @@
 """Mod dashboard - overview of open tickets, pending applications, recent warns, server stats."""
+import time
 import discord
 from discord import app_commands
 
@@ -8,6 +9,9 @@ from database import DB_PATH, get_auto_mod_settings
 from commands.moderation.incident_mode import get_incident_mode
 import aiosqlite
 
+_DASHBOARD_CACHE_TTL = 600.0  # 10 minutes
+_mod_dashboard_cache: dict[int, tuple[float, discord.Embed]] = {}
+
 
 async def _build_mod_dashboard_embed(
     guild: discord.Guild, client: discord.Client
@@ -15,7 +19,8 @@ async def _build_mod_dashboard_embed(
     """Query DB and return the mod dashboard embed."""
     async with aiosqlite.connect(DB_PATH) as db:
         cur = await db.execute("""
-            SELECT ticket_id, subject, user_id, created_at, last_activity_at, tag, priority, escalated
+            SELECT ticket_id, subject, user_id, created_at, last_activity_at, tag, priority, escalated,
+                   first_response_at
             FROM tickets
             WHERE guild_id=? AND status='open'
             ORDER BY CASE WHEN COALESCE(priority,'normal')='urgent' THEN 0 ELSE 1 END,
@@ -23,6 +28,13 @@ async def _build_mod_dashboard_embed(
             LIMIT 10
         """, (guild.id,))
         tickets = await cur.fetchall()
+
+        cur = await db.execute("""
+            SELECT COUNT(*) FROM tickets
+            WHERE guild_id=? AND status='open'
+              AND (first_response_at IS NULL OR first_response_at='')
+        """, (guild.id,))
+        awaiting_first_response = int((await cur.fetchone())[0] or 0)
 
         cur = await db.execute("""
             SELECT id, user_id, created_at
@@ -75,13 +87,18 @@ async def _build_mod_dashboard_embed(
     incident_on = await get_incident_mode(guild.id)
     incident_summary = "🚨 **ACTIVE**" if incident_on else "✅ Off"
 
+    sla_note = ""
+    if awaiting_first_response:
+        sla_note = f"\n**Tickets awaiting staff reply:** {awaiting_first_response}"
+
     fields = [
         (
             "📋 At a glance",
             f"**Open incidents:** {open_incidents}\n"
             f"**Warns today:** {warns_today}\n"
             f"**Incident mode:** {incident_summary}\n"
-            f"**Automod:** {automod_summary}",
+            f"**Automod:** {automod_summary}"
+            + sla_note,
             False,
         ),
     ]
@@ -93,13 +110,15 @@ async def _build_mod_dashboard_embed(
             tag      = row[5] if len(row) > 5 else None
             priority = row[6] if len(row) > 6 else None
             escalated = row[7] if len(row) > 7 else 0
+            first_resp = row[8] if len(row) > 8 else None
             user  = guild.get_member(uid)
             uname = user.display_name if user else f"User {uid}"
             tag_str     = f" [{tag}]" if tag else ""
             urgent_str  = " 🔴" if priority == "urgent" else ""
             esc_str     = " ⚠️" if escalated else ""
+            sla_str     = " ⏳" if not first_resp else ""
             lines.append(
-                f"• **{ticket_id}**{tag_str}{urgent_str}{esc_str} — {uname}\n"
+                f"• **{ticket_id}**{tag_str}{urgent_str}{esc_str}{sla_str} — {uname}\n"
                 f"  _{subject[:50]}{'…' if len(subject or '') > 50 else ''}_"
             )
         fields.append(("🎫 Open Tickets", "\n".join(lines), False))
@@ -132,7 +151,7 @@ async def _build_mod_dashboard_embed(
         fields.append(("⚠️ Recent Warnings", "No recent warnings.", False))
 
     refreshed = format_timestamp_readable(datetime.now(timezone.utc))
-    return obsidian_embed(
+    embed = obsidian_embed(
         "🛡️ Mod Dashboard",
         "Overview of items needing attention.",
         category="moderation",
@@ -141,6 +160,26 @@ async def _build_mod_dashboard_embed(
         footer=f"Refreshed {refreshed}  ·  /ticket · /manage_applications · /mod warn list",
         client=client,
     )
+    if guild.owner:
+        embed.set_author(name=guild.name, icon_url=guild.icon.url if guild.icon else None)
+    return embed
+
+
+async def get_mod_dashboard_embed(
+    guild: discord.Guild,
+    client: discord.Client,
+    *,
+    force_refresh: bool = False,
+) -> discord.Embed:
+    """Cached mod dashboard (10 min) unless force_refresh."""
+    now = time.monotonic()
+    if not force_refresh:
+        entry = _mod_dashboard_cache.get(guild.id)
+        if entry and (now - entry[0]) < _DASHBOARD_CACHE_TTL:
+            return entry[1]
+    embed = await _build_mod_dashboard_embed(guild, client)
+    _mod_dashboard_cache[guild.id] = (now, embed)
+    return embed
 
 
 async def _build_stats_dashboard_embed(
@@ -272,7 +311,7 @@ class ModDashboardView(discord.ui.View):
         if not await self._require_mod(interaction):
             return
         await interaction.response.defer()
-        embed = await _build_mod_dashboard_embed(self.guild, interaction.client)
+        embed = await get_mod_dashboard_embed(self.guild, interaction.client, force_refresh=True)
         await interaction.edit_original_response(embed=embed, view=self)
 
     @discord.ui.button(label="Lock #channel", style=discord.ButtonStyle.danger, emoji="🔒")
@@ -424,7 +463,7 @@ def setup(bot, group=None):
             )
 
         await interaction.response.defer(ephemeral=True)
-        embed = await _build_mod_dashboard_embed(interaction.guild, interaction.client)
+        embed = await get_mod_dashboard_embed(interaction.guild, interaction.client)
         view  = ModDashboardView(interaction.guild)
         await interaction.followup.send(embed=embed, view=view, ephemeral=True)
 

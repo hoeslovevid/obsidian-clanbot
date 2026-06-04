@@ -94,6 +94,8 @@ OPENAI_API_KEY = (os.getenv("OPENAI_API_KEY") or "").strip() or None
 
 # --- Embed / UX ---
 HELP_LAYOUT_V2 = os.getenv("HELP_LAYOUT_V2", "true").lower() in ("1", "true", "yes", "y", "on")
+# Optional full URL for embed banner image (showcase, errors, level-ups). When unset,
+# defaults to GitHub raw assets/obsidian_embed_banner.png under GITHUB_RAW_REPO.
 EMBED_BANNER_URL = os.getenv("EMBED_BANNER_URL", "").strip() or None
 EMBED_LOGO_URL = os.getenv("EMBED_LOGO_URL", "").strip() or None
 GITHUB_RAW_REPO = os.getenv("GITHUB_RAW_REPO", "hoeslovevid/obsidian-clanbot").strip()

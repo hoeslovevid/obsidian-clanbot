@@ -124,6 +124,12 @@ async def get_configured_channel_id(guild_id: int, setting_key: str) -> Optional
 async def set_guild_setting(guild_id: int, key: str, value: str) -> None:
     """Set a guild setting value and immediately invalidate the cache entry."""
     _cache_invalidate(guild_id, key)
+    try:
+        from core.channels import invalidate_channel_resolve_cache
+
+        invalidate_channel_resolve_cache(guild_id, key)
+    except Exception:
+        pass
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
             "INSERT OR REPLACE INTO guild_settings (guild_id, key, value) VALUES (?, ?, ?)",

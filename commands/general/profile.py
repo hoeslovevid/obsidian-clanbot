@@ -213,7 +213,7 @@ def setup(bot, group=None):
                 embed=obsidian_embed(
                     "❌ Invalid Context",
                     "Profiles with server stats can only be viewed in a server.",
-                    category="error",
+                    template="error",
                     client=interaction.client,
                 ),
                 ephemeral=True,
@@ -406,6 +406,8 @@ def setup(bot, group=None):
             f"👤 {target_user.display_name}",
             desc,
             color=member_color,
+            template="profile",
+            profile_category="general",
             author=target_user,
             thumbnail=target_user.display_avatar.url,
             fields=fields,

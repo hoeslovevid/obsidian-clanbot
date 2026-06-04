@@ -3,6 +3,7 @@ Channel resolution and management functions.
 This module handles channel finding, creation, and resolution logic.
 """
 import logging
+import time
 import discord  # type: ignore
 from typing import Mapping, Optional, Union, cast
 import aiosqlite  # type: ignore
@@ -10,6 +11,47 @@ import aiosqlite  # type: ignore
 from database import get_guild_setting, set_guild_setting, DB_PATH
 
 logger = logging.getLogger(__name__)
+
+# Resolved channel IDs per (guild, setting_key) — avoids repeated guild_settings reads.
+_CHANNEL_RESOLVE_CACHE: dict[str, tuple[int, float]] = {}
+_CHANNEL_RESOLVE_TTL = 300.0
+
+
+def _channel_resolve_cache_key(guild_id: int, setting_key: str) -> str:
+    return f"{guild_id}:{setting_key}"
+
+
+def invalidate_channel_resolve_cache(
+    guild_id: int,
+    setting_key: Optional[str] = None,
+) -> None:
+    """Evict cached resolve_channel_id results (call when guild_settings change)."""
+    if setting_key is None:
+        prefix = f"{guild_id}:"
+        for k in list(_CHANNEL_RESOLVE_CACHE.keys()):
+            if k.startswith(prefix):
+                del _CHANNEL_RESOLVE_CACHE[k]
+        return
+    _CHANNEL_RESOLVE_CACHE.pop(_channel_resolve_cache_key(guild_id, setting_key), None)
+
+
+def _channel_resolve_cache_get(guild_id: int, setting_key: str) -> Optional[int]:
+    ck = _channel_resolve_cache_key(guild_id, setting_key)
+    entry = _CHANNEL_RESOLVE_CACHE.get(ck)
+    if entry is None:
+        return None
+    ch_id, ts = entry
+    if time.monotonic() - ts > _CHANNEL_RESOLVE_TTL:
+        del _CHANNEL_RESOLVE_CACHE[ck]
+        return None
+    return ch_id
+
+
+def _channel_resolve_cache_put(guild_id: int, setting_key: str, channel_id: int) -> None:
+    _CHANNEL_RESOLVE_CACHE[_channel_resolve_cache_key(guild_id, setting_key)] = (
+        channel_id,
+        time.monotonic(),
+    )
 
 
 async def find_or_create_text_channel(guild: discord.Guild, *, name: str) -> discord.TextChannel:
@@ -35,26 +77,37 @@ async def resolve_channel_id(
     Saves the resolved ID into guild_settings.
     """
     from bot import AUTO_SETUP
+
+    cached_id = _channel_resolve_cache_get(guild.id, setting_key)
+    if cached_id is not None:
+        ch = guild.get_channel(cached_id)
+        if isinstance(ch, (discord.TextChannel, discord.VoiceChannel, discord.CategoryChannel)):
+            return ch.id
+        invalidate_channel_resolve_cache(guild.id, setting_key)
     
     saved = await get_guild_setting(guild.id, setting_key)
     if saved is not None:
         if saved == "0" or str(saved).lower() == "skipped":
+            _channel_resolve_cache_put(guild.id, setting_key, 0)
             return 0  # Moderator explicitly skipped during setup_obsidian
         if saved.isdigit() and int(saved) != 0:
             ch = guild.get_channel(int(saved))
             if isinstance(ch, (discord.TextChannel, discord.VoiceChannel, discord.CategoryChannel)):
+                _channel_resolve_cache_put(guild.id, setting_key, ch.id)
                 return ch.id
 
     if env_id:
         ch = guild.get_channel(env_id)
         if isinstance(ch, (discord.TextChannel, discord.VoiceChannel, discord.CategoryChannel)):
             await set_guild_setting(guild.id, setting_key, str(ch.id))
+            _channel_resolve_cache_put(guild.id, setting_key, ch.id)
             return ch.id
 
     # find by exact name match (case-sensitive)
     ch = discord.utils.get(guild.channels, name=fallback_name)
     if ch:
         await set_guild_setting(guild.id, setting_key, str(ch.id))
+        _channel_resolve_cache_put(guild.id, setting_key, ch.id)
         return ch.id
 
     # find by case-insensitive name match (in case moderators created it with different casing)
@@ -64,6 +117,7 @@ async def resolve_channel_id(
             if ch.name.lower() == fallback_lower:
                 logger.info(f"Found existing channel '{ch.name}' for {setting_key} (case-insensitive match)")
                 await set_guild_setting(guild.id, setting_key, str(ch.id))
+                _channel_resolve_cache_put(guild.id, setting_key, ch.id)
                 return ch.id
 
     # Before creating, check if there's already a channel that might be serving this purpose
@@ -85,6 +139,7 @@ async def resolve_channel_id(
                 # Found a potential match - save it and return
                 logger.info(f"Found existing channel '{ch.name}' for {setting_key} (matched keywords: {key_words}, fallback: '{fallback_name}')")
                 await set_guild_setting(guild.id, setting_key, str(ch.id))
+                _channel_resolve_cache_put(guild.id, setting_key, ch.id)
                 return ch.id
         
         # Additional fallback: for events channel, also check for common variations
@@ -98,6 +153,7 @@ async def resolve_channel_id(
                 if any(keyword in ch_normalized for keyword in event_keywords):
                     logger.info(f"Found potential events channel '{ch.name}' for {setting_key} (matched event keywords)")
                     await set_guild_setting(guild.id, setting_key, str(ch.id))
+                    _channel_resolve_cache_put(guild.id, setting_key, ch.id)
                     return ch.id
 
     if not AUTO_SETUP:
@@ -106,6 +162,7 @@ async def resolve_channel_id(
     # Create channel if AUTO_SETUP enabled
     created = await find_or_create_text_channel(guild, name=fallback_name)
     await set_guild_setting(guild.id, setting_key, str(created.id))
+    _channel_resolve_cache_put(guild.id, setting_key, created.id)
     return created.id
 
 

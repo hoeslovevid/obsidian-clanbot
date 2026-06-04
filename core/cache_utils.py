@@ -27,6 +27,11 @@ async def get_cached(key: str, ttl_seconds: float, fetch: Callable[[], Awaitable
     return val
 
 
+def cache_stats() -> str:
+    """Short summary for /admin health."""
+    return f"{len(_cache)} API entries"
+
+
 def invalidate(key_prefix: str = "") -> int:
     """Invalidate cache entries matching prefix. Returns count removed."""
     global _cache

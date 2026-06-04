@@ -260,7 +260,11 @@ def setup(bot, group=None):
                 color=EMBED_COLORS["general"],
                 client=interaction.client,
             )
-            return await interaction.followup.send(embed=embed, ephemeral=True)
+            return await interaction.followup.send(
+                embed=embed,
+                view=_NotificationPrefsView(interaction.user.id, interaction.guild.id),
+                ephemeral=True,
+            )
 
         if updated:
             return await interaction.followup.send(
@@ -308,6 +312,50 @@ def setup(bot, group=None):
             await _sgs(guild_id, f"{key}:{user_id}", value)
             labels.append(f"`{key.replace('user_', '')}`")
         return labels
+
+    class _NotificationPrefsView(discord.ui.View):
+        """Quick toggles for common notification prefs (slash command still works)."""
+
+        def __init__(self, requester_id: int, guild_id: int):
+            super().__init__(timeout=180)
+            self.requester_id = requester_id
+            self.guild_id = guild_id
+
+        async def interaction_check(self, btn_interaction: discord.Interaction) -> bool:
+            if btn_interaction.user.id != self.requester_id:
+                await btn_interaction.response.send_message(
+                    "Only the original user can use these buttons.", ephemeral=True
+                )
+                return False
+            return True
+
+        async def _flip(self, btn_interaction: discord.Interaction, key: str, label: str) -> None:
+            from database import get_guild_setting as _ggs, set_guild_setting as _sgs
+
+            cur = await _ggs(self.guild_id, f"{key}:{btn_interaction.user.id}")
+            new_val = "0" if cur == "1" else "1"
+            await _sgs(self.guild_id, f"{key}:{btn_interaction.user.id}", new_val)
+            state = "On" if new_val == "1" else "Off"
+            await btn_interaction.response.send_message(
+                embed=success_embed(f"{label}: {state}", "Use `/preferences` for all options.", client=btn_interaction.client),
+                ephemeral=True,
+            )
+
+        @discord.ui.button(label="Daily digest", emoji="☀️", style=discord.ButtonStyle.secondary)
+        async def digest_btn(self, btn_interaction: discord.Interaction, button: discord.ui.Button):
+            await self._flip(btn_interaction, "user_digest_dm", "Daily digest DM")
+
+        @discord.ui.button(label="Daily reminder", emoji="🎁", style=discord.ButtonStyle.secondary)
+        async def daily_btn(self, btn_interaction: discord.Interaction, button: discord.ui.Button):
+            await self._flip(btn_interaction, "user_daily_reminder", "Daily streak reminder")
+
+        @discord.ui.button(label="Level-up DM", emoji="⭐", style=discord.ButtonStyle.secondary)
+        async def levelup_btn(self, btn_interaction: discord.Interaction, button: discord.ui.Button):
+            await self._flip(btn_interaction, "user_levelup_dm", "Level-up DM")
+
+        @discord.ui.button(label="Typo helper", emoji="💡", style=discord.ButtonStyle.secondary)
+        async def typo_btn(self, btn_interaction: discord.Interaction, button: discord.ui.Button):
+            await self._flip(btn_interaction, "user_typo_helper", "Typo helper")
 
     class _RestoreDefaultsView(discord.ui.View):
         def __init__(self, requester_id: int):
