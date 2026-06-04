@@ -1,5 +1,6 @@
 import os
 import re
+import time
 import asyncio
 import random
 import logging
@@ -35,7 +36,7 @@ from core.config import (
     TOKEN, GUILD_ID, MOD_ROLE_NAME, BOT_STATUS, TIMEZONE, DB_PATH,
     BOT_VERSION, BOT_CHANGELOG,
     TEMP_VC_CATEGORY_ID, TEMP_VC_CATEGORY_NAME, CREATE_VC_NAME,
-    VOICE_IDLE_DELETE_MINUTES, VC_CLEANUP_INTERVAL_MINUTES,
+    VOICE_IDLE_DELETE_MINUTES, VC_CLEANUP_INTERVAL_MINUTES, VC_PANEL_UPDATE_DEBOUNCE_SECONDS,
     VOICE_PANEL_CHANNEL_ID, VOICE_PANEL_CHANNEL_NAME,
     COMPLAINTS_CHANNEL_ID, COMPLAINTS_CHANNEL_NAME,
     COMPLAINTS_LOG_CHANNEL_ID, COMPLAINTS_LOG_CHANNEL_NAME,
@@ -483,6 +484,47 @@ async def update_vc_panel_embed(guild: discord.Guild, vc_id: int) -> None:
         await msg.edit(embed=embed, view=VCPanelView(vc_id))
     except Exception:
         pass
+
+
+_vc_panel_update_last_at: Dict[Tuple[int, int], float] = {}
+_vc_panel_update_pending: Dict[Tuple[int, int], asyncio.Task] = {}
+
+
+async def schedule_vc_panel_embed_update(guild: discord.Guild, vc_id: int) -> None:
+    """Rate-limit VC panel embed edits triggered by voice events."""
+    key = (guild.id, vc_id)
+    now = time.monotonic()
+    last_at = _vc_panel_update_last_at.get(key, 0.0)
+    elapsed = now - last_at
+    debounce = VC_PANEL_UPDATE_DEBOUNCE_SECONDS
+
+    if elapsed >= debounce:
+        pending = _vc_panel_update_pending.pop(key, None)
+        if pending and not pending.done():
+            pending.cancel()
+        _vc_panel_update_last_at[key] = now
+        await update_vc_panel_embed(guild, vc_id)
+        return
+
+    pending = _vc_panel_update_pending.get(key)
+    if pending and not pending.done():
+        return
+
+    delay = debounce - elapsed
+
+    async def _run() -> None:
+        try:
+            await asyncio.sleep(delay)
+            _vc_panel_update_last_at[key] = time.monotonic()
+            await update_vc_panel_embed(guild, vc_id)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            pass
+        finally:
+            _vc_panel_update_pending.pop(key, None)
+
+    _vc_panel_update_pending[key] = asyncio.create_task(_run())
 
 
 # Complaint and Event modals/views are now in modals.py and views.py
@@ -977,7 +1019,7 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
             )
             if await cur.fetchone():
                 try:
-                    await update_vc_panel_embed(guild, channel.id)
+                    await schedule_vc_panel_embed_update(guild, channel.id)
                 except Exception:
                     pass
 
