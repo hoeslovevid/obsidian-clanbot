@@ -4,7 +4,8 @@ from discord import app_commands
 
 from datetime import datetime, timezone, date
 from core.utils import obsidian_embed, is_mod, format_timestamp_readable
-from database import DB_PATH, get_auto_mod_settings, get_incident_mode
+from database import DB_PATH, get_auto_mod_settings
+from commands.moderation.incident_mode import get_incident_mode
 import aiosqlite
 
 
