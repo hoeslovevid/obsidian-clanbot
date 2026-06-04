@@ -30,7 +30,10 @@ def load_all_commands(bot):
     pets_group = app_commands.Group(name="pets", description="🐾 Pet shop, care, battles, evolutions, and marketplace")
     store_group = app_commands.Group(name="store", description="🛒 Browse and buy server shop items")
     xp_group = app_commands.Group(name="xp", description="✨ XP check, leaderboard, settings, and events")
-    wfnotify_group = app_commands.Group(name="wfnotify", description="🔔 Warframe notifications: Baro, cycles, alerts, devstream")
+    wfnotify_group = app_commands.Group(
+        name="wfnotify",
+        description="🔔 Warframe alerts — /wfnotify configure (recommended) or per-type commands",
+    )
     lfg_group = app_commands.Group(name="lfg", description="🤝 Warframe LFG: post and browse looking-for-group ads")
     events_group = app_commands.Group(name="events", description="📅 Server events: create, browse, and recurring schedules")
 
@@ -430,8 +433,12 @@ def load_all_commands(bot):
     print(f"[commands] Registered {shortcut_count} top-level shortcut(s)")
 
     for cmd in bot.tree.get_commands(guild=None):
-        if isinstance(cmd, app_commands.Group) and len(cmd.commands) > 25:
-            print(f"[commands] WARNING: group '/{cmd.name}' has {len(cmd.commands)} subcommands (Discord max 25)")
+        if isinstance(cmd, app_commands.Group):
+            n = len(cmd.commands)
+            if n > 25:
+                print(f"[commands] WARNING: group '/{cmd.name}' has {n} subcommands (Discord max 25)")
+            elif n > 23:
+                print(f"[commands] HEADROOM: '/{cmd.name}' has {n}/25 subcommands — avoid adding more without a plan")
 
     total_subcommands = sum(
         len(cmd.commands) for cmd in bot.tree.get_commands(guild=None)

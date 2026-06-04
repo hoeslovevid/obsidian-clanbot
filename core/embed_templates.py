@@ -157,6 +157,20 @@ def confirm_embed(
     )
 
 
+TICKET_STATUS_LABELS: dict[str, str] = {
+    "open": "Open",
+    "awaiting_staff": "Awaiting staff",
+    "awaiting_member": "Awaiting member",
+    "closed": "Closed",
+}
+
+
+def ticket_status_chip(status: str) -> str:
+    """Human-readable status chip for ticket titles/footers."""
+    key = (status or "open").strip().lower()
+    return TICKET_STATUS_LABELS.get(key, key.replace("_", " ").title())
+
+
 def ticket_embed(
     title: str,
     desc: str,
@@ -168,6 +182,9 @@ def ticket_embed(
 ) -> discord.Embed:
     """Ticket channel / confirmation embed with status and priority colors."""
     status_key = (status or "open").strip().lower()
+    chip = ticket_status_chip(status_key)
+    if chip.lower() not in title.lower():
+        title = f"{title} · {chip}"
     priority_key = (priority or "normal").strip().lower()
     if priority_key == "urgent" and status_key == "open":
         color = discord.Color.from_str(TICKET_PRIORITY_COLORS["urgent"])
@@ -175,11 +192,18 @@ def ticket_embed(
         color = discord.Color.from_str(
             TICKET_STATUS_COLORS.get(status_key, TICKET_STATUS_COLORS["open"])
         )
+    footer = kwargs.pop("footer", None)
+    if footer and chip.lower() not in str(footer).lower():
+        footer = f"{chip} · {footer}"
+    elif not footer:
+        footer = chip
+
     return obsidian_embed(
         title,
         desc,
         category="community",
         color=color,
+        footer=footer,
         client=client,
         **kwargs,
     )

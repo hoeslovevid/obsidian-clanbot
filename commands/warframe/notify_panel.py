@@ -111,20 +111,71 @@ def build_panel_embed(client: Optional[discord.Client] = None) -> discord.Embed:
     return obsidian_embed(
         "🔔 Warframe Notification Subscriptions",
         "\n".join(lines)
-        + "\n\n_Only you see your subscription status. Use `/warframe subscribe` to view or change subscriptions outside this panel._",
+        + "\n\n_Only you see your subscription status. "
+        "Recommended: **`/wfnotify configure`** (ephemeral wizard) or `/warframe subscribe`._",
         category="warframe",
         client=client,
-        footer="Subscriptions are per-server and persist across restarts.",
+        footer="Per-server · persists across restarts · /wfnotify configure",
     )
 
 
+async def _subscription_summary(guild_id: int, user_id: int) -> str:
+    lines = []
+    for cat in WF_SUB_CATEGORIES:
+        if cat not in _CATEGORY_LABELS:
+            continue
+        key = f"wfsub:{cat}:{user_id}"
+        on = await get_guild_setting(guild_id, key) == "1"
+        mark = "✅" if on else "—"
+        lines.append(f"{mark} {_emoji(cat)} **{_label(cat)}**")
+    return "\n".join(lines) if lines else "_No categories configured._"
+
+
+class NotifyConfigureView(NotifyPanelView):
+    """Ephemeral configure wizard — same toggles as the public panel."""
+
+    def __init__(self):
+        super().__init__()
+        for item in self.children:
+            if isinstance(item, discord.ui.Button):
+                item.style = discord.ButtonStyle.secondary
+
+
+async def send_configure_wizard(interaction: discord.Interaction) -> None:
+    """Shared body for /wfnotify configure."""
+    if not interaction.guild:
+        return await interaction.response.send_message(
+            embed=error_embed("Invalid Context", "Use this in a server.", client=interaction.client),
+            ephemeral=True,
+        )
+    summary = await _subscription_summary(interaction.guild.id, interaction.user.id)
+    embed = obsidian_embed(
+        "🔔 Configure Warframe Notifications",
+        "Toggle streams below. Your choices sync with **`/warframe subscribe`** and server notify panels.\n\n"
+        f"**Your subscriptions**\n{summary}\n\n"
+        "_Tip: mods can post a channel panel with **`/wfnotify post_panel`**._",
+        category="warframe",
+        client=interaction.client,
+        footer="Recommended entry point · per-server toggles",
+    )
+    await interaction.response.send_message(embed=embed, view=NotifyConfigureView(), ephemeral=True)
+
+
 def setup(bot, group=None):
-    """Register the panel poster command + the persistent view."""
-    # Register the persistent view immediately so existing panels keep working.
+    """Register configure wizard, panel poster, and the persistent view."""
     try:
         bot.add_view(NotifyPanelView())
     except Exception as e:
         logger.debug(f"[notify_panel] add_view failed (already registered?): {e}")
+
+    if group:
+
+        @group.command(
+            name="configure",
+            description="Recommended — toggle Baro, cycles, alerts, and other Warframe pings (ephemeral).",
+        )
+        async def configure_cmd(interaction: discord.Interaction):
+            await send_configure_wizard(interaction)
 
     cmd = group.command(name="post_panel", description="Post a persistent self-subscribe panel for Warframe pings (mods only).") if group else None
     if not cmd:

@@ -3,6 +3,8 @@ import discord
 from discord import app_commands
 from datetime import datetime, timezone
 
+from core.embed_footers import footer_for
+from core.embed_templates import embed_template
 from core.utils import obsidian_embed, feature_off_embed, ECONOMY_ENABLED, format_number, EMBED_COLORS, render_bar
 from database import DB_PATH, now_utc, get_user_balance, add_coins
 import aiosqlite
@@ -111,11 +113,12 @@ def setup(bot, group=None):
                 f"-# {b['desc']}"
             )
         desc = "\n\n".join(lines)
-        embed = obsidian_embed(
+        embed = embed_template(
+            "showcase",
             "Daily Bounties",
-            desc or "No bounties today.",
-            color=EMBED_COLORS["economy"],
-            footer="Reset daily • Claim completed bounties below",
+            desc or "_No bounties available right now — check back after reset._",
+            category="economy",
+            footer=footer_for("economy_daily") + " · Claim completed bounties below",
             client=interaction.client,
         )
         view = None

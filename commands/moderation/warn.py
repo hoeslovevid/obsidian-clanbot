@@ -4,6 +4,8 @@ from discord import app_commands
 from typing import Optional
 import dateparser
 
+from core.embed_footers import footer_for
+from core.embed_templates import embed_template
 from core.utils import obsidian_embed, success_embed, error_embed, is_mod, channel_jump_url, copy_friendly_id, format_number, pluralize, EMBED_COLORS, AUTOCOMPLETE_MAX_CHOICES
 from database import DB_PATH, now_utc, get_log_channel_id
 from views import EmbedPaginator
@@ -178,15 +180,16 @@ async def execute_warn(interaction: discord.Interaction, user: discord.Member, r
         ("Reason", reason[:1024], False),
         ("Warning Count", warn_bar + action_text, True),
     ]
-    footer = f"Case {copy_friendly_id(case_id)} • Contact mods to appeal" if case_id else "Contact moderators to appeal warnings"
+    case_bit = f"Case {copy_friendly_id(case_id)} · " if case_id else ""
     await interaction.followup.send(
-        embed=obsidian_embed(
+        embed=embed_template(
+            "warning",
             "✅ User Warned",
             "",
-            color=discord.Color.orange(),
+            category="moderation",
             thumbnail=user.display_avatar.url if user.display_avatar else None,
             fields=warn_fields,
-            footer=footer or "Contact moderators to appeal warnings",
+            footer=f"{case_bit}{footer_for('moderation_warn')}",
             client=interaction.client,
         )
     )

@@ -199,12 +199,23 @@ def setup(bot, group=None):
         mention = role_ping.mention if role_ping else ""
         role_id = role_ping.id if role_ping else None
 
-        embed = obsidian_embed(
+        when_line = f"<t:{ts}:F>  _( <t:{ts}:R> )_"
+        end_line = f"<t:{end_ts}:t>  _( <t:{end_ts}:R> )_"
+        if interaction.guild:
+            from core.user_time import format_user_time
+            when_line = await format_user_time(interaction.guild.id, interaction.user.id, dt)
+            end_line = await format_user_time(
+                interaction.guild.id,
+                interaction.user.id,
+                datetime.fromtimestamp(end_ts, tz=timezone.utc),
+            )
+        embed = embed_template(
+            "showcase",
             f"🜂 Ops Order • {title}",
-            f"**When:** <t:{ts}:F>  _( <t:{ts}:R> )_\n\n"
-            f"**Ends:** <t:{end_ts}:t>  _( <t:{end_ts}:R> )_\n\n"
-            f"**Briefing:**\n{description}",
-            color=discord.Color.dark_grey(),
+            f"**When:** {when_line}\n\n**Ends:** {end_line}\n\n**Briefing:**\n{description}",
+            category="community",
+            footer=footer_for("community_events"),
+            client=interaction.client,
         )
         embed.set_author(name=f"Filed by {interaction.user}", icon_url=interaction.user.display_avatar.url)
         rsvp_empty = RSVPView.format_rsvp_summary({"GOING": 0, "MAYBE": 0, "NO": 0})

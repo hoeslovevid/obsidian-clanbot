@@ -5,6 +5,7 @@ import discord  # type: ignore
 from discord import app_commands  # type: ignore
 from typing import Optional, cast
 
+from core.command_search import MOD_ONLY_GROUPS, collect_command_entries, filter_entries_for_guild, search_commands
 from core.embed_templates import help_breadcrumb
 from core.utils import obsidian_embed, is_mod, ECONOMY_ENABLED, COINS_PER_MESSAGE, COINS_DAILY_REWARD, MESSAGE_COOLDOWN_SECONDS, COINS_PER_MINUTE_VOICE, EMBED_COLORS
 from core.config import BOT_WEBSITE
@@ -176,7 +177,7 @@ class HelpSelect(discord.ui.Select):
             "xp": ("XP", "XP check, leaderboard, settings", "✨"),
             "tools": ("Tools", "Coinflip, achievements, voice LB, stats", "🔧"),
             "warframe": ("Warframe", "Baro, cycles, alerts, fissures, builds", "🎮"),
-            "wfnotify": ("Warframe Notify", "Baro, cycle, invasion, devstream alerts", "🔔"),
+            "wfnotify": ("Warframe Notify", "Configure panel — Baro, cycles, alerts (recommended)", "🔔"),
             "lfg": ("LFG", "Looking-for-group posts", "🤝"),
             "community": ("Community", "Tickets, suggestions, complaints, applications", "👥"),
             "events": ("Events", "Server events: create and recurring schedules", "📅"),
@@ -194,15 +195,18 @@ class HelpSelect(discord.ui.Select):
         # Only add options for groups that actually exist
         options = []
         for group_name, (label, description, emoji) in group_definitions.items():
-            if group_name in available_groups:
-                options.append(
-                    discord.SelectOption(
-                        label=label,
-                        description=description,
-                        emoji=emoji,
-                        value=group_name
-                    )
+            if group_name not in available_groups:
+                continue
+            if not is_user_mod and group_name in MOD_ONLY_GROUPS:
+                continue
+            options.append(
+                discord.SelectOption(
+                    label=label,
+                    description=description,
+                    emoji=emoji,
+                    value=group_name,
                 )
+            )
         
         super().__init__(
             placeholder="Select a command group to view...",
@@ -248,6 +252,12 @@ class HelpSelect(discord.ui.Select):
         """Update the embed with commands for the specified page."""
         # Build command list (including nested subgroups)
         collected = _collect_group_commands(group, [group.name])
+        if interaction.guild:
+            collected = await filter_entries_for_guild(
+                interaction.guild.id,
+                collected,
+                is_mod=self.is_user_mod,
+            )
         commands_list = [f"• `/{path}` - {desc}" for path, desc in collected]
         
         if not commands_list:
@@ -289,7 +299,7 @@ class HelpSelect(discord.ui.Select):
             "xp": "✨ XP: check level, leaderboard, configure events and settings (mod commands)",
             "tools": "🔧 Tools: coinflip, activity heatmap, voice leaderboard, achievements, server stats, badges, AFK, reminders",
             "warframe": "🎮 Warframe: Baro, cycles, alerts, fissures, invasions, sortie, archon, builds, dojo, roles",
-            "wfnotify": "🔔 Warframe notifications: Baro, cycles, invasions, archon, alerts, devstream, forum/youtube/tennogen feeds",
+            "wfnotify": "🔔 Warframe notifications: use **`/wfnotify configure`** (recommended) or per-type commands — Baro, cycles, alerts, devstream",
             "lfg": "🤝 LFG: post or browse looking-for-group ads for Warframe activities",
             "community": "👥 Community: tickets, suggestions, applications, complaints, reputation, twitch notifications, activity",
             "events": "📅 Events: create one-off or recurring server events, list upcoming events",
@@ -595,14 +605,17 @@ def setup(bot, group=None):
         
         # Build initial embed — "Start here" mental model + full group list
         desc = (
-            "**Start here** — the commands members use most:\n\n"
+            "**Member essentials** — what most people use daily:\n\n"
             "👤 **Me** — `/daily` · `/profile` · `/me` · `/preferences` · `/favorites`\n"
-            "🎮 **Warframe** — `/baro` · `/fissures` · `/lfg` · `/trade`\n"
+            "🎮 **Warframe** — `/baro` · `/wfnotify configure` · `/fissures` · `/lfg` · `/trade`\n"
             "👥 **Community** — `/ticket` · `/case` · `/poll` · `/community suggest`\n"
-            "🔍 **Find anything** — `/search` keyword · `/menu` quick picker · `/help` full list\n"
+            "🔍 **Find anything** — `/search` keyword · `/menu` quick picker · `/status` bot health\n"
         )
         if is_user_mod:
-            desc += "\n🛡️ **Mods** — `/mod purge` · `/warn warn` · `/automod status` · `/admin dashboard`\n"
+            desc += (
+                "\n**Staff tools** — moderation & server ops:\n"
+                "🛡️ `/mod purge` · `/warn warn` · `/automod status` · `/admin dashboard` · `/admin console`\n"
+            )
 
         desc += "\n**All categories** (dropdown below):\n"
         
@@ -620,9 +633,18 @@ def setup(bot, group=None):
         }
         
         for group in groups:
+            if not is_user_mod and group.name in MOD_ONLY_GROUPS:
+                continue
             if group.name in group_info:
                 emoji_name, group_desc = group_info[group.name]
-                total = len(_collect_group_commands(group, [group.name]))
+                collected = _collect_group_commands(group, [group.name])
+                if interaction.guild:
+                    collected = await filter_entries_for_guild(
+                        interaction.guild.id,
+                        collected,
+                        is_mod=is_user_mod,
+                    )
+                total = len(collected)
                 desc += f"{emoji_name} **{group.name.title()}** - {total} command(s)\n"
         
         # Add feature info
@@ -701,7 +723,15 @@ def setup(bot, group=None):
                 ephemeral=True,
             )
 
-        matches, suggestion = search_commands(interaction.client, q, limit=12)
+        entries = collect_command_entries(interaction.client)
+        if interaction.guild:
+            is_user_mod = isinstance(interaction.user, discord.Member) and is_mod(interaction.user)
+            entries = await filter_entries_for_guild(
+                interaction.guild.id,
+                entries,
+                is_mod=is_user_mod,
+            )
+        matches, suggestion = search_commands(interaction.client, q, limit=12, entries=entries)
         if not matches:
             dym_line = f"\n\nDid you mean **`/{suggestion}`**?" if suggestion else ""
             return await interaction.response.send_message(

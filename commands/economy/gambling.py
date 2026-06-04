@@ -4,6 +4,8 @@ from discord import app_commands
 from typing import Optional, Dict, Tuple
 import random
 
+from core.embed_footers import footer_for
+from core.embed_templates import embed_template
 from core.utils import obsidian_embed, is_mod
 from database import DB_PATH, now_utc, add_coins, remove_coins
 import aiosqlite
@@ -101,11 +103,12 @@ async def _play_slots(
         await db.commit()
 
     low_warn = "\n\n⚠️ **Low balance!** Consider saving for your daily." if low_balance_warning and nb < 100 else ""
-    footer = f"Bet: {bet:,} coins • {'Jackpot! Try again!' if winnings > 0 else 'Try your luck again!'}"
-    embed = obsidian_embed(
+    footer = f"Bet: {bet:,} coins · {footer_for('economy_daily')}"
+    embed = embed_template(
+        "showcase",
         "🎰 Slots",
         f"**{reel1} | {reel2} | {reel3}**\n\n{result_pre}\n**New Balance:** {nb:,} coins{low_warn}",
-        color=color,
+        category="economy",
         thumbnail=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
         footer=footer,
         client=interaction.client,

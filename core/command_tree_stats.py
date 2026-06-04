@@ -15,6 +15,7 @@ class CommandTreeStats:
     standalone: int = 0
     grouped_subcommands: int = 0
     oversized: list[str] = field(default_factory=list)
+    headroom_warnings: list[str] = field(default_factory=list)
     top_level_names: list[str] = field(default_factory=list)
     group_summary: list[str] = field(default_factory=list)
 
@@ -32,6 +33,9 @@ def collect_command_tree_stats(bot: discord.Client) -> CommandTreeStats:
             sub_count = _count_group_subcommands(cmd)
             stats.grouped_subcommands += sub_count
             stats.group_summary.append(f"`/{cmd.name}` ({sub_count})")
+            direct = len(cmd.commands)
+            if direct > 23:
+                stats.headroom_warnings.append(f"`/{cmd.name}` ({direct}/25)")
             if len(cmd.commands) > 25:
                 stats.oversized.append(f"`/{cmd.name}` ({len(cmd.commands)} direct subcommands)")
             for sub in cmd.commands:

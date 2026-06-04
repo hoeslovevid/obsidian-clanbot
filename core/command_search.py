@@ -1,4 +1,4 @@
-"""Search registered slash commands by keyword (used by /general help_search)."""
+"""Search registered slash commands by keyword (used by /search and /help)."""
 from __future__ import annotations
 
 import difflib
@@ -6,6 +6,75 @@ from typing import Iterable, Optional
 
 import discord  # type: ignore
 from discord import app_commands  # type: ignore
+
+# Groups hidden from help/search for non-moderators.
+MOD_ONLY_GROUPS: frozenset[str] = frozenset(
+    {"mod", "automod", "warn", "roletools", "admin", "updates"}
+)
+
+# Longest-prefix wins. Maps command path prefixes to per-guild toggle keys in TOGGLEABLE_FEATURES.
+COMMAND_FEATURE_RULES: list[tuple[tuple[str, ...], str]] = [
+    (("wfnotify",), "notifications"),
+    (("warframe", "subscribe"), "notifications"),
+    (("warframe", "notify"), "notifications"),
+    (("economy", "gambling"), "gambling"),
+    (("gambling",), "gambling"),
+    (("pets",), "pets"),
+    (("lfg",), "lfg"),
+    (("trading",), "trade"),
+    (("trade",), "trade"),
+    (("events",), "events"),
+    (("general", "poll"), "polls"),
+    (("poll",), "polls"),
+]
+
+_ECONOMY_PATH_ROOTS: frozenset[str] = frozenset(
+    {
+        "economy",
+        "store",
+        "daily",
+        "wallet",
+        "leaderboard",
+        "bal",
+        "bounties",
+        "transfer",
+        "prestige",
+        "stash",
+        "invest",
+        "gamble",
+    }
+)
+
+
+def feature_for_path(path: str) -> Optional[str]:
+    """Return a TOGGLEABLE_FEATURES key when this path should respect guild toggles."""
+    parts = tuple((path or "").strip().lower().split())
+    if not parts:
+        return None
+    best: Optional[tuple[tuple[str, ...], str]] = None
+    for prefix, feature in COMMAND_FEATURE_RULES:
+        if len(parts) >= len(prefix) and parts[: len(prefix)] == prefix:
+            if best is None or len(prefix) > len(best[0]):
+                best = (prefix, feature)
+    if best:
+        return best[1]
+    if parts[0] == "pets":
+        return "pets"
+    if parts[0] in ("lfg",):
+        return "lfg"
+    if parts[0] in ("trading", "trade"):
+        return "trade"
+    if parts[0] in ("events", "event_create", "events_list"):
+        return "events"
+    if parts[0] == "wfnotify" or (len(parts) > 1 and parts[1] in ("notify", "subscribe")):
+        return "notifications"
+    return None
+
+
+def path_is_economy(path: str) -> bool:
+    """True when path is economy-related (respects global ECONOMY_ENABLED)."""
+    parts = (path or "").strip().lower().split()
+    return bool(parts) and parts[0] in _ECONOMY_PATH_ROOTS
 
 
 def collect_command_entries(bot) -> list[tuple[str, str]]:
@@ -33,13 +102,36 @@ def collect_command_entries(bot) -> list[tuple[str, str]]:
     except Exception:
         pass
 
-    # Deduplicate while preserving order
     seen: set[str] = set()
     out: list[tuple[str, str]] = []
     for path, desc in entries:
         if path in seen:
             continue
         seen.add(path)
+        out.append((path, desc))
+    return out
+
+
+async def filter_entries_for_guild(
+    guild_id: Optional[int],
+    entries: list[tuple[str, str]],
+    *,
+    is_mod: bool = False,
+) -> list[tuple[str, str]]:
+    """Drop mod-only and guild-disabled commands from discovery lists."""
+    from core.utils import ECONOMY_ENABLED, feature_enabled
+
+    out: list[tuple[str, str]] = []
+    for path, desc in entries:
+        root = path.split()[0] if path else ""
+        if not is_mod and root in MOD_ONLY_GROUPS:
+            continue
+        if not ECONOMY_ENABLED and path_is_economy(path):
+            continue
+        feat = feature_for_path(path)
+        if feat and guild_id:
+            if not await feature_enabled(int(guild_id), feat):
+                continue
         out.append((path, desc))
     return out
 
@@ -52,7 +144,6 @@ def did_you_mean(bot, query: str, *, cutoff: float = 0.45) -> Optional[str]:
     paths = [p for p, _ in collect_command_entries(bot)]
     if not paths:
         return None
-    # Match on full path and leaf segment
     candidates: list[str] = []
     for path in paths:
         candidates.append(path.lower())
@@ -75,11 +166,11 @@ def search_commands(
     *,
     limit: int = 15,
     low_score_threshold: int = 25,
+    entries: Optional[list[tuple[str, str]]] = None,
 ) -> tuple[list[tuple[str, str, int]], Optional[str]]:
     """Score and rank command paths matching ``query``.
 
-    Returns ``(matches, did_you_mean_path)`` where ``did_you_mean_path`` is set when
-    there are no matches or the best score is below ``low_score_threshold``.
+    Pass ``entries`` when results are pre-filtered (guild feature toggles).
     """
     SYNONYMS: dict[str, str] = {
         "coins": "economy balance daily coins wallet",
@@ -103,9 +194,11 @@ def search_commands(
         "purge": "mod purge delete messages",
         "giveaway": "giveaways giveaway",
         "event": "events event_create",
+        "notify": "wfnotify configure panel baro cycles alerts",
         "dojo": "warframe dojo_research clan",
         "setup": "general setup_obsidian welcome",
         "recent": "general recent menu history",
+        "favorite": "favorite_add favorites",
     }
 
     q = (query or "").strip().lower()
@@ -118,7 +211,8 @@ def search_commands(
             expanded += " " + SYNONYMS[tok]
     search_tokens = [t for t in expanded.split() if t]
     results: list[tuple[str, str, int]] = []
-    for path, desc in collect_command_entries(bot):
+    source = entries if entries is not None else collect_command_entries(bot)
+    for path, desc in source:
         path_l = path.lower()
         desc_l = desc.lower()
         hay = f"{path_l} {desc_l}"
@@ -138,7 +232,6 @@ def search_commands(
         elif any(tok in hay for tok in search_tokens):
             score += 15
         else:
-            # difflib-style partial: any token close to a path segment
             segments = path_l.replace("_", " ").split()
             for tok in tokens:
                 if difflib.get_close_matches(tok, segments + [path_l], n=1, cutoff=0.72):

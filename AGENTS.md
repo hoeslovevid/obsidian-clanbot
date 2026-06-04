@@ -28,5 +28,6 @@ When editing requirements or ignore rules, change files under `deploy/` or `conf
 ## Docs & commits
 
 - Update `docs/` when setup or deploy steps change.
+- **Command budget:** before adding slash commands, read [docs/COMMAND_BUDGET.md](docs/COMMAND_BUDGET.md) and check group subcommand counts (`/admin health` or startup HEADROOM logs). Never add to `/general` at 25 subcommands.
 - **Bot releases:** bump `BOT_VERSION` in `core/config.py` and update `CURRENT_RELEASE_*` / `CHANGELOG_HISTORY` in `core/changelog.py`, then commit and push (see `.cursor/rules/whatsnew-and-deploy.mdc`).
 - For other work, only commit or push when the user asks.

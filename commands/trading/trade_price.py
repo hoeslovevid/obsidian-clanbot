@@ -2,6 +2,8 @@
 import discord
 from discord import app_commands
 
+from core.embed_footers import footer_for
+from core.embed_templates import embed_template
 from core.utils import obsidian_embed, error_embed, EMBED_COLORS, BUTTON_ONLY_RUNNER_MSG
 from api.warframe_api import search_warframe_market_item, get_warframe_market_price
 from views import RetryView, RefreshView
@@ -59,11 +61,12 @@ def _build_trade_embed(item_data: dict, price_data: dict, platform_val: str, cli
     from datetime import datetime, timezone
     now = fetched_at or datetime.now(timezone.utc)
     ts = int(now.timestamp())
-    footer = f"Platform: {platform_val.upper()} • Last updated <t:{ts}:R>"
-    return obsidian_embed(
+    footer = f"{footer_for('trading_price')} · {platform_val.upper()} · <t:{ts}:R>"
+    return embed_template(
+        "showcase",
         f"💎 Market Prices: {item_name}",
         f"[View on Warframe Market]({market_url})",
-        color=EMBED_COLORS["economy"],
+        category="economy",
         thumbnail=thumb,
         fields=fields,
         author=author,

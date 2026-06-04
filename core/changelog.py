@@ -12,13 +12,25 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-04"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Release** — version label aligned with Railway `BOT_VERSION` deploy tracking (v1.90.0)",
-    "**Versioning** — `/about`, `/whatsnew`, `/status`, release announce, and update logs all use `BOT_VERSION`",
-    "**Deploy** — set `BOT_VERSION` on Railway when shipping; keep `core/config.py` default in sync",
+    "**Discovery** — `/search` and `/help` hide guild-disabled features; mod-only groups hidden from members",
+    "**Menu** — favorites-first picker with showcase empty-state hint for `/favorite_add`",
+    "**Warframe notify** — `/wfnotify configure` wizard (recommended); panel + legacy subcommands unchanged",
+    "**Status** — clear degraded state when Warframe API/cache is unhealthy",
+    "**Embeds** — showcase templates on bounties, gambling, trade price, giveaways; ticket status chips + SLA hint",
+    "**Ops** — command-tree headroom warnings at load; see `docs/COMMAND_BUDGET.md`",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "1.90.0",
+        "date": "2026-06-04",
+        "changes": [
+            "**Release** — version label aligned with Railway `BOT_VERSION` deploy tracking",
+            "**Versioning** — `/about`, `/whatsnew`, `/status`, release announce, and update logs all use `BOT_VERSION`",
+            "**Deploy** — set `BOT_VERSION` on Railway when shipping; keep `core/config.py` default in sync",
+        ],
+    },
     {
         "version": "1.7.1",
         "date": "2026-06-04",

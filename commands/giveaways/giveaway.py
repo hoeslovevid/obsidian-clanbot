@@ -4,6 +4,8 @@ from discord import app_commands
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+from core.embed_footers import footer_for
+from core.embed_templates import embed_template
 from core.utils import obsidian_embed, is_mod, parse_time_natural
 from database import DB_PATH
 import aiosqlite
@@ -180,12 +182,13 @@ def setup(bot, group=None):
         
         desc += f"\n\n**Entries:** 0"
         
-        embed = obsidian_embed(
+        embed = embed_template(
+            "showcase",
             giveaway_title,
             desc,
-            color=discord.Color.gold(),
+            category="prestige",
             thumbnail=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
-            footer=f"Created by {interaction.user.display_name} • {winners} winner(s)",
+            footer=footer_for("community_giveaway") + f" · {winners} winner(s)",
             client=interaction.client,
         )
         
@@ -248,12 +251,13 @@ def setup(bot, group=None):
         except Exception as e:
             logger.error(f"Error adding view to giveaway message: {e}")
         
-        embed = obsidian_embed(
+        embed = embed_template(
+            "showcase",
             "✅ Giveaway Created",
             f"Giveaway created successfully!\n\n[Jump to giveaway]({message.jump_url})",
-            color=discord.Color.green(),
+            category="prestige",
             thumbnail=interaction.guild.icon.url if interaction.guild and interaction.guild.icon else None,
-            footer=f"Ends <t:{int(end_time.timestamp())}:R>",
+            footer=f"{footer_for('community_giveaway')} · Ends <t:{int(end_time.timestamp())}:R>",
             client=interaction.client,
         )
         await interaction.followup.send(embed=embed, ephemeral=True)

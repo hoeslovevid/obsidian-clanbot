@@ -32,9 +32,9 @@ class ConsoleHubView(discord.ui.View):
     async def daily_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self._hint(interaction, "/daily", "claim your daily coin streak.")
 
-    @discord.ui.button(label="Status", style=discord.ButtonStyle.secondary, emoji="🎮", custom_id="obsidian_console:status")
-    async def wf_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self._hint(interaction, "/warframe status", "Baro, alerts, and cycles.")
+    @discord.ui.button(label="Status", style=discord.ButtonStyle.secondary, emoji="✅", custom_id="obsidian_console:status")
+    async def status_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._hint(interaction, "/status", "bot version, latency, and API health.")
 
     @discord.ui.button(label="Ticket", style=discord.ButtonStyle.secondary, emoji="🎫", custom_id="obsidian_console:ticket")
     async def ticket_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -54,6 +54,7 @@ def _hub_embed(client) -> discord.Embed:
             "**Quick picks** — use the buttons below or slash commands:\n"
             "• **`/menu`** — categorized command picker\n"
             "• **`/daily`** — claim your coin streak\n"
+            "• **`/status`** — bot version, latency, Warframe API health\n"
             "• **`/warframe status`** — Baro, alerts, cycles\n"
             "• **`/ticket`** — open a support ticket\n"
             "• **`/help`** — full command reference"

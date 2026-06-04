@@ -12,16 +12,10 @@ from core.utils import error_embed
 from database import now_utc
 
 
-async def _warframe_api_hint() -> str:
-    try:
-        from core.cache_utils import cache_stats
+async def _warframe_api_hint() -> tuple[str, bool]:
+    from core.cache_utils import warframe_health_line
 
-        stats = cache_stats()
-        if stats and ("stale" in stats.lower() or "miss" in stats.lower()):
-            return "Warframe API: **degraded** (serving cached data — live fetches may lag)"
-        return "Warframe API: **operational**"
-    except Exception:
-        return "Warframe API: **operational** (health probe unavailable)"
+    return warframe_health_line()
 
 
 def setup(bot, group=None):
@@ -40,7 +34,7 @@ def setup(bot, group=None):
 
         await interaction.response.defer(ephemeral=True)
         latency_ms = round((interaction.client.latency or 0) * 1000)
-        api_line = await _warframe_api_hint()
+        api_line, degraded = await _warframe_api_hint()
         guilds = len(getattr(interaction.client, "guilds", []) or [])
         uptime = "—"
         start = getattr(interaction.client, "start_time", None)
@@ -50,17 +44,23 @@ def setup(bot, group=None):
             mins = rem // 60
             uptime = f"{hours}h {mins}m" if hours else f"{mins}m"
 
+        status_title = "⚠️ Obsidian Bot Status" if degraded else "✅ Obsidian Bot Status"
+        hint = (
+            "_Warframe commands may show cached data until the API recovers. Try again in a minute._"
+            if degraded
+            else "_If something looks wrong, try again in a minute or ask staff._"
+        )
         embed = embed_template(
             "showcase",
-            "✅ Obsidian Bot Status",
+            status_title,
             (
                 f"**Version:** `{BOT_VERSION}`\n"
                 f"**Gateway:** {latency_ms} ms · **Uptime:** {uptime}\n"
                 f"**Servers:** {guilds}\n\n"
                 f"{api_line}\n\n"
-                "_If something looks wrong, try again in a minute or ask staff._"
+                f"{hint}"
             ),
-            category="general",
+            category="warning" if degraded else "general",
             footer=footer_for("status", version=BOT_VERSION),
             client=interaction.client,
         )

@@ -14,3 +14,13 @@ async def resolve_warframe_platform(guild_id: int, user_id: int) -> str:
         if p in _VALID:
             return p
     return "pc"
+
+
+def warframe_footer_platform_note(platform: str, *, pc_only_api: bool = False) -> str:
+    """Footer suffix when world-state is PC-sourced but user prefers another platform."""
+    p = (platform or "pc").strip().lower()
+    if pc_only_api and p != "pc":
+        return f"World-state data is PC-only · your pref is {p.upper()}"
+    if p != "pc":
+        return f"Platform: {p.upper()} · some feeds are PC-sourced"
+    return "Platform: PC"

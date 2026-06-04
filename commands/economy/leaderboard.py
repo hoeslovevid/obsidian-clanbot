@@ -6,7 +6,8 @@ from core.embed_footers import footer_for
 from core.embed_templates import embed_template
 from core.utils import obsidian_embed, feature_off_embed, ECONOMY_ENABLED, EMBED_COLORS
 from core.leaderboard_privacy import leaderboard_display_name, user_hides_from_leaderboards
-from views import EmbedPaginator
+from core.utils import BUTTON_ONLY_RUNNER_MSG
+from views import EmbedPaginator, RefreshView
 
 
 def setup(bot, group=None):
@@ -163,7 +164,44 @@ def setup(bot, group=None):
                 footer=p0.get("footer") or footer_for("economy_leaderboard"),
                 client=interaction.client,
             )
-            await interaction.followup.send(embed=embed, ephemeral=False)
+
+            async def on_refresh(btn_interaction: discord.Interaction):
+                if btn_interaction.user.id != interaction.user.id:
+                    return await btn_interaction.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
+                await btn_interaction.response.defer()
+                async with aiosqlite.connect(DB_PATH) as db:
+                    cur = await db.execute(
+                        f"""
+                        SELECT user_id, balance, total_earned
+                        FROM user_balances
+                        WHERE guild_id=? AND (balance > 0 OR total_earned > 0)
+                        ORDER BY {order_col} DESC
+                        LIMIT ?
+                        """,
+                        (interaction.guild.id, 50),
+                    )
+                    fresh_rows = await cur.fetchall()
+                if not fresh_rows:
+                    return await btn_interaction.followup.send("Leaderboard is empty.", ephemeral=True)
+                leaderboard_text = ""
+                for i, (user_id, balance, total_earned) in enumerate(fresh_rows[:per_page], 1):
+                    username = await leaderboard_display_name(interaction.guild, user_id)
+                    medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"`{i}.`"
+                    leaderboard_text += f"{medal} **{username}** — 💰 {balance:,} • 📊 {total_earned:,}\n"
+                new_embed = embed_template(
+                    "showcase",
+                    "🏆 Coin Leaderboard",
+                    f"Top {len(fresh_rows)} by {sort_label}",
+                    category="economy",
+                    thumbnail=p0.get("thumbnail"),
+                    fields=[("Rankings", leaderboard_text.strip(), False)],
+                    footer=footer_for("economy_leaderboard") + " · Refreshed",
+                    client=interaction.client,
+                )
+                await btn_interaction.message.edit(embed=new_embed, view=refresh_view)
+
+            refresh_view = RefreshView(on_refresh, timeout=300)
+            await interaction.followup.send(embed=embed, view=refresh_view, ephemeral=False)
         else:
             paginator_pages = []
             for p in pages:

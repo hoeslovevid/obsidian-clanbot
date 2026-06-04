@@ -56,6 +56,21 @@ async def _get_ticket_row_by_id(ticket_db_id: int) -> Optional[aiosqlite.Row]:
         return await cur.fetchone()
 
 
+async def _ticket_sla_hint(guild_id: int) -> Optional[str]:
+    """Optional SLA line from guild settings (minutes or free-text hint)."""
+    raw = await get_guild_setting(guild_id, "ticket_sla_minutes")
+    if raw and str(raw).strip().isdigit():
+        mins = int(str(raw).strip())
+        if mins < 60:
+            return f"_Staff typically responds within **{mins} minutes**._"
+        hours = max(1, mins // 60)
+        return f"_Staff typically responds within **{hours} hour{'s' if hours != 1 else ''}**._"
+    hint = await get_guild_setting(guild_id, "ticket_sla_hint")
+    if hint and str(hint).strip():
+        return f"_{str(hint).strip()}_"
+    return None
+
+
 def _format_dt_iso(iso_str: Optional[str]) -> str:
     """Format ISO datetime as readable Discord timestamp (full date + relative)."""
     if not iso_str:
@@ -526,9 +541,13 @@ async def create_ticket_for_user(interaction: discord.Interaction, target_member
         cur = await db.execute("SELECT last_insert_rowid()")
         ticket_db_id = (await cur.fetchone())[0]
     fields = [("Subject", subject, True), ("Status", "Open", True), ("Created For", target_member.mention, True), ("Created By", interaction.user.mention, True)]
+    sla = await _ticket_sla_hint(interaction.guild.id)
+    body = f"Ticket created for {target_member.mention} by {interaction.user.mention}.\n\nStaff will respond shortly."
+    if sla:
+        body += f"\n\n{sla}"
     embed = ticket_embed(
         f"Ticket #{ticket_id}",
-        f"Ticket created for {target_member.mention} by {interaction.user.mention}.\n\nStaff will respond shortly.",
+        body,
         status="open",
         priority="normal",
         fields=fields,
@@ -749,9 +768,13 @@ def setup(bot, group=None):
         ]
         if tag_val:
             fields.insert(1, ("Tag", tag_val, True))
+        ticket_body = "Staff will respond shortly. Use `/ticket close` to close this ticket."
+        sla = await _ticket_sla_hint(interaction.guild.id)
+        if sla:
+            ticket_body += f"\n\n{sla}"
         embed = ticket_embed(
             f"Ticket #{ticket_id}",
-            "Staff will respond shortly. Use `/ticket close` to close this ticket.",
+            ticket_body,
             status="open",
             priority=priority_val,
             fields=fields,

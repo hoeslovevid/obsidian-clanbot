@@ -4,8 +4,10 @@ from __future__ import annotations
 import discord  # type: ignore
 from discord import app_commands  # type: ignore
 
+from commands.general.favorites import get_user_favorites
 from core.command_history import get_recent_commands
 from core.command_shortcuts import find_tree_command
+from core.embed_templates import embed_template
 from core.utils import obsidian_embed, EMBED_COLORS
 
 # (label, emoji, command path, hint for parameterized commands)
@@ -14,6 +16,7 @@ MENU_ITEMS: list[tuple[str, str, list[str], str | None]] = [
     ("My profile", "👤", ["profile"], None),
     ("Quick snapshot (me)", "📊", ["me"], None),
     ("My wallet", "💼", ["economy", "wallet"], None),
+    ("Warframe notify setup", "🔔", ["wfnotify", "configure"], None),
     ("Baro Ki'Teer", "🛒", ["baro"], None),
     ("Void fissures", "💎", ["fissures"], None),
     ("Post LFG", "🤝", ["lfg", "lfg"], "Use **`/lfg`** — pick mission type and player count."),
@@ -25,7 +28,6 @@ MENU_ITEMS: list[tuple[str, str, list[str], str | None]] = [
     ("Search commands", "🔍", ["search"], "Use **`/search`** — keyword like `pet`, `baro`, or `ticket`."),
 ]
 
-# Extra lookup paths for safe no-arg auto-invoke (shortcut + nested)
 AUTO_INVOKE_ALIASES: dict[str, list[list[str]]] = {
     "daily": [["daily"], ["economy", "daily"]],
     "help": [["help"], ["general", "help"]],
@@ -34,6 +36,7 @@ AUTO_INVOKE_ALIASES: dict[str, list[list[str]]] = {
     "me": [["me"], ["general", "me"]],
     "search": [["search"], ["general", "help_search"]],
     "wallet": [["economy", "wallet"]],
+    "configure": [["wfnotify", "configure"]],
 }
 
 
@@ -51,10 +54,21 @@ class QuickMenuSelect(discord.ui.Select):
         self,
         bot: discord.Client,
         *,
+        favorites: list[str],
         recent: list[tuple[str, str]],
         menu_offset: int,
     ):
         options: list[discord.SelectOption] = []
+        for i, cmd_path in enumerate(favorites):
+            label = f"★ {cmd_path}"[:100]
+            options.append(
+                discord.SelectOption(
+                    label=label,
+                    emoji="⭐",
+                    value=f"fav:{i}",
+                    description="Pinned favorite"[:100],
+                )
+            )
         for i, (cmd_path, _at) in enumerate(recent):
             label = f"Recent: {cmd_path}"[:100]
             options.append(
@@ -76,12 +90,20 @@ class QuickMenuSelect(discord.ui.Select):
             max_values=1,
         )
         self.bot = bot
+        self.favorites = favorites
         self.recent = recent
         self.menu_offset = menu_offset
 
     async def callback(self, interaction: discord.Interaction):
         raw = self.values[0]
-        if raw.startswith("recent:"):
+        if raw.startswith("fav:"):
+            idx = int(raw.split(":", 1)[1])
+            if idx < 0 or idx >= len(self.favorites):
+                return await interaction.response.send_message("Favorite not found.", ephemeral=True)
+            path = self.favorites[idx].split()
+            label = f"/{self.favorites[idx]}"
+            hint = None
+        elif raw.startswith("recent:"):
             idx = int(raw.split(":", 1)[1])
             if idx < 0 or idx >= len(self.recent):
                 return await interaction.response.send_message("Recent entry not found.", ephemeral=True)
@@ -136,18 +158,35 @@ class QuickMenuSelect(discord.ui.Select):
 
 
 class QuickMenuView(discord.ui.View):
-    def __init__(self, bot: discord.Client, *, recent: list[tuple[str, str]]):
+    def __init__(
+        self,
+        bot: discord.Client,
+        *,
+        favorites: list[str],
+        recent: list[tuple[str, str]],
+    ):
         super().__init__(timeout=120)
-        self.add_item(QuickMenuSelect(bot, recent=recent, menu_offset=len(recent)))
+        offset = len(favorites) + len(recent)
+        self.add_item(QuickMenuSelect(bot, favorites=favorites, recent=recent, menu_offset=offset))
 
 
 def setup(bot, group=None):
     """Register top-level /menu only (discoverability)."""
 
     async def menu_impl(interaction: discord.Interaction):
+        favorites: list[str] = []
         recent: list[tuple[str, str]] = []
         if interaction.guild:
+            favorites = await get_user_favorites(interaction.guild.id, interaction.user.id)
             recent = await get_recent_commands(interaction.guild.id, interaction.user.id, limit=5)
+
+        fav_blurb = ""
+        if favorites:
+            fav_blurb = (
+                "**Your favorites** — "
+                + " · ".join(f"`/{cmd}`" for cmd in favorites[:6])
+                + "\n\n"
+            )
 
         recent_blurb = ""
         if recent:
@@ -158,21 +197,27 @@ def setup(bot, group=None):
             )
 
         desc = (
-            recent_blurb
+            fav_blurb
+            + recent_blurb
             + "**Quick start** — pick an action below, or type these shortcuts directly:\n\n"
             "👤 **Me** — `/daily` · `/profile` · `/wallet` · `/me` · `/preferences`\n"
-            "🎮 **Warframe** — `/baro` · `/fissures` · `/lfg` · `/trade`\n"
+            "🎮 **Warframe** — `/baro` · `/fissures` · `/wfnotify configure` · `/trade`\n"
             "👥 **Community** — `/ticket` · `/case` · `/poll`\n"
             "🔍 **Find anything** — `/search` · `/help` · `/favorites` · `/recent`\n"
         )
-        embed = obsidian_embed(
+
+        if interaction.guild and not favorites:
+            desc += "\n_Pin commands with **`/favorite_add`** — they appear at the top of this menu._"
+
+        embed = embed_template(
+            "showcase",
             "⚡ Quick Menu",
             desc,
-            color=EMBED_COLORS["community"],
-            footer="Shortcuts work from any channel • Mod tools: /help → Moderation",
+            category="community",
+            footer="Shortcuts work from any channel • Mod tools: /help → Staff tools",
             client=interaction.client,
         )
-        view = QuickMenuView(bot, recent=recent)
+        view = QuickMenuView(bot, favorites=favorites, recent=recent)
 
         async def _open_classic_picker(inter: discord.Interaction):
             await inter.response.edit_message(embed=embed, view=view)
@@ -181,7 +226,10 @@ def setup(bot, group=None):
 
         if menu_layout_v2_enabled():
             try:
-                layout = MenuHomeLayout(recent_blurb=recent_blurb, on_open_picker=_open_classic_picker)
+                layout = MenuHomeLayout(
+                    recent_blurb=fav_blurb + recent_blurb,
+                    on_open_picker=_open_classic_picker,
+                )
                 await interaction.response.send_message(view=layout, ephemeral=True)
                 return
             except Exception:
@@ -189,7 +237,7 @@ def setup(bot, group=None):
 
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
-    @app_commands.command(name="menu", description="Quick menu — daily, profile, baro, ticket, trade, and more.")
+    @app_commands.command(name="menu", description="Quick menu — favorites, daily, profile, baro, ticket, trade, and more.")
     async def menu_top(interaction: discord.Interaction):
         await menu_impl(interaction)
 

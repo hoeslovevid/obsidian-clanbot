@@ -1294,3 +1294,29 @@ def wf_staleness_for_path(path: str) -> Optional[datetime]:
     """Cached-at timestamp for a warframestat.us path (e.g. pc/voidTrader)."""
     return wf_cache_datetime(_wf_stat_url(path))
 
+
+def warframe_api_health() -> tuple[str, bool]:
+    """Return (status line, degraded?) for /status and health dashboards."""
+    probe_paths = ("pc/voidTrader", "pc/cetusCycle")
+    ages: list[float] = []
+    for path in probe_paths:
+        age = wf_cache_age_seconds(_wf_stat_url(path))
+        if age is not None:
+            ages.append(age)
+    max_age = max(ages) if ages else None
+    degraded = bool(_ws_fallback_logged) or (max_age is not None and max_age > 600)
+    if degraded:
+        detail = ""
+        if max_age is not None and max_age > 60:
+            detail = f" (cache up to {int(max_age // 60)}m old)"
+        return (
+            f"Warframe API: **degraded** — serving cached world-state{detail}; live fetches may lag",
+            True,
+        )
+    if max_age is None and not ages:
+        return (
+            "Warframe API: **warming** — no cached world-state yet; first fetch may take a moment",
+            False,
+        )
+    return "Warframe API: **operational**", False
+

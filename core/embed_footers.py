@@ -15,6 +15,8 @@ FOOTERS: dict[str, str] = {
     "me": "/daily · /wallet · /preferences — your quick toolkit",
     "warframe_status": "Tap Update data to refresh · platform follows /preferences",
     "warframe_baro": "Warframe Market link below · /warframe status for everything",
+    "warframe_notify": "Recommended: /wfnotify configure · legacy per-type commands still work",
+    "trading_price": "Tap Refresh to update · platform follows /preferences",
     "community_events": "RSVP on the ops board · reminders go out before start",
     "community_lfg": "Join with the buttons · thread opens for your squad",
     "community_giveaway": "/giveaways giveaway_list · enter before the timer ends",

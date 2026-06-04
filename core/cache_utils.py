@@ -32,6 +32,15 @@ def cache_stats() -> str:
     return f"{len(_cache)} API entries"
 
 
+def warframe_health_line() -> tuple[str, bool]:
+    """User-facing Warframe API status for ``/status``. Returns (line, is_degraded)."""
+    try:
+        from api.warframe_api import warframe_api_health
+        return warframe_api_health()
+    except Exception:
+        return "Warframe API: **operational** (health probe unavailable)", False
+
+
 def invalidate(key_prefix: str = "") -> int:
     """Invalidate cache entries matching prefix. Returns count removed."""
     global _cache
