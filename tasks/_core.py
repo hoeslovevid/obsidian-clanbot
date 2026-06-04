@@ -389,7 +389,9 @@ def setup_tasks(bot):
                             color=discord.Color.dark_grey(),
                             client=bot,
                         )
-                        embed.set_footer(text="✅ 0  |  ❔ 0  |  ❌ 0")
+                        rsvp_empty = RSVPView.format_rsvp_summary({"GOING": 0, "MAYBE": 0, "NO": 0})
+                        embed.add_field(name="RSVP", value=rsvp_empty, inline=False)
+                        embed.set_footer(text=rsvp_empty)
 
                         try:
                             msg = await ch.send(content=mention or None, embed=embed, view=RSVPView())

@@ -7,6 +7,8 @@ import asyncio
 import re
 import io
 
+from core.embed_templates import ticket_embed
+from core.embed_links import add_link_row, ticket_confirmation_buttons
 from core.utils import obsidian_embed, success_embed, is_mod, format_timestamp_readable, EMBED_COLORS
 from database import DB_PATH, now_utc, get_guild_setting
 from views import ConfirmView
@@ -523,12 +525,16 @@ async def create_ticket_for_user(interaction: discord.Interaction, target_member
         cur = await db.execute("SELECT last_insert_rowid()")
         ticket_db_id = (await cur.fetchone())[0]
     fields = [("Subject", subject, True), ("Status", "Open", True), ("Created For", target_member.mention, True), ("Created By", interaction.user.mention, True)]
-    embed = obsidian_embed(
+    embed = ticket_embed(
         f"Ticket #{ticket_id}",
         f"Ticket created for {target_member.mention} by {interaction.user.mention}.\n\nStaff will respond shortly.",
-        color=EMBED_COLORS["success"], fields=fields, author=interaction.user,
+        status="open",
+        priority="normal",
+        fields=fields,
+        author=interaction.user,
         thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
-        footer=f"Ticket ID: {ticket_id}", client=interaction.client,
+        footer=f"Ticket ID: {ticket_id}",
+        client=interaction.client,
     )
     await channel.send(embed=embed)
     controls = TicketControlView(int(ticket_db_id), ticket_id)
@@ -540,7 +546,19 @@ async def create_ticket_for_user(interaction: discord.Interaction, target_member
         await db.execute("UPDATE tickets SET control_message_id=? WHERE id=?", (ctrl_msg.id, ticket_db_id))
         await db.commit()
     await channel.send(f"{target_member.mention}, a ticket has been created for you.")
-    await interaction.followup.send(embed=obsidian_embed("✅ Ticket Created", f"Ticket for {target_member.mention}: {channel.mention}", color=EMBED_COLORS["success"], client=interaction.client), ephemeral=True)
+    confirm_view = discord.ui.View(timeout=120)
+    add_link_row(confirm_view, ticket_confirmation_buttons(channel_url=channel.jump_url))
+    await interaction.followup.send(
+        embed=ticket_embed(
+            "✅ Ticket Created",
+            f"Ticket for {target_member.mention}: {channel.mention}",
+            status="open",
+            priority="normal",
+            client=interaction.client,
+        ),
+        view=confirm_view,
+        ephemeral=True,
+    )
 
 
 async def create_ticket_channel(guild: discord.Guild, user: discord.Member, ticket_id: str, subject: str) -> Optional[discord.TextChannel]:
@@ -721,10 +739,11 @@ def setup(bot, group=None):
         ]
         if tag_val:
             fields.insert(1, ("Tag", tag_val, True))
-        embed = obsidian_embed(
+        embed = ticket_embed(
             f"Ticket #{ticket_id}",
             "Staff will respond shortly. Use `/ticket close` to close this ticket.",
-            color=discord.Color.green(),
+            status="open",
+            priority=priority_val,
             fields=fields,
             author=interaction.user,
             thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
@@ -803,16 +822,19 @@ def setup(bot, group=None):
         except Exception:
             pass  # never block ticket creation for notification errors
 
-        embed = success_embed(
-            "Ticket Created",
-            f"Your ticket has been created: {channel.mention}\n**Ticket ID:** `{ticket_id}`",
-            flair="Use `/community ticket message` in the channel to add info, `/community ticket close` when done.",
+        embed = ticket_embed(
+            "✅ Ticket Created",
+            f"Your ticket has been created: {channel.mention}\n**Ticket ID:** `{ticket_id}`\n\n"
+            "Use `/community ticket message` in the channel to add info, `/community ticket close` when done.",
+            status="open",
+            priority=priority_val,
+            thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
+            footer=f"Ticket ID: {ticket_id}",
             client=interaction.client,
         )
-        if interaction.guild.icon:
-            embed.set_thumbnail(url=interaction.guild.icon.url)
-        embed.set_footer(text=f"Ticket ID: {ticket_id}")
-        await interaction.followup.send(embed=embed, ephemeral=True)
+        confirm_view = discord.ui.View(timeout=120)
+        add_link_row(confirm_view, ticket_confirmation_buttons(channel_url=channel.jump_url))
+        await interaction.followup.send(embed=embed, view=confirm_view, ephemeral=True)
     
     command_decorator = group.command(name="ticket_close", description="Close a support ticket (moderators only).") if group else bot.tree.command(name="ticket_close", description="Close a support ticket (moderators only).")
     

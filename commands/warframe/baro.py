@@ -258,6 +258,9 @@ class BaroInventoryView(discord.ui.View):
         timeout: float = 300,
     ):
         super().__init__(timeout=timeout)
+        from core.embed_links import add_link_row, baro_link_buttons
+
+        add_link_row(self, baro_link_buttons())
         self.guild_id = guild_id
         self.is_active = is_active
         self.baro_data = baro_data
@@ -486,4 +489,8 @@ def _baro_view_for(
             mark_new=mark_new,
             refresh_callback=refresh_callback,
         )
-    return RefreshView(refresh_callback)
+    from core.embed_links import add_link_row, baro_link_buttons
+
+    view = RefreshView(refresh_callback)
+    add_link_row(view, baro_link_buttons())
+    return view

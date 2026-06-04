@@ -58,6 +58,17 @@ COMPLAINT_SEVERITY_COLORS: dict[str, str] = {
     "critical": "#992D22",
 }
 
+TICKET_PRIORITY_COLORS: dict[str, str] = {
+    "normal": "#52C97B",
+    "urgent": "#E05252",
+}
+
+TICKET_STATUS_COLORS: dict[str, str] = {
+    "open": "#7C83FF",
+    "closed": "#72767D",
+    "claimed": "#FAA61A",
+}
+
 # Category keyword → severity (longest / explicit keys checked via substring match)
 COMPLAINT_CATEGORY_SEVERITY: dict[str, str] = {
     "dox": "critical",

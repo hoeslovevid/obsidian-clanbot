@@ -98,6 +98,9 @@ class HelpSelectView(discord.ui.View):
     
     def __init__(self, bot, is_user_mod: bool):
         super().__init__(timeout=300)  # 5 minute timeout
+        from core.embed_links import add_link_row, help_link_buttons
+
+        add_link_row(self, help_link_buttons())
         self.bot = bot
         self.is_user_mod = is_user_mod
         self.current_group = None

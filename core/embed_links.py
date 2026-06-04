@@ -1,35 +1,53 @@
-"""Reusable link buttons and views for embeds."""
+"""Reusable link-button rows for embed messages."""
 from __future__ import annotations
 
-from typing import Optional
+from typing import Iterable, Optional
 
 import discord  # type: ignore
 
-from core.utils import channel_jump_url, message_jump_url
+from core.config import BOT_WEBSITE
+
+WARFRAME_WIKI_URL = "https://wiki.warframe.com/"
+WARFRAME_MARKET_URL = "https://warframe.market/"
 
 
 def link_button(label: str, url: str, *, emoji: Optional[str] = None) -> discord.ui.Button:
-    """Discord link-style button."""
-    return discord.ui.Button(
-        label=label[:80],
-        url=url,
-        style=discord.ButtonStyle.link,
-        emoji=emoji,
-    )
+    kwargs: dict = {"label": label[:80], "style": discord.ButtonStyle.link, "url": url}
+    if emoji:
+        kwargs["emoji"] = emoji
+    return discord.ui.Button(**kwargs)
 
 
-def channel_link_button(label: str, guild_id: int, channel_id: int) -> discord.ui.Button:
-    return link_button(label, channel_jump_url(guild_id, channel_id))
+def help_link_buttons() -> list[discord.ui.Button]:
+    buttons: list[discord.ui.Button] = []
+    if BOT_WEBSITE:
+        buttons.append(link_button("Website", BOT_WEBSITE, emoji="🌐"))
+    buttons.append(link_button("Warframe Wiki", WARFRAME_WIKI_URL, emoji="📖"))
+    return buttons
 
 
-def thread_link_button(label: str, guild_id: int, channel_id: int, message_id: int) -> discord.ui.Button:
-    return link_button(label, message_jump_url(guild_id, channel_id, message_id))
+def baro_link_buttons() -> list[discord.ui.Button]:
+    buttons = [link_button("Warframe Market", WARFRAME_MARKET_URL, emoji="🛒")]
+    if BOT_WEBSITE:
+        buttons.append(link_button("Obsidian", BOT_WEBSITE, emoji="🌐"))
+    return buttons
 
 
-class LinkRowView(discord.ui.View):
-    """Ephemeral-friendly view with up to 5 link buttons."""
+def ticket_confirmation_buttons(*, channel_url: Optional[str] = None) -> list[discord.ui.Button]:
+    buttons: list[discord.ui.Button] = []
+    if channel_url:
+        buttons.append(link_button("Open ticket", channel_url, emoji="🎫"))
+    if BOT_WEBSITE:
+        buttons.append(link_button("Help center", BOT_WEBSITE, emoji="🌐"))
+    return buttons
 
-    def __init__(self, *buttons: discord.ui.Button, timeout: Optional[float] = None):
-        super().__init__(timeout=timeout)
-        for btn in buttons[:5]:
-            self.add_item(btn)
+
+def add_link_row(view: discord.ui.View, buttons: Iterable[discord.ui.Button]) -> None:
+    """Append a single ActionRow of link buttons (max 5)."""
+    items = list(buttons)[:5]
+    if not items:
+        return
+    row = discord.ui.ActionRow()
+    for btn in items:
+        row.add_item(btn)
+    view.add_item(row)

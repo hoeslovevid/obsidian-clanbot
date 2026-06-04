@@ -11,6 +11,8 @@ from core.embed_assets import (
     COMPLAINT_SEVERITY_COLORS,
     PLATFORM_EMOJI,
     TEMPLATE_IMAGES,
+    TICKET_PRIORITY_COLORS,
+    TICKET_STATUS_COLORS,
     WARFRAME_VARIANT_THUMBNAILS,
 )
 from core.utils import EMBED_COLORS, obsidian_embed
@@ -122,6 +124,34 @@ def complaint_case_embed(
         title,
         desc,
         severity=severity,
+        client=client,
+        **kwargs,
+    )
+
+
+def ticket_embed(
+    title: str,
+    desc: str,
+    *,
+    status: str = "open",
+    priority: str = "normal",
+    client=None,
+    **kwargs: Any,
+) -> discord.Embed:
+    """Ticket channel / confirmation embed with status and priority colors."""
+    status_key = (status or "open").strip().lower()
+    priority_key = (priority or "normal").strip().lower()
+    if priority_key == "urgent" and status_key == "open":
+        color = discord.Color.from_str(TICKET_PRIORITY_COLORS["urgent"])
+    else:
+        color = discord.Color.from_str(
+            TICKET_STATUS_COLORS.get(status_key, TICKET_STATUS_COLORS["open"])
+        )
+    return obsidian_embed(
+        title,
+        desc,
+        category="community",
+        color=color,
         client=client,
         **kwargs,
     )

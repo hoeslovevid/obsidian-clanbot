@@ -172,11 +172,22 @@ def setup(bot, group=None):
             footer="Shortcuts work from any channel • Mod tools: /help → Moderation",
             client=interaction.client,
         )
-        await interaction.response.send_message(
-            embed=embed,
-            view=QuickMenuView(bot, recent=recent),
-            ephemeral=True,
-        )
+        view = QuickMenuView(bot, recent=recent)
+
+        async def _open_classic_picker(inter: discord.Interaction):
+            await inter.response.edit_message(embed=embed, view=view)
+
+        from core.menu_layout import menu_layout_v2_enabled, MenuHomeLayout
+
+        if menu_layout_v2_enabled():
+            try:
+                layout = MenuHomeLayout(recent_blurb=recent_blurb, on_open_picker=_open_classic_picker)
+                await interaction.response.send_message(view=layout, ephemeral=True)
+                return
+            except Exception:
+                pass
+
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
     @app_commands.command(name="menu", description="Quick menu — daily, profile, baro, ticket, trade, and more.")
     async def menu_top(interaction: discord.Interaction):
