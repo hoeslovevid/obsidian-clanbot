@@ -133,7 +133,7 @@ pip install -r deploy/requirements.txt
 python run.py
 ```
 
-**Railway / cloud:** See [DEPLOYMENT.md](DEPLOYMENT.md) for Railway setup. Project layout: `bot/` (app), `config/` (`.env`, `.gitignore`), `data/` (SQLite), `deploy/` (Procfile, requirements, Railway/Nixpacks), `docs/` (guides). Root `railway.toml` points Railway at `deploy/`. Use a persistent volume or external DB so data survives redeploys.
+**Railway / cloud:** See [DEPLOYMENT.md](DEPLOYMENT.md) for Railway setup. Project layout: `bot/` (app), `config/` (`.env`, `.gitignore`), `data/` (SQLite), `deploy/` (Procfile, requirements, mise), `docs/` (guides). Root `railway.toml` + `railpack.json` use **Railpack** (not Nixpacks); `requirements.txt` at root links to `deploy/requirements.txt`. Use a persistent volume or external DB so data survives redeploys.
 
 ---
 

@@ -1,10 +1,13 @@
-# Nixpacks build plan (path set via railway.toml → nixpacksConfigPath).
-# Fallback for services still on the Nixpacks builder.
+# Legacy Nixpacks fallback only (Railway default builder is RAILPACK via railway.toml).
+# If a service is still pinned to Nixpacks, this plan installs Python + pip explicitly.
 providers = ["python"]
 
 [variables]
 MISE_PYTHON_GITHUB_ATTESTATIONS = "false"
 NIXPACKS_PYTHON_VERSION = "3.11.11"
+
+[phases.setup]
+nixPkgs = ["python311Packages.pip"]
 
 [phases.install]
 cmds = ["pip install -r deploy/requirements.txt"]

@@ -8,18 +8,10 @@ This guide will help you deploy the Obsidian Clan Bot to Railway.
 
 If Railway diagnose mentions `MISE_PYTHON_GITHUB_ATTESTATIONS` or GitHub artifact attestations when installing Python, mise was updated and now verifies prebuilt Python binaries. Older patch releases may not have attestations.
 
-This repo pins Python in `deploy/runtime.txt` / `deploy/mise.toml` and disables attestation checks for Python installs. Build settings live in `deploy/nixpacks.toml`; Railway reads `railway.toml` at the repo root. If you still see the error, add this **service variable** in Railway:
+This repo pins Python in `deploy/runtime.txt` / `deploy/mise.toml` (hard-linked at the repo root for Railpack) and disables attestation checks for Python installs. Railway uses **Railpack** via root `railway.toml` and `railpack.json` — not Nixpacks. If you still see the error, add this **service variable** in Railway:
 
 ```
 MISE_PYTHON_GITHUB_ATTESTATIONS=false
-```
-
-Then redeploy.
-
-If Railpack cannot find `mise.toml` after it was moved into `deploy/`, add:
-
-```
-MISE_OVERRIDE_CONFIG_FILENAMES=deploy/mise.toml
 ```
 
 Then redeploy.
@@ -94,7 +86,8 @@ See `.env.example` for all available variables.
 
 1. Go to the "Settings" tab of your service
 2. Under "Service Type", make sure it's set to **"Worker"** (not Web Service)
-   - Railway uses `railway.toml` → `startCommand = python run.py` (Worker)
+   - Railway uses **Railpack** (`railway.toml` → `builder = "RAILPACK"`, `startCommand = python run.py`)
+   - In the service **Settings**, confirm the builder is **Railpack**, not Nixpacks
    - Or set start command manually to `python run.py`
 
 ## Step 5: Deploy
