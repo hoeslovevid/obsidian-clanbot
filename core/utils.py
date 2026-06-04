@@ -236,17 +236,21 @@ def format_duration_friendly(seconds: float) -> str:
     return " ".join(parts) if parts else "< 1m"
 
 
-def error_embed(title: str, message: str, *, action_hint: Optional[str] = None, client=None) -> discord.Embed:
+def error_embed(title: str, message: str, *, action_hint: Optional[str] = None, client=None, error_code: Optional[str] = None) -> discord.Embed:
     """Consistent error embed format with optional actionable next step."""
     desc = truncate_desc(str(message))
     if action_hint:
         desc += f"\n\n_→ {action_hint}_"
+    footer = EMBED_FOOTER_DEFAULT
+    if error_code:
+        footer = f"{footer} · Code: {error_code}"
     return obsidian_embed(
         f"❌ {title}" if not title.startswith("❌") else title,
         desc,
         category="error",
-        footer=EMBED_FOOTER_DEFAULT,
+        footer=footer,
         client=client,
+        template="error",
     )
 
 
@@ -358,28 +362,42 @@ def obsidian_embed(
     client: Optional[discord.Client] = None,
     timestamp: bool = True,
     brand: bool = False,
+    template: Optional[str] = None,
+    variant: Optional[str] = None,
+    severity: Optional[str] = None,
+    error_code: Optional[str] = None,
+    cached_at: Optional[datetime] = None,
 ) -> discord.Embed:
     """Create a standardized Obsidian-themed embed.
 
-    Args:
-        title:       Embed title.
-        desc:        Embed description.
-        color:       Explicit embed color (overrides category).
-        category:    Key from EMBED_COLORS for auto-color ("economy", "warframe", etc.).
-        author:      Discord member shown as embed author (avatar + display name).
-        author_name: Custom author name (used when author member not available).
-        author_icon: Custom author icon URL.
-        thumbnail:   Thumbnail image URL (top-right corner). Explicit overrides brand.
-        image:       Large banner image URL (bottom of embed).
-        footer:      Custom footer text.
-        footer_icon: Custom footer icon URL (defaults to bot avatar when client given).
-        fields:      List of (name, value) or (name, value, inline) tuples.
-        client:      Bot client — enables footer icon (and brand thumbnail when brand=True).
-        timestamp:   Whether to include current UTC timestamp (default True).
-        brand:       When True (and no explicit thumbnail), auto-attach the bot avatar as
-                     the embed thumbnail. Reserve for help/about/welcome/onboarding/level-up
-                     and other "showcase" embeds — keep off for transactional embeds.
+    Pass ``template`` (showcase, warframe_status, profile, error, levelup, complaint)
+    to apply preset thumbnails/banners from core.embed_templates.
     """
+    if template:
+        from core.embed_templates import embed_template
+        return embed_template(
+            template,
+            title,
+            desc,
+            category=category,
+            variant=variant,
+            color=color,
+            author=author,
+            author_name=author_name,
+            author_icon=author_icon,
+            thumbnail=thumbnail,
+            image=image,
+            footer=footer,
+            footer_icon=footer_icon,
+            fields=fields,
+            client=client,
+            timestamp=timestamp,
+            brand=brand,
+            cached_at=cached_at,
+            error_code=error_code,
+            severity=severity,
+        )
+
     # Resolve color: explicit > category > default brand color
     if color is None:
         color = EMBED_COLORS.get(category or "", EMBED_COLORS["general"])
@@ -411,6 +429,14 @@ def obsidian_embed(
         if bot_avatar:
             e.set_thumbnail(url=bot_avatar)
     
+    if brand and not image:
+        try:
+            from core.embed_assets import EMBED_BANNER_URL as _banner
+            if _banner:
+                e.set_image(url=_banner)
+        except Exception:
+            pass
+
     # Set image
     if image:
         e.set_image(url=image)
@@ -438,6 +464,17 @@ def obsidian_embed(
 
     # Set footer: always attach bot avatar as icon for a polished look
     footer_text = footer or EMBED_FOOTER_DEFAULT
+    if error_code:
+        footer_text = f"{footer_text} · Code: {error_code}"
+    if cached_at:
+        try:
+            age = (now_utc() - cached_at).total_seconds()
+            if age >= 60:
+                footer_text = f"{footer_text} · Cached · {int(age // 60)}m ago"
+            elif age >= 1:
+                footer_text = f"{footer_text} · Cached · {int(age)}s ago"
+        except Exception:
+            pass
     e.set_footer(text=footer_text[:2048], icon_url=footer_icon or _bot_avatar)
     
     return e
@@ -462,7 +499,7 @@ def warframe_data_unavailable_embed(client=None) -> discord.Embed:
         "Warframe's public stats service is often slow or briefly offline—that's normal, not your fault. "
         "Wait a minute and try again, or tap **Try again** / **Update data** if you see those buttons.\n\n"
         "_If we're showing cached data, countdowns might be slightly off._",
-        color=discord.Color.orange(),
+        template="error",
         client=client,
     )
 
@@ -666,10 +703,10 @@ async def send_levelup_announcement(
             "🎉 Level Up!",
             f"You leveled up to **Level {level}** in **{guild.name}**!\n\n"
             f"-# Keep chatting and staying active to climb even higher!",
-            category="prestige",
+            template="levelup",
+            variant=str(level),
             author=member,
             thumbnail=member.display_avatar.url if member.display_avatar else None,
-            image=LEVELUP_IMAGE_URL,
             fields=fields,
             footer=f"Total XP: {total_xp:,}",
             client=None,
@@ -694,10 +731,10 @@ async def send_levelup_announcement(
         "🎉 Level Up!",
         f"{member.mention} has leveled up to **Level {level}**!\n\n"
         f"-# Keep chatting and staying active to climb even higher!",
-        category="prestige",
+        template="levelup",
+        variant=str(level),
         author=member,
         thumbnail=member.display_avatar.url if member.display_avatar else None,
-        image=LEVELUP_IMAGE_URL,
         fields=fields,
         footer=f"Total XP: {total_xp:,}",
         client=None,

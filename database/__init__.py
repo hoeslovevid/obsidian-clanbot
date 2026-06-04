@@ -144,6 +144,19 @@ async def delete_guild_setting(guild_id: int, key: str) -> None:
         await db.commit()
 
 
+_BARO_HASH_KEY = "baro_inventory_hash"
+
+
+async def get_baro_inventory_hash(guild_id: int) -> Optional[str]:
+    """Last-seen Baro inventory hash for new-item markers (per guild)."""
+    return await get_guild_setting(guild_id, _BARO_HASH_KEY)
+
+
+async def set_baro_inventory_hash(guild_id: int, hash_val: str) -> None:
+    """Persist Baro inventory hash after a visit is displayed."""
+    await set_guild_setting(guild_id, _BARO_HASH_KEY, hash_val)
+
+
 async def record_command_usage(guild_id: int, user_id: int, command_name: str, weekday: int) -> None:
     """Bump the per-user / per-command / per-weekday counter used by /tools my_stats.
 
@@ -256,6 +269,39 @@ async def get_quieter_mode(guild_id: int) -> bool:
 async def set_quieter_mode(guild_id: int, enabled: bool) -> None:
     """Enable or disable quieter mode for the guild."""
     await set_guild_setting(guild_id, "quieter_mode", "1" if enabled else "0")
+
+
+async def get_digest_dm(guild_id: int, user_id: int) -> bool:
+    """Whether the user opted into the daily DM digest."""
+    val = await get_guild_setting(guild_id, f"user_digest_dm:{user_id}")
+    return val == "1"
+
+
+async def set_digest_dm(guild_id: int, user_id: int, enabled: bool) -> None:
+    """Enable or disable daily DM digest for a user."""
+    await set_guild_setting(guild_id, f"user_digest_dm:{user_id}", "1" if enabled else "0")
+
+
+async def get_achievement_notify_style(guild_id: int, user_id: int) -> str:
+    """Return achievement notify style: ephemeral, channel, dm, or off."""
+    style = await get_guild_setting(guild_id, f"user_achievement_notify_style:{user_id}")
+    if style in ("ephemeral", "channel", "dm", "off"):
+        return style
+    legacy = await get_guild_setting(guild_id, f"user_achievement_notify:{user_id}")
+    if legacy == "0":
+        return "off"
+    return "ephemeral"
+
+
+async def set_achievement_notify_style(guild_id: int, user_id: int, style: str) -> None:
+    """Set achievement notification style (ephemeral/channel/dm/off)."""
+    normalized = style if style in ("ephemeral", "channel", "dm", "off") else "ephemeral"
+    await set_guild_setting(guild_id, f"user_achievement_notify_style:{user_id}", normalized)
+    await set_guild_setting(
+        guild_id,
+        f"user_achievement_notify:{user_id}",
+        "0" if normalized == "off" else "1",
+    )
 
 
 async def get_log_channel_id(guild_id: int, log_type: str) -> Optional[int]:
@@ -1307,23 +1353,47 @@ async def check_and_unlock_achievement(
             except Exception as _e:
                 logger.debug(f"[achievement] title auto-unlock failed for {achievement_id}: {_e}")
 
-        # Item 107 — DM the unlocked title (subject to user_achievement_notify opt-out).
-        if unlocked_title_name and bot is not None:
+        notify_style = await get_achievement_notify_style(guild_id, user_id)
+
+        def _achievement_embed(client_obj=None):
+            from core.utils import obsidian_embed
+            reward_parts = []
+            if reward_coins > 0:
+                reward_parts.append(f"💰 **{reward_coins:,}** coins")
+            if reward_xp > 0:
+                reward_parts.append(f"⭐ **{reward_xp:,}** XP")
+            reward_line = "  ·  ".join(reward_parts) if reward_parts else None
+            fields = []
+            if reward_line:
+                fields.append(("🎁 Rewards", reward_line, False))
+            return obsidian_embed(
+                "🏆 Achievement Unlocked!",
+                f"> **{ach_name}**\n{ach_description}",
+                category="prestige",
+                fields=fields if fields else None,
+                footer="Use /general achievements to view all your achievements",
+                client=client_obj,
+            )
+
+        async def _resolve_member():
+            member = None
             try:
-                _an_val = await get_guild_setting(guild_id, f"user_achievement_notify:{user_id}")
-                if _an_val != "0":
+                guild_obj = bot.get_guild(guild_id) if bot and hasattr(bot, "get_guild") else None
+                if guild_obj:
+                    member = guild_obj.get_member(user_id)
+            except Exception:
+                member = None
+            if member is None and bot is not None:
+                try:
+                    member = await bot.fetch_user(user_id)
+                except Exception:
                     member = None
-                    try:
-                        guild_obj = bot.get_guild(guild_id) if hasattr(bot, "get_guild") else None
-                        if guild_obj:
-                            member = guild_obj.get_member(user_id)
-                    except Exception:
-                        member = None
-                    if member is None:
-                        try:
-                            member = await bot.fetch_user(user_id)
-                        except Exception:
-                            member = None
+            return member
+
+        if notify_style != "off":
+            if unlocked_title_name and bot is not None and notify_style in ("dm", "ephemeral"):
+                try:
+                    member = await _resolve_member()
                     if member is not None:
                         from core.utils import obsidian_embed
                         title_embed = obsidian_embed(
@@ -1337,39 +1407,37 @@ async def check_and_unlock_achievement(
                             await member.send(embed=title_embed)
                         except Exception:
                             pass
-            except Exception as _e:
-                logger.debug(f"[achievement] title DM failed: {_e}")
+                except Exception as _e:
+                    logger.debug(f"[achievement] title DM failed: {_e}")
 
-        # Ephemeral notification via interaction followup (when available)
-        if interaction is not None:
             try:
-                # Respect user opt-out preference (default: on)
-                _an_val = await get_guild_setting(guild_id, f"user_achievement_notify:{user_id}")
-                if _an_val == "0":
-                    return True
-                from core.utils import obsidian_embed
-                reward_parts = []
-                if reward_coins > 0:
-                    reward_parts.append(f"💰 **{reward_coins:,}** coins")
-                if reward_xp > 0:
-                    reward_parts.append(f"⭐ **{reward_xp:,}** XP")
-                reward_line = "  ·  ".join(reward_parts) if reward_parts else None
-
-                fields = []
-                if reward_line:
-                    fields.append(("🎁 Rewards", reward_line, False))
-
-                embed = obsidian_embed(
-                    "🏆 Achievement Unlocked!",
-                    f"> **{ach_name}**\n{ach_description}",
-                    category="prestige",
-                    fields=fields if fields else None,
-                    footer="Use /general achievements to view all your achievements",
-                    client=getattr(interaction, "client", None),
-                )
-                await interaction.followup.send(embed=embed, ephemeral=True)
+                ach_embed = _achievement_embed(getattr(interaction, "client", None) if interaction else bot)
+                if notify_style == "ephemeral" and interaction is not None:
+                    await interaction.followup.send(embed=ach_embed, ephemeral=True)
+                elif notify_style == "dm" and bot is not None:
+                    member = await _resolve_member()
+                    if member is not None:
+                        try:
+                            await member.send(embed=ach_embed)
+                        except Exception:
+                            pass
+                elif notify_style == "channel" and bot is not None:
+                    import discord as _discord
+                    guild_obj = bot.get_guild(guild_id) if hasattr(bot, "get_guild") else None
+                    if guild_obj:
+                        from core.utils import XP_LEVELUP_CHANNEL_KEY
+                        ch_id_s = await get_guild_setting(guild_id, XP_LEVELUP_CHANNEL_KEY)
+                        ch_id = int(ch_id_s) if ch_id_s and str(ch_id_s).isdigit() else None
+                        ch = guild_obj.get_channel(ch_id) if ch_id else guild_obj.system_channel
+                        if isinstance(ch, _discord.TextChannel):
+                            try:
+                                member = guild_obj.get_member(user_id)
+                                mention = member.mention if member else f"<@{user_id}>"
+                                await ch.send(content=mention, embed=ach_embed)
+                            except Exception:
+                                pass
             except Exception:
-                pass  # Never block the main flow for a notification
+                pass
 
         return True  # Newly unlocked
 

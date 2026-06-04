@@ -116,14 +116,18 @@ def setup(bot, group=None):
             if top_user and top_user.display_avatar:
                 thumb_url = top_user.display_avatar.url
         
-        rank_suffix = f" · 📍 Your rank: #{user_rank}/{total_count}" if user_rank else ""
+        fields: list[tuple[str, str, bool]] = []
+        if user_rank is not None:
+            fields.append(("📍 Your rank", f"**#{user_rank}** of **{total_count}**", True))
+        fields.append(("Rankings", leaderboard_text.strip(), False))
+
         embed = obsidian_embed(
             "⭐ XP Leaderboard",
             f"Top {len(rows)} XP earners{you_line}",
             category="economy",
             thumbnail=thumb_url,
-            fields=[("Rankings", leaderboard_text.strip(), False)],
-            footer=f"{interaction.guild.name} · {total_count} users with XP{rank_suffix}",
+            fields=fields,
+            footer=f"{interaction.guild.name} · {total_count} users with XP",
             client=interaction.client,
         )
         

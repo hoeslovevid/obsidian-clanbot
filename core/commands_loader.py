@@ -94,6 +94,7 @@ def load_all_commands(bot):
         "commands.general.onboarding",
         "commands.general.milestones_next",
         "commands.general.menu",
+        "commands.general.recent",
         "commands.general.whatsnew",
         "commands.general.reputation",
         "commands.general.twitch",
@@ -142,6 +143,7 @@ def load_all_commands(bot):
         "commands.moderation.inactive_role",
         "commands.moderation.ticket_config",
         "commands.economy.balance",
+        "commands.economy.wallet",
         "commands.economy.config",
         "commands.economy.transactions",
         "commands.economy.leaderboard",
@@ -160,6 +162,7 @@ def load_all_commands(bot):
         "commands.economy.pets",
         "commands.economy.prestige",
         "commands.warframe.baro",
+        "commands.warframe.world_state",
         "commands.warframe.baro_notify",
         "commands.warframe.lfg",
         "commands.warframe.lfg_list",
@@ -220,6 +223,7 @@ def load_all_commands(bot):
 
     group_mapping = {
         "commands.economy.balance": economy_group,
+        "commands.economy.wallet": economy_group,
         "commands.economy.config": economy_group,
         "commands.economy.transactions": economy_group,
         "commands.economy.leaderboard": economy_group,
@@ -238,6 +242,7 @@ def load_all_commands(bot):
         "commands.economy.shop_manage": economy_shop,
         "commands.economy.pets": economy_pets,
         "commands.warframe.baro": warframe_group,
+        "commands.warframe.world_state": warframe_group,
         "commands.warframe.baro_notify": wfnotify_group,
         # /lfg promoted to its own top-level group
         "commands.warframe.lfg": lfg_group,
@@ -304,6 +309,7 @@ def load_all_commands(bot):
         "commands.general.help": general_group,
         "commands.general.links": general_group,
         "commands.general.about": general_group,
+        "commands.general.recent": general_group,
         "commands.general.ping": community_group,
         "commands.general.invite": community_group,
         "commands.general.member_count": general_group,

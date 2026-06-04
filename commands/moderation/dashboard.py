@@ -2,9 +2,9 @@
 import discord
 from discord import app_commands
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from core.utils import obsidian_embed, is_mod, format_timestamp_readable
-from database import DB_PATH
+from database import DB_PATH, get_auto_mod_settings, get_incident_mode
 import aiosqlite
 
 
@@ -41,7 +41,49 @@ async def _build_mod_dashboard_embed(
         """, (guild.id,))
         warns = await cur.fetchall()
 
-    fields = []
+        cur = await db.execute("""
+            SELECT COUNT(*) FROM complaints
+            WHERE guild_id=? AND status IN ('OPEN','ACKNOWLEDGED','NEEDS INFO')
+        """, (guild.id,))
+        open_incidents = (await cur.fetchone())[0] or 0
+
+        today_iso = date.today().isoformat()
+        cur = await db.execute("""
+            SELECT COUNT(*) FROM warnings
+            WHERE guild_id=? AND date(created_at) = ?
+        """, (guild.id, today_iso))
+        warns_today = (await cur.fetchone())[0] or 0
+
+    automod = await get_auto_mod_settings(guild.id)
+    if automod and automod.get("enabled"):
+        rules = []
+        if automod.get("spam_enabled"):
+            rules.append("spam")
+        if automod.get("caps_enabled"):
+            rules.append("caps")
+        if automod.get("links_enabled"):
+            rules.append("links")
+        if automod.get("mention_enabled"):
+            rules.append("mentions")
+        automod_summary = f"✅ **ON** · {', '.join(rules) if rules else 'no rules'}"
+    elif automod:
+        automod_summary = "⏸️ **Configured** · disabled"
+    else:
+        automod_summary = "— not configured"
+
+    incident_on = await get_incident_mode(guild.id)
+    incident_summary = "🚨 **ACTIVE**" if incident_on else "✅ Off"
+
+    fields = [
+        (
+            "📋 At a glance",
+            f"**Open incidents:** {open_incidents}\n"
+            f"**Warns today:** {warns_today}\n"
+            f"**Incident mode:** {incident_summary}\n"
+            f"**Automod:** {automod_summary}",
+            False,
+        ),
+    ]
 
     if tickets:
         lines = []
@@ -252,7 +294,11 @@ class ModDashboardView(discord.ui.View):
         if not await self._require_mod(interaction):
             return
         from commands.moderation.incident_mode import toggle_incident_mode
-        new_state = await toggle_incident_mode(self.guild.id)
+        new_state = await toggle_incident_mode(
+            self.guild.id,
+            guild=self.guild,
+            client=interaction.client,
+        )
         await interaction.response.send_message(
             embed=obsidian_embed(
                 "🚨 Incident Mode " + ("Enabled" if new_state else "Disabled"),

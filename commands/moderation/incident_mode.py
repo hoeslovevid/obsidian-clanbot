@@ -5,7 +5,7 @@ from typing import Optional
 from datetime import datetime, timezone, timedelta
 
 from core.utils import obsidian_embed, is_mod
-from database import get_guild_setting, set_guild_setting, now_utc
+from database import get_guild_setting, set_guild_setting, get_log_channel_id, now_utc
 
 
 async def get_incident_mode(guild_id: int) -> bool:
@@ -13,17 +13,121 @@ async def get_incident_mode(guild_id: int) -> bool:
     return (await get_guild_setting(guild_id, "incident_mode_enabled") or "0") == "1"
 
 
-async def toggle_incident_mode(guild_id: int, *, duration_minutes: int = 60) -> bool:
+async def _resolve_incident_banner_channel(guild: discord.Guild) -> Optional[discord.TextChannel]:
+    """Prefer mod audit log channel, then system channel."""
+    for log_type in ("audit", "bot_error"):
+        ch_id = await get_log_channel_id(guild.id, log_type)
+        if ch_id:
+            ch = guild.get_channel(ch_id)
+            if isinstance(ch, discord.TextChannel):
+                return ch
+    if isinstance(guild.system_channel, discord.TextChannel):
+        return guild.system_channel
+    return None
+
+
+async def sync_incident_banner(
+    guild: discord.Guild,
+    client: discord.Client,
+    *,
+    enabled: bool,
+    message: str = "",
+    until_ts: int = 0,
+) -> None:
+    """Pin or update the incident banner in the mod log / system channel."""
+    ch = await _resolve_incident_banner_channel(guild)
+    if ch is None:
+        return
+
+    banner_id_s = await get_guild_setting(guild.id, "incident_banner_msg")
+    banner_id = int(banner_id_s) if banner_id_s and banner_id_s.isdigit() else 0
+
+    if not enabled:
+        if banner_id:
+            try:
+                msg = await ch.fetch_message(banner_id)
+                await msg.edit(
+                    embed=obsidian_embed(
+                        "✅ Incident Mode Cleared",
+                        "Normal operations restored. Non-critical commands are available again.",
+                        color=discord.Color.green(),
+                        client=client,
+                    ),
+                    content=None,
+                )
+                try:
+                    await msg.unpin()
+                except Exception:
+                    pass
+            except Exception:
+                pass
+        await set_guild_setting(guild.id, "incident_banner_msg", "0")
+        return
+
+    until_line = f"<t:{until_ts}:R>" if until_ts else "—"
+    body = message.strip() or "Non-critical bot commands are limited for non-moderators during this incident."
+    embed = obsidian_embed(
+        "🚨 Incident Mode Active",
+        f"{body}\n\n**Auto-disable:** {until_line}\n\n_Moderators retain full access._",
+        color=discord.Color.orange(),
+        category="moderation",
+        client=client,
+    )
+
+    msg: Optional[discord.Message] = None
+    if banner_id:
+        try:
+            msg = await ch.fetch_message(banner_id)
+            await msg.edit(embed=embed, content="@everyone" if ch.permissions_for(guild.me).mention_everyone else None)
+        except Exception:
+            msg = None
+
+    if msg is None:
+        try:
+            content = "@everyone" if ch.permissions_for(guild.me).mention_everyone else None
+            msg = await ch.send(content=content, embed=embed)
+            try:
+                await msg.pin()
+            except Exception:
+                pass
+        except Exception:
+            return
+
+    if msg:
+        await set_guild_setting(guild.id, "incident_banner_msg", str(msg.id))
+
+
+async def toggle_incident_mode(
+    guild_id: int,
+    *,
+    duration_minutes: int = 60,
+    guild: Optional[discord.Guild] = None,
+    client: Optional[discord.Client] = None,
+    message: str = "",
+) -> bool:
     """Flip incident mode on/off for ``guild_id``. Returns the new state."""
     new_state = not await get_incident_mode(guild_id)
     if new_state:
         until = int((now_utc() + timedelta(minutes=max(5, min(duration_minutes, 24 * 60)))).timestamp())
         await set_guild_setting(guild_id, "incident_mode_enabled", "1")
         await set_guild_setting(guild_id, "incident_mode_until_ts", str(until))
+        if message:
+            await set_guild_setting(guild_id, "incident_mode_message", message)
+        if guild and client:
+            msg = await get_guild_setting(guild_id, "incident_mode_message")
+            await sync_incident_banner(
+                guild,
+                client,
+                enabled=True,
+                message=msg or message or "",
+                until_ts=until,
+            )
     else:
         await set_guild_setting(guild_id, "incident_mode_enabled", "0")
         await set_guild_setting(guild_id, "incident_mode_until_ts", "0")
         await set_guild_setting(guild_id, "incident_mode_message", "")
+        if guild and client:
+            await sync_incident_banner(guild, client, enabled=False)
     return new_state
 
 
@@ -92,6 +196,7 @@ def setup(bot, group=None):
             await set_guild_setting(interaction.guild.id, "incident_mode_enabled", "0")
             await set_guild_setting(interaction.guild.id, "incident_mode_until_ts", "0")
             await set_guild_setting(interaction.guild.id, "incident_mode_message", "")
+            await sync_incident_banner(interaction.guild, interaction.client, enabled=False)
             return await interaction.followup.send(
                 embed=obsidian_embed(
                     "✅ Incident Mode Disabled",
@@ -113,6 +218,13 @@ def setup(bot, group=None):
         await set_guild_setting(interaction.guild.id, "incident_mode_enabled", "1")
         await set_guild_setting(interaction.guild.id, "incident_mode_until_ts", str(until))
         await set_guild_setting(interaction.guild.id, "incident_mode_message", message or "")
+        await sync_incident_banner(
+            interaction.guild,
+            interaction.client,
+            enabled=True,
+            message=message or "",
+            until_ts=until,
+        )
 
         return await interaction.followup.send(
             embed=obsidian_embed(
@@ -125,4 +237,3 @@ def setup(bot, group=None):
             ),
             ephemeral=True,
         )
-

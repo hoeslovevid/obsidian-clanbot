@@ -2809,6 +2809,9 @@ def setup_tasks(bot):
     async def before_youtube_check_loop():
         await bot.wait_until_ready()
 
+    from tasks.digest_loop import create_digest_loop
+    digest_dm_loop = create_digest_loop(bot)
+
     # Start all tasks with error handling
     tasks_to_start = [
         ('temp_vc_cleanup', temp_vc_cleanup),
@@ -2841,6 +2844,7 @@ def setup_tasks(bot):
         ('stale_ticket_reminder_loop', stale_ticket_reminder_loop),
         ('forum_check_loop', forum_check_loop),
         ('youtube_check_loop', youtube_check_loop),
+        ('digest_dm_loop', digest_dm_loop),
     ]
     
     started_tasks = {}

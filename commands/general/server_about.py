@@ -13,6 +13,16 @@ import aiosqlite  # type: ignore
 import discord
 from discord import app_commands
 
+from core.channels import resolve_channel_id
+from core.config import (
+    COMPLAINTS_CHANNEL_ID,
+    COMPLAINTS_CHANNEL_NAME,
+    EVENTS_CHANNEL_ID,
+    EVENTS_CHANNEL_NAME,
+    VOICE_PANEL_CHANNEL_ID,
+    VOICE_PANEL_CHANNEL_NAME,
+)
+from core.embed_links import LinkRowView, channel_link_button
 from core.utils import (
     EMBED_COLORS,
     error_embed,
@@ -24,7 +34,7 @@ from database import DB_PATH
 
 
 _CACHE_TTL = 10 * 60  # 10 minutes
-_CACHE: dict[int, tuple[float, discord.Embed]] = {}
+_CACHE: dict[int, tuple[float, tuple[discord.Embed, list]]] = {}
 
 
 async def _build_about_embed(guild: discord.Guild, client: discord.Client) -> discord.Embed:
@@ -83,6 +93,25 @@ async def _build_about_embed(guild: discord.Guild, client: discord.Client) -> di
     if top_active_lines:
         fields.append(("🏆 Top contributors (this week)", "\n".join(top_active_lines), False))
 
+    channel_specs = [
+        ("voice_panel_channel_id", "🔊 Voice panel", VOICE_PANEL_CHANNEL_ID, VOICE_PANEL_CHANNEL_NAME),
+        ("events_channel_id", "📅 Events", EVENTS_CHANNEL_ID, EVENTS_CHANNEL_NAME),
+        ("complaints_channel_id", "📋 Complaints", COMPLAINTS_CHANNEL_ID, COMPLAINTS_CHANNEL_NAME),
+    ]
+    channel_lines: list[str] = []
+    link_buttons: list = []
+    for setting_key, label, env_id, fallback_name in channel_specs:
+        ch_id = await resolve_channel_id(guild, setting_key, env_id, fallback_name)
+        if ch_id:
+            ch = guild.get_channel(ch_id)
+            mention = ch.mention if isinstance(ch, discord.abc.GuildChannel) else f"<#{ch_id}>"
+            channel_lines.append(f"{label}: {mention}")
+            if len(link_buttons) < 5:
+                link_buttons.append(channel_link_button(label.split(maxsplit=1)[-1][:20], guild.id, ch_id))
+
+    if channel_lines:
+        fields.append(("📌 Server channels", "\n".join(channel_lines), False))
+
     # Most active channels in the last 7 days — best-effort, since the
     # activity_log table isn't keyed on channel_id. We fall back to
     # `last_message_id` proximity (purely heuristic) and omit gracefully
@@ -114,9 +143,9 @@ async def _build_about_embed(guild: discord.Guild, client: discord.Client) -> di
         image=guild.banner.url if guild.banner else None,
         fields=fields,
         client=client,
-        footer=f"Server ID: {guild.id}",
+        footer=f"Server ID: {guild.id} • Configure channels with /setup_obsidian",
     )
-    return embed
+    return embed, link_buttons
 
 
 def setup(bot, group=None):
@@ -137,13 +166,15 @@ def setup(bot, group=None):
 
         cached = _CACHE.get(guild.id)
         embed: Optional[discord.Embed] = None
+        link_buttons: list = []
         if cached and (time.monotonic() - cached[0]) < _CACHE_TTL:
-            embed = cached[1]
+            embed, link_buttons = cached[1]
 
         if embed is None:
-            embed = await _build_about_embed(guild, interaction.client)
-            _CACHE[guild.id] = (time.monotonic(), embed)
+            embed, link_buttons = await _build_about_embed(guild, interaction.client)
+            _CACHE[guild.id] = (time.monotonic(), (embed, link_buttons))
 
-        await interaction.followup.send(embed=embed)
+        view = LinkRowView(*link_buttons) if link_buttons else None
+        await interaction.followup.send(embed=embed, view=view)
 
     bot.tree.add_command(server_group)

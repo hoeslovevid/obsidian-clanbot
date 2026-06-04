@@ -334,7 +334,13 @@ async def handle_modal_submit(bot: discord.Client, interaction: discord.Interact
             if evidence_val.strip():
                 desc += f"\n\n**Evidence:** {evidence_val}"
 
-            embed = obsidian_embed(f"Docket Entry • {case_id}", desc, color=discord.Color.red(), client=bot)
+            from core.embed_templates import complaint_case_embed
+            embed = complaint_case_embed(
+                f"Docket Entry • {case_id}",
+                desc,
+                category_val,
+                client=bot,
+            )
             embed.set_footer(text=f"Filed by: {interaction.user} • {interaction.user.id}")
 
             view = ComplaintModView(case_id)
@@ -750,7 +756,13 @@ async def handle_modal_submit(bot: discord.Client, interaction: discord.Interact
                 if evidence_val.strip():
                     desc += f"\n\n**Evidence:** {evidence_val}"
 
-                embed = obsidian_embed(f"Docket Entry • {case_id}", desc, color=discord.Color.red(), client=bot)
+                from core.embed_templates import complaint_case_embed
+                embed = complaint_case_embed(
+                    f"Docket Entry • {case_id}",
+                    desc,
+                    category_val,
+                    client=bot,
+                )
                 embed.set_footer(text=f"Filed by: {interaction.user} • {interaction.user.id}")
 
                 view = ComplaintModView(case_id)

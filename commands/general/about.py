@@ -2,7 +2,7 @@
 import discord  # type: ignore
 from discord import app_commands  # type: ignore
 
-from core.utils import obsidian_embed
+from core.embed_templates import embed_template
 from core.config import BOT_WEBSITE, BOT_DEVELOPER
 from core.version_tracking import get_current_bot_version
 
@@ -54,7 +54,8 @@ def setup(bot, group=None):
         if BOT_WEBSITE:
             fields.append(("🌐 Website", f"[Visit]({BOT_WEBSITE})", True))
 
-        embed = obsidian_embed(
+        embed = embed_template(
+            "showcase",
             f"About {bot_name}",
             f"> {desc}",
             category="general",
@@ -64,6 +65,7 @@ def setup(bot, group=None):
             fields=fields,
             footer="Use /help for the full command list",
             client=client,
+            brand=True,
         )
 
         await interaction.response.send_message(embed=embed, ephemeral=True)

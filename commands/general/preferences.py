@@ -4,7 +4,12 @@ from discord import app_commands
 from typing import Optional
 
 from core.utils import obsidian_embed, success_embed, is_mod, EMBED_COLORS
-from database import get_user_timezone, set_user_timezone, get_user_platform, set_user_platform, get_quieter_mode, set_quieter_mode
+from database import (
+    get_user_timezone, set_user_timezone, get_user_platform, set_user_platform,
+    get_quieter_mode, set_quieter_mode, get_digest_dm, set_digest_dm,
+    get_achievement_notify_style, set_achievement_notify_style, get_guild_setting, set_guild_setting,
+)
+from core.user_time import get_user_time_format
 
 COMMON_TIMEZONES = [
     ("UTC", "UTC"),
@@ -45,7 +50,10 @@ def setup(bot, group=None):
         quieter="Enable quieter mode: fewer pings in events/reminders (mods only)",
         daily_reminder="Get a DM ~1 hour before your daily streak resets",
         levelup_dm="Get a DM (instead of a public post) when you level up",
-        achievement_notify="Show a private notification when you unlock an achievement",
+        achievement_notify="Show a private notification when you unlock an achievement (legacy on/off)",
+        achievement_notify_style="How achievement unlocks are announced",
+        digest_dm="Daily DM digest: unclaimed daily, Baro window, today's events",
+        time_format="Clock display preference for timestamps",
         investment_dm="Get a DM when your investment matures and is ready to collect",
         typo_helper="Reply with a slash-command suggestion when you mis-type one in chat",
         hide_leaderboards="Show as Hidden on coin, XP, voice, and achievement leaderboards",
@@ -70,6 +78,20 @@ def setup(bot, group=None):
         app_commands.Choice(name="On", value="1"),
         app_commands.Choice(name="Off", value="0"),
     ])
+    @app_commands.choices(achievement_notify_style=[
+        app_commands.Choice(name="Ephemeral (private reply)", value="ephemeral"),
+        app_commands.Choice(name="Public channel", value="channel"),
+        app_commands.Choice(name="DM", value="dm"),
+        app_commands.Choice(name="Off", value="off"),
+    ])
+    @app_commands.choices(digest_dm=[
+        app_commands.Choice(name="On", value="1"),
+        app_commands.Choice(name="Off", value="0"),
+    ])
+    @app_commands.choices(time_format=[
+        app_commands.Choice(name="12-hour", value="12"),
+        app_commands.Choice(name="24-hour", value="24"),
+    ])
     @app_commands.choices(investment_dm=[
         app_commands.Choice(name="On", value="1"),
         app_commands.Choice(name="Off", value="0"),
@@ -90,6 +112,9 @@ def setup(bot, group=None):
         daily_reminder: Optional[app_commands.Choice[str]] = None,
         levelup_dm: Optional[app_commands.Choice[str]] = None,
         achievement_notify: Optional[app_commands.Choice[str]] = None,
+        achievement_notify_style: Optional[app_commands.Choice[str]] = None,
+        digest_dm: Optional[app_commands.Choice[str]] = None,
+        time_format: Optional[app_commands.Choice[str]] = None,
         investment_dm: Optional[app_commands.Choice[str]] = None,
         typo_helper: Optional[app_commands.Choice[str]] = None,
         hide_leaderboards: Optional[app_commands.Choice[str]] = None,
@@ -137,11 +162,37 @@ def setup(bot, group=None):
             state = "On (DM)" if levelup_dm.value == "1" else "Off (public)"
             updated.append(f"**Level-up notification:** {state}")
 
-        if achievement_notify:
-            from database import set_guild_setting
-            await set_guild_setting(interaction.guild.id, f"user_achievement_notify:{interaction.user.id}", achievement_notify.value)
+        if achievement_notify_style:
+            await set_achievement_notify_style(
+                interaction.guild.id, interaction.user.id, achievement_notify_style.value
+            )
+            labels = {
+                "ephemeral": "Ephemeral (private reply)",
+                "channel": "Public channel",
+                "dm": "DM",
+                "off": "Off",
+            }
+            updated.append(
+                f"**Achievement notifications:** {labels.get(achievement_notify_style.value, achievement_notify_style.value)}"
+            )
+        elif achievement_notify:
+            style = "ephemeral" if achievement_notify.value == "1" else "off"
+            await set_achievement_notify_style(interaction.guild.id, interaction.user.id, style)
             state = "On" if achievement_notify.value == "1" else "Off"
             updated.append(f"**Achievement notifications:** {state}")
+
+        if digest_dm:
+            enabled = digest_dm.value == "1"
+            await set_digest_dm(interaction.guild.id, interaction.user.id, enabled)
+            updated.append(f"**Daily digest DM:** {'On ☀️' if enabled else 'Off'}")
+
+        if time_format:
+            await set_guild_setting(
+                interaction.guild.id,
+                f"user_time_format:{interaction.user.id}",
+                time_format.value,
+            )
+            updated.append(f"**Time format:** {'24-hour' if time_format.value == '24' else '12-hour'}")
 
         if investment_dm:
             from database import set_guild_setting
@@ -176,8 +227,15 @@ def setup(bot, group=None):
             dr_on = dr_val == "1"
             lu_val = await get_guild_setting(interaction.guild.id, f"user_levelup_dm:{interaction.user.id}")
             lu_dm = lu_val == "1"
-            an_val = await get_guild_setting(interaction.guild.id, f"user_achievement_notify:{interaction.user.id}")
-            an_on = an_val != "0"  # default ON when unset
+            an_style = await get_achievement_notify_style(interaction.guild.id, interaction.user.id)
+            an_labels = {
+                "ephemeral": "Ephemeral 🔔",
+                "channel": "Public channel 📣",
+                "dm": "DM 📬",
+                "off": "Off",
+            }
+            digest_on = await get_digest_dm(interaction.guild.id, interaction.user.id)
+            tf = await get_user_time_format(interaction.guild.id, interaction.user.id)
             inv_val = await get_guild_setting(interaction.guild.id, f"user_investment_dm:{interaction.user.id}")
             inv_on = inv_val == "1"  # default OFF when unset
             th_val = await get_guild_setting(interaction.guild.id, f"user_typo_helper:{interaction.user.id}")
@@ -188,7 +246,9 @@ def setup(bot, group=None):
             lines.append(f"**Trading platform:** {current_platform.upper() if current_platform else 'Not set (defaults to PC)'}")
             lines.append(f"**Daily streak reminder:** {'On 🔔' if dr_on else 'Off'}")
             lines.append(f"**Level-up notification:** {'DM (private) 📬' if lu_dm else 'Public channel'}")
-            lines.append(f"**Achievement notifications:** {'On 🏆' if an_on else 'Off'}")
+            lines.append(f"**Achievement notifications:** {an_labels.get(an_style, an_style)}")
+            lines.append(f"**Daily digest DM:** {'On ☀️' if digest_on else 'Off'}")
+            lines.append(f"**Time format:** {'24-hour' if tf == '24' else '12-hour'}")
             lines.append(f"**Investment maturity DM:** {'On 📈' if inv_on else 'Off'}")
             lines.append(f"**Typo helper:** {'On 💡' if th_on else 'Off'}")
             lines.append(f"**Leaderboard privacy:** {'On 🕵️' if lb_hidden else 'Off (name shown)'}")
@@ -220,6 +280,8 @@ def setup(bot, group=None):
         "user_daily_reminder",
         "user_levelup_dm",
         "user_achievement_notify",
+        "user_achievement_notify_style",
+        "user_digest_dm",
         "user_investment_dm",
         "user_changelog_dm",
         "user_pet_alerts",
@@ -231,6 +293,8 @@ def setup(bot, group=None):
         "user_daily_reminder": "1",
         "user_levelup_dm": "0",  # public level-up channel by default
         "user_achievement_notify": "1",
+        "user_achievement_notify_style": "ephemeral",
+        "user_digest_dm": "0",
         "user_investment_dm": "0",
         "user_changelog_dm": "0",
         "user_pet_alerts": "1",

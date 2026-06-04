@@ -10,6 +10,64 @@ from database import DB_PATH
 import aiosqlite
 
 MAX_EXPORT_ROWS = 500
+TXN_PAGE_SIZE = 5
+
+
+class TransactionPaginator(discord.ui.View):
+    """Prev/Next pagination for transaction history (ephemeral)."""
+
+    def __init__(
+        self,
+        *,
+        title: str,
+        pages: list[str],
+        footer_base: str,
+        author: discord.Member,
+        client,
+        txn_filter: str | None,
+    ):
+        super().__init__(timeout=120)
+        self.title = title
+        self.pages = pages
+        self.footer_base = footer_base
+        self.author = author
+        self.client = client
+        self.txn_filter = txn_filter
+        self.page = 0
+        self._update_buttons()
+
+    def _update_buttons(self):
+        total = max(1, len(self.pages))
+        for c in self.children:
+            if getattr(c, "custom_id", "") == "txn_prev":
+                c.disabled = self.page <= 0
+            elif getattr(c, "custom_id", "") == "txn_next":
+                c.disabled = self.page >= total - 1
+
+    def _build_embed(self) -> discord.Embed:
+        total = max(1, len(self.pages))
+        filter_note = f" ({self.txn_filter})" if self.txn_filter else ""
+        return obsidian_embed(
+            self.title,
+            self.pages[self.page],
+            color=discord.Color.gold(),
+            author=self.author,
+            thumbnail=self.author.display_avatar.url if self.author.display_avatar else None,
+            footer=f"{self.footer_base} • Page {self.page + 1}/{total}{filter_note}",
+            client=self.client,
+        )
+
+    @discord.ui.button(label="◀ Prev", style=discord.ButtonStyle.secondary, custom_id="txn_prev")
+    async def prev_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.page = max(0, self.page - 1)
+        self._update_buttons()
+        await interaction.response.edit_message(embed=self._build_embed(), view=self)
+
+    @discord.ui.button(label="Next ▶", style=discord.ButtonStyle.secondary, custom_id="txn_next")
+    async def next_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.page = min(len(self.pages) - 1, self.page + 1)
+        self._update_buttons()
+        await interaction.response.edit_message(embed=self._build_embed(), view=self)
 
 
 def setup(bot, group=None):
@@ -123,18 +181,40 @@ def setup(bot, group=None):
             lines.append(f"{emoji} **{sign}{amount:,}** {type_label} — {desc_short}\n   {time_str} → **{running_balance:,}**")
             running_balance -= amount
 
-        desc_text = "\n\n".join(lines)
         title = f"📜 Transactions for {target.display_name}"
-        embed = obsidian_embed(
-            title,
-            desc_text,
-            color=discord.Color.gold(),
+        footer_base = f"Balance: {current_balance:,} coins • Showing last {len(rows)}"
+        filter_label = txn_filter if txn_filter else None
+
+        if len(lines) <= TXN_PAGE_SIZE:
+            embed = obsidian_embed(
+                title,
+                "\n\n".join(lines),
+                color=discord.Color.gold(),
+                author=target,
+                thumbnail=target.display_avatar.url if target.display_avatar else None,
+                footer=f"{footer_base}{f' ({txn_filter})' if txn_filter else ''} • Use type: to filter",
+                client=interaction.client,
+            )
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            return
+
+        page_chunks: list[str] = []
+        for i in range(0, len(lines), TXN_PAGE_SIZE):
+            page_chunks.append("\n\n".join(lines[i : i + TXN_PAGE_SIZE]))
+
+        paginator = TransactionPaginator(
+            title=title,
+            pages=page_chunks,
+            footer_base=footer_base,
             author=target,
-            thumbnail=target.display_avatar.url if target.display_avatar else None,
-            footer=f"Balance: {current_balance:,} coins • Showing last {len(rows)}{f' ({txn_filter})' if txn_filter else ''} • Use type: to filter",
             client=interaction.client,
+            txn_filter=filter_label,
         )
-        await interaction.followup.send(embed=embed, ephemeral=True)
+        await interaction.followup.send(
+            embed=paginator._build_embed(),
+            view=paginator,
+            ephemeral=True,
+        )
 
     # Export transactions as CSV
     export_decorator = (

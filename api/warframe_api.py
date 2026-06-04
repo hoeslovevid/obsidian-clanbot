@@ -1250,3 +1250,26 @@ async def get_warframe_market_price(item_url_name: str, platform: str = "pc") ->
             return None
 
     return await get_cached(f"warframe_market:price:{item_url_name}:{platform}", 90, _fetch)
+
+
+def wf_cache_age_seconds(url: str) -> Optional[float]:
+    """Seconds since last successful fetch for this API URL (None if unknown)."""
+    entry = _wf_stat_fallback.get(url)
+    if not entry:
+        return None
+    _, ts = entry
+    return max(0.0, time.monotonic() - ts)
+
+
+def wf_cache_datetime(url: str) -> Optional[datetime]:
+    """Approximate UTC time when cached data was last refreshed."""
+    age = wf_cache_age_seconds(url)
+    if age is None:
+        return None
+    return datetime.now(timezone.utc) - timedelta(seconds=age)
+
+
+def wf_staleness_for_path(path: str) -> Optional[datetime]:
+    """Cached-at timestamp for a warframestat.us path (e.g. pc/voidTrader)."""
+    return wf_cache_datetime(_wf_stat_url(path))
+

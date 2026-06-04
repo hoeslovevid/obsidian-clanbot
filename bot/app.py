@@ -49,7 +49,7 @@ from core.config import (
 
 # Re-export config for modules that import from bot (backward compat)
 __all__ = [
-    "bot", "check_auto_mod", "post_vc_panel", "log_complaint_action",
+    "bot", "check_auto_mod", "post_vc_panel", "update_vc_panel_embed", "log_complaint_action",
     "TOKEN", "GUILD_ID", "MOD_ROLE_NAME", "BOT_STATUS", "TIMEZONE", "DB_PATH",
     "BOT_VERSION", "BOT_CHANGELOG",
     "TEMP_VC_CATEGORY_ID", "TEMP_VC_CATEGORY_NAME", "CREATE_VC_NAME",
@@ -397,10 +397,18 @@ async def post_vc_panel(guild: discord.Guild, vc: discord.VoiceChannel, owner: d
     if not isinstance(panel_ch, discord.TextChannel):
         return
 
+    everyone_ow = vc.overwrites_for(guild.default_role)
+    locked = everyone_ow.connect is False
+    members = len(vc.members)
+    cap = vc.user_limit if vc.user_limit else "∞"
+    lock_label = "🔒 Sealed" if locked else "🔓 Open"
+
     embed = obsidian_embed(
         "Voice Channel Control",
         f"**Channel:** {vc.mention}\n"
-        f"**Owner:** {owner.mention}\n\n"
+        f"**Owner:** {owner.mention}\n"
+        f"**Members:** {members}/{cap}\n"
+        f"**Status:** {lock_label}\n\n"
         "Configure your voice channel using the controls below.\n"
         "_Squad owners and configured staff roles can use these controls._",
         color=discord.Color.dark_grey(),
@@ -418,6 +426,63 @@ async def post_vc_panel(guild: discord.Guild, vc: discord.VoiceChannel, owner: d
 
     # Register persistent view (so buttons keep working after restart)
     bot.add_view(view)
+
+
+async def update_vc_panel_embed(guild: discord.Guild, vc_id: int) -> None:
+    """Edit the VC panel message with live member count and lock status."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            "SELECT message_id FROM vc_panels WHERE guild_id=? AND channel_id=?",
+            (guild.id, vc_id),
+        )
+        row = await cur.fetchone()
+    if not row:
+        return
+
+    vc = guild.get_channel(vc_id)
+    if not isinstance(vc, discord.VoiceChannel):
+        return
+
+    panel_ch_id = await resolve_channel_id(
+        guild, "voice_panel_channel_id", VOICE_PANEL_CHANNEL_ID, VOICE_PANEL_CHANNEL_NAME
+    )
+    panel_ch = guild.get_channel(panel_ch_id) if panel_ch_id else None
+    if not isinstance(panel_ch, discord.TextChannel):
+        return
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            "SELECT owner_id FROM temp_vcs WHERE guild_id=? AND channel_id=?",
+            (guild.id, vc_id),
+        )
+        owner_row = await cur.fetchone()
+    owner_id = int(owner_row[0]) if owner_row else 0
+    owner = guild.get_member(owner_id)
+    owner_line = owner.mention if owner else f"<@{owner_id}>" if owner_id else "—"
+
+    everyone_ow = vc.overwrites_for(guild.default_role)
+    locked = everyone_ow.connect is False
+    members = len(vc.members)
+    cap = vc.user_limit if vc.user_limit else "∞"
+    lock_label = "🔒 Sealed" if locked else "🔓 Open"
+
+    embed = obsidian_embed(
+        "Voice Channel Control",
+        f"**Channel:** {vc.mention}\n"
+        f"**Owner:** {owner_line}\n"
+        f"**Members:** {members}/{cap}\n"
+        f"**Status:** {lock_label}\n\n"
+        "Configure your voice channel using the controls below.\n"
+        "_Squad owners and configured staff roles can use these controls._",
+        color=discord.Color.dark_grey(),
+        client=bot,
+    )
+
+    try:
+        msg = await panel_ch.fetch_message(int(row[0]))
+        await msg.edit(embed=embed, view=VCPanelView(vc_id))
+    except Exception:
+        pass
 
 
 # Complaint and Event modals/views are now in modals.py and views.py
@@ -900,6 +965,25 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
                     await db.commit()
     
     # Original join-to-create logic
+    guild = member.guild
+
+    async def _maybe_refresh_vc_panel(channel: Optional[discord.VoiceChannel]) -> None:
+        if channel is None or not isinstance(channel, discord.VoiceChannel):
+            return
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT 1 FROM temp_vcs WHERE guild_id=? AND channel_id=?",
+                (guild.id, channel.id),
+            )
+            if await cur.fetchone():
+                try:
+                    await update_vc_panel_embed(guild, channel.id)
+                except Exception:
+                    pass
+
+    await _maybe_refresh_vc_panel(before.channel if isinstance(before.channel, discord.VoiceChannel) else None)
+    await _maybe_refresh_vc_panel(after.channel if isinstance(after.channel, discord.VoiceChannel) else None)
+
     if not after.channel:
         return
 
@@ -1019,6 +1103,14 @@ async def on_interaction(interaction: discord.Interaction):
                     await track_command_usage(interaction.guild.id, interaction.user.id)
                 except Exception as e:
                     logger.debug(f"Failed to track command usage: {e}")
+                try:
+                    from core.command_history import qualified_command_name, record_recent_command
+
+                    path = qualified_command_name(interaction)
+                    if path:
+                        await record_recent_command(interaction.guild.id, interaction.user.id, path)
+                except Exception as e:
+                    logger.debug(f"Failed to record recent command: {e}")
         return
 
     if interaction.type == discord.InteractionType.modal_submit:
@@ -1641,6 +1733,8 @@ async def on_app_command_completion(interaction: discord.Interaction, command):
             str(full_name),
             now_utc().weekday(),
         )
+        from core.command_hints import maybe_send_first_use_hint
+        await maybe_send_first_use_hint(interaction, str(full_name))
     except Exception as _err:
         logger.debug(f"[my_stats] failed to record usage: {_err}")
 

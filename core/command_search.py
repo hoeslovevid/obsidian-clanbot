@@ -1,7 +1,8 @@
 """Search registered slash commands by keyword (used by /general help_search)."""
 from __future__ import annotations
 
-from typing import Iterable
+import difflib
+from typing import Iterable, Optional
 
 import discord  # type: ignore
 from discord import app_commands  # type: ignore
@@ -43,17 +44,49 @@ def collect_command_entries(bot) -> list[tuple[str, str]]:
     return out
 
 
-def search_commands(bot, query: str, *, limit: int = 15) -> list[tuple[str, str, int]]:
+def did_you_mean(bot, query: str, *, cutoff: float = 0.45) -> Optional[str]:
+    """Fuzzy-match ``query`` against command paths (difflib fallback)."""
+    q = (query or "").strip().lower()
+    if len(q) < 2:
+        return None
+    paths = [p for p, _ in collect_command_entries(bot)]
+    if not paths:
+        return None
+    # Match on full path and leaf segment
+    candidates: list[str] = []
+    for path in paths:
+        candidates.append(path.lower())
+        leaf = path.split()[-1].lower()
+        if leaf not in candidates:
+            candidates.append(leaf)
+    close = difflib.get_close_matches(q, candidates, n=1, cutoff=cutoff)
+    if not close:
+        return None
+    hit = close[0]
+    for path in paths:
+        if path.lower() == hit or path.split()[-1].lower() == hit:
+            return path
+    return None
+
+
+def search_commands(
+    bot,
+    query: str,
+    *,
+    limit: int = 15,
+    low_score_threshold: int = 25,
+) -> tuple[list[tuple[str, str, int]], Optional[str]]:
     """Score and rank command paths matching ``query``.
 
-    Returns ``(path, description, score)`` sorted best-first.
+    Returns ``(matches, did_you_mean_path)`` where ``did_you_mean_path`` is set when
+    there are no matches or the best score is below ``low_score_threshold``.
     """
-    # Extra keywords users type that map to command paths/descriptions
     SYNONYMS: dict[str, str] = {
-        "coins": "economy balance daily coins",
-        "money": "economy balance daily",
-        "balance": "economy balance bal",
-        "streak": "economy daily",
+        "coins": "economy balance daily coins wallet",
+        "money": "economy balance daily wallet",
+        "balance": "economy balance bal wallet",
+        "wallet": "economy wallet balance xp streak",
+        "streak": "economy daily wallet",
         "baro": "warframe baro void trader",
         "fissure": "warframe fissures void",
         "relic": "warframe fissures",
@@ -61,8 +94,8 @@ def search_commands(bot, query: str, *, limit: int = 15) -> list[tuple[str, str,
         "ticket": "community ticket support help",
         "report": "community request_help complaint case",
         "case": "community case_status complaint",
-        "help": "general help menu search",
-        "profile": "general profile me",
+        "help": "general help menu search recent",
+        "profile": "general profile me wallet",
         "poll": "general poll vote",
         "lfg": "lfg group mission",
         "pet": "pets shop feed",
@@ -72,11 +105,12 @@ def search_commands(bot, query: str, *, limit: int = 15) -> list[tuple[str, str,
         "event": "events event_create",
         "dojo": "warframe dojo_research clan",
         "setup": "general setup_obsidian welcome",
+        "recent": "general recent menu history",
     }
 
     q = (query or "").strip().lower()
     if not q:
-        return []
+        return [], None
     tokens = [t for t in q.split() if t]
     expanded = q
     for tok in tokens:
@@ -104,7 +138,21 @@ def search_commands(bot, query: str, *, limit: int = 15) -> list[tuple[str, str,
         elif any(tok in hay for tok in search_tokens):
             score += 15
         else:
-            continue
+            # difflib-style partial: any token close to a path segment
+            segments = path_l.replace("_", " ").split()
+            for tok in tokens:
+                if difflib.get_close_matches(tok, segments + [path_l], n=1, cutoff=0.72):
+                    score += 12
+            if score == 0:
+                continue
         results.append((path, desc, score))
     results.sort(key=lambda x: (-x[2], len(x[0]), x[0]))
-    return results[: max(1, int(limit))]
+    trimmed = results[: max(1, int(limit))]
+
+    suggestion: Optional[str] = None
+    if not trimmed or trimmed[0][2] < low_score_threshold:
+        suggestion = did_you_mean(bot, q)
+        if suggestion and trimmed and any(suggestion == p for p, _, _ in trimmed):
+            suggestion = None
+
+    return trimmed, suggestion

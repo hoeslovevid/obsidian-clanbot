@@ -5,6 +5,7 @@ import discord  # type: ignore
 from discord import app_commands  # type: ignore
 from typing import Optional, cast
 
+from core.embed_templates import help_breadcrumb
 from core.utils import obsidian_embed, is_mod, ECONOMY_ENABLED, COINS_PER_MESSAGE, COINS_DAILY_REWARD, MESSAGE_COOLDOWN_SECONDS, COINS_PER_MINUTE_VOICE, EMBED_COLORS
 from core.config import BOT_WEBSITE
 from core.presence import website_host
@@ -330,7 +331,7 @@ class HelpSelect(discord.ui.Select):
             group_desc += f"\n\n**Page {page + 1} of {total_pages}**"
         
         embed = obsidian_embed(
-            f"📋 {group_name} Commands",
+            f"📋 {help_breadcrumb([group.name])} Commands",
             group_desc,
             color=help_color,
             thumbnail=interaction.client.user.display_avatar.url if interaction.client and interaction.client.user else None,
@@ -649,7 +650,8 @@ def setup(bot, group=None):
         embed = obsidian_embed(
             "Command Reference",
             desc,
-            color=discord.Color.blurple(),
+            template="showcase",
+            brand=True,
             thumbnail=interaction.guild.icon.url if interaction.guild and interaction.guild.icon else (interaction.client.user.display_avatar.url if interaction.client and interaction.client.user else None),
             footer=help_footer,
             client=interaction.client,
@@ -657,6 +659,19 @@ def setup(bot, group=None):
         
         # Create view with select menu
         view = HelpSelectView(bot, is_user_mod)
+
+        async def _open_classic_picker(inter: discord.Interaction):
+            await inter.response.edit_message(embed=embed, view=view)
+
+        from core.help_layout import help_layout_v2_enabled, HelpHomeLayout
+
+        if help_layout_v2_enabled():
+            try:
+                layout = HelpHomeLayout(is_mod=is_user_mod, on_browse=_open_classic_picker)
+                await interaction.response.send_message(view=layout, ephemeral=True)
+                return
+            except Exception:
+                pass
         
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
@@ -683,12 +698,13 @@ def setup(bot, group=None):
                 ephemeral=True,
             )
 
-        matches = search_commands(interaction.client, q, limit=12)
+        matches, suggestion = search_commands(interaction.client, q, limit=12)
         if not matches:
+            dym_line = f"\n\nDid you mean **`/{suggestion}`**?" if suggestion else ""
             return await interaction.response.send_message(
                 embed=obsidian_embed(
                     "No matches",
-                    f"No commands matched **`{q}`**.\nTry **`/help`** to browse by category or **`/menu`** for quick picks.",
+                    f"No commands matched **`{q}`**.{dym_line}\nTry **`/help`** to browse by category or **`/menu`** for quick picks.",
                     category="general",
                     client=interaction.client,
                 ),
@@ -702,10 +718,15 @@ def setup(bot, group=None):
                 line += f" — {desc[:90]}{'…' if len(desc) > 90 else ''}"
             lines.append(line)
 
+        fields = None
+        if suggestion and matches and matches[0][2] < 25:
+            fields = [("Did you mean?", f"`/{suggestion}`", False)]
+
         embed = obsidian_embed(
             f"🔍 Command search — `{q}`",
             "\n".join(lines[:12]),
             color=discord.Color.blurple(),
+            fields=fields,
             footer=f"{len(matches)} match{'es' if len(matches) != 1 else ''} • /search or /help command:<name> for details",
             client=interaction.client,
         )

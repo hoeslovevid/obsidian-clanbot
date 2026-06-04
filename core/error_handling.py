@@ -118,11 +118,7 @@ async def send_error_reply(
     """Send a consistent error embed, using followup if the response was already sent."""
     from core.utils import error_embed
 
-    full_message = message
-    if error_code:
-        full_message = f"{message}\n\n`Error code: {error_code}`"
-
-    emb = error_embed("Error", full_message, action_hint=action_hint, client=interaction.client)
+    emb = error_embed("Error", message, action_hint=action_hint, client=interaction.client, error_code=error_code)
     try:
         if interaction.response.is_done():
             await interaction.followup.send(embed=emb, ephemeral=ephemeral)

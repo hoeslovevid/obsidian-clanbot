@@ -136,11 +136,14 @@ def setup(bot, group=None):
                 if top_user and top_user.display_avatar:
                     thumb_url = top_user.display_avatar.url
 
-            rank_suffix = f" • 📍 Your rank: #{user_rank}/{total_count}" if user_rank else ""
+            page_fields: list[tuple[str, str, bool]] = [("Rankings", leaderboard_text.strip(), False)]
+            if user_rank is not None:
+                page_fields.insert(0, ("📍 Your rank", f"**#{user_rank}** of **{total_count}**", True))
+
             pages.append({
                 "description": f"Top {len(rows)} by {sort_label}{you_line}",
-                "fields": [("Rankings", leaderboard_text.strip(), False)],
-                "footer": f"{interaction.guild.name} · Page {len(pages) + 1}/{(len(rows) + per_page - 1) // per_page}{rank_suffix}",
+                "fields": page_fields,
+                "footer": f"{interaction.guild.name} · Page {len(pages) + 1}/{(len(rows) + per_page - 1) // per_page}",
                 "thumbnail": thumb_url,
             })
 

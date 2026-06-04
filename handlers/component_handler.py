@@ -246,16 +246,22 @@ async def handle_component(bot: discord.Client, interaction: discord.Interaction
                     await vc.edit(user_limit=limit, reason="VC panel capacity preset")
                     label = "Capacity removed — **no limit**." if limit == 0 else f"Capacity set to **{limit}**."
                     await interaction.response.send_message(label, ephemeral=True)
+                    from bot import update_vc_panel_embed
+                    await update_vc_panel_embed(guild_vc, vc_id)
                     return
 
                 if action == "lock":
                     await edit_everyone(connect=False)
                     await interaction.response.send_message("Sealed.", ephemeral=True)
+                    from bot import update_vc_panel_embed
+                    await update_vc_panel_embed(guild_vc, vc_id)
                     return
 
                 if action == "unlock":
                     await edit_everyone(connect=True)
                     await interaction.response.send_message("Unsealed.", ephemeral=True)
+                    from bot import update_vc_panel_embed
+                    await update_vc_panel_embed(guild_vc, vc_id)
                     return
 
                 if action == "hide":

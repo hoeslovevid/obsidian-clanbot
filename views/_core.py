@@ -7,7 +7,7 @@ import discord  # type: ignore
 import aiosqlite  # type: ignore
 from typing import Optional, Callable, Awaitable, Any, Tuple
 
-from core.utils import display_case_status, is_mod, obsidian_embed
+from core.utils import display_case_status, is_mod, obsidian_embed, render_bar
 from core.vc_permissions import can_manage_temp_vc
 from database import DB_PATH, now_utc, log_complaint_action
 
@@ -209,6 +209,11 @@ class SetLimitSelect(discord.ui.Select):
 
         await vc.edit(user_limit=limit, reason="VC limit")
         await interaction.response.send_message("Limit updated.", ephemeral=True)
+        try:
+            from bot import update_vc_panel_embed
+            await update_vc_panel_embed(interaction.guild, self.vc_id)
+        except Exception:
+            pass
 
 
 class SetLimitView(discord.ui.View):
@@ -382,6 +387,25 @@ class RSVPView(discord.ui.View):
         self.add_item(discord.ui.Button(label="Maybe", style=discord.ButtonStyle.primary, emoji="❔", custom_id="events:rsvp:maybe"))
         self.add_item(discord.ui.Button(label="Can't", style=discord.ButtonStyle.danger, emoji="❌", custom_id="events:rsvp:no"))
 
+    @staticmethod
+    def format_rsvp_summary(counts: dict[str, int]) -> str:
+        """RSVP counts with a proportional going/maybe/no bar."""
+        going = int(counts.get("GOING", 0))
+        maybe = int(counts.get("MAYBE", 0))
+        no = int(counts.get("NO", 0))
+        total = going + maybe + no
+        if total <= 0:
+            return "✅ 0 · ❔ 0 · ❌ 0\n▱▱▱▱▱▱▱▱▱▱▱▱"
+        yes_pct = going / total * 100
+        maybe_pct = maybe / total * 100
+        no_pct = no / total * 100
+        return (
+            f"✅ **{going}** · ❔ **{maybe}** · ❌ **{no}**\n"
+            f"Going {render_bar(yes_pct, length=8, show_pct=False)}  "
+            f"Maybe {render_bar(maybe_pct, length=8, show_pct=False)}  "
+            f"No {render_bar(no_pct, length=8, show_pct=False)}"
+        )
+
     async def _set_rsvp(self, interaction: discord.Interaction, response: str):
         guild_id = interaction.guild.id
         msg_id = interaction.message.id
@@ -422,7 +446,14 @@ class RSVPView(discord.ui.View):
             counts[str(r)] = int(c)
 
         embed = interaction.message.embeds[0]
-        embed.set_footer(text=f"✅ {counts['GOING']}  |  ❔ {counts['MAYBE']}  |  ❌ {counts['NO']}")
+        summary = self.format_rsvp_summary(counts)
+        embed.set_footer(text=summary)
+        # Replace or add RSVP field
+        rsvp_field_idx = next((i for i, f in enumerate(embed.fields) if f.name == "RSVP"), None)
+        if rsvp_field_idx is not None:
+            embed.set_field_at(rsvp_field_idx, name="RSVP", value=summary, inline=False)
+        else:
+            embed.add_field(name="RSVP", value=summary, inline=False)
         await interaction.message.edit(embed=embed, view=self)
         await interaction.response.send_message("RSVP recorded.", ephemeral=True)
 
@@ -657,16 +688,7 @@ class GiveawayView(discord.ui.View):
 
         # Respond to the interaction first — prevents the 3-second timeout while editing
         await interaction.response.send_message(
-            embed=obsidian_embed(
-                "🎉 You're In!",
-                f"You entered the giveaway for **{prize}**!\n\n"
-                f"**Your entry:** #{entry_count}\n"
-                f"**Ends:** {end_str}\n"
-                f"**Winners:** {winner_count}\n\n"
-                f"_Good luck! Use the Leave button if you change your mind._",
-                color=discord.Color.green(),
-                client=interaction.client,
-            ),
+            f"You're in — **{entry_count}** entr{'y' if entry_count == 1 else 'ies'}",
             ephemeral=True,
         )
 

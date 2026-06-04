@@ -4,6 +4,7 @@ from discord import app_commands
 import aiosqlite
 
 from core.utils import obsidian_embed, is_mod, display_case_status, now_utc, get_mod_role
+from core.embed_templates import complaint_case_embed
 from commands.complaints.submit_complaint import case_id_autocomplete
 from database import DB_PATH
 
@@ -230,10 +231,10 @@ def setup(bot, group=None):
         if evidence and evidence.strip():
             desc += f"\n\n**Evidence:** {evidence}"
         
-        embed = obsidian_embed(
+        embed = complaint_case_embed(
             f"Docket Entry • {case_id}",
             desc,
-            color=discord.Color.red(),
+            category,
             author=interaction.user,
             thumbnail=guild.icon.url if guild.icon else None,
             footer=f"Filed by: {interaction.user} • Case: {case_id}",

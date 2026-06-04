@@ -107,7 +107,10 @@ async def create_event_from_modal(interaction: discord.Interaction, title: str, 
         color=discord.Color.dark_grey(),
     )
     embed.set_author(name=f"Filed by {interaction.user}", icon_url=interaction.user.display_avatar.url)
-    embed.set_footer(text="✅ 0  |  ❔ 0  |  ❌ 0")
+    from views import RSVPView
+    rsvp_empty = RSVPView.format_rsvp_summary({"GOING": 0, "MAYBE": 0, "NO": 0})
+    embed.add_field(name="RSVP", value=rsvp_empty, inline=False)
+    embed.set_footer(text=rsvp_empty)
     msg = await ch.send(embed=embed, view=RSVPView())
     thread_id = await _maybe_create_event_thread(msg, ch, title, dt)
     async with aiosqlite.connect(DB_PATH) as db:
@@ -199,7 +202,9 @@ def setup(bot, group=None):
             color=discord.Color.dark_grey(),
         )
         embed.set_author(name=f"Filed by {interaction.user}", icon_url=interaction.user.display_avatar.url)
-        embed.set_footer(text="✅ 0  |  ❔ 0  |  ❌ 0")
+        rsvp_empty = RSVPView.format_rsvp_summary({"GOING": 0, "MAYBE": 0, "NO": 0})
+        embed.add_field(name="RSVP", value=rsvp_empty, inline=False)
+        embed.set_footer(text=rsvp_empty)
 
         msg = await ch.send(content=mention if mention else None, embed=embed, view=RSVPView())
 

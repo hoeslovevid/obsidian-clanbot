@@ -6,6 +6,9 @@ import platform
 from datetime import datetime, timezone
 
 from core.utils import obsidian_embed, is_mod
+from core.config import BOT_VERSION
+from core.command_tree_stats import collect_command_tree_stats
+from core.error_handling import RECENT_ERRORS
 from database import DB_PATH, now_utc
 import aiosqlite
 
@@ -120,6 +123,9 @@ def setup(bot, group=None):
         
         # Bot latency
         latency_ms = round(bot.latency * 1000, 2)
+        tree_stats = collect_command_tree_stats(bot)
+        command_count = tree_stats.top_level + tree_stats.grouped_subcommands
+        error_count = len(RECENT_ERRORS)
         
         # Guild and user counts (single snapshot so list and count stay in sync)
         guild_list = list(bot.guilds)
@@ -134,8 +140,10 @@ def setup(bot, group=None):
         fields.append((
             f"{status_emoji} System Status",
             f"**Status:** {db_health['status'].title()}\n"
+            f"**Version:** {BOT_VERSION}\n"
             f"**Uptime:** {uptime_str}\n"
             f"**Latency:** {latency_ms}ms\n"
+            f"**Recent errors:** {error_count}\n"
             f"**Memory:** {memory_mb:.1f} MB\n"
             f"**CPU:** {cpu_percent:.1f}%",
             True
@@ -170,7 +178,7 @@ def setup(bot, group=None):
             "📊 Bot Statistics",
             f"**Guilds:** {guild_count:,}\n"
             f"**Users:** {user_count:,}\n"
-            f"**Commands:** {len([cmd for cmd in bot.tree.get_commands(guild=None)])}\n"
+            f"**Commands:** {command_count:,} ({tree_stats.top_level} top-level)\n"
             f"**Platform:** {platform.system()}",
             True
         ))

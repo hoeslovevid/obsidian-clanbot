@@ -1,4 +1,4 @@
-discord.py[voice]>=2.4.0
+discord.py[voice]>=2.6.0
 aiosqlite>=0.20.0
 python-dotenv>=1.0.0
 dateparser>=1.2.0

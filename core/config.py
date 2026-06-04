@@ -90,3 +90,9 @@ AUTO_SETUP = os.getenv("AUTO_SETUP", "false").lower() in ("1", "true", "yes", "y
 
 # --- Mention chat (hybrid: keywords + optional AI) ---
 OPENAI_API_KEY = (os.getenv("OPENAI_API_KEY") or "").strip() or None
+
+# --- Embed / UX ---
+HELP_LAYOUT_V2 = os.getenv("HELP_LAYOUT_V2", "true").lower() in ("1", "true", "yes", "y", "on")
+EMBED_BANNER_URL = os.getenv("EMBED_BANNER_URL", "").strip() or None
+EMBED_LOGO_URL = os.getenv("EMBED_LOGO_URL", "").strip() or None
+GITHUB_RAW_REPO = os.getenv("GITHUB_RAW_REPO", "hoeslovevid/obsidian-clanbot").strip()

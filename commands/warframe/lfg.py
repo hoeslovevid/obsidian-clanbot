@@ -110,6 +110,121 @@ MISSION_TYPES = [
 ]
 
 
+class LFGQuickModal(discord.ui.Modal, title="Quick LFG Post"):
+    """Modal for template-driven LFG posts."""
+
+    mission_input = discord.ui.TextInput(
+        label="Mission type",
+        placeholder="Steel Path, Sortie, Archon Hunt, …",
+        max_length=80,
+        required=True,
+    )
+    max_players_input = discord.ui.TextInput(
+        label="Max players",
+        placeholder="4",
+        default="4",
+        max_length=2,
+        required=False,
+    )
+    duration_input = discord.ui.TextInput(
+        label="Duration (hours)",
+        placeholder="24",
+        default="24",
+        max_length=3,
+        required=False,
+    )
+    notes_input = discord.ui.TextInput(
+        label="Notes",
+        style=discord.TextStyle.paragraph,
+        placeholder="Loadout, MR, voice, etc.",
+        max_length=500,
+        required=False,
+    )
+
+    def __init__(self, bot, *, mission_type: str, description: str = ""):
+        super().__init__()
+        self.bot = bot
+        self.mission_input.default = mission_type
+        if description:
+            self.notes_input.default = description
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            max_players = int((self.max_players_input.value or "4").strip())
+        except ValueError:
+            max_players = 4
+        try:
+            duration_hours = int((self.duration_input.value or "24").strip())
+        except ValueError:
+            duration_hours = 24
+        mission = (self.mission_input.value or "").strip()
+        if not mission:
+            return await interaction.response.send_message(
+                "Mission type is required.", ephemeral=True,
+            )
+        await create_lfg_post(
+            self.bot,
+            interaction,
+            mission,
+            max_players,
+            duration_hours,
+            (self.notes_input.value or "").strip(),
+            None,
+        )
+
+
+class LFGTemplateView(discord.ui.View):
+    """Steel Path / Sortie / Archon quick-post templates."""
+
+    def __init__(self, bot):
+        super().__init__(timeout=120)
+        self.bot = bot
+
+    @discord.ui.button(label="Steel Path", style=discord.ButtonStyle.primary, emoji="🗡️")
+    async def steel_path(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(
+            LFGQuickModal(
+                self.bot,
+                mission_type="Steel Path",
+                description="Steel Path farm — relics, SP fissures, or daily challenge.",
+            ),
+        )
+
+    @discord.ui.button(label="Sortie", style=discord.ButtonStyle.primary, emoji="🎯")
+    async def sortie(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(
+            LFGQuickModal(
+                self.bot,
+                mission_type="Sortie",
+                description="Today's sortie — mention loadout & archon shard goals if any.",
+            ),
+        )
+
+    @discord.ui.button(label="Archon", style=discord.ButtonStyle.primary, emoji="👹")
+    async def archon(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(
+            LFGQuickModal(
+                self.bot,
+                mission_type="Other",
+                description="Archon Hunt — specify shard/boss in notes. Use /warframe archon for timers.",
+            ),
+        )
+
+    @discord.ui.button(label="Hints", style=discord.ButtonStyle.secondary, emoji="💡")
+    async def hints(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message(
+            embed=obsidian_embed(
+                "LFG Quick Templates",
+                "**Steel Path** — SP fissures, daily bonus, endurance.\n"
+                "**Sortie** — 3 missions, modifier-aware loadouts.\n"
+                "**Archon** — weekly hunt; check `/warframe archon`.\n\n"
+                "Tap a template button to open a pre-filled form, or use `/lfg` with full options.",
+                client=interaction.client,
+            ),
+            ephemeral=True,
+        )
+
+
 class LFGView(discord.ui.View):
     """View with RSVP buttons for LFG posts."""
     
@@ -434,6 +549,28 @@ async def create_lfg_post(bot, interaction, mission_type: str, max_players: int,
 
 def setup(bot, group=None):
     """Register the lfg command."""
+    if group:
+        @group.command(name="quick", description="LFG templates — Steel Path, Sortie, Archon (pre-filled form).")
+        async def lfg_quick(interaction: discord.Interaction):
+            if not interaction.guild:
+                return await interaction.response.send_message(
+                    "LFG can only be used in a server.", ephemeral=True,
+                )
+            from core.utils import feature_enabled, feature_off_embed
+            if not await feature_enabled(interaction.guild.id, "lfg"):
+                return await interaction.response.send_message(
+                    embed=feature_off_embed("LFG", client=interaction.client), ephemeral=True,
+                )
+            await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "Quick LFG",
+                    "Pick a template to open a pre-filled post form.",
+                    client=interaction.client,
+                ),
+                view=LFGTemplateView(bot),
+                ephemeral=True,
+            )
+
     command_decorator = group.command(name="lfg", description="Create an LFG post for a Warframe mission.") if group else bot.tree.command(name="lfg", description="Create an LFG post for a Warframe mission.")
     
     @command_decorator

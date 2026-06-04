@@ -11,7 +11,7 @@ async def get_transfer_confirm_threshold(guild_id: int) -> int:
     val = await get_guild_setting(guild_id, "transfer_confirm_threshold")
     if val and str(val).isdigit():
         return max(0, int(val))
-    return 1000
+    return 100
 
 
 async def run_transfer_with_modal(interaction: discord.Interaction, user: discord.Member, amount: int):
