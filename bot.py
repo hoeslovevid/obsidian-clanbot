@@ -110,14 +110,18 @@ class ClanBot(commands.Bot):
                 # Don't use copy_global_to to avoid duplicates - just sync guild commands directly
                 await self.tree.sync(guild=guild)
                 self._last_command_sync = now_utc()
+                self._command_sync_guild_id = GUILD_ID
+                from core.command_tree_stats import collect_command_tree_stats
+
+                self._command_tree_stats = collect_command_tree_stats(self)
                 # List all registered commands for verification
-                commands_list = [cmd.name for cmd in self.tree.get_commands(guild=guild)]
+                commands_list = [cmd.name for cmd in self.tree.get_commands(guild=None)]
                 print(f"[sync] Synced {len(commands_list)} top-level commands/groups to guild {GUILD_ID}")
                 print(f"[sync] Top-level: {', '.join(commands_list)}")
                 
                 # Verify groups and their subcommands
                 total_subcommands = 0
-                for cmd in self.tree.get_commands(guild=guild):
+                for cmd in self.tree.get_commands(guild=None):
                     if isinstance(cmd, app_commands.Group):
                         subcommands = [subcmd.name for subcmd in cmd.commands]
                         total_subcommands += len(subcommands)
@@ -129,6 +133,10 @@ class ClanBot(commands.Bot):
             else:
                 await self.tree.sync()
                 self._last_command_sync = now_utc()
+                self._command_sync_guild_id = None
+                from core.command_tree_stats import collect_command_tree_stats
+
+                self._command_tree_stats = collect_command_tree_stats(self)
                 commands_list = [cmd.name for cmd in self.tree.get_commands(guild=None)]
                 print(f"[sync] Synced {len(commands_list)} top-level commands/groups globally (may take a while to appear)")
                 print(f"[sync] Top-level: {', '.join(commands_list)}")

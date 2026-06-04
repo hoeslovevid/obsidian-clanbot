@@ -198,10 +198,15 @@ async def schedule_command_resync(bot: discord.Client) -> None:
             if GUILD_ID:
                 guild = discord.Object(id=GUILD_ID)
                 synced = await bot.tree.sync(guild=guild)
+                bot._command_sync_guild_id = GUILD_ID
                 logger.info(f"[errors] Background resync: {len(synced)} commands to guild {GUILD_ID}")
             else:
                 synced = await bot.tree.sync()
+                bot._command_sync_guild_id = None
                 logger.info(f"[errors] Background resync: {len(synced)} commands globally")
+            from core.command_tree_stats import collect_command_tree_stats
+
+            bot._command_tree_stats = collect_command_tree_stats(bot)
             setattr(bot, "_last_command_sync", now_utc())
         except Exception as sync_err:
             logger.warning(f"[errors] Background command resync failed: {sync_err}")

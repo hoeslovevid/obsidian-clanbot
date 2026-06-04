@@ -267,6 +267,7 @@ async def run_startup(bot: discord.Client) -> None:
             cur = await db.execute("SELECT current_version FROM bot_version_tracking WHERE id = 1")
             version_row = await cur.fetchone()
             if version_row:
+                bot._bot_version = str(version_row[0])
                 logger.info(f"[ready] Bot version tracking loaded: {version_row[0]}")
             else:
                 logger.info("[ready] No version tracking found (will be created on first update check)")

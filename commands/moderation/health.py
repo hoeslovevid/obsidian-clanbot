@@ -7,35 +7,13 @@ from typing import Any, Optional
 
 import aiosqlite
 import discord
-from discord import app_commands
 
-from core.config import BOT_VERSION, GUILD_ID
+from core.config import GUILD_ID
+from core.command_tree_stats import collect_command_tree_stats, format_command_tree_field
 from core.error_handling import RECENT_ERRORS
+from core.version_tracking import get_current_bot_version
 from core.utils import obsidian_embed, is_mod
 from database import DB_PATH, get_log_channel_id
-
-
-def _command_tree_stats(bot: discord.Client, guild: Optional[discord.Guild]) -> tuple[int, int, list[str]]:
-    """Return top-level count, total subcommands, and groups over Discord's 25 limit."""
-    top_level = 0
-    total_sub = 0
-    oversized: list[str] = []
-
-    for cmd in bot.tree.get_commands(guild=guild):
-        top_level += 1
-        if isinstance(cmd, app_commands.Group):
-            sub_count = len(cmd.commands)
-            total_sub += sub_count
-            if sub_count > 25:
-                oversized.append(f"`/{cmd.name}` ({sub_count} subcommands)")
-            for sub in cmd.commands:
-                if isinstance(sub, app_commands.Group):
-                    nested = len(sub.commands)
-                    total_sub += nested
-                    if nested > 25:
-                        oversized.append(f"`/{cmd.name} {sub.name}` ({nested} subcommands)")
-
-    return top_level, total_sub, oversized
 
 
 async def build_health_embed(
@@ -58,7 +36,8 @@ async def build_health_embed(
         db_err = None
 
     latency_ms = round(bot.latency * 1000) if bot.latency >= 0 else None
-    top_level, total_sub, oversized = _command_tree_stats(bot, guild)
+    cmd_stats = getattr(bot, "_command_tree_stats", None) or collect_command_tree_stats(bot)
+    sync_guild_id = getattr(bot, "_command_sync_guild_id", GUILD_ID or None)
 
     tasks_info: dict[str, Any] = getattr(bot, "_background_tasks", {}) or {}
     running = sum(1 for t in tasks_info.values() if getattr(t, "is_running", lambda: False)())
@@ -78,10 +57,12 @@ async def build_health_embed(
 
     bot_error_log = await get_log_channel_id(guild.id, "bot_error")
 
-    color = discord.Color.green() if db_ok and not oversized else discord.Color.orange()
+    version = getattr(bot, "_bot_version", None) or await get_current_bot_version()
+
+    color = discord.Color.green() if db_ok and not cmd_stats.oversized else discord.Color.orange()
     embed = obsidian_embed(
         "🩺 Bot health",
-        f"Version **{BOT_VERSION}** · Guild **{guild.name}**",
+        f"Version **{version}** · Guild **{guild.name}**",
         color=color,
         client=bot,
     )
@@ -100,7 +81,8 @@ async def build_health_embed(
 
     embed.add_field(
         name="Commands",
-        value=f"{top_level} top-level · {total_sub} grouped subcommands\nLast sync: {sync_text}",
+        value=format_command_tree_field(cmd_stats, sync_guild_id=sync_guild_id)
+        + f"\nLast sync: {sync_text}",
         inline=False,
     )
 
@@ -120,10 +102,10 @@ async def build_health_embed(
         inline=True,
     )
 
-    if oversized:
+    if cmd_stats.oversized:
         embed.add_field(
             name="⚠️ Sync risk (groups >25)",
-            value="\n".join(oversized[:8]),
+            value="\n".join(cmd_stats.oversized[:8]),
             inline=False,
         )
 

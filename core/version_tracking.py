@@ -16,6 +16,28 @@ from database import DB_PATH, now_utc
 logger = logging.getLogger(__name__)
 
 
+async def get_current_bot_version() -> str:
+    """Return tracked version from DB, or ``BOT_VERSION`` env fallback."""
+    from core.config import BOT_VERSION
+
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT current_version FROM bot_version_tracking WHERE id = 1"
+            )
+            row = await cur.fetchone()
+            if row and row[0]:
+                return str(row[0])
+    except Exception as exc:
+        logger.debug("[version] Could not read version from DB: %s", exc)
+    return BOT_VERSION or "unknown"
+
+
+def get_registered_commands(bot) -> list:
+    """Top-level commands from the global tree (guild-scoped lookup is empty for this bot)."""
+    return bot.tree.get_commands(guild=None)
+
+
 def get_all_commands_recursive(commands, prefix=""):
     """
     Recursively get all commands including subcommands from groups.
@@ -42,17 +64,9 @@ def calculate_feature_hash(bot) -> str:
     """Calculate a hash of all registered commands and key bot files to detect changes."""
     commands_list = []
     
-    # Get all commands (both global and guild-specific), including subcommands from groups
+    # Get all commands from the global registration tree
     try:
-        import os
-        GUILD_ID = int(os.getenv("GUILD_ID", "0") or "0")
-        if GUILD_ID:
-            guild = discord.Object(id=GUILD_ID)
-            top_level_commands = bot.tree.get_commands(guild=guild)
-        else:
-            top_level_commands = bot.tree.get_commands(guild=None)
-        
-        # Recursively get all commands including subcommands
+        top_level_commands = get_registered_commands(bot)
         commands_list = sorted(get_all_commands_recursive(top_level_commands))
         logger.info(f"[version] Calculated hash from {len(commands_list)} commands (including subcommands): {', '.join(commands_list[:10])}{'...' if len(commands_list) > 10 else ''}")
     except Exception as e:
@@ -102,13 +116,7 @@ async def detect_and_update_version(bot) -> Tuple[str, list]:
     # Get current commands list for comparison (including subcommands from groups)
     current_commands = set()
     try:
-        if GUILD_ID:
-            guild = discord.Object(id=GUILD_ID)
-            top_level_commands = bot.tree.get_commands(guild=guild)
-        else:
-            top_level_commands = bot.tree.get_commands(guild=None)
-        
-        # Recursively get all commands including subcommands
+        top_level_commands = get_registered_commands(bot)
         current_commands = set(get_all_commands_recursive(top_level_commands))
     except Exception:
         pass
@@ -281,6 +289,7 @@ async def check_and_post_updates(bot):
     
     # First, detect if version should be auto-updated
     detected_version, changes = await detect_and_update_version(bot)
+    bot._bot_version = detected_version
     logger.info(f"[update_log] Version detection result: version={detected_version}, changes={len(changes) if changes else 0}")
     if changes:
         logger.info(f"[update_log] Changes detected: {changes}")

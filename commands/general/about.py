@@ -1,11 +1,10 @@
 """About command - bot description, features, and developer info."""
-import aiosqlite  # type: ignore
 import discord  # type: ignore
 from discord import app_commands  # type: ignore
 
 from core.utils import obsidian_embed
-from core.config import BOT_VERSION, BOT_WEBSITE, BOT_DEVELOPER
-from database import DB_PATH
+from core.config import BOT_WEBSITE, BOT_DEVELOPER
+from core.version_tracking import get_current_bot_version
 
 
 def setup(bot, group=None):
@@ -23,15 +22,7 @@ def setup(bot, group=None):
         bot_name = client.user.display_name if client.user else "Bot"
 
         # Read current version from database (updated on each deployment)
-        version = BOT_VERSION or "—"
-        try:
-            async with aiosqlite.connect(DB_PATH) as db:
-                cur = await db.execute("SELECT current_version FROM bot_version_tracking WHERE id = 1")
-                row = await cur.fetchone()
-                if row and row[0]:
-                    version = str(row[0])
-        except Exception:
-            pass
+        version = await get_current_bot_version()
         bot_avatar = (
             client.user.display_avatar.url
             if client.user and hasattr(client.user, "display_avatar")
