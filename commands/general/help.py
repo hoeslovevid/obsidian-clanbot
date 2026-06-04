@@ -709,8 +709,6 @@ def setup(bot, group=None):
     @search_decorator
     @app_commands.describe(query="Keyword to search (command name or description)")
     async def help_search(interaction: discord.Interaction, query: str):
-        from core.command_search import search_commands
-
         q = (query or "").strip()
         if len(q) < 2:
             return await interaction.response.send_message(
