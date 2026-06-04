@@ -25,7 +25,7 @@ def load_all_commands(bot):
     automod_group = app_commands.Group(name="automod", description="🤖 Auto-moderation (spam, caps, links, mentions)")
     warn_group = app_commands.Group(name="warn", description="🛑 Warnings, templates, and moderator notes")
     roletools_group = app_commands.Group(name="roletools", description="🎭 Reaction roles, level roles, role menus, mass assign")
-    admin_group = app_commands.Group(name="admin", description="🗄️ Server admin: backups, retention, incidents, KPIs, applications")
+    admin_group = app_commands.Group(name="admin", description="🗄️ Server admin: retention, incidents, KPIs, applications, data export")
     # Promoted from economy/warframe/community subgroups for the same 8000-char cap reason
     pets_group = app_commands.Group(name="pets", description="🐾 Pet shop, care, battles, evolutions, and marketplace")
     store_group = app_commands.Group(name="store", description="🛒 Browse and buy server shop items")
