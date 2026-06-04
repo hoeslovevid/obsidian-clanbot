@@ -475,7 +475,11 @@ def obsidian_embed(
                 footer_text = f"{footer_text} · Cached · {int(age)}s ago"
         except Exception:
             pass
-    e.set_footer(text=footer_text[:2048], icon_url=footer_icon or _bot_avatar)
+    try:
+        from core.embed_assets import EMBED_LOGO_URL as _logo_url
+    except Exception:
+        _logo_url = None
+    e.set_footer(text=footer_text[:2048], icon_url=footer_icon or _logo_url or _bot_avatar)
     
     return e
 

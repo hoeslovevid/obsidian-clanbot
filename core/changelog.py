@@ -12,26 +12,41 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-04"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Embeds** — unified `embed_template` / showcase styling across commands",
-    "**Banner** — `EMBED_BANNER_URL` env override; default GitHub raw `obsidian_embed_banner.png`",
-    "**Caches** — shared cache helpers and warmer API paths; fewer redundant fetches",
-    "**Startup** — slash sync only when `BOT_VERSION` changes (faster restarts)",
-    "**Digest 2.0** — richer mod digest loop and dashboard/health observability",
-    "**Menu V2** — categorized `/menu` with optional media-gallery banner (`HELP_LAYOUT_V2`)",
-    "**Help V2** — searchable help, link rows, and clearer command discovery",
-    "**Preferences** — DM toggles plus per-user Warframe platform preference",
-    "**Phase 5 UX** — link rows on showcase embeds; `menu_layout` command pilots",
-    "**Tickets** — ticket panel/control embeds use dedicated ticket styling",
-    "**Warframe** — Baro/status polish and platform-aware world-state lookups",
-    "**Fix** — `get_incident_mode` imported from `incident_mode` (health/dashboard)",
-    "**Fix** — VC panel embed updates debounced (`VC_PANEL_UPDATE_DEBOUNCE_SECONDS`)",
-    "**Fix** — slow-command tracking without setting attrs on frozen `Interaction`",
-    "**Fix** — `server_about` LinkRowView import on deploy",
-    "**Fix** — Help V2 no longer mixes link rows with classic `HelpSelectView`",
+    "**Clan Console** — `/general console` posts a pinned hub (Menu, Daily, Status, Ticket, Help)",
+    "**Status** — `/status` shows version, latency, and Warframe API health hint",
+    "**Embeds** — contextual footers, showcase templates on economy/community commands",
+    "**Brand** — `EMBED_LOGO_URL` footer/thumbnail; `EMBED_BANNER_URL` documented for Railway",
+    "**Confirm UX** — unified warning-style confirms for transfer, purge, and ticket close",
+    "**Release posts** — auto-announce `BOT_VERSION` to `changelog_channel_id` when configured",
+    "**V2 pilots** — optional LayoutView splash for `/profile` and `/economy wallet` (`HELP_LAYOUT_V2`)",
+    "**Mentions** — @bot replies use showcase embeds; incident mode copy improved",
+    "**Onboarding** — welcome DM uses showcase template (3-step button flow unchanged)",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "1.6.0",
+        "date": "2026-06-04",
+        "changes": [
+            "**Embeds** — unified `embed_template` / showcase styling across commands",
+            "**Banner** — `EMBED_BANNER_URL` env override; default GitHub raw `obsidian_embed_banner.png`",
+            "**Caches** — shared cache helpers and warmer API paths; fewer redundant fetches",
+            "**Startup** — slash sync only when `BOT_VERSION` changes (faster restarts)",
+            "**Digest 2.0** — richer mod digest loop and dashboard/health observability",
+            "**Menu V2** — categorized `/menu` with optional media-gallery banner (`HELP_LAYOUT_V2`)",
+            "**Help V2** — searchable help, link rows, and clearer command discovery",
+            "**Preferences** — DM toggles plus per-user Warframe platform preference",
+            "**Phase 5 UX** — link rows on showcase embeds; `menu_layout` command pilots",
+            "**Tickets** — ticket panel/control embeds use dedicated ticket styling",
+            "**Warframe** — Baro/status polish and platform-aware world-state lookups",
+            "**Fix** — `get_incident_mode` imported from `incident_mode` (health/dashboard)",
+            "**Fix** — VC panel embed updates debounced (`VC_PANEL_UPDATE_DEBOUNCE_SECONDS`)",
+            "**Fix** — slow-command tracking without setting attrs on frozen `Interaction`",
+            "**Fix** — `server_about` LinkRowView import on deploy",
+            "**Fix** — Help V2 no longer mixes link rows with classic `HelpSelectView`",
+        ],
+    },
     {
         "version": "1.5.0",
         "date": "2026-05-14",

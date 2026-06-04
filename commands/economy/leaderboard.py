@@ -2,6 +2,8 @@
 import discord
 from discord import app_commands
 
+from core.embed_footers import footer_for
+from core.embed_templates import embed_template
 from core.utils import obsidian_embed, feature_off_embed, ECONOMY_ENABLED, EMBED_COLORS
 from core.leaderboard_privacy import leaderboard_display_name, user_hides_from_leaderboards
 from views import EmbedPaginator
@@ -92,25 +94,27 @@ def setup(bot, group=None):
             
             if total_count == 0:
                 return await interaction.followup.send(
-                    embed=obsidian_embed(
+                    embed=embed_template(
+                        "showcase",
                         "📊 Leaderboard Empty",
                         "No users have earned coins yet!\n\n_→ Start chatting or use `/daily` to earn coins._",
-                        color=discord.Color.orange(),
-                        footer="Use /balance to check your coins • /help for all commands",
+                        category="economy",
+                        footer=footer_for("economy_leaderboard"),
                         client=interaction.client,
                     ),
-                    ephemeral=True
+                    ephemeral=True,
                 )
             else:
                 return await interaction.followup.send(
-                    embed=obsidian_embed(
+                    embed=embed_template(
+                        "showcase",
                         "📊 Leaderboard Empty",
                         "No users currently have coins.\n\n_→ Chat or use `/daily` to earn coins and appear on the leaderboard._",
-                        color=discord.Color.orange(),
-                        footer="Use /balance to check your coins • /help for all commands",
+                        category="economy",
+                        footer=footer_for("economy_leaderboard"),
                         client=interaction.client,
                     ),
-                    ephemeral=True
+                    ephemeral=True,
                 )
         
         per_page = min(limit, 15)
@@ -149,13 +153,14 @@ def setup(bot, group=None):
 
         if len(pages) == 1:
             p0 = pages[0]
-            embed = obsidian_embed(
+            embed = embed_template(
+                "showcase",
                 "🏆 Coin Leaderboard",
                 p0["description"],
                 category="economy",
                 thumbnail=p0.get("thumbnail"),
                 fields=p0.get("fields"),
-                footer=p0.get("footer"),
+                footer=p0.get("footer") or footer_for("economy_leaderboard"),
                 client=interaction.client,
             )
             await interaction.followup.send(embed=embed, ephemeral=False)
@@ -169,13 +174,14 @@ def setup(bot, group=None):
                     "thumbnail": p.get("thumbnail"),
                 })
             paginator = EmbedPaginator("🏆 Coin Leaderboard", paginator_pages, color=EMBED_COLORS["economy"], client=interaction.client, total_items=total_count, per_page=per_page)
-            first_embed = obsidian_embed(
+            first_embed = embed_template(
+                "showcase",
                 "🏆 Coin Leaderboard",
                 paginator_pages[0]["description"],
                 category="economy",
                 thumbnail=pages[0].get("thumbnail"),
                 fields=paginator_pages[0]["fields"],
-                footer=paginator_pages[0]["footer"],
+                footer=paginator_pages[0]["footer"] or footer_for("economy_leaderboard"),
                 client=interaction.client,
             )
             await interaction.followup.send(embed=first_embed, view=paginator, ephemeral=False)

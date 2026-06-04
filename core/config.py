@@ -53,10 +53,10 @@ DB_PATH = os.getenv("DB_PATH", str(PROJECT_ROOT / "data" / "obsidian_clanbot.db"
 # --- Version ---
 # Single source of truth for /about, /whatsnew, and slash-command sync.
 # On release: bump BOT_VERSION here and update CURRENT_RELEASE_* in core/changelog.py.
-BOT_VERSION = os.getenv("BOT_VERSION", "1.6.0")
+BOT_VERSION = os.getenv("BOT_VERSION", "1.7.0")
 BOT_CHANGELOG = os.getenv(
     "BOT_CHANGELOG",
-    "v1.6.0 — embed system, digest 2.0, menu/help V2, Phase 5 UX, platform prefs, and stability fixes. See /whatsnew.",
+    "v1.7.0 — Clan Console hub, contextual embeds, /status, release announcements, and V2 layout pilots. See /whatsnew.",
 )
 
 # --- Temp VC ---

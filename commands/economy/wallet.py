@@ -139,4 +139,16 @@ def setup(bot, group=None):
             await btn_interaction.message.edit(embed=new_embed, view=view)
 
         view = RefreshView(refresh_cb)
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        from core.wallet_layout import WalletSnapshotLayout, wallet_layout_v2_enabled
+
+        if wallet_layout_v2_enabled():
+            data = await get_user_profile_data(interaction.guild.id, interaction.user.id)
+            body = (
+                f"**{format_number(int(data.get('balance') or 0))}** coins · "
+                f"Lv **{int(data.get('level') or 0)}** · streak **{int(data.get('daily_streak') or 0)}**d"
+            )
+            layout = WalletSnapshotLayout(title="💼 Wallet snapshot", body=body)
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+            await interaction.followup.send(view=layout, ephemeral=True)
+        else:
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)

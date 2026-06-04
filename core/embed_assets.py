@@ -1,21 +1,28 @@
-"""Central embed image URLs and category art (Obsidian brand)."""
+"""Central embed image URLs and category art (Obsidian brand).
+
+Banner: set ``EMBED_BANNER_URL`` in Railway/your host env to a public HTTPS image
+(e.g. raw GitHub ``assets/obsidian_embed_banner.png``). Local dev can use the file at
+``assets/obsidian_embed_banner.png`` (see ``LOCAL_BANNER_PATH``).
+
+Logo: optional ``EMBED_LOGO_URL`` — used as footer icon and general-category thumbnail
+when set (square PNG recommended, 128–256px).
+"""
 from __future__ import annotations
 
 import os
 from pathlib import Path
 
-from core.config import BOT_WEBSITE, GITHUB_RAW_REPO, PROJECT_ROOT, EMBED_BANNER_URL as _ENV_BANNER
+from core.config import GITHUB_RAW_REPO, PROJECT_ROOT, EMBED_BANNER_URL as _ENV_BANNER, EMBED_LOGO_URL
 
-# Default: GitHub raw after deploy; override with EMBED_BANNER_URL
+# Default: GitHub raw after deploy; override with EMBED_BANNER_URL on Railway
 _DEFAULT_BANNER = (
     f"https://raw.githubusercontent.com/{GITHUB_RAW_REPO}/main/"
     f"assets/obsidian_embed_banner.png"
 )
 
 EMBED_BANNER_URL = _ENV_BANNER or _DEFAULT_BANNER
-EMBED_LOGO_URL = os.getenv("EMBED_LOGO_URL", "").strip() or None
 
-# Category thumbnails (small icons, top-right)
+# Category thumbnails — Twemoji CDN (neutral cross-platform); general may use EMBED_LOGO_URL
 CATEGORY_THUMBNAILS: dict[str, str] = {
     "warframe": "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f3ae.png",
     "economy": "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f4b0.png",
@@ -26,6 +33,14 @@ CATEGORY_THUMBNAILS: dict[str, str] = {
     "error": "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/26a0.png",
     "warning": "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f4a1.png",
 }
+
+
+def category_thumbnail(category: str) -> str:
+    """Thumbnail URL for a category; ``EMBED_LOGO_URL`` overrides ``general`` when set."""
+    cat = (category or "general").strip().lower()
+    if cat == "general" and EMBED_LOGO_URL:
+        return EMBED_LOGO_URL
+    return CATEGORY_THUMBNAILS.get(cat, CATEGORY_THUMBNAILS["general"])
 
 # Large banner images per template variant
 TEMPLATE_IMAGES: dict[str, str] = {

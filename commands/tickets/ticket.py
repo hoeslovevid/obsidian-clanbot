@@ -7,7 +7,8 @@ import asyncio
 import re
 import io
 
-from core.embed_templates import ticket_embed
+from core.embed_templates import confirm_embed, ticket_embed
+from core.embed_footers import footer_for
 from core.embed_links import add_link_row, ticket_confirmation_buttons
 from core.utils import obsidian_embed, success_embed, is_mod, format_timestamp_readable, EMBED_COLORS
 from database import DB_PATH, now_utc, get_guild_setting
@@ -538,7 +539,16 @@ async def create_ticket_for_user(interaction: discord.Interaction, target_member
     )
     await channel.send(embed=embed)
     controls = TicketControlView(int(ticket_db_id), ticket_id)
-    ctrl_msg = await channel.send(embed=obsidian_embed("🎫 Ticket Controls", "Staff controls: claim, add note, transcript, close.", color=discord.Color.blurple(), client=interaction.client), view=controls)
+    ctrl_msg = await channel.send(
+        embed=ticket_embed(
+            "🎫 Ticket Controls",
+            "Staff: claim · note · transcript · close. Activity updates the ticket timestamp.",
+            status="open",
+            footer=footer_for("community_ticket"),
+            client=interaction.client,
+        ),
+        view=controls,
+    )
     bot_ref = getattr(interaction.client, "bot", interaction.client) or interaction.client
     if hasattr(bot_ref, "add_view"):
         bot_ref.add_view(controls, message_id=ctrl_msg.id)
@@ -755,11 +765,12 @@ def setup(bot, group=None):
         # Ticket control panel (persistent view)
         controls = TicketControlView(int(ticket_db_id), ticket_id)
         ctrl_msg = await channel.send(
-            embed=obsidian_embed(
+            embed=ticket_embed(
                 "🎫 Ticket Controls",
                 "Staff controls: claim, add internal note, generate transcript, close.\n"
                 "(*Buttons are for moderators.*)",
-                color=discord.Color.blurple(),
+                status="open",
+                footer=footer_for("community_ticket"),
                 client=interaction.client,
             ),
             view=controls,
@@ -907,10 +918,10 @@ def setup(bot, group=None):
                     )
                 )
 
-        embed = obsidian_embed(
+        embed = confirm_embed(
             "⚠️ Confirm Close",
             f"Close ticket `{ticket_id}`? A transcript will be saved and the channel will be archived.",
-            color=discord.Color.orange(),
+            footer=footer_for("community_ticket"),
             client=interaction.client,
         )
         async def on_confirm(btn_interaction: discord.Interaction, confirmed: bool):

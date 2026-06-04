@@ -19,6 +19,8 @@ import aiosqlite  # type: ignore
 import discord
 from discord import app_commands
 
+from core.embed_footers import footer_for
+from core.embed_templates import embed_template
 from core.utils import (
     obsidian_embed, success_embed, error_embed, BUTTON_ONLY_RUNNER_MSG,
     EMBED_COLORS, render_bar, is_mod, format_number,
@@ -219,19 +221,15 @@ class OnboardingView(discord.ui.View):
 
 
 def _build_dm_embed(member: discord.Member, client) -> discord.Embed:
-    return obsidian_embed(
+    return embed_template(
+        "showcase",
         f"👋 Welcome to {member.guild.name}!",
-        f"Hi {member.display_name} — here are a few quick things you can set up "
-        "to get the most out of the server. Tap a button to start.\n\n"
-        "**🌐 Set Timezone** · accurate reminders\n"
-        "**🎁 Claim Daily** · start your coin streak\n"
-        "**🔔 Pick Notifications** · Baro, alerts, cycles\n"
-        "**🎮 Link Steam** · for trading & roles\n\n"
-        "_You can re-open this any time with `/onboarding send_me`, `/onboarding resume`, or `/menu`._",
+        f"Hi {member.display_name} — tap a button to get started:\n\n"
+        "**1.** Set timezone · **2.** Claim daily · **3.** Pick notifications · **4.** Link Steam\n\n"
+        "_Re-open anytime with `/onboarding resume` or `/menu`._",
         category="general",
         client=client,
-        brand=True,
-        footer="Welcome aboard!",
+        footer=footer_for("onboarding"),
     )
 
 

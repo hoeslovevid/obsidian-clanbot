@@ -1,6 +1,8 @@
 """Transfer command - available via context menu (right-click user → Transfer Coins)."""
 import discord
 
+from core.embed_footers import footer_for
+from core.embed_templates import confirm_embed, embed_template
 from core.utils import obsidian_embed, feature_off_embed, ECONOMY_ENABLED, BUTTON_ONLY_RUNNER_MSG
 from views import ConfirmView
 
@@ -88,10 +90,10 @@ async def run_transfer_with_modal(interaction: discord.Interaction, user: discor
 
     threshold = await get_transfer_confirm_threshold(interaction.guild.id)
     if amount >= threshold:
-        embed = obsidian_embed(
+        embed = confirm_embed(
             "⚠️ Confirm Transfer",
             f"Send **{amount:,}** coins to {user.mention}?\n\nThis can't be undone. _(Only you can confirm.)_",
-            color=discord.Color.orange(),
+            footer=footer_for("economy_transfer"),
             client=interaction.client,
         )
         async def on_confirm(btn_interaction: discord.Interaction, confirmed: bool):

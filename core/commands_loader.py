@@ -203,6 +203,8 @@ def load_all_commands(bot):
         "commands.general.profile",
         "commands.general.me",
         "commands.general.bot_status",
+        "commands.general.status",
+        "commands.general.console",
         "commands.general.badges",
         "commands.general.announcements",
         "commands.general.cross_server",
@@ -331,6 +333,8 @@ def load_all_commands(bot):
         "commands.general.profile": general_group,
         "commands.general.me": general_group,
         "commands.general.bot_status": general_group,
+        "commands.general.status": general_group,
+        "commands.general.console": general_group,
         "commands.general.badges": tools_group,                # Moved: community at 25 limit
         "commands.general.announcements": admin_group,        # Moved: general_group payload >8000 bytes
         "commands.general.cross_server": tools_group,          # Moved: general_group at 25-cmd limit

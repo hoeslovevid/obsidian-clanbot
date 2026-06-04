@@ -1,0 +1,76 @@
+"""User-facing bot status — version, latency, operational hint."""
+from __future__ import annotations
+
+import discord  # type: ignore
+from discord import app_commands  # type: ignore
+
+from core.config import BOT_VERSION
+from core.embed_footers import footer_for
+from core.embed_links import LinkRowView, help_link_buttons
+from core.embed_templates import embed_template
+from core.utils import error_embed
+from database import now_utc
+
+
+async def _warframe_api_hint() -> str:
+    try:
+        from core.cache_utils import cache_stats
+
+        stats = cache_stats()
+        if stats and ("stale" in stats.lower() or "miss" in stats.lower()):
+            return "Warframe API: **degraded** (serving cached data — live fetches may lag)"
+        return "Warframe API: **operational**"
+    except Exception:
+        return "Warframe API: **operational** (health probe unavailable)"
+
+
+def setup(bot, group=None):
+    """Register `/general status` and top-level `/status` shortcut."""
+
+    async def status_callback(interaction: discord.Interaction):
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=error_embed(
+                    "Invalid Context",
+                    "Use this command inside a server.",
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+
+        await interaction.response.defer(ephemeral=True)
+        latency_ms = round((interaction.client.latency or 0) * 1000)
+        api_line = await _warframe_api_hint()
+        guilds = len(getattr(interaction.client, "guilds", []) or [])
+        uptime = "—"
+        start = getattr(interaction.client, "start_time", None)
+        if start:
+            delta = now_utc() - start
+            hours, rem = divmod(int(delta.total_seconds()), 3600)
+            mins = rem // 60
+            uptime = f"{hours}h {mins}m" if hours else f"{mins}m"
+
+        embed = embed_template(
+            "showcase",
+            "✅ Obsidian Bot Status",
+            (
+                f"**Version:** `{BOT_VERSION}`\n"
+                f"**Gateway:** {latency_ms} ms · **Uptime:** {uptime}\n"
+                f"**Servers:** {guilds}\n\n"
+                f"{api_line}\n\n"
+                "_If something looks wrong, try again in a minute or ask staff._"
+            ),
+            category="general",
+            footer=footer_for("status", version=BOT_VERSION),
+            client=interaction.client,
+        )
+        view = LinkRowView(*help_link_buttons())
+        await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+
+    group.command(name="status", description="Bot version, latency, and service health.")(status_callback)
+    shortcut = app_commands.Command(
+        name="status",
+        description="Bot version and health (shortcut for /general status)",
+        callback=status_callback,
+    )
+    bot.tree.add_command(shortcut)

@@ -4,6 +4,8 @@ from discord import app_commands
 from datetime import datetime, timezone
 
 from typing import Optional
+from core.embed_footers import footer_for
+from core.embed_templates import embed_template
 from core.utils import obsidian_embed, success_embed, parse_time_natural, now_utc, is_mod, EMBED_COLORS, TIME_AUTOCOMPLETE_CHOICES
 from database import DB_PATH
 import aiosqlite
@@ -101,10 +103,13 @@ async def create_event_from_modal(interaction: discord.Interaction, title: str, 
     if duration_hours < 1 or duration_hours > 24:
         duration_hours = 2
     end_ts = ts + (duration_hours * 3600)
-    embed = obsidian_embed(
+    embed = embed_template(
+        "showcase",
         f"🜂 Ops Order • {title}",
         f"**When:** <t:{ts}:F>  _( <t:{ts}:R> )_\n\n**Ends:** <t:{end_ts}:t>\n\n**Briefing:**\n{description}",
-        color=discord.Color.dark_grey(),
+        category="community",
+        footer=footer_for("community_events"),
+        client=interaction.client,
     )
     embed.set_author(name=f"Filed by {interaction.user}", icon_url=interaction.user.display_avatar.url)
     from views import RSVPView

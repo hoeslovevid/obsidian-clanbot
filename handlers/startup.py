@@ -76,6 +76,11 @@ async def run_startup(bot: discord.Client) -> None:
         # Basic views
         bot.add_view(ComplaintPanel())
         bot.add_view(RSVPView())
+        try:
+            from commands.general.console import ConsoleHubView
+            bot.add_view(ConsoleHubView())
+        except Exception as e:
+            logger.debug(f"[ready] ConsoleHubView registration skipped: {e}")
 
         # Item 47: re-register pending VC revival vote buttons.
         try:
@@ -330,6 +335,16 @@ async def run_startup(bot: discord.Client) -> None:
 
     # Run update check in background (non-blocking)
     asyncio.create_task(check_updates())
+
+    async def announce_release():
+        try:
+            from core.release_announce import announce_release_if_needed
+            await asyncio.sleep(6)
+            await announce_release_if_needed(bot)
+        except Exception as e:
+            logger.debug(f"[ready] release announce skipped: {e}")
+
+    asyncio.create_task(announce_release())
 
     # Re-register reaction roles for all messages (optimized - batch fetch reactions)
     async def restore_reaction_roles():

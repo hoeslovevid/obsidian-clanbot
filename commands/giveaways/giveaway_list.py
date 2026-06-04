@@ -3,6 +3,8 @@ import discord
 from discord import app_commands
 from datetime import datetime, timezone
 
+from core.embed_templates import embed_template
+from core.embed_footers import footer_for
 from core.utils import obsidian_embed
 from database import DB_PATH
 from views import EmbedPaginator
@@ -98,13 +100,15 @@ def setup(bot, group=None):
 
         if not rows:
             return await interaction.followup.send(
-                embed=obsidian_embed(
+                embed=embed_template(
+                    "showcase",
                     "📋 No Active Giveaways",
                     "There are currently no active giveaways in this server.\n\nUse `/giveaways giveaway` to create one!",
-                    color=discord.Color.blue(),
+                    category="community",
+                    footer=footer_for("community_giveaway"),
                     client=interaction.client,
                 ),
-                ephemeral=True
+                ephemeral=True,
             )
 
         pages = []

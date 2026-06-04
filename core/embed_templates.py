@@ -8,6 +8,7 @@ import discord  # type: ignore
 
 from core.embed_assets import (
     CATEGORY_THUMBNAILS,
+    category_thumbnail,
     COMPLAINT_SEVERITY_COLORS,
     PLATFORM_EMOJI,
     TEMPLATE_IMAGES,
@@ -15,6 +16,7 @@ from core.embed_assets import (
     TICKET_STATUS_COLORS,
     WARFRAME_VARIANT_THUMBNAILS,
 )
+from core.embed_footers import footer_for
 from core.utils import EMBED_COLORS, obsidian_embed
 
 
@@ -51,21 +53,26 @@ def embed_template(
     if template == "showcase":
         brand = True
         image = image or TEMPLATE_IMAGES.get("showcase")
-        thumbnail = thumbnail or CATEGORY_THUMBNAILS.get(cat)
+        thumbnail = thumbnail or category_thumbnail(cat)
     elif template == "warframe_status":
         cat = "warframe"
         if variant and variant in WARFRAME_VARIANT_THUMBNAILS:
             thumbnail = thumbnail or WARFRAME_VARIANT_THUMBNAILS[variant]
         else:
-            thumbnail = thumbnail or CATEGORY_THUMBNAILS.get("warframe")
+            thumbnail = thumbnail or category_thumbnail("warframe")
         if platform and platform in PLATFORM_EMOJI:
             title = f"{PLATFORM_EMOJI[platform]} {title}"
     elif template == "profile":
         cat = kwargs.pop("profile_category", "general") or "general"
+    elif template == "warning":
+        cat = category or "warning"
+        thumbnail = thumbnail or category_thumbnail("warning")
+        if color is None and "color" not in kwargs:
+            kwargs["color"] = EMBED_COLORS.get("warning")
     elif template == "error":
         cat = "error"
         image = image or TEMPLATE_IMAGES.get("error")
-        thumbnail = thumbnail or CATEGORY_THUMBNAILS.get("error")
+        thumbnail = thumbnail or category_thumbnail("error")
     elif template == "levelup":
         cat = "prestige"
         level = int(variant or "1")
@@ -82,7 +89,7 @@ def embed_template(
             kwargs["color"] = discord.Color.from_str(COMPLAINT_SEVERITY_COLORS[severity])
 
     cache_suffix = _cached_footer_suffix(cached_at)
-    base_footer = footer or "Use /help for commands"
+    base_footer = footer or footer_for("default")
     if error_code:
         base_footer = f"{base_footer} · Code: {error_code}"
     if cache_suffix:
@@ -124,6 +131,27 @@ def complaint_case_embed(
         title,
         desc,
         severity=severity,
+        client=client,
+        **kwargs,
+    )
+
+
+def confirm_embed(
+    title: str,
+    desc: str,
+    *,
+    client=None,
+    footer: Optional[str] = None,
+    footer_key: str = "moderation_purge",
+    **kwargs: Any,
+) -> discord.Embed:
+    """Consistent confirmation / destructive-action embed (warning styling)."""
+    return embed_template(
+        "warning",
+        title,
+        desc,
+        category="moderation",
+        footer=footer or footer_for(footer_key),
         client=client,
         **kwargs,
     )

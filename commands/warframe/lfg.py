@@ -5,6 +5,8 @@ from discord import app_commands
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+from core.embed_footers import footer_for
+from core.embed_templates import embed_template
 from core.utils import obsidian_embed, get_mod_role, extract_id
 from database import DB_PATH, get_guild_setting, set_guild_setting
 import aiosqlite
@@ -495,12 +497,13 @@ async def create_lfg_post(bot, interaction, mission_type: str, max_players: int,
     if cycle_nudge:
         fields.append(("🌍 World cycle", cycle_nudge, False))
 
-    embed = obsidian_embed(
+    embed = embed_template(
+        "showcase",
         "🔍 Looking for Group",
-        "",
-        color=discord.Color.blue(),
+        f"> Host: {interaction.user.mention} · Mission **{mission_name}**",
+        category="community",
         fields=fields,
-        footer=f"LFG ID: {lfg_id} • Click buttons below to join/leave",
+        footer=f"{footer_for('community_lfg')} · ID {lfg_id}",
         client=interaction.client,
     )
     view = LFGView(lfg_id)

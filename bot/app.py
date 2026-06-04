@@ -262,6 +262,8 @@ async def incident_mode_check(interaction: discord.Interaction) -> bool:
             # Help / status
             "general help",
             "general bot_status",
+            "general status",
+            "status",
         }
 
         # Any command under /mod is allowed
@@ -272,10 +274,20 @@ async def incident_mode_check(interaction: discord.Interaction) -> bool:
             return True
 
         msg = await get_guild_setting(interaction.guild.id, "incident_mode_message")
-        reason = msg.strip() if msg else "Incident mode is active. Please try again later."
+        reason = msg.strip() if msg else (
+            "The server is in **incident mode** while staff handle an issue. "
+            "Most commands are paused for now — you can still use **`/help`**, **`/status`**, or **`/ticket`**."
+        )
         if not interaction.response.is_done():
+            from core.embed_templates import embed_template
             await interaction.response.send_message(
-                embed=obsidian_embed("🚨 Incident Mode", reason, color=discord.Color.orange(), client=bot),
+                embed=embed_template(
+                    "warning",
+                    "🚨 Incident Mode",
+                    reason,
+                    category="moderation",
+                    client=bot,
+                ),
                 ephemeral=True,
             )
         return False
@@ -750,7 +762,17 @@ async def on_message(message: discord.Message):
                 OPENAI_API_KEY,
                 bot=bot,
             )
-            await message.reply(reply, mention_author=False)
+            from core.embed_footers import footer_for
+            from core.embed_templates import embed_template
+            embed = embed_template(
+                "showcase",
+                "💬 Obsidian Bot",
+                reply,
+                category="general",
+                footer=footer_for("mention"),
+                client=bot,
+            )
+            await message.reply(embed=embed, mention_author=False)
             return  # Don't process economy for mention-only messages
         except discord.Forbidden:
             pass

@@ -4,6 +4,7 @@ from discord import app_commands
 from typing import Optional
 from datetime import datetime, timezone
 
+from core.embed_footers import footer_for
 from core.utils import obsidian_embed, is_mod, format_timestamp_readable, EMBED_FOOTER_DEFAULT, render_bar, EMBED_COLORS
 from database import (
     DB_PATH, now_utc, get_user_balance, get_user_xp, 
@@ -23,7 +24,10 @@ class BioModal(discord.ui.Modal, title="Set Your Profile Bio"):
 
     async def on_submit(self, interaction: discord.Interaction):
         if not interaction.guild:
-            return await interaction.response.send_message("Server only.", ephemeral=True)
+            return await interaction.response.send_message(
+                "This command can only be used inside a server.",
+                ephemeral=True,
+            )
         from database import set_guild_setting
         bio_text = self.bio.value.strip()
         await set_guild_setting(interaction.guild.id, f"user_bio:{interaction.user.id}", bio_text)
@@ -391,7 +395,7 @@ def setup(bot, group=None):
                 pass
         if profile_data["achievements_count"] > 0:
             footer_parts.append("/achievements for full list")
-        footer_text = " · ".join(footer_parts) if footer_parts else EMBED_FOOTER_DEFAULT
+        footer_text = " · ".join(footer_parts) if footer_parts else footer_for("profile")
 
         # Prepend pet emoji + name when the user has a pet (tiny personal touch).
         if profile_data.get("pet"):
@@ -415,6 +419,17 @@ def setup(bot, group=None):
             client=interaction.client,
         )
 
+        from core.profile_layout import ProfileSnapshotLayout, profile_layout_v2_enabled
+
+        if profile_layout_v2_enabled() and is_self:
+            headline = f"Level **{current_level}** · **{profile_data['balance']:,}** coins"
+            stats = f"**{profile_data['messages_sent']:,}** messages · **{voice_time}** voice"
+            layout = ProfileSnapshotLayout(
+                display_name=target_user.display_name,
+                headline=headline,
+                stats_blurb=stats,
+            )
+            await interaction.followup.send(view=layout, ephemeral=True)
         await interaction.followup.send(embed=embed, ephemeral=defer_ephemeral)
 
     group.command(name="profile", description="View your or another user's profile and statistics.")(profile_callback)

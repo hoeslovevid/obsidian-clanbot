@@ -1,0 +1,88 @@
+"""Post a release note to configured guild channels when BOT_VERSION changes."""
+from __future__ import annotations
+
+import logging
+from typing import Optional
+
+import aiosqlite  # type: ignore
+import discord  # type: ignore
+
+from core.changelog import resolve_current_release
+from core.config import BOT_VERSION
+from core.embed_links import LinkRowView, help_link_buttons
+from core.embed_templates import embed_template
+from database import DB_PATH, get_guild_setting, now_utc
+
+logger = logging.getLogger(__name__)
+
+_SETTING_PREFIX = "release_announced_version:"
+
+
+async def _resolve_changelog_channel_id(guild_id: int) -> Optional[int]:
+    """Guild changelog channel: setting first, then update_log_settings, then log_channels."""
+    raw = await get_guild_setting(guild_id, "changelog_channel_id")
+    if raw and str(raw).isdigit():
+        return int(raw)
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT channel_id FROM update_log_settings WHERE guild_id=? AND channel_id IS NOT NULL",
+                (guild_id,),
+            )
+            row = await cur.fetchone()
+            if row and row[0]:
+                return int(row[0])
+    except Exception:
+        pass
+    try:
+        from database import get_log_channel_id
+
+        return await get_log_channel_id(guild_id, "changelog")
+    except Exception:
+        return None
+
+
+async def announce_release_if_needed(bot: discord.Client) -> None:
+    """For each guild, post once per BOT_VERSION when a changelog channel is configured."""
+    if not BOT_VERSION:
+        return
+    release = resolve_current_release()
+    bullets = release.get("changes") or []
+    summary = "\n".join(f"• {b}" for b in bullets[:12])
+    if len(bullets) > 12:
+        summary += f"\n-# …and {len(bullets) - 12} more in /whatsnew"
+
+    for guild in bot.guilds:
+        try:
+            channel_id = await _resolve_changelog_channel_id(guild.id)
+            if not channel_id:
+                continue
+            marker = await get_guild_setting(guild.id, f"{_SETTING_PREFIX}{BOT_VERSION}")
+            if marker == "1":
+                continue
+            channel = guild.get_channel(channel_id)
+            if not isinstance(channel, discord.TextChannel):
+                continue
+            me = guild.me
+            if not me:
+                continue
+            perms = channel.permissions_for(me)
+            if not perms.send_messages or not perms.embed_links:
+                continue
+
+            embed = embed_template(
+                "showcase",
+                f"🚀 Obsidian Bot v{BOT_VERSION}",
+                summary or "The bot was updated. See **/whatsnew** for details.",
+                category="general",
+                footer=f"Released {release.get('date', '')} · /whatsnew",
+                client=bot,
+            )
+            view = LinkRowView(*help_link_buttons())
+            await channel.send(embed=embed, view=view)
+            from database import set_guild_setting
+
+            await set_guild_setting(guild.id, f"{_SETTING_PREFIX}{BOT_VERSION}", "1")
+            logger.info("[release] Announced v%s in %s (#%s)", BOT_VERSION, guild.name, channel.name)
+        except Exception as exc:
+            logger.debug("[release] skip guild %s: %s", guild.id, exc)

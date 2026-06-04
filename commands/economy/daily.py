@@ -3,6 +3,8 @@ import discord
 from discord import app_commands
 from datetime import datetime, timezone, timedelta
 
+from core.embed_footers import footer_for
+from core.embed_templates import embed_template
 from core.utils import obsidian_embed, feature_off_embed, ECONOMY_ENABLED, COINS_DAILY_REWARD, format_number, pluralize, EMBED_COLORS
 
 
@@ -336,14 +338,30 @@ async def _run_daily(interaction: discord.Interaction, force_reset: bool = False
         title, cat = "🎁 Daily Reward Claimed!", "economy"
 
     freeze_note = "\n-# Used your monthly streak freeze." if used_freeze else ""
-    embed = obsidian_embed(
-        title,
+    desc = (
         f"> **+{format_number(coins_awarded)}** {pluralize(coins_awarded, 'coin')} claimed!\n\n"
-        f"Come back after reset for the next one!{freeze_note}",
-        category=cat,
-        fields=fields,
-        thumbnail=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
-        footer="Streak bonuses: 7d=1.25× · 14d=1.5× · 30d=2× · Resets if you miss a day",
-        client=interaction.client,
+        f"Come back after reset for the next one!{freeze_note}"
     )
+    thumb = interaction.user.display_avatar.url if interaction.user.display_avatar else None
+    if cat in ("economy", "prestige"):
+        embed = embed_template(
+            "showcase",
+            title,
+            desc,
+            category=cat,
+            fields=fields,
+            thumbnail=thumb,
+            footer=footer_for("economy_daily"),
+            client=interaction.client,
+        )
+    else:
+        embed = obsidian_embed(
+            title,
+            desc,
+            category=cat,
+            fields=fields,
+            thumbnail=thumb,
+            footer=footer_for("economy_daily"),
+            client=interaction.client,
+        )
     await interaction.followup.send(embed=embed, ephemeral=True)

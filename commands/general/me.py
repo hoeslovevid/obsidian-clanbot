@@ -13,6 +13,7 @@ import discord
 from discord import app_commands
 import aiosqlite
 
+from core.embed_footers import footer_for
 from core.utils import (
     obsidian_embed,
     error_embed,
@@ -202,7 +203,7 @@ async def _run_me(interaction: discord.Interaction):
     elif next_daily:
         footer = f"Next daily in <t:{next_daily}:R>"
     else:
-        footer = "Use /help to explore commands"
+        footer = footer_for("me")
 
     embed = obsidian_embed(
         f"👋 {interaction.user.display_name}",

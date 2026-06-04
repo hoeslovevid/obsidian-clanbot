@@ -6,6 +6,7 @@ from typing import Optional
 import discord  # type: ignore
 from discord import app_commands  # type: ignore
 
+from core.embed_templates import confirm_embed
 from core.utils import obsidian_embed, error_embed, is_mod, format_number, pluralize, permission_hint_embed
 from views import ConfirmView
 
@@ -96,11 +97,10 @@ def setup(bot, group=None):
         if needs_confirm:
             preview = "all unpinned messages" if amount_val.lower() == "all" else f"up to {amount_val} messages"
             archive_note = " A transcript will be saved." if archive else ""
-            embed = obsidian_embed(
+            embed = confirm_embed(
                 "⚠️ Confirm Purge",
                 f"Delete **{preview}** from {interaction.channel.mention}?{archive_note}\n\nThis cannot be undone.",
-                color=discord.Color.orange(),
-                footer="Mod only • See also: /mod warn, /mod data_retention",
+                footer_key="moderation_purge",
                 client=interaction.client,
             )
             async def on_confirm(btn_interaction: discord.Interaction, confirmed: bool):

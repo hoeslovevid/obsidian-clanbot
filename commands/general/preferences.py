@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from typing import Optional
 
-from core.utils import obsidian_embed, success_embed, is_mod, EMBED_COLORS
+from core.utils import obsidian_embed, success_embed, error_embed, is_mod, EMBED_COLORS
 from database import (
     get_user_timezone, set_user_timezone, get_user_platform, set_user_platform,
     get_quieter_mode, set_quieter_mode, get_digest_dm, set_digest_dm,
@@ -122,7 +122,7 @@ def setup(bot, group=None):
         """Set timezone or quieter mode."""
         if not interaction.guild:
             return await interaction.response.send_message(
-                embed=obsidian_embed("❌ Invalid Context", "Use this in a server.", color=discord.Color.red(), client=interaction.client),
+                embed=error_embed("Invalid Context", "This command can only be used inside a server.", client=interaction.client),
                 ephemeral=True
             )
 
@@ -399,7 +399,7 @@ def setup(bot, group=None):
     async def preferences_unsubscribe_all(interaction: discord.Interaction):
         if not interaction.guild:
             return await interaction.response.send_message(
-                embed=obsidian_embed("❌ Invalid Context", "Use this in a server.", color=discord.Color.red(), client=interaction.client),
+                embed=error_embed("Invalid Context", "This command can only be used inside a server.", client=interaction.client),
                 ephemeral=True,
             )
         await interaction.response.defer(ephemeral=True)
@@ -432,7 +432,7 @@ def setup(bot, group=None):
     async def preferences_subscribe_all(interaction: discord.Interaction):
         if not interaction.guild:
             return await interaction.response.send_message(
-                embed=obsidian_embed("❌ Invalid Context", "Use this in a server.", color=discord.Color.red(), client=interaction.client),
+                embed=error_embed("Invalid Context", "This command can only be used inside a server.", client=interaction.client),
                 ephemeral=True,
             )
         await interaction.response.defer(ephemeral=True)
