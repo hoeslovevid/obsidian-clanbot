@@ -6,8 +6,8 @@ How to add a new release:
        with the **previous** version string, then write new ``CURRENT_RELEASE_*`` bullets.
 
 The current page label always uses ``BOT_VERSION``; historical pages keep their
-stored version. ``core.version_tracking.check_and_post_updates`` DMs subscribers
-when a new bot version is detected.
+stored version. ``core.release_announce.announce_release_if_needed`` DMs subscribers
+when a new ``BOT_VERSION`` is announced.
 """
 from __future__ import annotations
 

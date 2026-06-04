@@ -326,31 +326,21 @@ async def run_startup(bot: discord.Client) -> None:
         return_exceptions=True
     )
 
-    # Wait a bit for commands to fully sync, then check and post automatic update logs (non-blocking)
-    async def check_updates():
-        """Check for updates in background (lazy-import defers version_tracking until ready)."""
+    # Version tracking + one showcase release post per BOT_VERSION (non-blocking)
+    async def sync_tracking_and_announce_release():
         try:
-            from core.version_tracking import check_and_post_updates
-            logger.info("[ready] Waiting for commands to sync, then checking for automatic updates...")
-            await asyncio.sleep(5)  # Give commands more time to fully register and sync with Discord
-            logger.info("[ready] Starting update check...")
-            await check_and_post_updates(bot)
-            logger.info("[ready] Automatic update check completed")
-        except Exception as e:
-            logger.error(f"[ready] Error during automatic update check: {e}", exc_info=True)
-
-    # Run update check in background (non-blocking)
-    asyncio.create_task(check_updates())
-
-    async def announce_release():
-        try:
+            from core.version_tracking import sync_version_tracking
             from core.release_announce import announce_release_if_needed
-            await asyncio.sleep(6)
-            await announce_release_if_needed(bot)
-        except Exception as e:
-            logger.debug(f"[ready] release announce skipped: {e}")
 
-    asyncio.create_task(announce_release())
+            logger.info("[ready] Waiting for commands to sync before release announce…")
+            await asyncio.sleep(5)
+            await sync_version_tracking(bot)
+            await announce_release_if_needed(bot)
+            logger.info("[ready] Version tracking and release announce completed")
+        except Exception as e:
+            logger.error(f"[ready] Release announce pipeline failed: {e}", exc_info=True)
+
+    asyncio.create_task(sync_tracking_and_announce_release())
 
     # Re-register reaction roles for all messages (optimized - batch fetch reactions)
     async def restore_reaction_roles():

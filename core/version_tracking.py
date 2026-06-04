@@ -1,17 +1,18 @@
 """
-Version tracking and update logging.
-This module handles automatic version detection and update posting.
+Version tracking for deploy and feature-hash detection.
+
+Channel release posts use ``core.release_announce.announce_release_if_needed`` only.
+This module updates ``bot_version_tracking`` and does not post to changelog channels.
 """
 import logging
 import hashlib
 import os
 from datetime import datetime, timezone
-from typing import Tuple, List, Optional
+from typing import Tuple, List
 import aiosqlite  # type: ignore
-import discord  # type: ignore
 from discord import app_commands  # type: ignore
 
-from database import DB_PATH, now_utc
+from database import DB_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +128,7 @@ def _command_change_lines(
 async def detect_and_update_version(bot) -> Tuple[str, list]:
     """
     Sync tracking DB to ``BOT_VERSION`` and detect deploy/feature changes.
-    Returns: (canonical BOT_VERSION, list of changes for update-log posts)
+    Returns: (canonical BOT_VERSION, list of change lines for logs only)
     """
     from core.config import BOT_VERSION
 
@@ -204,205 +205,24 @@ async def detect_and_update_version(bot) -> Tuple[str, list]:
         return canonical, []
 
 
-async def check_and_post_updates(bot):
-    """Check if bot version has changed and post update logs automatically."""
-    from bot import BOT_VERSION, BOT_CHANGELOG
-    from core.utils import obsidian_embed
-    
-    logger.info("[update_log] ========== Starting automatic update check ==========")
-    
-    # First, detect if version should be auto-updated
+async def sync_version_tracking(bot) -> None:
+    """Update version/hash tracking DB on startup (no changelog channel posts)."""
+    from core.config import BOT_VERSION
+
+    logger.info("[version] Syncing bot_version_tracking…")
     detected_version, changes = await detect_and_update_version(bot)
     version_to_use = BOT_VERSION or detected_version
     bot._bot_version = version_to_use
-    logger.info(
-        "[update_log] Version detection result: version=%s, changes=%s",
-        version_to_use,
-        len(changes) if changes else 0,
-    )
     if changes:
-        logger.info(f"[update_log] Changes detected: {changes}")
-
-    if not changes:
         logger.info(
-            "[update_log] No changes detected, version remains at %s, skipping update post",
+            "[version] Tracking updated for %s (%s change line(s)); release post handled by release_announce",
             version_to_use,
+            len(changes),
         )
-        return
-    
-    if not version_to_use:
-        logger.warning("[update_log] No version set, skipping update check")
-        return  # No version set, skip
-    
-    logger.info(f"[update_log] Version changed to {version_to_use}, posting update with {len(changes)} change(s)")
-    
-    async with aiosqlite.connect(DB_PATH) as db:
-        # Get all guilds with update log channels configured
-        cur = await db.execute("""
-            SELECT guild_id, channel_id FROM update_log_settings WHERE channel_id IS NOT NULL
-        """)
-        guilds_with_logs = await cur.fetchall()
-        logger.info(f"[update_log] Query result: {guilds_with_logs}")
-    
-    if not guilds_with_logs:
-        logger.warning("[update_log] ⚠️ No update log channels configured in database! Use /update_log_setup to configure a channel.")
-        return  # No update log channels configured
-    
-    logger.info(f"[update_log] Found {len(guilds_with_logs)} guild(s) with update log channels configured")
-    
-    for guild_id, channel_id in guilds_with_logs:
-        try:
-            guild = bot.get_guild(guild_id)
-            if not guild:
-                logger.warning(f"[update_log] Guild {guild_id} not found, skipping")
-                continue
-            
-            channel = guild.get_channel(channel_id)
-            if not channel:
-                logger.warning(f"[update_log] Channel {channel_id} not found in guild {guild.name}, skipping")
-                continue
-            
-            if not isinstance(channel, discord.TextChannel):
-                logger.warning(f"[update_log] Channel {channel_id} in {guild.name} is not a text channel, skipping")
-                continue
-            
-            # Verify bot has permission to send messages in this channel
-            if not bot.user:
-                logger.warning(f"[update_log] bot.user is None, skipping guild {guild.name}")
-                continue
-            
-            bot_member = guild.get_member(bot.user.id)
-            if not bot_member:
-                logger.warning(f"[update_log] Bot member not found in guild {guild.name}, skipping")
-                continue
-            
-            permissions = channel.permissions_for(bot_member)
-            if not permissions.send_messages or not permissions.embed_links:
-                logger.warning(f"[update_log] Bot lacks permissions (send_messages={permissions.send_messages}, embed_links={permissions.embed_links}) in {guild.name} (#{channel.name}), skipping")
-                continue
-            
-            logger.info(f"[update_log] Verified channel {guild.name} (#{channel.name}) - has permissions, proceeding...")
-            
-            # Check if this version has already been posted
-            async with aiosqlite.connect(DB_PATH) as db:
-                cur = await db.execute("""
-                    SELECT 1 FROM update_log_posted_versions 
-                    WHERE guild_id = ? AND version = ?
-                """, (guild_id, version_to_use))
-                already_posted = await cur.fetchone()
-            
-            if already_posted:
-                if changes:
-                    # Version was posted before, but changes were just detected - this means version was just incremented
-                    # Post it again to notify about the new version
-                    logger.info(f"[update_log] ⚠️ Version {version_to_use} was posted before, but NEW CHANGES detected - will post update anyway")
-                else:
-                    # Already posted and no new changes - skip
-                    logger.info(f"[update_log] Version {version_to_use} already posted to {guild.name} (#{channel.name}) and no new changes, skipping")
-                    continue
-            else:
-                logger.info(f"[update_log] Version {version_to_use} not yet posted to {guild.name} (#{channel.name}), will post now")
-            
-            logger.info(f"[update_log] Version {version_to_use} not yet posted to {guild.name} (#{channel.name}), posting now...")
-            
-            # Build git-style commit summary
-            added_commands = []
-            removed_commands = []
-            other_changes = []
-            
-            for change in changes:
-                if "✅ **Added" in change or "Added" in change:
-                    # Extract command names
-                    if "command(s):" in change:
-                        cmd_list = change.split("command(s):")[-1].strip()
-                        added_commands.extend([cmd.strip() for cmd in cmd_list.split(",")])
-                elif "❌ **Removed" in change or "Removed" in change:
-                    if "command(s):" in change:
-                        cmd_list = change.split("command(s):")[-1].strip()
-                        removed_commands.extend([cmd.strip() for cmd in cmd_list.split(",")])
-                else:
-                    other_changes.append(change)
-            
-            # Build summary (like git commit message)
-            summary_parts = []
-            
-            # Main summary from BOT_CHANGELOG if available
-            if BOT_CHANGELOG:
-                summary_parts.append(f"**Summary:**\n{BOT_CHANGELOG}")
-            
-            # Build changes summary
-            changes_summary = []
-            
-            if added_commands:
-                changes_summary.append(f"**Added ({len(added_commands)}):**\n" + "\n".join([f"  + `{cmd}`" for cmd in sorted(added_commands)]))
-            
-            if removed_commands:
-                changes_summary.append(f"**Removed ({len(removed_commands)}):**\n" + "\n".join([f"  - `{cmd}`" for cmd in sorted(removed_commands)]))
-            
-            if other_changes:
-                # Clean up other changes (remove markdown formatting for cleaner display)
-                for change in other_changes:
-                    clean_change = change.replace("**", "").replace("🔄", "").replace("🚀", "").strip()
-                    if clean_change:
-                        changes_summary.append(f"**Modified:**\n  {clean_change}")
-            
-            # Combine summary
-            if summary_parts:
-                description = "\n\n".join(summary_parts)
-            else:
-                description = f"**Update Summary:**\nBot updated to version {version_to_use}"
-            
-            if changes_summary:
-                description += "\n\n" + "\n\n".join(changes_summary)
-            
-            # If no changes detected but we're posting (shouldn't happen, but safety check)
-            if not changes_summary and not BOT_CHANGELOG:
-                description = f"Bot has been updated to version {version_to_use}."
-                logger.warning(f"[update_log] No changelog or changes detected for version {version_to_use}, posting generic message")
-            
-            embed = obsidian_embed(
-                f"🤖 Bot Update v{version_to_use}",
-                description,
-                color=discord.Color.blue(),
-                client=bot,
-            )
-            embed.timestamp = now_utc()
-            
-            try:
-                await channel.send(embed=embed)
+    else:
+        logger.info("[version] Tracking unchanged at %s", version_to_use)
 
-                # DM users that opted into changelog DMs (Item 27).
-                try:
-                    from commands.general.whatsnew import get_changelog_subscribers
-                    subscribers = await get_changelog_subscribers(guild_id)
-                    sent = 0
-                    for uid in subscribers:
-                        try:
-                            member = guild.get_member(uid)
-                            if not member or member.bot:
-                                continue
-                            await member.send(embed=embed)
-                            sent += 1
-                        except (discord.Forbidden, discord.HTTPException):
-                            continue
-                    if subscribers:
-                        logger.info(f"[update_log] DMed changelog v{version_to_use} to {sent}/{len(subscribers)} subscribers in {guild.name}")
-                except Exception as dm_err:
-                    logger.debug(f"[update_log] changelog DM step failed: {dm_err}")
 
-                # Mark as posted
-                async with aiosqlite.connect(DB_PATH) as db:
-                    await db.execute("""
-                        INSERT OR REPLACE INTO update_log_posted_versions (guild_id, version, posted_at)
-                        VALUES (?, ?, ?)
-                    """, (guild_id, version_to_use, now_utc().isoformat()))
-                    await db.commit()
-                
-                logger.info(f"[update_log] ✅ Posted version {version_to_use} to {guild.name} (#{channel.name})")
-            except Exception as e:
-                logger.error(f"[update_log] ❌ Error posting update to {guild.name} (#{channel.name}): {e}", exc_info=True)
-        
-        except Exception as e:
-            logger.error(f"[update_log] Error processing guild {guild_id}: {e}", exc_info=True)
-    
-    logger.info("[update_log] ========== Automatic update check completed ==========")
+async def check_and_post_updates(bot) -> None:
+    """Backward-compatible alias — tracking only; does not post embeds."""
+    await sync_version_tracking(bot)
