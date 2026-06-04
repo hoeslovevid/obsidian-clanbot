@@ -54,7 +54,7 @@ DB_PATH = os.getenv("DB_PATH", str(PROJECT_ROOT / "data" / "obsidian_clanbot.db"
 # Single source of truth for /about, /whatsnew, /status, release announce, and slash-command sync.
 # Set BOT_VERSION on Railway to match each production release; keep this code default in sync.
 # On release: bump BOT_VERSION here (and on Railway), then update CURRENT_RELEASE_* in core/changelog.py.
-BOT_VERSION = os.getenv("BOT_VERSION", "1.91.1")
+BOT_VERSION = os.getenv("BOT_VERSION", "1.91.2")
 BOT_CHANGELOG = os.getenv(
     "BOT_CHANGELOG",
     "v1.91.1 — One showcase release post per deploy. See /whatsnew.",
@@ -66,7 +66,7 @@ TEMP_VC_CATEGORY_NAME = os.getenv("TEMP_VC_CATEGORY_NAME", "Temp VCs")
 CREATE_VC_NAME = os.getenv("CREATE_VC_NAME", "➕ Form Squad")
 VOICE_IDLE_DELETE_MINUTES = int(os.getenv("VOICE_IDLE_DELETE_MINUTES", "5"))
 VC_CLEANUP_INTERVAL_MINUTES = int(os.getenv("VC_CLEANUP_INTERVAL_MINUTES", "2"))
-VC_PANEL_UPDATE_DEBOUNCE_SECONDS = float(os.getenv("VC_PANEL_UPDATE_DEBOUNCE_SECONDS", "4"))
+VC_PANEL_UPDATE_DEBOUNCE_SECONDS = float(os.getenv("VC_PANEL_UPDATE_DEBOUNCE_SECONDS", "8"))
 
 # --- Channels ---
 VOICE_PANEL_CHANNEL_ID = int(os.getenv("VOICE_PANEL_CHANNEL_ID", "0") or "0")

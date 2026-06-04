@@ -211,7 +211,7 @@ class SetLimitSelect(discord.ui.Select):
         await interaction.response.send_message("Limit updated.", ephemeral=True)
         try:
             from bot import update_vc_panel_embed
-            await update_vc_panel_embed(interaction.guild, self.vc_id)
+            await update_vc_panel_embed(interaction.guild, self.vc_id, force=True)
         except Exception:
             pass
 

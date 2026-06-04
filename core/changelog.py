@@ -12,12 +12,21 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-04"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Fix** — deploy posts one showcase release embed per `BOT_VERSION` (no duplicate simple update embeds)",
-    "**Release** — changelog text from `core/changelog.py` only; stale `BOT_CHANGELOG` env no longer drives channel posts",
+    "**Fix** — VC panel edits coalesced per guild with skip-if-unchanged (fewer Discord 429 PATCH warnings)",
+    "**Fix** — `safe_message_edit` paces channel edits; Baro live loop 5m + skip redundant embed updates",
+    "**Config** — default `VC_PANEL_UPDATE_DEBOUNCE_SECONDS` raised to 8",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "1.91.1",
+        "date": "2026-06-04",
+        "changes": [
+            "**Fix** — deploy posts one showcase release embed per `BOT_VERSION` (no duplicate simple update embeds)",
+            "**Release** — changelog text from `core/changelog.py` only; stale `BOT_CHANGELOG` env no longer drives channel posts",
+        ],
+    },
     {
         "version": "1.91.0",
         "date": "2026-06-04",

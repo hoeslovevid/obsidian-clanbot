@@ -24,6 +24,8 @@ from core.utils import obsidian_embed, ECONOMY_ENABLED, COINS_PER_MINUTE_VOICE, 
 # Tracks (guild_id, channel_id) pairs already warned this session to avoid
 # spamming the guild owner every loop iteration.
 _warned_broken_channels: set[tuple[int, int]] = set()
+# Last embed fingerprint per live Baro message — skip redundant PATCH edits
+_baro_live_embed_cache: dict[tuple[int, int, int], str] = {}
 
 
 async def _warn_broken_channel(
@@ -925,7 +927,7 @@ def setup_tasks(bot):
         await bot.wait_until_ready()
         await asyncio.sleep(24)
 
-    @tasks.loop(minutes=1)  # Update every minute
+    @tasks.loop(minutes=5)  # Live countdown — Discord :R timestamps update client-side; 5m is enough for text countdowns
     async def baro_live_update_loop():
         """Update live Baro messages with current time remaining."""
         try:
@@ -933,6 +935,7 @@ def setup_tasks(bot):
             
             if not is_active or not baro_data:
                 # Baro is not active, clean up all live messages
+                _baro_live_embed_cache.clear()
                 async with aiosqlite.connect(DB_PATH) as db:
                     await db.execute("DELETE FROM baro_live_messages")
                     await db.commit()
@@ -1001,9 +1004,17 @@ def setup_tasks(bot):
                     # Rebuild embed with updated time
                     build_baro_embed = get_baro_embed_builder()
                     updated_embed = build_baro_embed(baro_data, True, bot)
-                    
-                    # Update the message
-                    await message.edit(embed=updated_embed)
+
+                    # Skip edit when content unchanged (reduces PATCH spam / 429s)
+                    desc_key = (updated_embed.description or "") + (updated_embed.title or "")
+                    cache_key = (guild_id, channel_id, message_id)
+                    if _baro_live_embed_cache.get(cache_key) == desc_key:
+                        continue
+
+                    from core.safe_message_edit import safe_message_edit
+
+                    await safe_message_edit(message, embed=updated_embed)
+                    _baro_live_embed_cache[cache_key] = desc_key
                     
                 except discord.Forbidden:
                     # Missing permissions, remove from database

@@ -466,7 +466,12 @@ async def post_vc_panel(guild: discord.Guild, vc: discord.VoiceChannel, owner: d
     bot.add_view(view)
 
 
-async def update_vc_panel_embed(guild: discord.Guild, vc_id: int) -> None:
+_vc_panel_fingerprint: Dict[Tuple[int, int], str] = {}
+_guild_pending_vc_updates: Dict[int, set[int]] = {}
+_guild_vc_flush_tasks: Dict[int, asyncio.Task] = {}
+
+
+async def update_vc_panel_embed(guild: discord.Guild, vc_id: int, *, force: bool = False) -> None:
     """Edit the VC panel message with live member count and lock status."""
     async with aiosqlite.connect(DB_PATH) as db:
         cur = await db.execute(
@@ -504,6 +509,11 @@ async def update_vc_panel_embed(guild: discord.Guild, vc_id: int) -> None:
     cap = vc.user_limit if vc.user_limit else "∞"
     lock_label = "🔒 Sealed" if locked else "🔓 Open"
 
+    fingerprint = f"{members}|{cap}|{locked}|{owner_id}"
+    fp_key = (guild.id, vc_id)
+    if not force and _vc_panel_fingerprint.get(fp_key) == fingerprint:
+        return
+
     embed = obsidian_embed(
         "Voice Channel Control",
         f"**Channel:** {vc.mention}\n"
@@ -517,51 +527,42 @@ async def update_vc_panel_embed(guild: discord.Guild, vc_id: int) -> None:
     )
 
     try:
+        from core.safe_message_edit import safe_message_edit
+
         msg = await panel_ch.fetch_message(int(row[0]))
-        await msg.edit(embed=embed, view=VCPanelView(vc_id))
+        await safe_message_edit(msg, embed=embed, view=VCPanelView(vc_id))
+        _vc_panel_fingerprint[fp_key] = fingerprint
     except Exception:
         pass
 
 
-_vc_panel_update_last_at: Dict[Tuple[int, int], float] = {}
-_vc_panel_update_pending: Dict[Tuple[int, int], asyncio.Task] = {}
-
-
 async def schedule_vc_panel_embed_update(guild: discord.Guild, vc_id: int) -> None:
-    """Rate-limit VC panel embed edits triggered by voice events."""
-    key = (guild.id, vc_id)
-    now = time.monotonic()
-    last_at = _vc_panel_update_last_at.get(key, 0.0)
-    elapsed = now - last_at
-    debounce = VC_PANEL_UPDATE_DEBOUNCE_SECONDS
+    """Coalesce voice-triggered VC panel refreshes per guild (avoids channel edit bursts)."""
+    gid = guild.id
+    _guild_pending_vc_updates.setdefault(gid, set()).add(vc_id)
 
-    if elapsed >= debounce:
-        pending = _vc_panel_update_pending.pop(key, None)
-        if pending and not pending.done():
-            pending.cancel()
-        _vc_panel_update_last_at[key] = now
-        await update_vc_panel_embed(guild, vc_id)
+    existing = _guild_vc_flush_tasks.get(gid)
+    if existing and not existing.done():
         return
 
-    pending = _vc_panel_update_pending.get(key)
-    if pending and not pending.done():
-        return
-
-    delay = debounce - elapsed
-
-    async def _run() -> None:
+    async def _flush_guild_panels() -> None:
         try:
-            await asyncio.sleep(delay)
-            _vc_panel_update_last_at[key] = time.monotonic()
-            await update_vc_panel_embed(guild, vc_id)
+            await asyncio.sleep(VC_PANEL_UPDATE_DEBOUNCE_SECONDS)
+            vc_ids = _guild_pending_vc_updates.pop(gid, set())
+            from core.safe_message_edit import CHANNEL_EDIT_MIN_INTERVAL
+
+            for index, vid in enumerate(sorted(vc_ids)):
+                if index > 0:
+                    await asyncio.sleep(CHANNEL_EDIT_MIN_INTERVAL)
+                await update_vc_panel_embed(guild, vid)
         except asyncio.CancelledError:
             raise
         except Exception:
             pass
         finally:
-            _vc_panel_update_pending.pop(key, None)
+            _guild_vc_flush_tasks.pop(gid, None)
 
-    _vc_panel_update_pending[key] = asyncio.create_task(_run())
+    _guild_vc_flush_tasks[gid] = asyncio.create_task(_flush_guild_panels())
 
 
 # Complaint and Event modals/views are now in modals.py and views.py
