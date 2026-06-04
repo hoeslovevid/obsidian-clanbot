@@ -42,6 +42,20 @@ def ticket_confirmation_buttons(*, channel_url: Optional[str] = None) -> list[di
     return buttons
 
 
+def channel_link_button(label: str, guild_id: int, channel_id: int) -> discord.ui.Button:
+    """Link button that opens a guild text/voice channel in the Discord client."""
+    url = f"https://discord.com/channels/{guild_id}/{channel_id}"
+    return link_button(label, url)
+
+
+class LinkRowView(discord.ui.View):
+    """View with a single row of link buttons (max 5)."""
+
+    def __init__(self, *buttons: discord.ui.Button):
+        super().__init__(timeout=None)
+        add_link_row(self, buttons)
+
+
 def add_link_row(view: discord.ui.View, buttons: Iterable[discord.ui.Button]) -> None:
     """Append a single ActionRow of link buttons (max 5)."""
     items = list(buttons)[:5]
