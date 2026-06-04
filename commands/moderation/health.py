@@ -8,10 +8,9 @@ from typing import Any, Optional
 import aiosqlite
 import discord
 
-from core.config import GUILD_ID
+from core.config import BOT_VERSION, GUILD_ID
 from core.command_tree_stats import collect_command_tree_stats, format_command_tree_field
 from core.error_handling import RECENT_ERRORS
-from core.version_tracking import get_current_bot_version
 from core.utils import obsidian_embed, is_mod
 from database import DB_PATH, get_log_channel_id
 
@@ -57,7 +56,7 @@ async def build_health_embed(
 
     bot_error_log = await get_log_channel_id(guild.id, "bot_error")
 
-    version = getattr(bot, "_bot_version", None) or await get_current_bot_version()
+    version = BOT_VERSION or "unknown"
 
     color = discord.Color.green() if db_ok and not cmd_stats.oversized else discord.Color.orange()
     embed = obsidian_embed(

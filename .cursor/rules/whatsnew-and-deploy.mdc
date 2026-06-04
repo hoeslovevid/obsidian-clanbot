@@ -7,8 +7,8 @@ alwaysApply: true
 
 When you change bot behavior, commands, embeds, tasks, or user-visible UX:
 
-1. **Update `/whatsnew`** — Add a new entry at the **top** of `CHANGELOG` in `commands/general/whatsnew.py` (newest first). Schema: `{"version": "x.y.z", "date": "YYYY-MM-DD", "changes": ["..."]}`. Summarize user-facing changes in clear bullets; group with `**Section** — detail` when helpful.
-2. **Bump version** — Set the same version in `core/config.py` as the default `BOT_VERSION` (and refresh `BOT_CHANGELOG` default text if it no longer matches).
+1. **Bump version** — Set default `BOT_VERSION` in `core/config.py` (and refresh `BOT_CHANGELOG` default text if needed). This is the single source of truth for `/about`, `/whatsnew` page 1, health, and slash-command sync.
+2. **Update changelog bullets** — In `core/changelog.py`, archive the previous release into `CHANGELOG_HISTORY` (with the old version string), then replace `CURRENT_RELEASE_DATE` and `CURRENT_RELEASE_CHANGES` for the new release. Do not hardcode the current version string in changelog data.
 3. **Ship** — `git add`, `git commit`, and `git push` unless the user explicitly says not to commit or push.
 
-`/about` previews the latest changelog entry; `BOT_VERSION` also controls whether slash commands re-sync on deploy.
+If `CURRENT_RELEASE_CHANGES` is empty, `/whatsnew` falls back to `BOT_CHANGELOG` env text. Historical pages keep their stored `version` fields.

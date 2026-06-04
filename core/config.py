@@ -51,7 +51,8 @@ TIMEZONE = os.getenv("TIMEZONE", "America/New_York")
 DB_PATH = os.getenv("DB_PATH", str(PROJECT_ROOT / "data" / "obsidian_clanbot.db"))
 
 # --- Version ---
-# Keep in sync with commands/general/whatsnew.py CHANGELOG[0] on each release.
+# Single source of truth for /about, /whatsnew, and slash-command sync.
+# On release: bump BOT_VERSION here and update CURRENT_RELEASE_* in core/changelog.py.
 BOT_VERSION = os.getenv("BOT_VERSION", "1.6.0")
 BOT_CHANGELOG = os.getenv(
     "BOT_CHANGELOG",

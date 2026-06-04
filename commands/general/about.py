@@ -3,6 +3,7 @@ import discord  # type: ignore
 from discord import app_commands  # type: ignore
 
 from core.embed_templates import embed_template
+from core.changelog import get_latest_changelog_entry
 from core.config import BOT_WEBSITE, BOT_DEVELOPER, BOT_CHANGELOG
 from core.version_tracking import get_current_bot_version
 
@@ -47,11 +48,9 @@ def setup(bot, group=None):
 
         whats_new = ""
         try:
-            from commands.general.whatsnew import CHANGELOG
-
-            if CHANGELOG:
-                entry = CHANGELOG[0]
-                bullets = entry.get("changes") or []
+            entry = get_latest_changelog_entry()
+            bullets = entry.get("changes") or []
+            if bullets:
                 whats_new = "\n".join(f"• {c}" for c in bullets[:4])
                 if len(bullets) > 4:
                     whats_new += f"\n• _+{len(bullets) - 4} more — `/whatsnew`_"

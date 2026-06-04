@@ -1,14 +1,13 @@
 """/whatsnew - paginated changelog viewer with DM subscription.
 
-How to add a new release entry:
-    Append a dict to ``CHANGELOG`` (newest first). Schema:
-        {"version": "1.6.0", "date": "2026-06-04", "changes": ["..."]}
+How to add a new release:
+    1. Bump default ``BOT_VERSION`` (and ``BOT_CHANGELOG`` if needed) in ``core/config.py``.
+    2. Move ``CURRENT_RELEASE_*`` from ``core/changelog.py`` into ``CHANGELOG_HISTORY``
+       with the **previous** version string, then write new ``CURRENT_RELEASE_*`` bullets.
 
-The /whatsnew command shows the last 5 entries (newest first), one per
-page, with a 🔔 button that lets users opt into changelog DMs.
-``core.version_tracking.check_and_post_updates`` will additionally DM any
-user with ``user_changelog_dm:{user_id} == "1"`` when a new bot version
-is detected.
+The current page label always uses ``BOT_VERSION``; historical pages keep their
+stored version. ``core.version_tracking.check_and_post_updates`` DMs subscribers
+when a new bot version is detected.
 """
 from __future__ import annotations
 
@@ -19,66 +18,11 @@ import discord  # type: ignore
 import aiosqlite  # type: ignore
 from discord import app_commands  # type: ignore
 
+from core.changelog import get_changelog_pages
 from core.utils import obsidian_embed, error_embed, EMBED_COLORS, EMBED_FOOTER_DEFAULT, bullet_list
 from database import DB_PATH, get_guild_setting, set_guild_setting
 
 logger = logging.getLogger(__name__)
-
-
-# Hand-curated changelog. Add new entries to the TOP. Old entries get rolled off
-# by the 5-entry paginator but stay in this list for /whatsnew history.
-CHANGELOG: list[dict] = [
-    {
-        "version": "1.6.0",
-        "date": "2026-06-04",
-        "changes": [
-            "**Embeds** — unified `embed_template` / showcase styling across commands",
-            "**Banner** — `EMBED_BANNER_URL` env override; default GitHub raw `obsidian_embed_banner.png`",
-            "**Caches** — shared cache helpers and warmer API paths; fewer redundant fetches",
-            "**Startup** — slash sync only when `BOT_VERSION` changes (faster restarts)",
-            "**Digest 2.0** — richer mod digest loop and dashboard/health observability",
-            "**Menu V2** — categorized `/menu` with optional media-gallery banner (`HELP_LAYOUT_V2`)",
-            "**Help V2** — searchable help, link rows, and clearer command discovery",
-            "**Preferences** — DM toggles plus per-user Warframe platform preference",
-            "**Phase 5 UX** — link rows on showcase embeds; `menu_layout` command pilots",
-            "**Tickets** — ticket panel/control embeds use dedicated ticket styling",
-            "**Warframe** — Baro/status polish and platform-aware world-state lookups",
-            "**Fix** — `get_incident_mode` imported from `incident_mode` (health/dashboard)",
-            "**Fix** — VC panel embed updates debounced (`VC_PANEL_UPDATE_DEBOUNCE_SECONDS`)",
-            "**Fix** — slow-command tracking without setting attrs on frozen `Interaction`",
-            "**Fix** — `server_about` LinkRowView import on deploy",
-            "**Fix** — Help V2 no longer mixes link rows with classic `HelpSelectView`",
-        ],
-    },
-    {
-        "version": "1.5.0",
-        "date": "2026-05-14",
-        "changes": [
-            "/whatsnew changelog viewer with DM subscription",
-            "Mod Context popup (right-click → all mod tools in one ephemeral embed)",
-            "/mod purge: filter by user/contains/older_than/from_bots + confirm step",
-            "/warframe vc: host transfer command and panel button hand-off",
-            "VC presets: save/apply/list/delete favourite VC configs",
-            "Idle VC revival vote: closed VCs can be brought back with 3 clicks",
-            "Live poll results bar — embed updates as votes come in",
-            "Cycle-aware LFG nudges (Plains/Vallis/Cambion timing)",
-            "Saved warn reason templates with autocomplete on /mod warn",
-            "Pet evolution stages (Baby → Young → Adult → Elder)",
-            "/preferences unsubscribe_all and subscribe_all DM shortcuts",
-            "Right-click 'Explain command' context menu",
-        ],
-    },
-    {
-        "version": "1.4.0",
-        "date": "2026-05-10",
-        "changes": [
-            "Earlier QoL batch — investments DMs, profile polish, cycle notify",
-            "Mod stats dashboard refresh button",
-            "Trading post and Warframe market refinements",
-        ],
-    },
-]
-
 
 MAX_PAGES = 5
 
@@ -209,7 +153,7 @@ def setup(bot, group=None):
                 embed=error_embed("Invalid Context", "Use this in a server.", client=interaction.client),
                 ephemeral=True,
             )
-        pages = CHANGELOG[:MAX_PAGES]
+        pages = get_changelog_pages(max_pages=MAX_PAGES)
         if not pages:
             return await interaction.response.send_message(
                 embed=obsidian_embed(

@@ -1,0 +1,92 @@
+"""Changelog pages for /whatsnew and /about.
+
+``BOT_VERSION`` in ``core.config`` is the single source of truth for the
+current release label. Curate bullets in ``CURRENT_RELEASE_*``; on each
+release, archive the previous release into ``CHANGELOG_HISTORY`` with an
+explicit version string (historical entries only).
+"""
+from __future__ import annotations
+
+from core.config import BOT_CHANGELOG, BOT_VERSION
+
+# Current release (version string comes from BOT_VERSION only).
+CURRENT_RELEASE_DATE = "2026-06-04"
+CURRENT_RELEASE_CHANGES: list[str] = [
+    "**Embeds** — unified `embed_template` / showcase styling across commands",
+    "**Banner** — `EMBED_BANNER_URL` env override; default GitHub raw `obsidian_embed_banner.png`",
+    "**Caches** — shared cache helpers and warmer API paths; fewer redundant fetches",
+    "**Startup** — slash sync only when `BOT_VERSION` changes (faster restarts)",
+    "**Digest 2.0** — richer mod digest loop and dashboard/health observability",
+    "**Menu V2** — categorized `/menu` with optional media-gallery banner (`HELP_LAYOUT_V2`)",
+    "**Help V2** — searchable help, link rows, and clearer command discovery",
+    "**Preferences** — DM toggles plus per-user Warframe platform preference",
+    "**Phase 5 UX** — link rows on showcase embeds; `menu_layout` command pilots",
+    "**Tickets** — ticket panel/control embeds use dedicated ticket styling",
+    "**Warframe** — Baro/status polish and platform-aware world-state lookups",
+    "**Fix** — `get_incident_mode` imported from `incident_mode` (health/dashboard)",
+    "**Fix** — VC panel embed updates debounced (`VC_PANEL_UPDATE_DEBOUNCE_SECONDS`)",
+    "**Fix** — slow-command tracking without setting attrs on frozen `Interaction`",
+    "**Fix** — `server_about` LinkRowView import on deploy",
+    "**Fix** — Help V2 no longer mixes link rows with classic `HelpSelectView`",
+]
+
+# Older releases (newest first). Include ``version`` for each archived release.
+CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "1.5.0",
+        "date": "2026-05-14",
+        "changes": [
+            "/whatsnew changelog viewer with DM subscription",
+            "Mod Context popup (right-click → all mod tools in one ephemeral embed)",
+            "/mod purge: filter by user/contains/older_than/from_bots + confirm step",
+            "/warframe vc: host transfer command and panel button hand-off",
+            "VC presets: save/apply/list/delete favourite VC configs",
+            "Idle VC revival vote: closed VCs can be brought back with 3 clicks",
+            "Live poll results bar — embed updates as votes come in",
+            "Cycle-aware LFG nudges (Plains/Vallis/Cambion timing)",
+            "Saved warn reason templates with autocomplete on /mod warn",
+            "Pet evolution stages (Baby → Young → Adult → Elder)",
+            "/preferences unsubscribe_all and subscribe_all DM shortcuts",
+            "Right-click 'Explain command' context menu",
+        ],
+    },
+    {
+        "version": "1.4.0",
+        "date": "2026-05-10",
+        "changes": [
+            "Earlier QoL batch — investments DMs, profile polish, cycle notify",
+            "Mod stats dashboard refresh button",
+            "Trading post and Warframe market refinements",
+        ],
+    },
+]
+
+
+def resolve_current_release() -> dict:
+    """Current release entry; ``version`` is always ``BOT_VERSION``."""
+    changes: list[str] = list(CURRENT_RELEASE_CHANGES)
+    if not changes:
+        summary = BOT_CHANGELOG.strip()
+        if summary:
+            changes = [summary]
+        else:
+            for entry in CHANGELOG_HISTORY:
+                if str(entry.get("version", "")) == BOT_VERSION:
+                    changes = list(entry.get("changes") or [])
+                    break
+    return {
+        "version": BOT_VERSION,
+        "date": CURRENT_RELEASE_DATE,
+        "changes": changes,
+    }
+
+
+def get_latest_changelog_entry() -> dict:
+    """Latest release for /about and similar previews."""
+    return resolve_current_release()
+
+
+def get_changelog_pages(*, max_pages: int = 5) -> list[dict]:
+    """Paginated changelog (newest first), capped at ``max_pages``."""
+    pages = [resolve_current_release(), *CHANGELOG_HISTORY]
+    return pages[:max_pages]

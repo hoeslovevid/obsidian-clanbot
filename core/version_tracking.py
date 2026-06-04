@@ -17,19 +17,9 @@ logger = logging.getLogger(__name__)
 
 
 async def get_current_bot_version() -> str:
-    """Return tracked version from DB, or ``BOT_VERSION`` env fallback."""
+    """Canonical user-facing release version (``BOT_VERSION`` from config/env)."""
     from core.config import BOT_VERSION
 
-    try:
-        async with aiosqlite.connect(DB_PATH) as db:
-            cur = await db.execute(
-                "SELECT current_version FROM bot_version_tracking WHERE id = 1"
-            )
-            row = await cur.fetchone()
-            if row and row[0]:
-                return str(row[0])
-    except Exception as exc:
-        logger.debug("[version] Could not read version from DB: %s", exc)
     return BOT_VERSION or "unknown"
 
 
