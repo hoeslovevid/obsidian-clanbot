@@ -211,9 +211,14 @@ from core.commands_loader import load_all_commands
 load_all_commands(bot)
 
 # --------------------- Global app command checks ---------------------
+# Slash command start times (interaction uses __slots__; cannot set arbitrary attrs).
+_cmd_start_times: dict[int, float] = {}
+
 # Incident mode: block non-critical commands for non-mods.
 async def incident_mode_check(interaction: discord.Interaction) -> bool:
-    interaction._obsidian_cmd_started_at = time.perf_counter()  # type: ignore[attr-defined]
+    iid = getattr(interaction, "id", None)
+    if iid is not None:
+        _cmd_start_times[int(iid)] = time.perf_counter()
     try:
         if not interaction.guild:
             return True
@@ -1840,7 +1845,8 @@ def _find_similar_commands(typed: str, all_commands: list[str], max_suggestions:
 async def on_app_command_completion(interaction: discord.Interaction, command):
     """Record per-user slash command usage for /tools my_stats. Best-effort, never raises."""
     try:
-        started = getattr(interaction, "_obsidian_cmd_started_at", None)
+        iid = getattr(interaction, "id", None)
+        started = _cmd_start_times.pop(int(iid), None) if iid is not None else None
         if started is not None:
             elapsed_ms = (time.perf_counter() - started) * 1000
             if elapsed_ms >= 3000:
