@@ -12,12 +12,21 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-04"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Fix** — slash-command sync: `/general` exceeded Discord's 25-subcommand cap after v1.7.0",
-    "**Commands** — `/status` is top-level only; Clan Console hub is `/admin console` (mods)",
+    "**Release** — version label aligned with Railway `BOT_VERSION` deploy tracking (v1.90.0)",
+    "**Versioning** — `/about`, `/whatsnew`, `/status`, release announce, and update logs all use `BOT_VERSION`",
+    "**Deploy** — set `BOT_VERSION` on Railway when shipping; keep `core/config.py` default in sync",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "1.7.1",
+        "date": "2026-06-04",
+        "changes": [
+            "**Fix** — slash-command sync: `/general` exceeded Discord's 25-subcommand cap after v1.7.0",
+            "**Commands** — `/status` is top-level only; Clan Console hub is `/admin console` (mods)",
+        ],
+    },
     {
         "version": "1.7.0",
         "date": "2026-06-04",

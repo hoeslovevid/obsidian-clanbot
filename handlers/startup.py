@@ -268,14 +268,20 @@ async def run_startup(bot: discord.Client) -> None:
             else:
                 logger.info("[ready] No update log channels configured")
 
-            # Verify version tracking exists
+            # Canonical version is BOT_VERSION (env / core.config); DB row is for change detection only.
+            from core.config import BOT_VERSION
+
+            bot._bot_version = BOT_VERSION or "unknown"
             cur = await db.execute("SELECT current_version FROM bot_version_tracking WHERE id = 1")
             version_row = await cur.fetchone()
             if version_row:
-                bot._bot_version = str(version_row[0])
-                logger.info(f"[ready] Bot version tracking loaded: {version_row[0]}")
+                logger.info(
+                    "[ready] BOT_VERSION=%s (tracking DB: %s)",
+                    bot._bot_version,
+                    version_row[0],
+                )
             else:
-                logger.info("[ready] No version tracking found (will be created on first update check)")
+                logger.info("[ready] BOT_VERSION=%s (no tracking row yet)", bot._bot_version)
 
     async def init_achievements():
         """Initialize achievement definitions (cached)."""

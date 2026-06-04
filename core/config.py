@@ -51,12 +51,13 @@ TIMEZONE = os.getenv("TIMEZONE", "America/New_York")
 DB_PATH = os.getenv("DB_PATH", str(PROJECT_ROOT / "data" / "obsidian_clanbot.db"))
 
 # --- Version ---
-# Single source of truth for /about, /whatsnew, and slash-command sync.
-# On release: bump BOT_VERSION here and update CURRENT_RELEASE_* in core/changelog.py.
-BOT_VERSION = os.getenv("BOT_VERSION", "1.7.1")
+# Single source of truth for /about, /whatsnew, /status, release announce, and slash-command sync.
+# Set BOT_VERSION on Railway to match each production release; keep this code default in sync.
+# On release: bump BOT_VERSION here (and on Railway), then update CURRENT_RELEASE_* in core/changelog.py.
+BOT_VERSION = os.getenv("BOT_VERSION", "1.90.0")
 BOT_CHANGELOG = os.getenv(
     "BOT_CHANGELOG",
-    "v1.7.1 — Fix slash-command sync (/general over 25-cap); /status top-level, /admin console. See /whatsnew.",
+    "v1.90.0 — Version aligned with Railway deploy tracking. See /whatsnew.",
 )
 
 # --- Temp VC ---

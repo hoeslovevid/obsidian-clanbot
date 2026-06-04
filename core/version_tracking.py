@@ -101,180 +101,107 @@ def calculate_feature_hash(bot) -> str:
     return hash_value
 
 
+def _command_change_lines(
+    previous_commands: set,
+    current_commands: set,
+) -> list[str]:
+    """Build human-readable change lines when the feature hash shifts."""
+    changes: list[str] = []
+    added_commands = current_commands - previous_commands
+    removed_commands = previous_commands - current_commands
+    if added_commands:
+        changes.append(
+            f"✅ **Added {len(added_commands)} command(s):** {', '.join(sorted(added_commands))}"
+        )
+    if removed_commands:
+        changes.append(
+            f"❌ **Removed {len(removed_commands)} command(s):** {', '.join(sorted(removed_commands))}"
+        )
+    if not added_commands and not removed_commands and previous_commands:
+        changes.append("🔄 **Internal updates:** Commands or features have been modified")
+    elif not previous_commands and current_commands:
+        changes.append("🚀 **Feature update:** Bot commands or code have been updated")
+    return changes
+
+
 async def detect_and_update_version(bot) -> Tuple[str, list]:
     """
-    Detect if features have changed and auto-increment version.
-    Returns: (version, list of changes)
+    Sync tracking DB to ``BOT_VERSION`` and detect deploy/feature changes.
+    Returns: (canonical BOT_VERSION, list of changes for update-log posts)
     """
-    import os
-    GUILD_ID = int(os.getenv("GUILD_ID", "0") or "0")
+    from core.config import BOT_VERSION
+
+    canonical = (BOT_VERSION or "").strip() or "unknown"
     current_hash = calculate_feature_hash(bot)
-    
-    # Get current commands list for comparison (including subcommands from groups)
-    current_commands = set()
+
+    current_commands: set = set()
     try:
         top_level_commands = get_registered_commands(bot)
         current_commands = set(get_all_commands_recursive(top_level_commands))
     except Exception:
         pass
-    
+
+    current_commands_str = ",".join(sorted(current_commands)) if current_commands else ""
+    now_iso = datetime.now(timezone.utc).isoformat()
+
     async with aiosqlite.connect(DB_PATH) as db:
-        # Get stored version info and previous commands
         cur = await db.execute("""
             SELECT current_version, feature_hash, previous_commands FROM bot_version_tracking WHERE id = 1
         """)
         row = await cur.fetchone()
-        
+
         if not row:
-            # First time - initialize with version 1.2.0
-            new_version = "1.2.0"
-            changes = ["Initial bot version"]
-            if current_commands:
-                changes.append(f"**Commands:** {', '.join(sorted(current_commands))}")
-            logger.info(f"[version] First run detected, initializing with version {new_version}")
-            # Store current commands as previous_commands for next comparison
-            current_commands_str = ",".join(sorted(current_commands)) if current_commands else ""
+            changes: list[str] = []
+            logger.info("[version] First run — initializing tracking at BOT_VERSION %s", canonical)
             await db.execute("""
                 INSERT OR REPLACE INTO bot_version_tracking (id, current_version, feature_hash, last_updated, previous_commands)
                 VALUES (1, ?, ?, ?, ?)
-            """, (new_version, current_hash, datetime.now(timezone.utc).isoformat(), current_commands_str))
+            """, (canonical, current_hash, now_iso, current_commands_str))
             await db.commit()
-            
-            # Verify the version was stored correctly
-            verify_cur = await db.execute("SELECT current_version FROM bot_version_tracking WHERE id = 1")
-            verify_row = await verify_cur.fetchone()
-            if verify_row and verify_row[0] == new_version:
-                logger.info(f"[version] ✅ Version {new_version} successfully stored and verified in database")
-            else:
-                logger.error(f"[version] ❌ Version storage verification failed! Expected {new_version}, got {verify_row}")
-            
-            return new_version, changes
-        else:
-            stored_version = row[0]
-            stored_hash = row[1] if len(row) > 1 else ""
-            previous_commands_str = row[2] if len(row) > 2 and row[2] else None
-            
-            # Reset version to 1.2.0 if stored version is less than 1.2.0
+            return canonical, changes
+
+        stored_version = (row[0] or "").strip()
+        stored_hash = row[1] if len(row) > 1 else ""
+        previous_commands_str = row[2] if len(row) > 2 and row[2] else ""
+
+        previous_commands: set = set()
+        if previous_commands_str:
             try:
-                version_parts = stored_version.split(".")
-                if len(version_parts) >= 2:
-                    major = int(version_parts[0])
-                    minor = int(version_parts[1])
-                    if major < 1 or (major == 1 and minor < 2):
-                        logger.info(f"[version] Resetting version from {stored_version} to 1.2.0")
-                        stored_version = "1.2.0"
-                        # Update stored version
-                        await db.execute("""
-                            UPDATE bot_version_tracking 
-                            SET current_version = ? 
-                            WHERE id = 1
-                        """, (stored_version,))
-                        await db.commit()
-            except (ValueError, IndexError):
-                # Invalid version format, reset to 1.2.0
-                logger.info(f"[version] Invalid version format {stored_version}, resetting to 1.2.0")
-                stored_version = "1.2.0"
-                await db.execute("""
-                    UPDATE bot_version_tracking 
-                    SET current_version = ? 
-                    WHERE id = 1
-                """, (stored_version,))
-                await db.commit()
-            
-            logger.info(f"[version] Loaded stored version: {stored_version}, hash: {stored_hash[:8] if stored_hash else 'empty'}...")
-            
-            # Get previous commands from stored data (these are the commands from the LAST version)
-            previous_commands = set()
-            if previous_commands_str:
-                try:
-                    previous_commands = set(previous_commands_str.split(",")) if previous_commands_str else set()
-                    logger.info(f"[version] Previous commands loaded: {len(previous_commands)} commands")
-                except Exception as e:
-                    logger.warning(f"[version] Error parsing previous commands: {e}")
-                    previous_commands = set()
-            else:
-                logger.info(f"[version] No previous commands stored (first change detection)")
-            
-            # If hash hasn't changed, no update needed - return stored version with no changes
-            if stored_hash == current_hash:
-                logger.info(f"[version] No changes detected (hash: {current_hash[:8] if current_hash else 'empty'}...), keeping version {stored_version}")
-                # Return stored version with empty changes list - this means no update needed
-                return stored_version, []
-            
-            # Hash changed - detect what changed
-            logger.info(f"[version] Hash changed from {stored_hash[:8] if stored_hash else 'empty'}... to {current_hash[:8]}...")
-            changes = []
-            
-            # Compare commands to detect additions and removals
-            logger.info(f"[version] Comparing commands: previous={len(previous_commands)}, current={len(current_commands)}")
-            added_commands = current_commands - previous_commands
-            removed_commands = previous_commands - current_commands
-            
-            logger.info(f"[version] Command changes detected: +{len(added_commands)} added, -{len(removed_commands)} removed")
-            
-            if added_commands:
-                changes.append(f"✅ **Added {len(added_commands)} command(s):** {', '.join(sorted(added_commands))}")
-            if removed_commands:
-                changes.append(f"❌ **Removed {len(removed_commands)} command(s):** {', '.join(sorted(removed_commands))}")
-            if not added_commands and not removed_commands and previous_commands:
-                # Commands exist but changed in some way (maybe internal changes)
-                changes.append("🔄 **Internal updates:** Commands or features have been modified")
-            elif not previous_commands:
-                # First time detecting changes - don't show all commands, just note it's the first change
-                changes.append("🚀 **First feature update:** Bot features have been updated")
-            
-            # Commands have changed - increment version based on change type
-            try:
-                # Parse version (format: MAJOR.MINOR.PATCH)
-                version_parts = stored_version.split(".")
-                if len(version_parts) >= 2:
-                    major = int(version_parts[0])
-                    minor = int(version_parts[1])
-                    patch = int(version_parts[2]) if len(version_parts) > 2 else 0
-                    
-                    # Determine if this is a "big" change (commands added/removed) or "small" change (internal updates only)
-                    has_added = len(added_commands) > 0
-                    has_removed = len(removed_commands) > 0
-                    is_big_change = has_added or has_removed
-                    
-                    logger.info(f"[version] Change detection: added={has_added} ({len(added_commands)}), removed={has_removed} ({len(removed_commands)}), is_big={is_big_change}")
-                    
-                    if is_big_change:
-                        # Big change: increment minor version (1.7.0 → 1.8.0)
-                        minor += 1
-                        patch = 0  # Reset patch
-                        logger.info(f"[version] Big change detected (commands added/removed), incrementing minor version")
-                    else:
-                        # Small change: increment patch version (1.7.0 → 1.7.1)
-                        patch += 1
-                        logger.info(f"[version] Small change detected (internal updates only), incrementing patch version")
-                    
-                    new_version = f"{major}.{minor}.{patch}"
-                else:
-                    # Fallback: start at 1.2.0
-                    new_version = "1.2.0"
-            except (ValueError, IndexError):
-                # Invalid version format, start at 1.2.0
-                new_version = "1.2.0"
-            
-            # Update stored version, hash, and store CURRENT commands as previous_commands for next comparison
-            current_commands_str = ",".join(sorted(current_commands)) if current_commands else ""
+                previous_commands = set(previous_commands_str.split(","))
+            except Exception as e:
+                logger.warning("[version] Error parsing previous commands: %s", e)
+
+        version_changed = stored_version != canonical
+        hash_changed = stored_hash != current_hash
+        changes = []
+
+        if version_changed:
+            changes.append(f"🚀 **Release:** Deployed v{canonical}")
+            logger.info(
+                "[version] BOT_VERSION changed %s → %s",
+                stored_version or "(empty)",
+                canonical,
+            )
+
+        if hash_changed:
+            logger.info(
+                "[version] Feature hash changed %s... → %s...",
+                (stored_hash[:8] if stored_hash else "empty"),
+                (current_hash[:8] if current_hash else "empty"),
+            )
+            changes.extend(_command_change_lines(previous_commands, current_commands))
+
+        if version_changed or hash_changed:
             await db.execute("""
                 INSERT OR REPLACE INTO bot_version_tracking (id, current_version, feature_hash, last_updated, previous_commands)
                 VALUES (1, ?, ?, ?, ?)
-            """, (new_version, current_hash, datetime.now(timezone.utc).isoformat(), current_commands_str))
+            """, (canonical, current_hash, now_iso, current_commands_str))
             await db.commit()
-            
-            # Verify the version was stored correctly
-            verify_cur = await db.execute("SELECT current_version FROM bot_version_tracking WHERE id = 1")
-            verify_row = await verify_cur.fetchone()
-            if verify_row and verify_row[0] == new_version:
-                logger.info(f"[version] ✅ Version {new_version} successfully stored and verified in database (from {stored_version})")
-            else:
-                logger.error(f"[version] ❌ Version storage verification failed! Expected {new_version}, got {verify_row}")
-            
-            logger.info(f"[version] Version incremented to {new_version} (from {stored_version}), stored {len(current_commands)} commands as previous_commands")
-            return new_version, changes
+            logger.info("[version] Tracking synced to BOT_VERSION %s", canonical)
+            return canonical, changes
+
+        logger.info("[version] No deploy or feature changes (BOT_VERSION %s)", canonical)
+        return canonical, []
 
 
 async def check_and_post_updates(bot):
@@ -286,18 +213,22 @@ async def check_and_post_updates(bot):
     
     # First, detect if version should be auto-updated
     detected_version, changes = await detect_and_update_version(bot)
-    bot._bot_version = detected_version
-    logger.info(f"[update_log] Version detection result: version={detected_version}, changes={len(changes) if changes else 0}")
+    version_to_use = BOT_VERSION or detected_version
+    bot._bot_version = version_to_use
+    logger.info(
+        "[update_log] Version detection result: version=%s, changes=%s",
+        version_to_use,
+        len(changes) if changes else 0,
+    )
     if changes:
         logger.info(f"[update_log] Changes detected: {changes}")
-    
-    # If no changes detected, don't post an update (version persists, no need to post)
+
     if not changes:
-        logger.info(f"[update_log] No changes detected, version remains at {detected_version}, skipping update post")
+        logger.info(
+            "[update_log] No changes detected, version remains at %s, skipping update post",
+            version_to_use,
+        )
         return
-    
-    # Use detected version (or fallback to env version)
-    version_to_use = detected_version if detected_version else BOT_VERSION
     
     if not version_to_use:
         logger.warning("[update_log] No version set, skipping update check")

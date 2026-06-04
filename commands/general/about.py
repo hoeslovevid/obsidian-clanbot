@@ -22,7 +22,6 @@ def setup(bot, group=None):
         client = interaction.client
         bot_name = client.user.display_name if client.user else "Bot"
 
-        # Read current version from database (updated on each deployment)
         version = await get_current_bot_version()
         bot_avatar = (
             client.user.display_avatar.url
