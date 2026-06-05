@@ -51,7 +51,9 @@ async def mark_lfg_filled(
                 if not old_title.startswith("[FILLED"):
                     embed.title = f"[FILLED ✅] {old_title}"
                 embed.set_footer(text="✅ Group filled — post will auto-archive soon")
-                await msg.edit(embed=embed)
+                from core.safe_message_edit import safe_message_edit
+
+                await safe_message_edit(msg, embed=embed)
         except (discord.NotFound, discord.HTTPException):
             pass
 

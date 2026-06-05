@@ -67,7 +67,7 @@ def embed_template(
     elif template == "warning":
         cat = category or "warning"
         thumbnail = thumbnail or category_thumbnail("warning")
-        if color is None and "color" not in kwargs:
+        if "color" not in kwargs:
             kwargs["color"] = EMBED_COLORS.get("warning")
     elif template == "error":
         cat = "error"

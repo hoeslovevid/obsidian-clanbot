@@ -57,7 +57,8 @@ def _hub_embed(client) -> discord.Embed:
             "• **`/status`** — bot version, latency, Warframe API health\n"
             "• **`/warframe status`** — Baro, alerts, cycles\n"
             "• **`/ticket`** — open a support ticket\n"
-            "• **`/help`** — full command reference"
+            "• **`/help`** — full command reference\n"
+            "• **`/favorite_add`** — pin commands; they show in `/menu` and `/help`"
         ),
         category="general",
         footer=footer_for("console_hub"),

@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 # Item 81 — onboarding step ledger
 # ---------------------------------------------------------------------------
 ONBOARDING_STEP_NAMES: tuple[str, ...] = (
-    "set_timezone", "claim_daily", "pick_notifications", "link_steam",
+    "set_timezone", "set_platform", "open_menu",
 )
 
 
@@ -146,12 +146,14 @@ class OnboardingView(discord.ui.View):
             return False
         return True
 
-    @discord.ui.button(label="Set Timezone", style=discord.ButtonStyle.primary, emoji="🌐")
+    @discord.ui.button(label="1 · Timezone", style=discord.ButtonStyle.primary, emoji="🌐")
     async def tz_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message(
-            embed=obsidian_embed(
+            embed=embed_template(
+                "showcase",
                 "🌐 Set your timezone",
-                "Pick a timezone — used for daily reminders, event schedules, and `/me`.",
+                "Pick a timezone — used for reminders, events, and `/me`.\n\n"
+                "You can also run **`/preferences`** anytime.",
                 category="general",
                 client=interaction.client,
             ),
@@ -159,53 +161,40 @@ class OnboardingView(discord.ui.View):
             ephemeral=True,
         )
 
-    @discord.ui.button(label="Claim Daily", style=discord.ButtonStyle.success, emoji="🎁")
-    async def daily_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # We can't run a slash callback directly from a DM context (no guild),
-        # so we point the user at the slash command instead.
-        await _record_onboarding_step(self.guild_id, interaction.user.id, "claim_daily")
+    @discord.ui.button(label="2 · Platform", style=discord.ButtonStyle.primary, emoji="🎮")
+    async def platform_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await _record_onboarding_step(self.guild_id, interaction.user.id, "set_platform")
         await interaction.response.send_message(
-            embed=obsidian_embed(
-                "🎁 Claim your daily reward",
-                f"Hop into **{self.member.guild.name}** and run **`/daily`** "
-                "(or `/economy daily`) to claim your first reward.\n\n"
-                "_Daily coins reset every 24h UTC. Keep your streak to multiply rewards!_",
-                category="economy",
-                client=interaction.client,
-            ),
-            ephemeral=True,
-        )
-
-    @discord.ui.button(label="Pick Notifications", style=discord.ButtonStyle.primary, emoji="🔔")
-    async def notify_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await _record_onboarding_step(self.guild_id, interaction.user.id, "pick_notifications")
-        await interaction.response.send_message(
-            embed=obsidian_embed(
-                "🔔 Pick notifications",
-                "In the server, run **`/warframe subscribe`** or look for the "
-                "**🔔 Warframe Notification Subscriptions** panel a mod may have posted.\n\n"
-                "_You can subscribe to: Baro, Cycles, Archon, Alerts, Invasions, Devstream._",
+            embed=embed_template(
+                "showcase",
+                "🎮 Warframe platform",
+                f"In **{self.member.guild.name}**, run **`/preferences`** and set your platform "
+                "(PC, Xbox, PlayStation, Switch).\n\n"
+                "_Baro, fissures, and trade tools follow this preference._",
                 category="warframe",
+                footer=footer_for("warframe_status"),
                 client=interaction.client,
             ),
             ephemeral=True,
         )
 
-    @discord.ui.button(label="Link Steam", style=discord.ButtonStyle.secondary, emoji="🎮")
-    async def steam_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await _record_onboarding_step(self.guild_id, interaction.user.id, "link_steam")
+    @discord.ui.button(label="3 · Menu", style=discord.ButtonStyle.success, emoji="📋")
+    async def menu_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await _record_onboarding_step(self.guild_id, interaction.user.id, "open_menu")
         await interaction.response.send_message(
-            embed=obsidian_embed(
-                "🎮 Link Warframe / Steam",
-                "Use **`/warframe link`** in the server to connect your Warframe / "
-                "Steam identity for trade pricing, achievement roles, and dojo features.",
-                category="warframe",
+            embed=embed_template(
+                "showcase",
+                "📋 Command menu",
+                f"Use **`/menu`** in the server for daily, profile, baro, tickets, and more.\n\n"
+                "Pin favorites with **`/favorite_add`** — they appear at the top of `/menu` and `/help`.",
+                category="general",
+                footer=footer_for("help"),
                 client=interaction.client,
             ),
             ephemeral=True,
         )
 
-    @discord.ui.button(label="Done", style=discord.ButtonStyle.secondary, emoji="✅")
+    @discord.ui.button(label="Done", style=discord.ButtonStyle.secondary, emoji="✅", row=1)
     async def done_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         for child in self.children:
             child.disabled = True  # type: ignore[attr-defined]
@@ -225,8 +214,8 @@ def _build_dm_embed(member: discord.Member, client) -> discord.Embed:
         "showcase",
         f"👋 Welcome to {member.guild.name}!",
         f"Hi {member.display_name} — tap a button to get started:\n\n"
-        "**1.** Set timezone · **2.** Claim daily · **3.** Pick notifications · **4.** Link Steam\n\n"
-        "_Re-open anytime with `/onboarding resume` or `/menu`._",
+        "**1.** Timezone · **2.** Platform (`/preferences`) · **3.** `/menu` quick picks\n\n"
+        "_Re-open anytime with `/onboarding resume`._",
         category="general",
         client=client,
         footer=footer_for("onboarding"),

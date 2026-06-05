@@ -277,13 +277,16 @@ async def incident_mode_check(interaction: discord.Interaction) -> bool:
             "The server is in **incident mode** while staff handle an issue. "
             "Most commands are paused for now — you can still use **`/help`**, **`/status`**, or **`/ticket`**."
         )
+        until_line = ""
+        if until_ts and until_ts > now_ts:
+            until_line = f"\n\n_Auto-resumes <t:{until_ts}:R> (<t:{until_ts}:F>)._"
         if not interaction.response.is_done():
             from core.embed_templates import embed_template
             await interaction.response.send_message(
                 embed=embed_template(
                     "warning",
                     "🚨 Incident Mode",
-                    reason,
+                    f"{reason}{until_line}",
                     category="moderation",
                     client=bot,
                 ),
@@ -784,20 +787,43 @@ async def on_message(message: discord.Message):
             now_iso = now_utc().isoformat()
             is_staff = isinstance(message.author, discord.Member) and is_mod(message.author)
             async with aiosqlite.connect(DB_PATH) as db:
-                # Update last activity; if staff and first_response_at missing, set it
+                cur = await db.execute(
+                    "SELECT user_id FROM tickets WHERE guild_id=? AND channel_id=? AND status!='closed'",
+                    (message.guild.id, message.channel.id),
+                )
+                owner_row = await cur.fetchone()
+                new_status = None
+                if owner_row:
+                    owner_id = int(owner_row[0])
+                    if is_staff:
+                        new_status = "awaiting_member"
+                    elif message.author.id == owner_id:
+                        new_status = "awaiting_staff"
                 await db.execute(
                     """
                     UPDATE tickets
                     SET last_activity_at=?,
+                        status=COALESCE(?, status),
                         first_response_at=CASE
                             WHEN ?=1 AND (first_response_at IS NULL OR first_response_at='') THEN ?
                             ELSE first_response_at
                         END
-                    WHERE guild_id=? AND channel_id=? AND status='open'
+                    WHERE guild_id=? AND channel_id=? AND status!='closed'
                     """,
-                    (now_iso, 1 if is_staff else 0, now_iso, message.guild.id, message.channel.id),
+                    (
+                        now_iso,
+                        new_status,
+                        1 if is_staff else 0,
+                        now_iso,
+                        message.guild.id,
+                        message.channel.id,
+                    ),
                 )
                 await db.commit()
+            if new_status:
+                from commands.tickets.ticket import sync_ticket_status_for_channel
+
+                await sync_ticket_status_for_channel(message.guild, message.channel.id, new_status)
     except Exception:
         # Never break message handling because of ticket tracking
         pass

@@ -117,13 +117,25 @@ async def send_error_reply(
 ) -> None:
     """Send a consistent error embed, using followup if the response was already sent."""
     from core.utils import error_embed
+    from core.embed_links import add_link_row, help_link_buttons
 
-    emb = error_embed("Error", message, action_hint=action_hint, client=interaction.client, error_code=error_code)
+    ticket_hint = None
+    if error_code:
+        ticket_hint = f"Open **`/ticket`** and mention code **`{error_code}`** if you need staff help."
+    merged_hint = action_hint
+    if ticket_hint:
+        merged_hint = f"{action_hint}\n\n{ticket_hint}" if action_hint else ticket_hint
+
+    emb = error_embed("Error", message, action_hint=merged_hint, client=interaction.client, error_code=error_code)
+    view = None
+    if error_code:
+        view = discord.ui.View(timeout=120)
+        add_link_row(view, help_link_buttons())
     try:
         if interaction.response.is_done():
-            await interaction.followup.send(embed=emb, ephemeral=ephemeral)
+            await interaction.followup.send(embed=emb, view=view, ephemeral=ephemeral)
         else:
-            await interaction.response.send_message(embed=emb, ephemeral=ephemeral)
+            await interaction.response.send_message(embed=emb, view=view, ephemeral=ephemeral)
     except Exception:
         pass
 

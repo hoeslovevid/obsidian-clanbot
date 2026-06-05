@@ -12,13 +12,27 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-04"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Fix** — VC panel edits coalesced per guild with skip-if-unchanged (fewer Discord 429 PATCH warnings)",
-    "**Fix** — `safe_message_edit` paces channel edits; Baro live loop 5m + skip redundant embed updates",
-    "**Config** — default `VC_PANEL_UPDATE_DEBOUNCE_SECONDS` raised to 8",
+    "**Embeds** — showcase templates + contextual footers on giveaways, gambling, polls, warn, and community entry points",
+    "**Live edits** — `safe_message_edit` on poll results, giveaway entry counts, and LFG fill updates",
+    "**Tickets** — status chips on activity, mod quick-reply buttons (Looking into it / Need more info / Resolved)",
+    "**Discovery** — favorites surface in `/help` and `/menu`; onboarding 3-step flow (timezone → platform → menu)",
+    "**Trust** — presence shows `BOT_VERSION` + Warframe health; error embeds hint `/ticket` with error code",
+    "**Warframe** — platform footer notes on baro, status, and related commands",
+    "**V2** — `HELP_LAYOUT_V2` default; fixed warning template color bug in `embed_template`",
+    "**Ops** — incident mode embed shows auto-disable timestamp; embed asset env docs for Railway",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "1.91.2",
+        "date": "2026-06-04",
+        "changes": [
+            "**Fix** — VC panel edits coalesced per guild with skip-if-unchanged (fewer Discord 429 PATCH warnings)",
+            "**Fix** — `safe_message_edit` paces channel edits; Baro live loop 5m + skip redundant embed updates",
+            "**Config** — default `VC_PANEL_UPDATE_DEBOUNCE_SECONDS` raised to 8",
+        ],
+    },
     {
         "version": "1.91.1",
         "date": "2026-06-04",

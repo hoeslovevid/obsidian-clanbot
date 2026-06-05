@@ -39,10 +39,12 @@ def setup(bot, group=None):
                 rows = await cur.fetchall()
             if not rows:
                 return await interaction.followup.send(
-                    embed=obsidian_embed(
+                    embed=embed_template(
+                        "showcase",
                         "🎉 No Giveaway Entries",
-                        "You haven't entered any active giveaways. Use `/giveaways giveaway_list` to see open giveaways.",
-                        color=discord.Color.blue(),
+                        "You haven't entered any active giveaways.\n\nUse `/giveaways giveaway_list` to see open giveaways.",
+                        category="community",
+                        footer=footer_for("community_giveaway"),
                         client=interaction.client,
                     ),
                     ephemeral=True,
@@ -57,7 +59,14 @@ def setup(bot, group=None):
                 except Exception:
                     lines.append(f"**{title}** — {prize}")
             await interaction.followup.send(
-                embed=obsidian_embed("🎉 My Giveaway Entries", "\n\n".join(lines), color=discord.Color.gold(), client=interaction.client),
+                embed=embed_template(
+                    "showcase",
+                    "🎉 My Giveaway Entries",
+                    "\n\n".join(lines),
+                    category="prestige",
+                    footer=footer_for("community_giveaway"),
+                    client=interaction.client,
+                ),
                 ephemeral=True,
             )
 
@@ -154,12 +163,13 @@ def setup(bot, group=None):
             pages.append({"description": description.strip()})
 
         if len(pages) == 1:
-            embed = obsidian_embed(
+            embed = embed_template(
+                "showcase",
                 "🎉 Active Giveaways",
                 pages[0]["description"],
-                color=discord.Color.gold(),
+                category="prestige",
                 thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
-                footer=f"{len(rows)} active giveaway(s)",
+                footer=f"{footer_for('community_giveaway')} · {len(rows)} active",
                 client=interaction.client,
             )
             await interaction.followup.send(embed=embed, ephemeral=True)

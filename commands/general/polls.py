@@ -8,6 +8,8 @@ import json
 import time
 import logging
 
+from core.embed_templates import embed_template
+from core.embed_footers import footer_for
 from core.utils import obsidian_embed, is_mod, render_bar
 from database import DB_PATH, now_utc
 import aiosqlite
@@ -46,7 +48,14 @@ def _build_live_poll_embed(question: str, options_list: list, counts: list[int],
                 desc += f"\n\n**Ends:** <t:{int(end_dt.timestamp())}:R>"
         except Exception:
             pass
-    return obsidian_embed("📊 Poll", desc, color=discord.Color.blue())
+    return embed_template(
+        "showcase",
+        "📊 Poll",
+        desc,
+        category="community",
+        footer=footer_for("community_events"),
+        client=None,
+    )
 
 
 async def _refresh_live_poll(channel: discord.abc.Messageable, message_id: int) -> None:
@@ -75,7 +84,11 @@ async def _refresh_live_poll(channel: discord.abc.Messageable, message_id: int) 
             creator_part = original.footer.text.split("Poll by", 1)[-1].strip()
             if creator_part:
                 new_embed.set_footer(text=f"Live results — react to vote • Poll by {creator_part}")
-        await message.edit(embed=new_embed)
+        from core.safe_message_edit import safe_message_edit
+
+        if original and original.description == new_embed.description:
+            return
+        await safe_message_edit(message, embed=new_embed)
     except (discord.NotFound, discord.Forbidden):
         return
     except Exception as e:
@@ -190,13 +203,14 @@ def setup(bot, group=None):
         if ends_at:
             poll_text += f"\n\n**Ends:** <t:{int(dateparser.parse(ends_at, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True}).timestamp())}:R>"
         
-        embed = obsidian_embed(
+        embed = embed_template(
+            "showcase",
             "📊 Poll",
             poll_text,
-            color=discord.Color.blue(),
+            category="community",
+            footer=f"Poll by {interaction.user.display_name}",
             client=interaction.client,
         )
-        embed.set_footer(text=f"Poll by {interaction.user.display_name}")
         
         # Send poll message
         message = await interaction.channel.send(embed=embed)
@@ -218,13 +232,14 @@ def setup(bot, group=None):
             await db.commit()
         
         await interaction.followup.send(
-            embed=obsidian_embed(
+            embed=embed_template(
+                "showcase",
                 "✅ Poll Created",
                 f"Poll has been created: {message.jump_url}",
-                color=discord.Color.green(),
+                category="community",
                 client=interaction.client,
             ),
-            ephemeral=True
+            ephemeral=True,
         )
     
     command_decorator = group.command(name="poll_results", description="View poll results.") if group else bot.tree.command(name="poll_results", description="View poll results.")

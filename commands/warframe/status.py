@@ -10,7 +10,7 @@ from api.warframe_api import wf_staleness_for_path
 from api.warframe_api import get_baro_status, fetch_alerts, get_all_cycles, fetch_fissures, fetch_sortie, fetch_invasions
 from commands.warframe.alerts import format_alert_rewards
 from views import RetryView, RefreshView
-from core.cache_utils import invalidate
+from core.warframe_platform import warframe_footer_platform_note
 
 
 def _format_baro_summary(baro_data: dict, is_active: bool) -> tuple[str, str]:
@@ -183,7 +183,10 @@ def build_status_embed(
     now = datetime.now(timezone.utc)
     footer_ts = int(now.timestamp())
     plat_label = platform.upper() if platform else "PC"
-    footer = f"Last updated <t:{footer_ts}:R> · {plat_label} data · Use Refresh to update"
+    footer = (
+        f"Last updated <t:{footer_ts}:R> · {plat_label} data · Use Refresh · "
+        f"{warframe_footer_platform_note(platform, pc_only_api=True)}"
+    )
 
     fields = []
     

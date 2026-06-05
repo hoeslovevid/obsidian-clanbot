@@ -196,10 +196,11 @@ async def _play_dice(
 
     low_warn = "\n\n⚠️ **Low balance!** Consider saving for your daily." if low_balance_warning and new_balance < 100 else ""
     footer = f"Bet: {bet:,} coins • {'Roll again!' if user_roll > bot_roll else 'Try again!'}"
-    embed = obsidian_embed(
+    embed = embed_template(
+        "showcase",
         "🎲 Dice",
         f"{result}\n**New Balance:** {new_balance:,} coins{low_warn}",
-        color=color,
+        category="economy",
         thumbnail=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
         footer=footer,
         client=interaction.client,
@@ -291,10 +292,11 @@ async def _play_roulette(
 
     low_warn = "\n\n⚠️ **Low balance!** Consider saving for your daily." if low_balance_warning and new_balance < 100 else ""
     footer = f"Bet: {bet:,} coins • Landed on {landed_color.capitalize()} • {'Spin again!' if chosen_color == landed_color else 'Try red, black, or green'}"
-    embed = obsidian_embed(
+    embed = embed_template(
+        "showcase",
         "🎰 Roulette",
         f"{result}\n**New Balance:** {new_balance:,} coins{low_warn}",
-        color=color_embed,
+        category="economy",
         thumbnail=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
         footer=footer,
         client=interaction.client,
@@ -415,10 +417,12 @@ def setup(bot, group=None):
 
         if not totals or totals[0] == 0:
             return await interaction.followup.send(
-                embed=obsidian_embed(
+                embed=embed_template(
+                    "showcase",
                     "🎲 No Gambling History",
                     f"{target.mention} hasn't played any games yet.",
                     category="economy",
+                    footer=footer_for("economy_daily"),
                     client=interaction.client,
                 ),
                 ephemeral=is_self,
@@ -444,7 +448,8 @@ def setup(bot, group=None):
             ))
 
         net_sign = "+" if net_profit >= 0 else ""
-        embed = obsidian_embed(
+        embed = embed_template(
+            "showcase",
             f"🎲 Gambling Stats — {target.display_name}",
             f"> **{total_wins}W / {total_losses}L** across {total_plays:,} games\n"
             f"> Win rate: **{win_rate}%**  ·  Net: **{net_sign}{net_profit:,}** coins",

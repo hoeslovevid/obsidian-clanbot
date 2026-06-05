@@ -12,6 +12,7 @@ from discord import app_commands
 
 from api.warframe_api import get_baro_status, wf_staleness_for_path
 from core.embed_templates import embed_template
+from core.warframe_platform import warframe_footer_platform_note
 from core.utils import (
     BUTTON_ONLY_RUNNER_MSG,
     format_number,
@@ -170,7 +171,7 @@ def build_baro_embed(
             client=client,
             cached_at=cached_at,
             fields=fields,
-            footer="PC data · Use Refresh · See also: /warframe cycles, /warframe alerts",
+            footer=f"PC data · Use Refresh · {warframe_footer_platform_note('pc', pc_only_api=True)}",
         )
 
     fields = []
@@ -239,7 +240,7 @@ def build_baro_embed(
         client=client,
         cached_at=cached_at,
         fields=fields,
-        footer="PC data · Baro visits every ~2 weeks",
+        footer=f"PC data · Baro visits every ~2 weeks · {warframe_footer_platform_note('pc', pc_only_api=True)}",
     )
 
 

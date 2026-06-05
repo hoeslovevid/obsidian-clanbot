@@ -227,13 +227,15 @@ def setup(bot, group=None):
 
         if not warnings_with_ids:
             return await interaction.followup.send(
-                embed=obsidian_embed(
+                embed=embed_template(
+                    "showcase",
                     "⚠️ Warnings",
                     f"{user.mention} has no warnings.",
-                    color=discord.Color.green(),
+                    category="moderation",
+                    footer=footer_for("moderation_warn"),
                     client=interaction.client,
                 ),
-                ephemeral=True
+                ephemeral=True,
             )
 
         per_page = 15
@@ -243,11 +245,12 @@ def setup(bot, group=None):
         ]
         if len(lines) <= per_page:
             warnings_text = "\n".join(lines)
-            embed = obsidian_embed(
+            embed = embed_template(
+                "warning",
                 f"⚠️ Warnings for {user.display_name}",
                 f"**Total:** {format_number(len(warnings_with_ids))}/{max_warnings} {pluralize(len(warnings_with_ids), 'warning')}\n\n{warnings_text}",
-                color=EMBED_COLORS["moderation"],
-                footer="Mod only • See also: /mod purge",
+                category="moderation",
+                footer=f"{footer_for('moderation_warn')} · Mod only",
                 client=interaction.client,
             )
             await interaction.followup.send(embed=embed, ephemeral=True)
@@ -344,14 +347,16 @@ def setup(bot, group=None):
             await db.commit()
         
         await interaction.followup.send(
-            embed=obsidian_embed(
+            embed=embed_template(
+                "warning",
                 "✅ Warn System Configured",
                 f"**Max Warnings:** {max_warnings}\n**Action:** {action}\n"
                 f"{f'**Mute Duration:** {mute_duration} minutes' if action == 'mute' and mute_duration else ''}",
-                color=discord.Color.green(),
+                category="moderation",
+                footer=footer_for("moderation_warn"),
                 client=interaction.client,
             ),
-            ephemeral=True
+            ephemeral=True,
         )
 
     # ----- Item 38: warn reason templates ---------------------------------------
@@ -463,10 +468,12 @@ def setup(bot, group=None):
         rows = await _list_templates(interaction.guild.id)
         if not rows:
             return await interaction.response.send_message(
-                embed=obsidian_embed(
+                embed=embed_template(
+                    "showcase",
                     "No templates",
-                    "No saved warn reasons yet. Mods can add one with `/mod warn template_add`.",
-                    color=EMBED_COLORS["moderation"],
+                    "No saved warn reasons yet. Mods can add one with `/warn template_add`.",
+                    category="moderation",
+                    footer=footer_for("moderation_warn"),
                     client=interaction.client,
                 ),
                 ephemeral=True,

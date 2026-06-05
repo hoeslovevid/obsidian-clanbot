@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 
 import discord  # type: ignore
 
-from core.config import BOT_WEBSITE
+from core.config import BOT_VERSION, BOT_WEBSITE
 
 
 def website_host() -> Optional[str]:
@@ -25,16 +25,37 @@ def website_host() -> Optional[str]:
     return host or None
 
 
+def _warframe_health_snippet() -> str:
+    try:
+        from core.cache_utils import warframe_health_line
+
+        line, degraded = warframe_health_line()
+        if not line:
+            return ""
+        short = line.replace("Warframe API:", "").replace("**", "").strip()
+        if len(short) > 36:
+            short = short[:33] + "…"
+        return f"WF {'degraded' if degraded else 'ok'}" if not short else short
+    except Exception:
+        return ""
+
+
 def build_bot_activity(bot) -> discord.Activity:
-    """Presence shown in the member list: website + /help + guild count."""
+    """Presence: version, optional API health hint, /help, guild count."""
     guild_count = len(getattr(bot, "guilds", []) or [])
-    servers = f"{guild_count} server{'s' if guild_count != 1 else ''}"
+    servers = f"{guild_count} srv" if guild_count else ""
+    version = (getattr(bot, "_bot_version", None) or BOT_VERSION or "").strip()
+    parts: list[str] = []
+    if version:
+        parts.append(f"v{version}")
+    health = _warframe_health_snippet()
+    if health:
+        parts.append(health)
     host = website_host()
     if host:
-        name = f"{host} • /help • {servers}"
-    else:
-        name = f"/help • {servers}"
-    return discord.Activity(
-        type=discord.ActivityType.watching,
-        name=name[:128],
-    )
+        parts.append(host)
+    parts.append("/help")
+    if servers:
+        parts.append(servers)
+    name = " · ".join(p for p in parts if p)[:128]
+    return discord.Activity(type=discord.ActivityType.watching, name=name)

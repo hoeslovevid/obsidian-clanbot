@@ -245,6 +245,52 @@ class TicketSatisfactionView(discord.ui.View):
             await interaction.response.send_message("Thanks! Rating saved.", ephemeral=True)
 
 
+async def sync_ticket_status_for_channel(
+    guild: discord.Guild,
+    channel_id: int,
+    status: str,
+) -> None:
+    """Update ticket row status and refresh the control-panel embed chip."""
+    status_key = (status or "open").strip().lower()
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            "SELECT id, ticket_id, control_message_id FROM tickets WHERE guild_id=? AND channel_id=? AND status!='closed'",
+            (guild.id, channel_id),
+        )
+        row = await cur.fetchone()
+        if not row:
+            return
+        ticket_db_id, ticket_id, control_message_id = row
+        await db.execute(
+            "UPDATE tickets SET status=? WHERE id=?",
+            (status_key, ticket_db_id),
+        )
+        await db.commit()
+
+    if not control_message_id:
+        return
+    channel = guild.get_channel(channel_id)
+    if not isinstance(channel, discord.TextChannel):
+        return
+    try:
+        msg = await channel.fetch_message(int(control_message_id))
+        if not msg.embeds:
+            return
+        new_emb = ticket_embed(
+            "🎫 Ticket Controls",
+            "Staff: claim · note · transcript · quick replies · close.\n"
+            "(*Buttons are for moderators.*)",
+            status=status_key,
+            footer=footer_for("community_ticket"),
+            client=channel.guild.me if channel.guild else None,
+        )
+        from core.safe_message_edit import safe_message_edit
+
+        await safe_message_edit(msg, embed=new_emb)
+    except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+        pass
+
+
 class TicketControlView(discord.ui.View):
     """Persistent control panel for a ticket."""
 
@@ -297,6 +343,52 @@ class TicketControlView(discord.ui.View):
         )
         close_btn.callback = self._close  # type: ignore
         self.add_item(close_btn)
+
+        for key, label in (
+            ("looking", "Looking into it"),
+            ("info", "Need more info"),
+            ("resolved", "Resolved"),
+        ):
+            btn = discord.ui.Button(
+                label=label,
+                style=discord.ButtonStyle.secondary,
+                custom_id=f"ticket:quick:{ticket_db_id}:{key}",
+            )
+            btn.callback = self._quick_reply_factory(key)  # type: ignore
+            self.add_item(btn)
+
+    _QUICK_BODIES: dict[str, str] = {
+        "looking": "🫡 **Staff:** We're looking into this — thanks for your patience.",
+        "info": "📎 **Staff:** Please share any extra details, screenshots, or steps so we can help faster.",
+        "resolved": "✅ **Staff:** Marking this resolved from our side — reply here if you still need help.",
+    }
+
+    def _quick_reply_factory(self, key: str):
+        async def _handler(interaction: discord.Interaction):
+            await self._post_quick_reply(interaction, key)
+
+        return _handler
+
+    async def _post_quick_reply(self, interaction: discord.Interaction, key: str) -> None:
+        if not interaction.guild or not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
+            return await interaction.response.send_message("Mods only.", ephemeral=True)
+        body = self._QUICK_BODIES.get(key, "Staff update.")
+        status = "awaiting_member" if key != "info" else "awaiting_member"
+        await interaction.response.defer(ephemeral=True)
+        try:
+            if isinstance(interaction.channel, discord.TextChannel):
+                await interaction.channel.send(
+                    embed=ticket_embed(
+                        "💬 Staff update",
+                        body,
+                        status=status,
+                        client=interaction.client,
+                    )
+                )
+                await sync_ticket_status_for_channel(interaction.guild, interaction.channel.id, status)
+        except discord.Forbidden:
+            pass
+        await interaction.followup.send("Posted in ticket.", ephemeral=True)
 
     async def _claim(self, interaction: discord.Interaction):
         if not interaction.guild or not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):

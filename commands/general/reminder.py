@@ -5,7 +5,8 @@ from typing import Optional
 from datetime import datetime, timezone, timedelta
 import dateparser
 
-from core.config import TIMEZONE
+from core.embed_templates import embed_template
+from core.user_time import format_user_time
 from core.utils import obsidian_embed, TIME_AUTOCOMPLETE_CHOICES, EMBED_COLORS
 from database import DB_PATH, now_utc, get_user_timezone
 import aiosqlite
@@ -123,14 +124,18 @@ def setup(bot, group=None):
             await db.commit()
 
         repeat_text = f"\n**Repeats:** {repeat.name.split(' - ')[0]}" if recurrence_rule else ""
+        when_display = await format_user_time(
+            interaction.guild.id, interaction.user.id, remind_time, include_relative=True
+        )
         await interaction.followup.send(
-            embed=obsidian_embed(
+            embed=embed_template(
+                "showcase",
                 "✅ Reminder Set",
-                f"**Reminder:** {reminder}\n**When:** <t:{int(remind_time.timestamp())}:F> (<t:{int(remind_time.timestamp())}:R>){repeat_text}",
-                color=EMBED_COLORS["success"],
+                f"**Reminder:** {reminder}\n**When:** {when_display}{repeat_text}",
+                category="general",
                 client=interaction.client,
             ),
-            ephemeral=True
+            ephemeral=True,
         )
 
     # Reminder preferences (mods only) - quieter notifications via DM

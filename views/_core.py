@@ -14,6 +14,27 @@ from database import DB_PATH, now_utc, log_complaint_action
 logger = logging.getLogger(__name__)
 
 
+async def _update_giveaway_entry_embed(message: discord.Message, entry_count: int) -> None:
+    """Update public giveaway embed entry count; skip if unchanged."""
+    if not message or not message.embeds:
+        return
+    embed = message.embeds[0].copy()
+    desc = embed.description or ""
+    import re
+
+    match = re.search(r"\*\*Entries:\*\*\s*(\d+)", desc)
+    if match and int(match.group(1)) == entry_count:
+        return
+    if "**Entries:**" in desc:
+        desc = desc.rsplit("**Entries:**", 1)[0] + f"**Entries:** {entry_count}"
+    else:
+        desc += f"\n\n**Entries:** {entry_count}"
+    embed.description = desc
+    from core.safe_message_edit import safe_message_edit
+
+    await safe_message_edit(message, embed=embed)
+
+
 class EmbedPaginator(discord.ui.View):
     """Reusable paginated embed view with Prev/Next buttons."""
 
@@ -695,15 +716,8 @@ class GiveawayView(discord.ui.View):
         # Update the public embed entry count in the background (non-blocking)
         try:
             message = interaction.message
-            if message and message.embeds:
-                embed = message.embeds[0]
-                desc = embed.description or ""
-                if "**Entries:**" in desc:
-                    desc = desc.rsplit("**Entries:**", 1)[0] + f"**Entries:** {entry_count}"
-                else:
-                    desc += f"\n\n**Entries:** {entry_count}"
-                embed.description = desc
-                await message.edit(embed=embed)
+            if message:
+                await _update_giveaway_entry_embed(message, entry_count)
         except Exception as e:
             logger.debug(f"Could not update giveaway embed: {e}")
 
@@ -790,15 +804,8 @@ class GiveawayView(discord.ui.View):
         # Update embed
         try:
             message = interaction.message
-            if message and message.embeds:
-                embed = message.embeds[0]
-                desc = embed.description
-                if "**Entries:**" in desc:
-                    desc = desc.rsplit("**Entries:**", 1)[0] + f"**Entries:** {entry_count}"
-                else:
-                    desc += f"\n\n**Entries:** {entry_count}"
-                embed.description = desc
-                await message.edit(embed=embed)
+            if message:
+                await _update_giveaway_entry_embed(message, entry_count)
         except Exception as e:
             logger.debug(f"Could not update giveaway embed: {e}")
         

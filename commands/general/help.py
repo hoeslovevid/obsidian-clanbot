@@ -604,12 +604,29 @@ def setup(bot, group=None):
                 groups.append(cmd)
         
         # Build initial embed — "Start here" mental model + full group list
+        fav_line = ""
+        if interaction.guild:
+            try:
+                from commands.general.favorites import get_user_favorites
+
+                favs = await get_user_favorites(interaction.guild.id, interaction.user.id)
+                if favs:
+                    fav_line = (
+                        "\n**Your favorites** — "
+                        + " · ".join(f"`/{p}`" for p in favs[:6])
+                        + "\n"
+                    )
+            except Exception:
+                pass
+
         desc = (
-            "**Member essentials** — what most people use daily:\n\n"
+            fav_line
+            + "**Member essentials** — what most people use daily:\n\n"
             "👤 **Me** — `/daily` · `/profile` · `/me` · `/preferences` · `/favorites`\n"
             "🎮 **Warframe** — `/baro` · `/wfnotify configure` · `/fissures` · `/lfg` · `/trade`\n"
             "👥 **Community** — `/ticket` · `/case` · `/poll` · `/community suggest`\n"
             "🔍 **Find anything** — `/search` keyword · `/menu` quick picker · `/status` bot health\n"
+            "\n**Preferences** — `/preferences` includes platform, timezone, and **achievement notify** style (embed vs minimal).\n"
         )
         if is_user_mod:
             desc += (

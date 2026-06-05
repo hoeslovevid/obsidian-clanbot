@@ -4,6 +4,8 @@ import discord
 from discord import app_commands
 
 from datetime import datetime, timezone, date
+from core.embed_templates import embed_template
+from core.embed_footers import footer_for
 from core.utils import obsidian_embed, is_mod, format_timestamp_readable
 from database import DB_PATH, get_auto_mod_settings
 from commands.moderation.incident_mode import get_incident_mode
@@ -151,13 +153,14 @@ async def _build_mod_dashboard_embed(
         fields.append(("⚠️ Recent Warnings", "No recent warnings.", False))
 
     refreshed = format_timestamp_readable(datetime.now(timezone.utc))
-    embed = obsidian_embed(
+    embed = embed_template(
+        "showcase",
         "🛡️ Mod Dashboard",
         "Overview of items needing attention.",
         category="moderation",
         fields=fields,
         thumbnail=guild.icon.url if guild.icon else None,
-        footer=f"Refreshed {refreshed}  ·  /ticket · /manage_applications · /mod warn list",
+        footer=f"Refreshed {refreshed} · {footer_for('community_ticket')}",
         client=client,
     )
     if guild.owner:

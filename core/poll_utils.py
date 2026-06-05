@@ -8,7 +8,8 @@ from typing import Optional
 import aiosqlite  # type: ignore
 import discord  # type: ignore
 
-from core.utils import obsidian_embed, render_bar
+from core.embed_templates import embed_template
+from core.utils import render_bar
 from database import DB_PATH
 
 logger = logging.getLogger(__name__)
@@ -58,7 +59,13 @@ def build_poll_results_embed(
         elif winners:
             desc += f"\n\n**Tie:** " + ", ".join(f"**{w}**" for w in winners)
         desc += f"\n\n**Total votes:** {total}"
-    embed = obsidian_embed(title, desc, color=discord.Color.gold() if closed else discord.Color.blue())
+    embed = embed_template(
+        "showcase" if not closed else "showcase",
+        title,
+        desc,
+        category="community",
+        client=None,
+    )
     footer = "Final results" if closed else "Live results — react to vote"
     if creator_name:
         footer = f"{footer} • Poll by {creator_name}"
@@ -99,7 +106,9 @@ async def close_expired_poll(bot, row: tuple) -> None:
         embed = build_poll_results_embed(
             question, options_list, counts, closed=True, creator_name=creator_name
         )
-        await message.edit(embed=embed)
+        from core.safe_message_edit import safe_message_edit
+
+        await safe_message_edit(message, embed=embed)
     except (discord.NotFound, discord.Forbidden, discord.HTTPException) as exc:
         logger.debug("[poll] close edit failed for %s: %s", message_id, exc)
 

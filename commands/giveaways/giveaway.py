@@ -1,4 +1,5 @@
 """Giveaway creation command."""
+import logging
 import discord
 from discord import app_commands
 from datetime import datetime, timedelta, timezone
@@ -9,6 +10,8 @@ from core.embed_templates import embed_template
 from core.utils import obsidian_embed, is_mod, parse_time_natural
 from database import DB_PATH
 import aiosqlite
+
+logger = logging.getLogger(__name__)
 
 
 def setup(bot, group=None):

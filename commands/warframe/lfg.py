@@ -279,7 +279,9 @@ class LFGView(discord.ui.View):
                 for item in self.children:
                     if isinstance(item, discord.ui.Button) and item.label in ("Join", "Mark as Filled"):
                         item.disabled = True
-                await interaction.message.edit(embed=embed, view=self)
+                from core.safe_message_edit import safe_message_edit
+
+                await safe_message_edit(interaction.message, embed=embed, view=self)
         except Exception:
             pass
         await interaction.followup.send(msg, ephemeral=True)
