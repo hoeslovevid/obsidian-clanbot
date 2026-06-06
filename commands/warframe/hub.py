@@ -40,6 +40,17 @@ def _hub_link_buttons() -> list[discord.ui.Button]:
     return list(baro_link_buttons()[:2])
 
 
+async def _hub_cycle_panel_channel(guild_id: int) -> int | None:
+    if not guild_id:
+        return None
+    try:
+        from core.cycles_live import get_guild_cycle_panel_channel_id
+
+        return await get_guild_cycle_panel_channel_id(guild_id)
+    except Exception:
+        return None
+
+
 async def _fetch_hub_data(platform: str = "pc"):
     return await asyncio.gather(
         get_baro_status(),
@@ -69,6 +80,7 @@ def build_hub_embed(
     wishlist_line: str | None = None,
     twitch_line: str | None = None,
     guild_id: int | None = None,
+    cycle_panel_channel_id: int | None = None,
 ) -> discord.Embed:
     """Compact hub card with daily ops, relic planner, and live status."""
     fields: list[tuple[str, str, bool]] = []
@@ -94,6 +106,8 @@ def build_hub_embed(
 
     cycles = cycles_data or {}
     cycle_text = _format_cycles_summary(cycles)
+    if cycle_panel_channel_id:
+        cycle_text = f"{cycle_text}\n_Live panel: <#{cycle_panel_channel_id}>_"
     if len(cycle_text) > 200:
         cycle_text = cycle_text[:197] + "…"
     fields.append(("🌍 Cycles", cycle_text or "—", True))
@@ -159,6 +173,7 @@ def _hub_view(interaction: discord.Interaction, platform: str, guild_id: int) ->
             inv = bd.get("inventory") or bd.get("Inventory") or []
             wishlist = await get_baro_wishlist_overlap(guild_id, inv)
         twitch = await get_twitch_streaming_line(guild_id)
+        panel_ch = await _hub_cycle_panel_channel(guild_id)
         new_emb = build_hub_embed(
             baro_active=ia,
             baro_data=bd or {},
@@ -173,6 +188,7 @@ def _hub_view(interaction: discord.Interaction, platform: str, guild_id: int) ->
             wishlist_line=wishlist,
             twitch_line=twitch,
             guild_id=guild_id,
+            cycle_panel_channel_id=panel_ch,
         )
         from core.help_layout import help_layout_v2_enabled
         from core.warframe_hub_layout import WarframeHubLayout
@@ -305,6 +321,7 @@ def setup(bot, group=None):
                     inv = bd.get("inventory") or bd.get("Inventory") or []
                     wishlist = await get_baro_wishlist_overlap(guild_id, inv)
                 twitch = await get_twitch_streaming_line(guild_id) if guild_id else None
+                panel_ch = await _hub_cycle_panel_channel(guild_id) if guild_id else None
                 emb = build_hub_embed(
                     baro_active=ia,
                     baro_data=bd or {},
@@ -319,6 +336,7 @@ def setup(bot, group=None):
                     wishlist_line=wishlist,
                     twitch_line=twitch,
                     guild_id=guild_id,
+                    cycle_panel_channel_id=panel_ch,
                 )
                 view = _hub_view(interaction, platform, guild_id)
                 await btn_interaction.message.edit(embed=emb, view=view)
@@ -333,6 +351,7 @@ def setup(bot, group=None):
             inv = baro_data.get("inventory") or baro_data.get("Inventory") or []
             wishlist_line = await get_baro_wishlist_overlap(guild_id, inv)
         twitch_line = await get_twitch_streaming_line(guild_id) if guild_id else None
+        panel_ch = await _hub_cycle_panel_channel(guild_id) if guild_id else None
 
         embed = build_hub_embed(
             baro_active=is_active,
@@ -348,6 +367,7 @@ def setup(bot, group=None):
             wishlist_line=wishlist_line,
             twitch_line=twitch_line,
             guild_id=guild_id,
+            cycle_panel_channel_id=panel_ch,
         )
         view = _hub_view(interaction, platform, guild_id)
         from core.help_layout import help_layout_v2_enabled

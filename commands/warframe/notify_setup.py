@@ -179,7 +179,8 @@ async def _build_overview_embed(
     # know to use their dedicated commands.
     extras = (
         "\n\n_For per-reward invasion pings, use `/wfnotify invasion_notify`._\n"
-        "_For automatic event creation toggle, use `/wfnotify warframe_event_notify`._"
+        "_For automatic event creation toggle, use `/wfnotify warframe_event_notify`._\n"
+        "_For open-world cycles, post a live panel with `/wfnotify cycle_panel` instead of flip pings._"
     )
 
     desc = "Use the menu to set or clear a channel for each notification stream.\n\n" + "\n".join(lines) + extras
@@ -239,6 +240,8 @@ class _ChannelPickerView(discord.ui.View):
         flash = (
             f"✅ **{self.label}**: {_fmt_channel(interaction.guild, prev)} → <#{channel.id}>"
         )
+        if self.slug == "cycles":
+            flash += "\n_Post a live panel with `/wfnotify cycle_panel` to replace flip pings._"
         await self.parent.return_to_overview(interaction, flash=flash)
 
     async def _on_clear(self, interaction: discord.Interaction):

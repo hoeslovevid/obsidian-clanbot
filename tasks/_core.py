@@ -27,6 +27,8 @@ _warned_broken_channels: set[tuple[int, int]] = set()
 # Last embed fingerprint per live Baro message — skip redundant PATCH edits
 _baro_live_embed_cache: dict[tuple[int, int, int], str] = {}
 
+CYCLE_LIVE_UPDATE_MINUTES = max(3, min(15, int(os.getenv("CYCLE_LIVE_UPDATE_MINUTES", "5"))))
+
 
 async def _warn_broken_channel(
     guild: discord.Guild, channel_id: int, feature: str
@@ -1115,6 +1117,89 @@ def setup_tasks(bot):
     async def before_baro_live_update_loop():
         await bot.wait_until_ready()
 
+    @tasks.loop(minutes=CYCLE_LIVE_UPDATE_MINUTES)
+    async def cycle_live_update_loop():
+        """Update pinned live cycle panels in place."""
+        try:
+            if not bot.is_ready():
+                return
+
+            from core.cycles_live import (
+                build_cycles_live_embed,
+                cycles_embed_fingerprint,
+                delete_cycle_live_message,
+                get_cycle_live_embed_cache,
+            )
+            from core.safe_message_edit import safe_message_edit
+
+            cycles_data = await get_all_cycles()
+            if not cycles_data or not any(cycles_data.values()):
+                return
+
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute("""
+                    SELECT guild_id, channel_id, message_id
+                    FROM cycle_live_messages
+                """)
+                messages = await cur.fetchall()
+
+            cache = get_cycle_live_embed_cache()
+
+            for guild_id, channel_id, message_id in messages:
+                try:
+                    guild = bot.get_guild(guild_id)
+                    if not guild:
+                        await delete_cycle_live_message(guild_id, channel_id, message_id)
+                        continue
+
+                    channel = guild.get_channel(channel_id)
+                    if not isinstance(channel, discord.TextChannel):
+                        await delete_cycle_live_message(guild_id, channel_id, message_id)
+                        continue
+
+                    try:
+                        message = await channel.fetch_message(message_id)
+                    except discord.NotFound:
+                        await delete_cycle_live_message(guild_id, channel_id, message_id)
+                        continue
+
+                    updated_embed = build_cycles_live_embed(bot, cycles_data)
+                    fp = cycles_embed_fingerprint(updated_embed)
+                    cache_key = (guild_id, channel_id, message_id)
+                    if cache.get(cache_key) == fp:
+                        continue
+
+                    await safe_message_edit(message, embed=updated_embed)
+                    cache[cache_key] = fp
+
+                    async with aiosqlite.connect(DB_PATH) as db:
+                        await db.execute(
+                            """
+                            UPDATE cycle_live_messages SET updated_at=?
+                            WHERE guild_id=? AND channel_id=? AND message_id=?
+                            """,
+                            (now_utc().isoformat(), guild_id, channel_id, message_id),
+                        )
+                        await db.commit()
+
+                except discord.Forbidden:
+                    await delete_cycle_live_message(guild_id, channel_id, message_id)
+                except Exception as e:
+                    logger.error(
+                        "Error updating cycle live message %s in %s: %s",
+                        message_id,
+                        guild_id,
+                        e,
+                    )
+                    continue
+
+        except Exception as e:
+            logger.error(f"Error in cycle_live_update_loop: {e}", exc_info=True)
+
+    @cycle_live_update_loop.before_loop
+    async def before_cycle_live_update_loop():
+        await bot.wait_until_ready()
+
     @tasks.loop(hours=6)  # Check every 6 hours for Warframe playtime role assignments
     async def warframe_achievement_roles_loop():
         """Assign roles based on Warframe playtime and other in-game achievements."""
@@ -1684,6 +1769,11 @@ def setup_tasks(bot):
                         # Send notifications to all guilds that have it enabled
                         for guild in bot.guilds:
                             try:
+                                from core.cycles_live import guild_skips_cycle_pings
+
+                                if await guild_skips_cycle_pings(guild.id):
+                                    continue
+
                                 async with aiosqlite.connect(DB_PATH) as db:
                                     cur = await db.execute(
                                         f"SELECT channel_id, {column}, ping_role_id FROM cycle_notification_settings WHERE guild_id=?",
@@ -3007,6 +3097,7 @@ def setup_tasks(bot):
         ('voice_reward_loop', voice_reward_loop),
         ('baro_check_loop', baro_check_loop),
         ('baro_live_update_loop', baro_live_update_loop),
+        ('cycle_live_update_loop', cycle_live_update_loop),
         ('warframe_achievement_roles_loop', warframe_achievement_roles_loop),
         ('lfg_expire_loop', lfg_expire_loop),
         ('lfg_scheduled_reminder_loop', lfg_scheduled_reminder_loop),

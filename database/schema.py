@@ -298,6 +298,16 @@ async def init_db() -> None:
         )""")
 
         await db.execute("""
+        CREATE TABLE IF NOT EXISTS cycle_live_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            channel_id INTEGER NOT NULL,
+            message_id INTEGER NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(guild_id, channel_id, message_id)
+        )""")
+
+        await db.execute("""
         CREATE TABLE IF NOT EXISTS invasion_notification_settings (
             guild_id INTEGER NOT NULL,
             reward_lower TEXT NOT NULL,

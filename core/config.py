@@ -54,10 +54,10 @@ DB_PATH = os.getenv("DB_PATH", str(PROJECT_ROOT / "data" / "obsidian_clanbot.db"
 # Single source of truth for /about, /whatsnew, /status, release announce, and slash-command sync.
 # Set BOT_VERSION on Railway to match each production release; keep this code default in sync.
 # On release: bump BOT_VERSION here (and on Railway), then update CURRENT_RELEASE_* in core/changelog.py.
-BOT_VERSION = os.getenv("BOT_VERSION", "1.97.0")
+BOT_VERSION = os.getenv("BOT_VERSION", "1.98.0")
 BOT_CHANGELOG = os.getenv(
     "BOT_CHANGELOG",
-    "v1.96.0 — Music Path C: temp VC, LFG radio, event soundtracks, VC bonus. See /whatsnew.",
+    "v1.98.0 — Warframe cycles live panel; see /whatsnew.",
 )
 
 # Presence rotation: default | menu | degraded | event
@@ -103,6 +103,8 @@ OPENAI_API_KEY = (os.getenv("OPENAI_API_KEY") or "").strip() or None
 
 # --- Embed / UX ---
 HELP_LAYOUT_V2 = os.getenv("HELP_LAYOUT_V2", "true").lower() in ("1", "true", "yes", "y", "on")
+# Live open-world cycles panel refresh interval (minutes, default 5; clamped 3–15 in tasks).
+CYCLE_LIVE_UPDATE_MINUTES = os.getenv("CYCLE_LIVE_UPDATE_MINUTES", "5")
 # Optional full URL for embed banner image (showcase, errors, level-ups). When unset,
 # defaults to GitHub raw assets/obsidian_embed_banner.png under GITHUB_RAW_REPO.
 EMBED_BANNER_URL = os.getenv("EMBED_BANNER_URL", "").strip() or None

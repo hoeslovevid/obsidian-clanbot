@@ -12,16 +12,26 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-06"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**V2 Batch 1** — `/help` category browse, `/menu` picker, `/profile` full card, `/economy wallet` single LayoutView + Refresh",
-    "**V2 Batch 2** — `/status`, `/whatsnew`, `/search`, `/daily`, `/me`, `/ticket` open, `/warframe hub` refreshable layouts",
-    "**V2 Batch 3** — `/admin console`, `/onboarding`, `/about`, `/recent`, `/favorites`, `/preferences`, `/wfnotify setup` opening screen",
-    "**V2 Batch 4** — Music Now Playing panel, LFG post buttons, ticket open confirmation on LayoutView ActionRows",
-    "**V2 Batch 5** — `/admin dashboard` refresh snapshot (full dashboard stays classic); heavy mod tools deferred",
-    "**Shared** — `core/layout_v2.py` helpers; `HELP_LAYOUT_V2` gate with classic embed fallback on all surfaces",
+    "**Cycles live panel** — `/wfnotify cycle_panel` posts a pinned, auto-updating embed (Cetus, Fortuna, Deimos + progress bars)",
+    "**Panel-only mode** — guilds with a live panel skip cycle flip ping spam; background loop refreshes every few minutes",
+    "**Notify setup** — `/wfnotify setup` hints to post the live panel after setting a cycles channel",
+    "**Config** — `CYCLE_LIVE_UPDATE_MINUTES` (default 5) controls panel refresh interval",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "1.97.0",
+        "date": "2026-06-06",
+        "changes": [
+            "**V2 Batch 1** — `/help` category browse, `/menu` picker, `/profile` full card, `/economy wallet` single LayoutView + Refresh",
+            "**V2 Batch 2** — `/status`, `/whatsnew`, `/search`, `/daily`, `/me`, `/ticket` open, `/warframe hub` refreshable layouts",
+            "**V2 Batch 3** — `/admin console`, `/onboarding`, `/about`, `/recent`, `/favorites`, `/preferences`, `/wfnotify setup` opening screen",
+            "**V2 Batch 4** — Music Now Playing panel, LFG post buttons, ticket open confirmation on LayoutView ActionRows",
+            "**V2 Batch 5** — `/admin dashboard` refresh snapshot (full dashboard stays classic); heavy mod tools deferred",
+            "**Shared** — `core/layout_v2.py` helpers; `HELP_LAYOUT_V2` gate with classic embed fallback on all surfaces",
+        ],
+    },
     {
         "version": "1.96.0",
         "date": "2026-06-06",
