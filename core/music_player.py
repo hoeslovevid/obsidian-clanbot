@@ -1,0 +1,544 @@
+"""Guild music player: queue, playback, loop/shuffle, persistence."""
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import os
+import random
+import re
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional, Set
+
+import aiosqlite  # type: ignore
+import discord  # type: ignore
+import yt_dlp  # type: ignore
+
+from database import DB_PATH, get_guild_setting
+
+logger = logging.getLogger(__name__)
+
+MUSIC_AUTO_LEAVE_MINUTES = int(os.getenv("MUSIC_AUTO_LEAVE_MINUTES", "5"))
+MUSIC_VOTE_SKIP_RATIO = float(os.getenv("MUSIC_VOTE_SKIP_RATIO", "0.5"))
+PLAYLIST_MAX_TRACKS = int(os.getenv("MUSIC_PLAYLIST_MAX", "50"))
+
+yt_dlp.utils.bug_reports_message = lambda: ""
+
+ytdl_format_options = {
+    "format": "bestaudio/best",
+    "outtmpl": "%(extractor)s-%(id)s-%(title)s.%(ext)s",
+    "restrictfilenames": True,
+    "noplaylist": True,
+    "nocheckcertificate": True,
+    "ignoreerrors": False,
+    "logtostderr": False,
+    "quiet": True,
+    "no_warnings": True,
+    "default_search": "ytsearch",
+    "source_address": "0.0.0.0",
+    "extract_flat": False,
+}
+
+ffmpeg_options = {
+    "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
+    "options": "-vn -bufsize 512k",
+}
+
+ytdl = yt_dlp.YoutubeDL(ytdl_format_options)
+
+
+def now_utc() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def format_duration(seconds: int) -> str:
+    if not seconds:
+        return "Unknown"
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    secs = seconds % 60
+    if hours > 0:
+        return f"{hours}:{minutes:02d}:{secs:02d}"
+    return f"{minutes}:{secs:02d}"
+
+
+def is_youtube_url(query: str) -> bool:
+    youtube_patterns = [
+        r"(?:https?://)?(?:www\.)?(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/|youtube\.com/v/)",
+        r"youtube\.com/playlist\?list=",
+    ]
+    return any(re.search(pattern, query, re.IGNORECASE) for pattern in youtube_patterns)
+
+
+def is_playlist_url(query: str) -> bool:
+    return bool(re.search(r"playlist\?list=", query, re.IGNORECASE))
+
+
+def is_direct_media_url(query: str) -> bool:
+    if not query.startswith("http"):
+        return False
+    lower = query.lower()
+    if is_youtube_url(query):
+        return True
+    if "soundcloud.com" in lower:
+        return True
+    if re.search(r"\.(mp3|wav|ogg|flac|m4a|webm)(\?|$)", lower):
+        return True
+    return query.startswith("http")
+
+
+def _friendly_extract_error(exc: Exception) -> str:
+    text = str(exc).lower()
+    if "soundcloud" in text and ("not available" in text or "404" in text):
+        return "That SoundCloud track could not be loaded. It may be private or region-locked."
+    if "youtube" in text or "video unavailable" in text:
+        return "That YouTube video is unavailable or blocked in your region."
+    if "unsupported url" in text or "no video" in text:
+        return "Unsupported URL. Try a YouTube link, SoundCloud link, or search terms."
+    if "sign in" in text or "confirm your age" in text:
+        return "This content requires sign-in and cannot be streamed."
+    return f"Could not load audio: {exc}"
+
+
+class YTDLSource(discord.PCMVolumeTransformer):
+    def __init__(self, source, *, data, volume=0.5):
+        super().__init__(source, volume)
+        self.data = data
+        self.title = data.get("title", "Unknown")
+        self.url = data.get("webpage_url") or data.get("url", "")
+        self.duration = data.get("duration", 0) or 0
+        self.thumbnail = data.get("thumbnail", "")
+        self.uploader = data.get("uploader", "Unknown")
+
+    @classmethod
+    async def from_url(cls, url, *, loop=None, stream=True, volume=0.5):
+        loop = loop or asyncio.get_event_loop()
+        fetch_url = url
+        if not is_direct_media_url(url) and not url.startswith("http"):
+            fetch_url = f"ytsearch:{url}"
+
+        opts = dict(ytdl_format_options)
+        if is_playlist_url(fetch_url):
+            opts["noplaylist"] = False
+            opts["playlistend"] = PLAYLIST_MAX_TRACKS
+
+        local_ytdl = yt_dlp.YoutubeDL(opts) if opts != ytdl_format_options else ytdl
+
+        try:
+            data = await loop.run_in_executor(
+                None, lambda: local_ytdl.extract_info(fetch_url, download=not stream)
+            )
+        except Exception as exc:
+            raise ValueError(_friendly_extract_error(exc)) from exc
+
+        if "entries" in data:
+            entries = [e for e in data["entries"] if e]
+            if not entries:
+                raise ValueError("No tracks found in that playlist or search.")
+            if len(entries) > 1:
+                raise PlaylistResult(entries[:PLAYLIST_MAX_TRACKS], data)
+            data = entries[0]
+
+        if not data:
+            raise ValueError("No audio found for that query.")
+
+        if stream:
+            formats = data.get("formats", [])
+            audio_url = None
+            for fmt in formats:
+                if fmt.get("acodec") != "none" and fmt.get("vcodec") == "none":
+                    audio_url = fmt.get("url")
+                    break
+            if not audio_url:
+                audio_url = data.get("url")
+            if not audio_url:
+                raise ValueError("Could not extract a stream URL for this track.")
+            return cls(discord.FFmpegPCMAudio(audio_url, **ffmpeg_options), data=data, volume=volume)
+
+        filename = local_ytdl.prepare_filename(data)
+        return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data, volume=volume)
+
+    @classmethod
+    def track_info_from_data(cls, data: dict, *, query: str, requested_by: int) -> dict:
+        return {
+            "title": data.get("title", "Unknown"),
+            "url": data.get("webpage_url") or data.get("url", ""),
+            "duration": data.get("duration", 0) or 0,
+            "thumbnail": data.get("thumbnail", ""),
+            "uploader": data.get("uploader", "Unknown"),
+            "requested_by": requested_by,
+            "query": query,
+        }
+
+
+class PlaylistResult(Exception):
+    """Raised when extraction returns multiple playlist entries."""
+
+    def __init__(self, entries: list, meta: dict):
+        self.entries = entries
+        self.meta = meta
+        super().__init__(f"Playlist with {len(entries)} track(s)")
+
+
+@dataclass
+class GuildMusicState:
+    queue: List[dict] = field(default_factory=list)
+    loop_mode: str = "off"  # off | track | queue
+    shuffle: bool = False
+    vote_skip_votes: Set[int] = field(default_factory=set)
+    current_track: Optional[dict] = None
+    volume: float = 0.5
+    text_channel_id: Optional[int] = None
+    voice_channel_id: Optional[int] = None
+    panel_message_id: Optional[int] = None
+    vc_empty_since: Optional[float] = None
+
+
+_guild_states: Dict[int, GuildMusicState] = {}
+
+
+def get_state(guild_id: int) -> GuildMusicState:
+    if guild_id not in _guild_states:
+        _guild_states[guild_id] = GuildMusicState()
+    return _guild_states[guild_id]
+
+
+def music_queues() -> Dict[int, List[dict]]:
+    """Back-compat alias: guild_id -> queue list."""
+    return {gid: st.queue for gid, st in _guild_states.items()}
+
+
+def _cycle_loop_mode(current: str) -> str:
+    order = ("off", "track", "queue")
+    try:
+        idx = order.index(current)
+    except ValueError:
+        return "off"
+    return order[(idx + 1) % len(order)]
+
+
+def loop_mode_label(mode: str) -> str:
+    return {"off": "Off", "track": "Track", "queue": "Queue"}.get(mode, mode.title())
+
+
+async def persist_guild_state(guild_id: int, *, is_playing: bool) -> None:
+    st = get_state(guild_id)
+    queue_json = json.dumps(st.queue)
+    current_title = (st.current_track or {}).get("title")
+    volume_pct = int(round(st.volume * 100))
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """
+            INSERT OR REPLACE INTO music_queues
+            (guild_id, channel_id, voice_channel_id, current_track, queue_json, is_playing, volume, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                guild_id,
+                st.text_channel_id or 0,
+                st.voice_channel_id or 0,
+                current_title,
+                queue_json,
+                1 if is_playing else 0,
+                volume_pct,
+                now_utc().isoformat(),
+            ),
+        )
+        await db.commit()
+
+
+async def restore_music_queues(bot: discord.Client) -> int:
+    """Load in-memory queues from DB where is_playing (best-effort, no voice reconnect)."""
+    restored = 0
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            """
+            SELECT guild_id, channel_id, voice_channel_id, queue_json, volume
+            FROM music_queues WHERE is_playing=1
+            """
+        )
+        rows = await cur.fetchall()
+    for guild_id, channel_id, voice_channel_id, queue_json, volume in rows:
+        try:
+            st = get_state(int(guild_id))
+            st.queue = json.loads(queue_json or "[]")
+            st.text_channel_id = int(channel_id) if channel_id else None
+            st.voice_channel_id = int(voice_channel_id) if voice_channel_id else None
+            st.volume = max(0.0, min(1.0, (volume or 50) / 100.0))
+            panel_raw = await get_guild_setting(int(guild_id), "music_panel_message_id")
+            if panel_raw:
+                st.panel_message_id = int(panel_raw)
+            restored += 1
+        except Exception as exc:
+            logger.debug("[music] restore failed guild=%s: %s", guild_id, exc)
+    if restored:
+        logger.info("[music] Restored queue state for %s guild(s)", restored)
+    return restored
+
+
+async def set_panel_message_id(guild_id: int, message_id: Optional[int]) -> None:
+    st = get_state(guild_id)
+    st.panel_message_id = message_id
+    from database import set_guild_setting
+
+    if message_id:
+        await set_guild_setting(guild_id, "music_panel_message_id", str(message_id))
+    else:
+        await set_guild_setting(guild_id, "music_panel_message_id", "")
+
+
+def _pop_next_track(st: GuildMusicState) -> Optional[dict]:
+    if not st.queue:
+        return None
+    if st.shuffle:
+        idx = random.randrange(len(st.queue))
+        return st.queue.pop(idx)
+    return st.queue.pop(0)
+
+
+async def play_next_in_queue(guild_id: int, bot: discord.Client) -> None:
+    guild = bot.get_guild(guild_id)
+    if not guild:
+        return
+    voice_client = guild.voice_client
+    if not voice_client:
+        await persist_guild_state(guild_id, is_playing=False)
+        return
+
+    st = get_state(guild_id)
+    st.vote_skip_votes.clear()
+
+    loop_mode = st.loop_mode
+    previous = st.current_track
+
+    if loop_mode == "track" and previous:
+        next_track = previous
+    else:
+        if loop_mode == "queue" and previous and not st.queue:
+            st.queue.append(previous)
+        next_track = _pop_next_track(st)
+
+    if not next_track:
+        st.current_track = None
+        await persist_guild_state(guild_id, is_playing=False)
+        await update_now_playing_panel(guild, bot)
+        return
+
+    st.current_track = next_track
+    query = next_track.get("query") or next_track.get("url") or ""
+
+    try:
+        player = await YTDLSource.from_url(query, loop=bot.loop, stream=True, volume=st.volume)
+        st.current_track = YTDLSource.track_info_from_data(
+            player.data,
+            query=query,
+            requested_by=int(next_track.get("requested_by") or 0),
+        )
+
+        def _after(err):
+            if err:
+                logger.warning("[music] playback error guild=%s: %s", guild_id, err)
+            asyncio.run_coroutine_threadsafe(play_next_in_queue(guild_id, bot), bot.loop)
+
+        voice_client.play(player, after=_after)
+        if voice_client.source:
+            voice_client.source.volume = st.volume
+
+        await persist_guild_state(guild_id, is_playing=True)
+        await update_now_playing_panel(guild, bot, announce=not await _quieter_announce(guild.id))
+    except Exception as exc:
+        logger.warning("[music] skip bad track guild=%s: %s", guild_id, exc)
+        await play_next_in_queue(guild_id, bot)
+
+
+async def _quieter_announce(guild_id: int) -> bool:
+    try:
+        from database import get_quieter_mode
+
+        return await get_quieter_mode(guild_id)
+    except Exception:
+        return False
+
+
+def build_now_playing_embed(guild: discord.Guild, client) -> discord.Embed:
+    from core.embed_footers import footer_for
+    from core.embed_templates import embed_template
+
+    st = get_state(guild.id)
+    track = st.current_track
+    voice = guild.voice_client
+    paused = bool(voice and voice.is_paused())
+    playing = bool(voice and voice.is_playing())
+
+    if track:
+        title = track.get("title", "Unknown")
+        uploader = track.get("uploader", "Unknown")
+        duration = format_duration(int(track.get("duration") or 0))
+        req_id = track.get("requested_by")
+        req_line = f"<@{req_id}>" if req_id else "Unknown"
+        desc = (
+            f"**{title}**\n"
+            f"Uploader: {uploader}\n"
+            f"Duration: {duration}\n"
+            f"Requested by {req_line}\n\n"
+            f"**Loop:** {loop_mode_label(st.loop_mode)} · **Shuffle:** {'On' if st.shuffle else 'Off'}\n"
+            f"**Queue:** {len(st.queue)} track(s) · **Volume:** {int(st.volume * 100)}%"
+        )
+        status = "⏸️ Paused" if paused else ("🎵 Now Playing" if playing else "⏹️ Idle")
+        embed = embed_template(
+            "showcase",
+            status,
+            desc,
+            category="music",
+            footer=footer_for("music"),
+            client=client,
+        )
+        thumb = track.get("thumbnail")
+        if thumb:
+            embed.set_thumbnail(url=thumb)
+        return embed
+
+    if st.queue:
+        desc = f"No track loaded — **{len(st.queue)}** in queue.\nUse **/music play** to start."
+    else:
+        desc = "Nothing playing. Use **/music play** to start."
+    return embed_template(
+        "showcase",
+        "🎵 Music",
+        desc,
+        category="music",
+        footer=footer_for("music"),
+        client=client,
+    )
+
+
+def _panel_view_factory(guild_id: int):
+    from commands.music.music import MusicPanelView
+
+    return MusicPanelView(guild_id)
+
+
+async def update_now_playing_panel(
+    guild: discord.Guild,
+    bot: discord.Client,
+    *,
+    announce: bool = False,
+) -> None:
+    from core.safe_message_edit import safe_message_edit
+
+    st = get_state(guild.id)
+    embed = build_now_playing_embed(guild, bot)
+    view = _panel_view_factory(guild.id)
+
+    channel = None
+    if st.text_channel_id:
+        ch = guild.get_channel(st.text_channel_id)
+        if isinstance(ch, discord.TextChannel):
+            channel = ch
+
+    if st.panel_message_id and channel:
+        try:
+            msg = await channel.fetch_message(st.panel_message_id)
+            await safe_message_edit(msg, embed=embed, view=view)
+            return
+        except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+            st.panel_message_id = None
+
+    if announce and channel and (guild.voice_client and (guild.voice_client.is_playing() or guild.voice_client.is_paused())):
+        try:
+            msg = await channel.send(embed=embed, view=view)
+            await set_panel_message_id(guild.id, msg.id)
+        except Exception:
+            pass
+
+
+async def get_vote_skip_ratio(guild_id: int) -> float:
+    raw = await get_guild_setting(guild_id, "music_vote_skip_ratio")
+    if raw:
+        try:
+            val = float(raw)
+            return max(0.1, min(1.0, val))
+        except ValueError:
+            pass
+    return MUSIC_VOTE_SKIP_RATIO
+
+
+def listeners_in_vc(guild: discord.Guild) -> list[discord.Member]:
+    vc = guild.voice_client
+    if not vc or not vc.channel:
+        return []
+    return [m for m in vc.channel.members if not m.bot]
+
+
+async def register_vote_skip(member: discord.Member) -> tuple[bool, str, int, int]:
+    """Add a vote; returns (should_skip, message, votes, needed)."""
+    if not member.voice or not member.voice.channel:
+        return False, "Join the bot's voice channel to vote.", 0, 0
+    guild = member.guild
+    vc = guild.voice_client
+    if not vc or member.voice.channel.id != vc.channel.id:
+        return False, "Join the bot's voice channel to vote.", 0, 0
+    if not vc.is_playing() and not vc.is_paused():
+        return False, "Nothing is playing right now.", 0, 0
+
+    st = get_state(guild.id)
+    if member.id in st.vote_skip_votes:
+        ratio = await get_vote_skip_ratio(guild.id)
+        listeners = listeners_in_vc(guild)
+        needed = max(1, int(len(listeners) * ratio + 0.999))
+        return False, "You already voted to skip.", len(st.vote_skip_votes), needed
+
+    st.vote_skip_votes.add(member.id)
+    ratio = await get_vote_skip_ratio(guild.id)
+    listeners = listeners_in_vc(guild)
+    needed = max(1, int(len(listeners) * ratio + 0.999))
+    votes = len(st.vote_skip_votes)
+    if votes >= needed:
+        return True, f"Vote skip passed ({votes}/{needed}).", votes, needed
+    return False, f"Vote recorded ({votes}/{needed} needed).", votes, needed
+
+
+async def clear_guild_playback(
+    guild: discord.Guild,
+    bot: discord.Client,
+    *,
+    disconnect: bool = True,
+) -> None:
+    st = get_state(guild.id)
+    st.queue.clear()
+    st.current_track = None
+    st.vote_skip_votes.clear()
+    if guild.voice_client:
+        guild.voice_client.stop()
+        if disconnect:
+            await guild.voice_client.disconnect()
+    await persist_guild_state(guild.id, is_playing=False)
+    await update_now_playing_panel(guild, bot)
+
+
+async def music_auto_leave_tick(bot: discord.Client) -> None:
+    """Disconnect when bot VC is empty for MUSIC_AUTO_LEAVE_MINUTES."""
+    import time
+
+    if MUSIC_AUTO_LEAVE_MINUTES <= 0:
+        return
+    threshold = MUSIC_AUTO_LEAVE_MINUTES * 60
+    now = time.monotonic()
+    for guild in bot.guilds:
+        vc = guild.voice_client
+        if not vc or not vc.channel:
+            get_state(guild.id).vc_empty_since = None
+            continue
+        humans = [m for m in vc.channel.members if not m.bot]
+        st = get_state(guild.id)
+        if humans:
+            st.vc_empty_since = None
+            continue
+        if st.vc_empty_since is None:
+            st.vc_empty_since = now
+            continue
+        if now - st.vc_empty_since >= threshold:
+            logger.info("[music] auto-leave guild=%s (empty %sm)", guild.id, MUSIC_AUTO_LEAVE_MINUTES)
+            await clear_guild_playback(guild, bot, disconnect=True)
+            st.vc_empty_since = None

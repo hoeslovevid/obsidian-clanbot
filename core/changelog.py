@@ -12,20 +12,35 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-06"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Warframe hub** — Daily Ops, relic planner, Baro wishlist overlap, Twitch line, platform-aware fetches",
-    "**Weekly recap** — Optional Sunday channel post (`recap_channel_id` guild setting)",
-    "**LFG** — Role tags, scheduled squads + 15m reminder, interest subscribe (`/lfg subscribe`), thread summary on expiry",
-    "**Tickets** — Transcript showcase embed with SLA timings; complaint → ticket escalation button",
-    "**Clan ops** — Dojo public board, mentorship pairing (`/admin mentorship`), officer live board on dashboard",
-    "**Profile** — IGN verification badge, Steam playtime, live server-goal multiplier hint",
-    "**Economy** — Weekly LFG bounty; shop rotation week hint; pet gift already available via `/pets gift`",
-    "**Applications** — Pipeline stage buttons (Interview → Trial → Accept); incident post-summary embed",
-    "**Build** — Weapon/frame autocomplete + Overframe deep links",
-    "**Presence** — `PRESENCE_MODE` env: default, menu, degraded, event",
+    "**Music Path A** — Player logic in `core/music_player.py`; stop/pause/skip/queue/volume register at bot load (bug fix)",
+    "**Now Playing panel** — Showcase embed with Skip / Pause / Queue buttons; `safe_message_edit` updates; quieter mode reduces channel spam",
+    "**Auto-leave** — Disconnects when VC empty (`MUSIC_AUTO_LEAVE_MINUTES`, default 5)",
+    "**DJ & vote-skip** — `music_dj_role_id` guild setting; `/music voteskip` + panel skip for listeners",
+    "**Queue tools** — `/music shuffle`, `/music loop`, `/music remove`, `/music clear`, `/music config`",
+    "**Channel lock** — Optional `music_channel_id`; queue restore on startup (no auto voice reconnect)",
+    "**Playlists** — YouTube playlists up to 50 tracks; SoundCloud/direct URL support with clearer errors",
+    "**Feature toggle** — `music` in `/admin features`; hidden from `/search` when disabled",
+    "**Deploy** — `ffmpeg` added to Railpack `deploy.aptPackages` for Railway voice playback",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "1.94.0",
+        "date": "2026-06-06",
+        "changes": [
+            "**Warframe hub** — Daily Ops, relic planner, Baro wishlist overlap, Twitch line, platform-aware fetches",
+            "**Weekly recap** — Optional Sunday channel post (`recap_channel_id` guild setting)",
+            "**LFG** — Role tags, scheduled squads + 15m reminder, interest subscribe (`/lfg subscribe`), thread summary on expiry",
+            "**Tickets** — Transcript showcase embed with SLA timings; complaint → ticket escalation button",
+            "**Clan ops** — Dojo public board, mentorship pairing (`/admin mentorship`), officer live board on dashboard",
+            "**Profile** — IGN verification badge, Steam playtime, live server-goal multiplier hint",
+            "**Economy** — Weekly LFG bounty; shop rotation week hint; pet gift already available via `/pets gift`",
+            "**Applications** — Pipeline stage buttons (Interview → Trial → Accept); incident post-summary embed",
+            "**Build** — Weapon/frame autocomplete + Overframe deep links",
+            "**Presence** — `PRESENCE_MODE` env: default, menu, degraded, event",
+        ],
+    },
     {
         "version": "1.93.0",
         "date": "2026-06-06",

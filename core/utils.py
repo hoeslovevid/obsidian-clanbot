@@ -50,6 +50,7 @@ EMBED_COLORS = {
     "moderation": discord.Color.from_str("#E05252"),  # muted red
     "community":  discord.Color.from_str("#52C97B"),  # fresh green
     "general":    discord.Color.from_str("#7C83FF"),  # rich blurple
+    "music":      discord.Color.from_str("#1DB954"),  # streaming green
     "success":    discord.Color.from_str("#43B581"),  # Discord success green
     "warning":    discord.Color.from_str("#FAA61A"),  # amber warning
     "error":      discord.Color.from_str("#F04747"),  # Discord error red
@@ -146,6 +147,7 @@ TOGGLEABLE_FEATURES: tuple[str, ...] = (
     "events",
     "economy_passive",
     "notifications",
+    "music",
 )
 
 

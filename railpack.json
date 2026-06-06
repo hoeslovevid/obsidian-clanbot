@@ -5,6 +5,7 @@
     "python": "3.11.11"
   },
   "deploy": {
-    "startCommand": "python run.py"
+    "startCommand": "python run.py",
+    "aptPackages": ["ffmpeg"]
   }
 }

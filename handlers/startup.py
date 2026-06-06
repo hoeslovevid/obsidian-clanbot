@@ -238,6 +238,25 @@ async def run_startup(bot: discord.Client) -> None:
         except Exception as exc:
             logger.debug(f"[ready] Could not register role_panel views: {exc}")
 
+        # Music now-playing panels + queue restore (best-effort, no voice reconnect)
+        try:
+            from core.music_player import restore_music_queues
+            from commands.music.music import MusicPanelView
+
+            await restore_music_queues(bot)
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute(
+                    "SELECT guild_id FROM music_queues WHERE is_playing=1 OR length(queue_json) > 2"
+                )
+                guild_rows = await cur.fetchall()
+            for (gid,) in guild_rows:
+                try:
+                    bot.add_view(MusicPanelView(int(gid)))
+                except Exception:
+                    pass
+        except Exception as exc:
+            logger.debug(f"[ready] music panel registration skipped: {exc}")
+
     # Run setup tasks in parallel
     await asyncio.gather(
         setup_guild_channels(),

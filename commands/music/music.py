@@ -1,650 +1,676 @@
-"""Music bot commands with YouTube support."""
+"""Music bot commands — /music group."""
+from __future__ import annotations
+
+import asyncio
+import logging
+from typing import Optional
+
 import discord
 from discord import app_commands
 from discord.ext import commands
-from typing import Optional, List, Dict
-from datetime import datetime, timezone
-import yt_dlp  # type: ignore
-import asyncio
-import re
 
-from core.utils import obsidian_embed, is_mod
-from database import DB_PATH
-import aiosqlite  # type: ignore
-import json
+from core.embed_footers import footer_for
+from core.embed_templates import embed_template
+from core.music_player import (
+    PlaylistResult,
+    YTDLSource,
+    _cycle_loop_mode,
+    build_now_playing_embed,
+    clear_guild_playback,
+    format_duration,
+    get_state,
+    get_vote_skip_ratio,
+    loop_mode_label,
+    persist_guild_state,
+    play_next_in_queue,
+    register_vote_skip,
+    set_panel_message_id,
+    update_now_playing_panel,
+)
+from core.utils import error_embed, feature_enabled, feature_off_embed, is_mod, success_embed
+from database import get_guild_setting, set_guild_setting
 
+logger = logging.getLogger(__name__)
 
-def now_utc() -> datetime:
-    """Get current UTC datetime."""
-    return datetime.now(timezone.utc)
-
-
-# Suppress yt-dlp warnings
-yt_dlp.utils.bug_reports_message = lambda: ''
-
-# yt-dlp options optimized for YouTube
-ytdl_format_options = {
-    'format': 'bestaudio/best',
-    'outtmpl': '%(extractor)s-%(id)s-%(title)s.%(ext)s',
-    'restrictfilenames': True,
-    'noplaylist': True,
-    'nocheckcertificate': True,
-    'ignoreerrors': False,
-    'logtostderr': False,
-    'quiet': True,
-    'no_warnings': True,
-    'default_search': 'ytsearch',
-    'source_address': '0.0.0.0',
-    'extract_flat': False,
-}
-
-ffmpeg_options = {
-    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
-    'options': '-vn -bufsize 512k'
-}
-
-ytdl = yt_dlp.YoutubeDL(ytdl_format_options)
+MUSIC_DJ_ROLE_KEY = "music_dj_role_id"
+MUSIC_CHANNEL_KEY = "music_channel_id"
 
 
-def is_youtube_url(query: str) -> bool:
-    """Check if query is a YouTube URL."""
-    youtube_patterns = [
-        r'(?:https?://)?(?:www\.)?(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/|youtube\.com/v/)',
-        r'youtube\.com/playlist\?list=',
-    ]
-    return any(re.search(pattern, query, re.IGNORECASE) for pattern in youtube_patterns)
+def _cmd_decorator(group, bot, name: str, description: str):
+    if group:
+        return group.command(name=name, description=description)
+    return bot.tree.command(name=name, description=description)
 
 
-class YTDLSource(discord.PCMVolumeTransformer):
-    def __init__(self, source, *, data, volume=0.5):
-        super().__init__(source, volume)
-        self.data = data
-        self.title = data.get('title', 'Unknown')
-        self.url = data.get('webpage_url') or data.get('url', '')
-        self.duration = data.get('duration', 0)
-        self.thumbnail = data.get('thumbnail', '')
-        self.uploader = data.get('uploader', 'Unknown')
-
-    @classmethod
-    async def from_url(cls, url, *, loop=None, stream=True):
-        """Create a YTDLSource from a URL or search query."""
-        loop = loop or asyncio.get_event_loop()
-        
-        # If it's not a URL, treat it as a search query
-        if not is_youtube_url(url) and not url.startswith('http'):
-            url = f"ytsearch:{url}"
-        
-        try:
-            data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
-            
-            if 'entries' in data:
-                # If it's a search result or playlist, get the first entry
-                data = data['entries'][0]
-            
-            if not data:
-                raise ValueError("No video found")
-            
-            # Get the audio URL
-            if stream:
-                # For streaming, get the direct URL
-                formats = data.get('formats', [])
-                audio_url = None
-                for fmt in formats:
-                    if fmt.get('acodec') != 'none' and fmt.get('vcodec') == 'none':
-                        audio_url = fmt.get('url')
-                        break
-                if not audio_url:
-                    # Fallback to best format
-                    audio_url = data.get('url')
-                
-                if not audio_url:
-                    raise ValueError("Could not extract audio URL")
-                
-                return cls(discord.FFmpegPCMAudio(audio_url, **ffmpeg_options), data=data)
-            else:
-                filename = ytdl.prepare_filename(data)
-                return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
-        except Exception as e:
-            raise ValueError(f"Error extracting video info: {str(e)}")
+async def _music_enabled(interaction: discord.Interaction) -> bool:
+    if not interaction.guild:
+        return False
+    if not await feature_enabled(interaction.guild.id, "music"):
+        await interaction.response.send_message(
+            embed=feature_off_embed("Music", action_hint="Ask a mod to enable it via /admin features.", client=interaction.client),
+            ephemeral=True,
+        )
+        return False
+    return True
 
 
-# Queue management per guild
-music_queues: Dict[int, List[Dict]] = {}
+async def _guild_only(interaction: discord.Interaction) -> bool:
+    if interaction.guild and isinstance(interaction.user, discord.Member):
+        return True
+    await interaction.response.send_message(
+        embed=error_embed("Invalid Context", "This command can only be used in a server.", client=interaction.client),
+        ephemeral=True,
+    )
+    return False
 
 
-def setup(bot, group=None):
+async def _channel_allowed(interaction: discord.Interaction) -> bool:
+    assert interaction.guild
+    locked = await get_guild_setting(interaction.guild.id, MUSIC_CHANNEL_KEY)
+    if not locked:
+        return True
+    try:
+        locked_id = int(locked)
+    except ValueError:
+        return True
+    if interaction.channel_id == locked_id:
+        return True
+    vc = interaction.guild.voice_client
+    member = interaction.user
+    if (
+        vc
+        and vc.channel
+        and isinstance(member, discord.Member)
+        and member.voice
+        and member.voice.channel
+        and member.voice.channel.id == vc.channel.id
+    ):
+        return True
+    ch = interaction.guild.get_channel(locked_id)
+    hint = ch.mention if ch else f"<#{locked_id}>"
+    await interaction.response.send_message(
+        embed=error_embed(
+            "Wrong Channel",
+            f"Music commands are restricted to {hint} (or join the bot's voice channel).",
+            client=interaction.client,
+        ),
+        ephemeral=True,
+    )
+    return False
+
+
+async def _has_dj(member: discord.Member) -> bool:
+    if is_mod(member):
+        return True
+    raw = await get_guild_setting(member.guild.id, MUSIC_DJ_ROLE_KEY)
+    if not raw:
+        return False
+    try:
+        role_id = int(raw)
+    except ValueError:
+        return False
+    return any(r.id == role_id for r in member.roles)
+
+
+async def _require_dj(interaction: discord.Interaction) -> bool:
+    assert isinstance(interaction.user, discord.Member)
+    if await _has_dj(interaction.user):
+        return True
+    await interaction.response.send_message(
+        embed=error_embed(
+            "DJ Only",
+            "You need the DJ role or mod permissions for this action.",
+            action_hint="Ask a moderator or use vote-skip to skip tracks.",
+            client=interaction.client,
+        ),
+        ephemeral=True,
+    )
+    return False
+
+
+async def _require_voice(interaction: discord.Interaction) -> bool:
+    if isinstance(interaction.user, discord.Member) and interaction.user.voice and interaction.user.voice.channel:
+        return True
+    await interaction.response.send_message(
+        embed=error_embed("Not in Voice", "You must be in a voice channel.", client=interaction.client),
+        ephemeral=True,
+    )
+    return False
+
+
+class MusicPanelView(discord.ui.View):
+    """Persistent now-playing controls (one view instance per guild)."""
+
+    def __init__(self, guild_id: int):
+        super().__init__(timeout=None)
+        self.guild_id = guild_id
+        skip = discord.ui.Button(
+            label="Skip",
+            style=discord.ButtonStyle.primary,
+            custom_id=f"music:{guild_id}:skip",
+            row=0,
+        )
+        skip.callback = self._on_skip
+        self.add_item(skip)
+        toggle = discord.ui.Button(
+            label="Pause",
+            style=discord.ButtonStyle.secondary,
+            custom_id=f"music:{guild_id}:toggle",
+            row=0,
+        )
+        toggle.callback = self._on_toggle
+        self.add_item(toggle)
+        queue = discord.ui.Button(
+            label="Queue",
+            style=discord.ButtonStyle.secondary,
+            custom_id=f"music:{guild_id}:queue",
+            row=0,
+        )
+        queue.callback = self._on_queue
+        self.add_item(queue)
+
+    async def _guild(self, interaction: discord.Interaction) -> Optional[discord.Guild]:
+        if not interaction.guild or interaction.guild.id != self.guild_id:
+            await interaction.response.send_message("This panel belongs to another server.", ephemeral=True)
+            return None
+        if not await feature_enabled(interaction.guild.id, "music"):
+            await interaction.response.send_message(
+                embed=feature_off_embed("Music", client=interaction.client),
+                ephemeral=True,
+            )
+            return None
+        return interaction.guild
+
+    async def _on_skip(self, interaction: discord.Interaction):
+        guild = await self._guild(interaction)
+        if not guild or not isinstance(interaction.user, discord.Member):
+            return
+        dj = await _has_dj(interaction.user)
+        if not dj:
+            should_skip, msg, _, _ = await register_vote_skip(interaction.user)
+            if not should_skip:
+                return await interaction.response.send_message(msg, ephemeral=True)
+        vc = guild.voice_client
+        if not vc or (not vc.is_playing() and not vc.is_paused()):
+            return await interaction.response.send_message("Nothing is playing.", ephemeral=True)
+        vc.stop()
+        await interaction.response.send_message("⏭️ Skipped.", ephemeral=True)
+        await update_now_playing_panel(guild, interaction.client)
+
+    async def _on_toggle(self, interaction: discord.Interaction):
+        guild = await self._guild(interaction)
+        if not guild:
+            return
+        vc = guild.voice_client
+        if not vc:
+            return await interaction.response.send_message("Not connected.", ephemeral=True)
+        if vc.is_playing():
+            vc.pause()
+            await interaction.response.send_message("⏸️ Paused.", ephemeral=True)
+        elif vc.is_paused():
+            vc.resume()
+            await interaction.response.send_message("▶️ Resumed.", ephemeral=True)
+        else:
+            return await interaction.response.send_message("Nothing is playing.", ephemeral=True)
+        await update_now_playing_panel(guild, interaction.client)
+
+    async def _on_queue(self, interaction: discord.Interaction):
+        guild = await self._guild(interaction)
+        if not guild:
+            return
+        await interaction.response.send_message(
+            embed=_queue_embed(guild, interaction.client),
+            ephemeral=True,
+        )
+
+
+def _queue_embed(guild: discord.Guild, client) -> discord.Embed:
+    st = get_state(guild.id)
+    lines = []
+    if st.current_track:
+        lines.append(f"**Now:** {st.current_track.get('title', 'Unknown')}")
+    if st.queue:
+        lines.append("")
+        lines.append("**Up next:**")
+        for i, track in enumerate(st.queue[:10], 1):
+            lines.append(f"{i}. {track.get('title', 'Unknown')} ({format_duration(int(track.get('duration') or 0))})")
+        if len(st.queue) > 10:
+            lines.append(f"_…and {len(st.queue) - 10} more_")
+    elif not st.current_track:
+        lines.append("Queue is empty.")
+    return embed_template(
+        "showcase",
+        "📋 Music Queue",
+        "\n".join(lines) or "Queue is empty.",
+        category="music",
+        footer=footer_for("music"),
+        client=client,
+    )
+
+
+async def _start_playback(
+    interaction: discord.Interaction,
+    player: YTDLSource,
+    track_info: dict,
+    *,
+    query: str,
+) -> None:
+    assert interaction.guild
+    st = get_state(interaction.guild.id)
+    st.text_channel_id = interaction.channel.id if interaction.channel else st.text_channel_id
+    st.voice_channel_id = interaction.user.voice.channel.id  # type: ignore[union-attr]
+    st.current_track = track_info
+    st.volume = st.volume or 0.5
+
+    voice_client = interaction.guild.voice_client
+    assert voice_client
+
+    def _after(err):
+        if err:
+            logger.warning("[music] playback error guild=%s: %s", interaction.guild.id, err)
+        asyncio.run_coroutine_threadsafe(
+            play_next_in_queue(interaction.guild.id, interaction.client),
+            interaction.client.loop,
+        )
+
+    voice_client.play(player, after=_after)
+    if voice_client.source:
+        voice_client.source.volume = st.volume
+
+    await persist_guild_state(interaction.guild.id, is_playing=True)
+    embed = build_now_playing_embed(interaction.guild, interaction.client)
+    view = MusicPanelView(interaction.guild.id)
+    msg = await interaction.followup.send(embed=embed, view=view)
+    await set_panel_message_id(interaction.guild.id, msg.id)
+
+
+def setup(bot: commands.Bot, group=None):
     """Register music commands."""
-    
-    command_decorator = group.command(name="play", description="Play music from a URL or search query.") if group else bot.tree.command(name="play", description="Play music from a URL or search query.")
-    
-    @command_decorator
-    @app_commands.describe(query="YouTube URL or search query")
+
+    @_cmd_decorator(group, bot, "play", "Play music from a URL or search query.")
+    @app_commands.describe(query="YouTube/SoundCloud URL or search query")
     async def play(interaction: discord.Interaction, query: str):
-        """Play music."""
-        if not interaction.guild or not isinstance(interaction.user, discord.Member):
-            return await interaction.response.send_message(
-                embed=obsidian_embed(
-                    "❌ Invalid Context",
-                    "This command can only be used in a server.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
-            )
-        
-        if not interaction.user.voice or not interaction.user.voice.channel:
-            return await interaction.response.send_message(
-                embed=obsidian_embed(
-                    "❌ Not in Voice Channel",
-                    "You must be in a voice channel to use this command.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
-            )
-        
+        if not await _guild_only(interaction):
+            return
+        if not await _music_enabled(interaction):
+            return
+        if not await _channel_allowed(interaction):
+            return
+        if not await _require_voice(interaction):
+            return
+        if not await _require_dj(interaction):
+            return
+
         await interaction.response.defer()
-        
+        assert interaction.guild and isinstance(interaction.user, discord.Member)
+
         voice_client = interaction.guild.voice_client
         if not voice_client:
             try:
                 voice_client = await interaction.user.voice.channel.connect()
-            except Exception as e:
+            except Exception as exc:
                 return await interaction.followup.send(
-                    embed=obsidian_embed(
-                        "❌ Connection Failed",
-                        f"Could not connect to voice channel: {e}",
-                        color=discord.Color.red(),
-                        client=interaction.client,
-                    )
+                    embed=error_embed("Connection Failed", str(exc), client=interaction.client),
                 )
-        
+
         try:
-            # Show loading message
-            loading_msg = await interaction.followup.send(
-                embed=obsidian_embed(
-                    "⏳ Loading...",
+            loading = await interaction.followup.send(
+                embed=embed_template(
+                    "showcase",
+                    "⏳ Loading…",
                     f"Searching for: **{query}**",
-                    color=discord.Color.blue(),
+                    category="music",
                     client=interaction.client,
-                )
+                ),
             )
-            
-            # Extract video info
-            player = await YTDLSource.from_url(query, loop=interaction.client.loop, stream=True)
-            
-            # Initialize queue if needed
-            if interaction.guild.id not in music_queues:
-                music_queues[interaction.guild.id] = []
-            
-            # Check if already playing
+
+            try:
+                player = await YTDLSource.from_url(query, loop=interaction.client.loop, stream=True, volume=get_state(interaction.guild.id).volume)
+            except PlaylistResult as pl:
+                st = get_state(interaction.guild.id)
+                tracks = [
+                    YTDLSource.track_info_from_data(
+                        entry,
+                        query=entry.get("webpage_url") or entry.get("url") or query,
+                        requested_by=interaction.user.id,
+                    )
+                    for entry in pl.entries
+                ]
+                if voice_client.is_playing() or voice_client.is_paused() or st.current_track:
+                    st.queue.extend(tracks)
+                    await loading.edit(
+                        embed=success_embed(
+                            "Playlist Added",
+                            f"Added **{len(tracks)}** track(s) to the queue.",
+                            client=interaction.client,
+                        ),
+                    )
+                    await persist_guild_state(interaction.guild.id, is_playing=True)
+                    await update_now_playing_panel(interaction.guild, interaction.client)
+                    return
+
+                first = tracks[0]
+                first_query = first.get("query") or first.get("url") or query
+                sub_player = await YTDLSource.from_url(
+                    first_query,
+                    loop=interaction.client.loop,
+                    stream=True,
+                    volume=st.volume,
+                )
+                first_info = YTDLSource.track_info_from_data(
+                    sub_player.data,
+                    query=first_query,
+                    requested_by=interaction.user.id,
+                )
+                st.queue.extend(tracks[1:])
+                await loading.delete()
+                await _start_playback(interaction, sub_player, first_info, query=query)
+                if len(tracks) > 1:
+                    await interaction.followup.send(
+                        embed=success_embed(
+                            "Playlist Queued",
+                            f"Now playing first track; **{len(tracks) - 1}** more in queue.",
+                            client=interaction.client,
+                        ),
+                    )
+                return
+
+            track_info = YTDLSource.track_info_from_data(
+                player.data,
+                query=query,
+                requested_by=interaction.user.id,
+            )
+            st = get_state(interaction.guild.id)
+
             if voice_client.is_playing() or voice_client.is_paused():
-                # Add to queue
-                track_info = {
-                    'title': player.title,
-                    'url': player.url,
-                    'duration': player.duration,
-                    'thumbnail': player.thumbnail,
-                    'uploader': player.uploader,
-                    'requested_by': interaction.user.id,
-                    'query': query
-                }
-                music_queues[interaction.guild.id].append(track_info)
-                
-                await loading_msg.edit(
-                    embed=obsidian_embed(
-                        "➕ Added to Queue",
-                        f"**{player.title}**\n"
-                        f"Position in queue: {len(music_queues[interaction.guild.id])}\n"
-                        f"Requested by {interaction.user.mention}",
-                        color=discord.Color.blue(),
+                st.queue.append(track_info)
+                await loading.edit(
+                    embed=success_embed(
+                        "Added to Queue",
+                        f"**{track_info['title']}**\nPosition: **{len(st.queue)}**",
                         client=interaction.client,
-                    )
+                    ),
                 )
+                await persist_guild_state(interaction.guild.id, is_playing=True)
+                await update_now_playing_panel(interaction.guild, interaction.client)
             else:
-                # Play immediately
-                track_info = {
-                    'title': player.title,
-                    'url': player.url,
-                    'duration': player.duration,
-                    'thumbnail': player.thumbnail,
-                    'uploader': player.uploader,
-                    'requested_by': interaction.user.id,
-                    'query': query
-                }
-                
-                voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(
-                    play_next_in_queue(interaction.guild.id, interaction.client), interaction.client.loop
-                ))
-                voice_client.source.volume = 0.5
-                
-                await loading_msg.edit(
-                    embed=obsidian_embed(
-                        "🎵 Now Playing",
-                        f"**{player.title}**\n"
-                        f"Uploader: {player.uploader}\n"
-                        f"Duration: {format_duration(player.duration)}\n"
-                        f"Requested by {interaction.user.mention}",
-                        color=discord.Color.green(),
-                        client=interaction.client,
-                    ).set_thumbnail(url=player.thumbnail) if player.thumbnail else obsidian_embed(
-                        "🎵 Now Playing",
-                        f"**{player.title}**\n"
-                        f"Uploader: {player.uploader}\n"
-                        f"Duration: {format_duration(player.duration)}\n"
-                        f"Requested by {interaction.user.mention}",
-                        color=discord.Color.green(),
-                        client=interaction.client,
-                    )
-                )
-            
-            # Update database
-            queue_json = json.dumps(music_queues.get(interaction.guild.id, []))
-            async with aiosqlite.connect(DB_PATH) as db:
-                await db.execute("""
-                    INSERT OR REPLACE INTO music_queues 
-                    (guild_id, channel_id, voice_channel_id, current_track, queue_json, is_playing, volume, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, 50, ?)
-                """, (
-                    interaction.guild.id,
-                    interaction.channel.id if interaction.channel else 0,
-                    interaction.user.voice.channel.id,
-                    player.title,
-                    queue_json,
-                    1 if not (voice_client.is_playing() or voice_client.is_paused()) else 0,
-                    now_utc().isoformat()
-                ))
-                await db.commit()
-        except Exception as e:
+                await loading.delete()
+                await _start_playback(interaction, player, track_info, query=query)
+        except ValueError as exc:
             await interaction.followup.send(
-                embed=obsidian_embed(
-                    "❌ Playback Error",
-                    f"Error playing music: {str(e)}\n\n"
-                    f"**Tips:**\n"
-                    f"• Make sure the URL is valid\n"
-                    f"• Try a different search query\n"
-                    f"• Check if the video is available",
-                    color=discord.Color.red(),
+                embed=error_embed(
+                    "Playback Error",
+                    str(exc),
+                    action_hint="Try another link or search terms.",
                     client=interaction.client,
-                )
+                ),
+            )
+        except Exception as exc:
+            await interaction.followup.send(
+                embed=error_embed("Playback Error", str(exc), client=interaction.client),
             )
 
-
-def format_duration(seconds: int) -> str:
-    """Format duration in seconds to MM:SS or HH:MM:SS."""
-    if not seconds:
-        return "Unknown"
-    hours = seconds // 3600
-    minutes = (seconds % 3600) // 60
-    secs = seconds % 60
-    if hours > 0:
-        return f"{hours}:{minutes:02d}:{secs:02d}"
-    return f"{minutes}:{secs:02d}"
-
-
-async def play_next_in_queue(guild_id: int, bot):
-    """Play the next song in the queue."""
-    if guild_id not in music_queues or not music_queues[guild_id]:
-        # Queue is empty, update database
-        async with aiosqlite.connect(DB_PATH) as db:
-            await db.execute("""
-                UPDATE music_queues SET is_playing=0 WHERE guild_id=?
-            """, (guild_id,))
-            await db.commit()
-        return
-    
-    guild = bot.get_guild(guild_id)
-    if not guild:
-        return
-    
-    voice_client = guild.voice_client
-    if not voice_client:
-        return
-    
-    # Get next track
-    next_track = music_queues[guild_id].pop(0)
-    
-    try:
-        # Create player from stored query or URL
-        query = next_track.get('query') or next_track.get('url')
-        player = await YTDLSource.from_url(query, loop=bot.loop, stream=True)
-        
-        voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(
-            play_next_in_queue(guild_id, bot), bot.loop
-        ))
-        voice_client.source.volume = 0.5
-        
-        # Update database
-        queue_json = json.dumps(music_queues.get(guild_id, []))
-        async with aiosqlite.connect(DB_PATH) as db:
-            await db.execute("""
-                UPDATE music_queues 
-                SET current_track=?, queue_json=?, is_playing=1, updated_at=?
-                WHERE guild_id=?
-            """, (player.title, queue_json, now_utc().isoformat(), guild_id))
-            await db.commit()
-        
-        # Notify in channel (if we can find it)
-        async with aiosqlite.connect(DB_PATH) as db:
-            cur = await db.execute("SELECT channel_id FROM music_queues WHERE guild_id=?", (guild_id,))
-            row = await cur.fetchone()
-            if row and row[0]:
-                channel = guild.get_channel(row[0])
-                if isinstance(channel, discord.TextChannel):
-                    try:
-                        await channel.send(
-                            embed=obsidian_embed(
-                                "🎵 Now Playing",
-                                f"**{player.title}**\n"
-                                f"Uploader: {player.uploader}\n"
-                                f"Duration: {format_duration(player.duration)}",
-                                color=discord.Color.green(),
-                                client=bot,
-                            ).set_thumbnail(url=player.thumbnail) if player.thumbnail else obsidian_embed(
-                                "🎵 Now Playing",
-                                f"**{player.title}**\n"
-                                f"Uploader: {player.uploader}\n"
-                                f"Duration: {format_duration(player.duration)}",
-                                color=discord.Color.green(),
-                                client=bot,
-                            )
-                        )
-                    except:
-                        pass
-    except Exception as e:
-        # Error playing next track, try next one
-        await play_next_in_queue(guild_id, bot)
-    
-    command_decorator = group.command(name="stop", description="Stop music playback and clear queue.") if group else bot.tree.command(name="stop", description="Stop music playback and clear queue.")
-    
-    @command_decorator
+    @_cmd_decorator(group, bot, "stop", "Stop playback and clear the queue.")
     async def stop(interaction: discord.Interaction):
-        """Stop music."""
-        if not interaction.guild:
+        if not await _guild_only(interaction):
+            return
+        if not await _music_enabled(interaction):
+            return
+        if not await _require_dj(interaction):
+            return
+        vc = interaction.guild.voice_client  # type: ignore[union-attr]
+        if not vc:
             return await interaction.response.send_message(
-                embed=obsidian_embed(
-                    "❌ Invalid Context",
-                    "This command can only be used in a server.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
+                embed=error_embed("Not Playing", "The bot is not in a voice channel.", client=interaction.client),
+                ephemeral=True,
             )
-        
-        voice_client = interaction.guild.voice_client
-        if not voice_client:
-            return await interaction.response.send_message(
-                embed=obsidian_embed(
-                    "❌ Not Playing",
-                    "The bot is not playing music.",
-                    color=discord.Color.orange(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
-            )
-        
-        # Clear queue
-        if interaction.guild.id in music_queues:
-            music_queues[interaction.guild.id].clear()
-        
-        voice_client.stop()
-        await voice_client.disconnect()
-        
-        async with aiosqlite.connect(DB_PATH) as db:
-            await db.execute("""
-                UPDATE music_queues SET is_playing=0, queue_json=? WHERE guild_id=?
-            """, (json.dumps([]), interaction.guild.id))
-            await db.commit()
-        
+        await clear_guild_playback(interaction.guild, interaction.client, disconnect=True)  # type: ignore[arg-type]
         await interaction.response.send_message(
-            embed=obsidian_embed(
-                "⏹️ Stopped",
-                "Music playback stopped and queue cleared.",
-                color=discord.Color.blue(),
-                client=interaction.client,
-            )
+            embed=success_embed("Stopped", "Playback stopped and queue cleared.", client=interaction.client),
         )
-    
-    command_decorator = group.command(name="pause", description="Pause music playback.") if group else bot.tree.command(name="pause", description="Pause music playback.")
-    
-    @command_decorator
+
+    @_cmd_decorator(group, bot, "pause", "Pause playback.")
     async def pause(interaction: discord.Interaction):
-        """Pause music."""
-        if not interaction.guild:
+        if not await _guild_only(interaction):
+            return
+        if not await _music_enabled(interaction):
+            return
+        vc = interaction.guild.voice_client  # type: ignore[union-attr]
+        if not vc or not vc.is_playing():
             return await interaction.response.send_message(
-                embed=obsidian_embed(
-                    "❌ Invalid Context",
-                    "This command can only be used in a server.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
+                embed=error_embed("Not Playing", "Nothing is playing.", client=interaction.client),
+                ephemeral=True,
             )
-        
-        voice_client = interaction.guild.voice_client
-        if not voice_client or not voice_client.is_playing():
-            return await interaction.response.send_message(
-                embed=obsidian_embed(
-                    "❌ Not Playing",
-                    "The bot is not playing music.",
-                    color=discord.Color.orange(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
-            )
-        
-        voice_client.pause()
+        vc.pause()
         await interaction.response.send_message(
-            embed=obsidian_embed(
-                "⏸️ Paused",
-                "Music playback paused.",
-                color=discord.Color.blue(),
-                client=interaction.client,
-            )
+            embed=success_embed("Paused", "Playback paused.", client=interaction.client),
         )
-    
-    command_decorator = group.command(name="resume", description="Resume music playback.") if group else bot.tree.command(name="resume", description="Resume music playback.")
-    
-    @command_decorator
+        await update_now_playing_panel(interaction.guild, interaction.client)  # type: ignore[arg-type]
+
+    @_cmd_decorator(group, bot, "resume", "Resume playback.")
     async def resume(interaction: discord.Interaction):
-        """Resume music."""
-        if not interaction.guild:
+        if not await _guild_only(interaction):
+            return
+        if not await _music_enabled(interaction):
+            return
+        vc = interaction.guild.voice_client  # type: ignore[union-attr]
+        if not vc or not vc.is_paused():
             return await interaction.response.send_message(
-                embed=obsidian_embed(
-                    "❌ Invalid Context",
-                    "This command can only be used in a server.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
+                embed=error_embed("Not Paused", "Playback is not paused.", client=interaction.client),
+                ephemeral=True,
             )
-        
-        voice_client = interaction.guild.voice_client
-        if not voice_client or not voice_client.is_paused():
-            return await interaction.response.send_message(
-                embed=obsidian_embed(
-                    "❌ Not Paused",
-                    "The bot is not paused.",
-                    color=discord.Color.orange(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
-            )
-        
-        voice_client.resume()
+        vc.resume()
         await interaction.response.send_message(
-            embed=obsidian_embed(
-                "▶️ Resumed",
-                "Music playback resumed.",
-                color=discord.Color.green(),
-                client=interaction.client,
-            )
+            embed=success_embed("Resumed", "Playback resumed.", client=interaction.client),
         )
-    
-    command_decorator = group.command(name="skip", description="Skip the current song.") if group else bot.tree.command(name="skip", description="Skip the current song.")
-    
-    @command_decorator
+        await update_now_playing_panel(interaction.guild, interaction.client)  # type: ignore[arg-type]
+
+    @_cmd_decorator(group, bot, "skip", "Skip the current track (DJ/mod or vote-skip).")
     async def skip(interaction: discord.Interaction):
-        """Skip current song."""
-        if not interaction.guild:
+        if not await _guild_only(interaction):
+            return
+        if not await _music_enabled(interaction):
+            return
+        assert isinstance(interaction.user, discord.Member)
+        dj = await _has_dj(interaction.user)
+        if not dj:
             return await interaction.response.send_message(
-                embed=obsidian_embed(
-                    "❌ Invalid Context",
-                    "This command can only be used in a server.",
-                    color=discord.Color.red(),
+                embed=error_embed(
+                    "DJ Only",
+                    "Use **/music voteskip** or ask a DJ to skip.",
                     client=interaction.client,
                 ),
-                ephemeral=True
+                ephemeral=True,
             )
-        
-        voice_client = interaction.guild.voice_client
-        if not voice_client or (not voice_client.is_playing() and not voice_client.is_paused()):
+        vc = interaction.guild.voice_client  # type: ignore[union-attr]
+        if not vc or (not vc.is_playing() and not vc.is_paused()):
             return await interaction.response.send_message(
-                embed=obsidian_embed(
-                    "❌ Not Playing",
-                    "The bot is not playing music.",
-                    color=discord.Color.orange(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
+                embed=error_embed("Not Playing", "Nothing to skip.", client=interaction.client),
+                ephemeral=True,
             )
-        
-        voice_client.stop()
+        vc.stop()
         await interaction.response.send_message(
-            embed=obsidian_embed(
-                "⏭️ Skipped",
-                "Skipped to the next song.",
-                color=discord.Color.blue(),
-                client=interaction.client,
-            )
+            embed=success_embed("Skipped", "Playing next track…", client=interaction.client),
         )
-    
-    command_decorator = group.command(name="queue", description="View the music queue.") if group else bot.tree.command(name="queue", description="View the music queue.")
-    
-    @command_decorator
-    async def queue(interaction: discord.Interaction):
-        """View queue."""
-        if not interaction.guild:
-            return await interaction.response.send_message(
-                embed=obsidian_embed(
-                    "❌ Invalid Context",
-                    "This command can only be used in a server.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
+
+    @_cmd_decorator(group, bot, "voteskip", "Vote to skip the current track.")
+    async def voteskip(interaction: discord.Interaction):
+        if not await _guild_only(interaction):
+            return
+        if not await _music_enabled(interaction):
+            return
+        assert isinstance(interaction.user, discord.Member)
+        should_skip, msg, votes, needed = await register_vote_skip(interaction.user)
+        if should_skip:
+            vc = interaction.guild.voice_client  # type: ignore[union-attr]
+            if vc:
+                vc.stop()
+            await interaction.response.send_message(
+                embed=success_embed("Vote Skip", msg, client=interaction.client),
             )
-        
-        await interaction.response.defer()
-        
-        # Get current track
-        voice_client = interaction.guild.voice_client
-        current_track = None
-        if voice_client and voice_client.source:
-            if hasattr(voice_client.source, 'title'):
-                current_track = voice_client.source.title
-        
-        # Get queue
-        queue_list = music_queues.get(interaction.guild.id, [])
-        
-        if not current_track and not queue_list:
-            return await interaction.followup.send(
-                embed=obsidian_embed(
-                    "📋 Queue",
-                    "The queue is empty.",
-                    color=discord.Color.blue(),
-                    client=interaction.client,
-                )
-            )
-        
-        # Build queue text
-        queue_text = ""
-        if current_track:
-            queue_text += f"**🎵 Now Playing:** {current_track}\n\n"
-        
-        if queue_list:
-            queue_text += "**📋 Up Next:**\n"
-            for i, track in enumerate(queue_list[:10], 1):
-                title = track.get('title', 'Unknown')
-                duration = format_duration(track.get('duration', 0))
-                queue_text += f"{i}. {title} ({duration})\n"
-            
-            if len(queue_list) > 10:
-                queue_text += f"\n... and {len(queue_list) - 10} more"
         else:
-            queue_text += "No songs in queue."
-        
-        await interaction.followup.send(
-            embed=obsidian_embed(
-                "📋 Music Queue",
-                queue_text,
-                color=discord.Color.blue(),
-                client=interaction.client,
-            )
+            await interaction.response.send_message(msg, ephemeral=True)
+
+    @_cmd_decorator(group, bot, "queue", "View the music queue.")
+    async def queue_cmd(interaction: discord.Interaction):
+        if not await _guild_only(interaction):
+            return
+        if not await _music_enabled(interaction):
+            return
+        await interaction.response.send_message(
+            embed=_queue_embed(interaction.guild, interaction.client),  # type: ignore[arg-type]
+            ephemeral=True,
         )
-    
-    command_decorator = group.command(name="volume", description="Set music volume (0-100).") if group else bot.tree.command(name="volume", description="Set music volume (0-100).")
-    
-    @command_decorator
-    @app_commands.describe(volume="Volume level (0-100)")
+
+    @_cmd_decorator(group, bot, "volume", "Set volume (0–100).")
+    @app_commands.describe(volume="Volume level (0–100)")
     async def volume(interaction: discord.Interaction, volume: int):
-        """Set volume."""
-        if not interaction.guild:
-            return await interaction.response.send_message(
-                embed=obsidian_embed(
-                    "❌ Invalid Context",
-                    "This command can only be used in a server.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
-            )
-        
+        if not await _guild_only(interaction):
+            return
+        if not await _music_enabled(interaction):
+            return
+        if not await _require_dj(interaction):
+            return
         if volume < 0 or volume > 100:
             return await interaction.response.send_message(
-                embed=obsidian_embed(
-                    "❌ Invalid Volume",
-                    "Volume must be between 0 and 100.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
+                embed=error_embed("Invalid Volume", "Volume must be 0–100.", client=interaction.client),
+                ephemeral=True,
             )
-        
-        voice_client = interaction.guild.voice_client
-        if not voice_client or not voice_client.source:
+        vc = interaction.guild.voice_client  # type: ignore[union-attr]
+        if not vc or not vc.source:
             return await interaction.response.send_message(
-                embed=obsidian_embed(
-                    "❌ Not Playing",
-                    "The bot is not playing music.",
-                    color=discord.Color.orange(),
+                embed=error_embed("Not Playing", "Nothing is playing.", client=interaction.client),
+                ephemeral=True,
+            )
+        st = get_state(interaction.guild.id)  # type: ignore[union-attr]
+        st.volume = volume / 100.0
+        vc.source.volume = st.volume
+        await persist_guild_state(interaction.guild.id, is_playing=True)  # type: ignore[union-attr]
+        await interaction.response.send_message(
+            embed=success_embed("Volume", f"Set to **{volume}%**.", client=interaction.client),
+        )
+
+    @_cmd_decorator(group, bot, "shuffle", "Toggle shuffle mode for the queue.")
+    async def shuffle(interaction: discord.Interaction):
+        if not await _guild_only(interaction):
+            return
+        if not await _music_enabled(interaction):
+            return
+        if not await _require_dj(interaction):
+            return
+        st = get_state(interaction.guild.id)  # type: ignore[union-attr]
+        st.shuffle = not st.shuffle
+        await interaction.response.send_message(
+            embed=success_embed("Shuffle", f"Shuffle is now **{'on' if st.shuffle else 'off'}**.", client=interaction.client),
+        )
+
+    @_cmd_decorator(group, bot, "loop", "Cycle loop mode: off → track → queue.")
+    async def loop_cmd(interaction: discord.Interaction):
+        if not await _guild_only(interaction):
+            return
+        if not await _music_enabled(interaction):
+            return
+        if not await _require_dj(interaction):
+            return
+        st = get_state(interaction.guild.id)  # type: ignore[union-attr]
+        st.loop_mode = _cycle_loop_mode(st.loop_mode)
+        await interaction.response.send_message(
+            embed=success_embed("Loop", f"Loop mode: **{loop_mode_label(st.loop_mode)}**.", client=interaction.client),
+        )
+
+    @_cmd_decorator(group, bot, "remove", "Remove a track from the queue by position.")
+    @app_commands.describe(position="Queue position (1 = next up)")
+    async def remove(interaction: discord.Interaction, position: int):
+        if not await _guild_only(interaction):
+            return
+        if not await _music_enabled(interaction):
+            return
+        if not await _require_dj(interaction):
+            return
+        st = get_state(interaction.guild.id)  # type: ignore[union-attr]
+        if position < 1 or position > len(st.queue):
+            return await interaction.response.send_message(
+                embed=error_embed("Invalid Position", f"Enter 1–{len(st.queue) or 0}.", client=interaction.client),
+                ephemeral=True,
+            )
+        removed = st.queue.pop(position - 1)
+        await persist_guild_state(interaction.guild.id, is_playing=bool(interaction.guild.voice_client and interaction.guild.voice_client.is_playing()))  # type: ignore[union-attr]
+        await interaction.response.send_message(
+            embed=success_embed("Removed", f"Removed **{removed.get('title', 'track')}**.", client=interaction.client),
+        )
+
+    @_cmd_decorator(group, bot, "clear", "Clear the queue (keeps current track).")
+    async def clear(interaction: discord.Interaction):
+        if not await _guild_only(interaction):
+            return
+        if not await _music_enabled(interaction):
+            return
+        if not await _require_dj(interaction):
+            return
+        st = get_state(interaction.guild.id)  # type: ignore[union-attr]
+        count = len(st.queue)
+        st.queue.clear()
+        await persist_guild_state(
+            interaction.guild.id,  # type: ignore[union-attr]
+            is_playing=bool(interaction.guild.voice_client and (interaction.guild.voice_client.is_playing() or interaction.guild.voice_client.is_paused())),  # type: ignore[union-attr]
+        )
+        await interaction.response.send_message(
+            embed=success_embed("Queue Cleared", f"Removed **{count}** track(s).", client=interaction.client),
+        )
+
+    @_cmd_decorator(group, bot, "config", "Configure DJ role, music channel, and vote-skip ratio (mods).")
+    @app_commands.describe(
+        dj_role="Role allowed to control music (optional)",
+        music_channel="Text channel for music commands (optional)",
+        vote_skip_ratio="Fraction of listeners needed to skip (0.1–1.0, optional)",
+    )
+    async def config(
+        interaction: discord.Interaction,
+        dj_role: Optional[discord.Role] = None,
+        music_channel: Optional[discord.TextChannel] = None,
+        vote_skip_ratio: Optional[float] = None,
+    ):
+        if not await _guild_only(interaction):
+            return
+        if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
+            return await interaction.response.send_message(
+                embed=error_embed("Mods Only", "Only moderators can configure music.", client=interaction.client),
+                ephemeral=True,
+            )
+        assert interaction.guild
+        updates = []
+        if dj_role is not None:
+            await set_guild_setting(interaction.guild.id, MUSIC_DJ_ROLE_KEY, str(dj_role.id))
+            updates.append(f"**DJ role:** {dj_role.mention}")
+        if music_channel is not None:
+            await set_guild_setting(interaction.guild.id, MUSIC_CHANNEL_KEY, str(music_channel.id))
+            updates.append(f"**Music channel:** {music_channel.mention}")
+        if vote_skip_ratio is not None:
+            ratio = max(0.1, min(1.0, vote_skip_ratio))
+            await set_guild_setting(interaction.guild.id, "music_vote_skip_ratio", str(ratio))
+            updates.append(f"**Vote-skip ratio:** {ratio:.0%}")
+        if not updates:
+            dj_raw = await get_guild_setting(interaction.guild.id, MUSIC_DJ_ROLE_KEY)
+            ch_raw = await get_guild_setting(interaction.guild.id, MUSIC_CHANNEL_KEY)
+            ratio = await get_vote_skip_ratio(interaction.guild.id)
+            dj_line = f"<@&{dj_raw}>" if dj_raw else "_Not set_"
+            ch_line = f"<#{ch_raw}>" if ch_raw else "_Any channel_"
+            return await interaction.response.send_message(
+                embed=embed_template(
+                    "showcase",
+                    "🎵 Music Config",
+                    f"**DJ role:** {dj_line}\n**Music channel:** {ch_line}\n**Vote-skip ratio:** {ratio:.0%}",
+                    category="music",
                     client=interaction.client,
                 ),
-                ephemeral=True
+                ephemeral=True,
             )
-        
-        voice_client.source.volume = volume / 100
-        
-        async with aiosqlite.connect(DB_PATH) as db:
-            await db.execute("""
-                UPDATE music_queues SET volume=? WHERE guild_id=?
-            """, (volume, interaction.guild.id))
-            await db.commit()
-        
         await interaction.response.send_message(
-            embed=obsidian_embed(
-                "🔊 Volume Set",
-                f"Volume set to {volume}%.",
-                color=discord.Color.blue(),
-                client=interaction.client,
-            )
+            embed=success_embed("Music Config", "\n".join(updates), client=interaction.client),
+            ephemeral=True,
         )
 
 
 async def handle_playback_finished(guild_id: int):
-    """Handle when playback finishes (deprecated - use play_next_in_queue instead)."""
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("""
-            UPDATE music_queues SET is_playing=0 WHERE guild_id=?
-        """, (guild_id,))
-        await db.commit()
+    """Legacy hook — use play_next_in_queue instead."""
+    await persist_guild_state(guild_id, is_playing=False)

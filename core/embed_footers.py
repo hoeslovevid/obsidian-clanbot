@@ -23,6 +23,7 @@ FOOTERS: dict[str, str] = {
     "community_ticket": "/ticket for support · staff see this channel",
     "community_ticket_open": "Staff will reply in your ticket channel · add details anytime",
     "community_rsvp": "RSVP on the ops board · reminders go out before start",
+    "music": "/music queue · Skip / Pause on the now-playing panel · DJ role via /music config",
     "economy_transfer_success": "Balances updated · /economy transactions for history",
     "warframe_hub": "/warframe hub to refresh · /wfnotify configure for alerts",
     "moderation_purge": "Mod only · transcript saved when archive is on",

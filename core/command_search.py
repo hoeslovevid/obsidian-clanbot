@@ -26,6 +26,7 @@ COMMAND_FEATURE_RULES: list[tuple[tuple[str, ...], str]] = [
     (("events",), "events"),
     (("general", "poll"), "polls"),
     (("poll",), "polls"),
+    (("music",), "music"),
 ]
 
 _ECONOMY_PATH_ROOTS: frozenset[str] = frozenset(
@@ -66,6 +67,8 @@ def feature_for_path(path: str) -> Optional[str]:
         return "trade"
     if parts[0] in ("events", "event_create", "events_list"):
         return "events"
+    if parts[0] == "music":
+        return "music"
     if parts[0] == "wfnotify" or (len(parts) > 1 and parts[1] in ("notify", "subscribe")):
         return "notifications"
     return None
@@ -189,6 +192,7 @@ def search_commands(
         "profile": "general profile me wallet",
         "poll": "general poll vote",
         "lfg": "lfg group mission",
+        "music": "music play queue skip dj",
         "pet": "pets shop feed",
         "warn": "warn warn moderation",
         "purge": "mod purge delete messages",

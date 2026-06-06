@@ -54,10 +54,10 @@ DB_PATH = os.getenv("DB_PATH", str(PROJECT_ROOT / "data" / "obsidian_clanbot.db"
 # Single source of truth for /about, /whatsnew, /status, release announce, and slash-command sync.
 # Set BOT_VERSION on Railway to match each production release; keep this code default in sync.
 # On release: bump BOT_VERSION here (and on Railway), then update CURRENT_RELEASE_* in core/changelog.py.
-BOT_VERSION = os.getenv("BOT_VERSION", "1.94.0")
+BOT_VERSION = os.getenv("BOT_VERSION", "1.95.0")
 BOT_CHANGELOG = os.getenv(
     "BOT_CHANGELOG",
-    "v1.94.0 — Warframe hub expansion, weekly recap, LFG upgrades, clan ops. See /whatsnew.",
+    "v1.95.0 — Music Path A: player refactor, now-playing panel, DJ/vote-skip, queue tools. See /whatsnew.",
 )
 
 # Presence rotation: default | menu | degraded | event

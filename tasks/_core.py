@@ -2899,6 +2899,22 @@ def setup_tasks(bot):
     from tasks.weekly_recap_loop import create_weekly_recap_loop
     weekly_recap_loop = create_weekly_recap_loop(bot)
 
+    @tasks.loop(minutes=1)
+    async def music_auto_leave_loop():
+        """Disconnect from voice when the channel is empty too long."""
+        try:
+            if not bot.is_ready():
+                return
+            from core.music_player import music_auto_leave_tick
+
+            await music_auto_leave_tick(bot)
+        except Exception as e:
+            logger.error(f"[music] auto-leave loop error: {e}", exc_info=True)
+
+    @music_auto_leave_loop.before_loop
+    async def before_music_auto_leave_loop():
+        await bot.wait_until_ready()
+
     # Start all tasks with error handling
     tasks_to_start = [
         ('temp_vc_cleanup', temp_vc_cleanup),
@@ -2934,6 +2950,7 @@ def setup_tasks(bot):
         ('youtube_check_loop', youtube_check_loop),
         ('digest_dm_loop', digest_dm_loop),
         ('weekly_recap_loop', weekly_recap_loop),
+        ('music_auto_leave_loop', music_auto_leave_loop),
     ]
     
     started_tasks = {}
