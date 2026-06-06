@@ -222,13 +222,39 @@ def setup(bot, group=None):
         async def _open_classic_picker(inter: discord.Interaction):
             await inter.response.edit_message(embed=embed, view=view)
 
+        async def _back_to_menu_home(inter: discord.Interaction):
+            from core.menu_layout import MenuHomeLayout
+
+            layout = MenuHomeLayout(
+                recent_blurb=fav_blurb + recent_blurb,
+                on_open_picker=_open_v2_picker,
+            )
+            await inter.response.edit_message(view=layout)
+
+        async def _open_v2_picker(inter: discord.Interaction):
+            from core.menu_layout import MenuPickerLayout, menu_layout_v2_enabled
+
+            if menu_layout_v2_enabled():
+                try:
+                    layout = MenuPickerLayout(
+                        bot,
+                        favorites=favorites,
+                        recent=recent,
+                        on_back=_back_to_menu_home,
+                    )
+                    await inter.response.edit_message(view=layout)
+                    return
+                except Exception:
+                    pass
+            await _open_classic_picker(inter)
+
         from core.menu_layout import menu_layout_v2_enabled, MenuHomeLayout
 
         if menu_layout_v2_enabled():
             try:
                 layout = MenuHomeLayout(
                     recent_blurb=fav_blurb + recent_blurb,
-                    on_open_picker=_open_classic_picker,
+                    on_open_picker=_open_v2_picker,
                 )
                 await interaction.response.send_message(view=layout, ephemeral=True)
                 return

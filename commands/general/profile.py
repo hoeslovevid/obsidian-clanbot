@@ -457,17 +457,20 @@ def setup(bot, group=None):
             client=interaction.client,
         )
 
-        from core.profile_layout import ProfileSnapshotLayout, profile_layout_v2_enabled
+        from core.profile_layout import ProfileFullLayout, profile_layout_v2_enabled
 
-        if profile_layout_v2_enabled() and is_self:
-            headline = f"Level **{current_level}** · **{profile_data['balance']:,}** coins"
-            stats = f"**{profile_data['messages_sent']:,}** messages · **{voice_time}** voice"
-            layout = ProfileSnapshotLayout(
-                display_name=target_user.display_name,
-                headline=headline,
-                stats_blurb=stats,
-            )
-            await interaction.followup.send(view=layout, ephemeral=True)
+        if profile_layout_v2_enabled() and is_self and defer_ephemeral:
+            try:
+                fields = [(f.name, f.value, f.inline) for f in embed.fields]
+                layout = ProfileFullLayout(
+                    title=f"👤 {target_user.display_name}",
+                    description=embed.description or "",
+                    fields=fields,
+                )
+                await interaction.followup.send(view=layout, ephemeral=True)
+                return
+            except Exception:
+                pass
         await interaction.followup.send(embed=embed, ephemeral=defer_ephemeral)
 
     group.command(name="profile", description="View your or another user's profile and statistics.")(profile_callback)

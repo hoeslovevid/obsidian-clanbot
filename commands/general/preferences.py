@@ -260,6 +260,19 @@ def setup(bot, group=None):
                 color=EMBED_COLORS["general"],
                 client=interaction.client,
             )
+            from core.help_layout import help_layout_v2_enabled
+            from core.preferences_layout import PreferencesLayout
+
+            if help_layout_v2_enabled():
+                try:
+                    layout = PreferencesLayout(lines=lines)
+                    await interaction.followup.send(
+                        view=layout,
+                        ephemeral=True,
+                    )
+                    return
+                except Exception:
+                    pass
             return await interaction.followup.send(
                 embed=embed,
                 view=_NotificationPrefsView(interaction.user.id, interaction.guild.id),

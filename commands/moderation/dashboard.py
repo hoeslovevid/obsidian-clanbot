@@ -338,6 +338,26 @@ class ModDashboardView(discord.ui.View):
             return
         await interaction.response.defer()
         embed = await get_mod_dashboard_embed(self.guild, interaction.client, force_refresh=True)
+        from core.dashboard_layout import ModDashboardSnapshotLayout
+        from core.help_layout import help_layout_v2_enabled
+
+        if help_layout_v2_enabled():
+            try:
+                snap_fields = [(f.name, f.value, f.inline) for f in embed.fields[:3]]
+
+                async def _snap_refresh(inter: discord.Interaction):
+                    await self.refresh(inter, button)
+
+                layout = ModDashboardSnapshotLayout(
+                    title="🛡️ Mod Dashboard",
+                    intro=embed.description or "Overview of items needing attention.",
+                    fields=snap_fields,
+                    on_refresh=_snap_refresh,
+                )
+                await interaction.edit_original_response(view=layout)
+                return
+            except Exception:
+                pass
         await interaction.edit_original_response(embed=embed, view=self)
 
     @discord.ui.button(label="Lock #channel", style=discord.ButtonStyle.danger, emoji="🔒")

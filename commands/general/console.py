@@ -142,8 +142,19 @@ def setup(bot, group=None):
             )
 
         embed = _hub_embed(interaction.client, interaction.guild)
-        view = ConsoleHubView()
-        msg = await target.send(embed=embed, view=view)
+        from core.console_layout import ConsoleHubLayout
+        from core.help_layout import help_layout_v2_enabled
+
+        if help_layout_v2_enabled():
+            try:
+                layout = ConsoleHubLayout(body=embed.description or "")
+                msg = await target.send(view=layout)
+            except Exception:
+                view = ConsoleHubView()
+                msg = await target.send(embed=embed, view=view)
+        else:
+            view = ConsoleHubView()
+            msg = await target.send(embed=embed, view=view)
         # Optional website row as a second message is noisy; help links live in embed footer.
         try:
             await msg.pin(reason="Obsidian Clan Console hub")

@@ -425,6 +425,25 @@ def _panel_view_factory(guild_id: int):
     return MusicPanelView(guild_id)
 
 
+def build_now_playing_layout(guild: discord.Guild, bot: discord.Client):
+    """Build V2 now-playing panel when HELP_LAYOUT_V2 is enabled."""
+    from core.help_layout import help_layout_v2_enabled
+    from core.music_panel_layout import MusicPanelLayout
+
+    if not help_layout_v2_enabled():
+        return None
+    embed = build_now_playing_embed(guild, bot)
+    panel = _panel_view_factory(guild.id)
+    return MusicPanelLayout(
+        guild_id=guild.id,
+        title=embed.title or "🎵 Music",
+        body=embed.description or "",
+        on_skip=panel._on_skip,
+        on_toggle=panel._on_toggle,
+        on_queue=panel._on_queue,
+    )
+
+
 async def update_now_playing_panel(
     guild: discord.Guild,
     bot: discord.Client,
@@ -436,6 +455,7 @@ async def update_now_playing_panel(
     st = get_state(guild.id)
     embed = build_now_playing_embed(guild, bot)
     view = _panel_view_factory(guild.id)
+    layout = build_now_playing_layout(guild, bot)
 
     channel = None
     if st.text_channel_id:
@@ -446,14 +466,20 @@ async def update_now_playing_panel(
     if st.panel_message_id and channel:
         try:
             msg = await channel.fetch_message(st.panel_message_id)
-            await safe_message_edit(msg, embed=embed, view=view)
+            if layout:
+                await safe_message_edit(msg, view=layout)
+            else:
+                await safe_message_edit(msg, embed=embed, view=view)
             return
         except (discord.NotFound, discord.Forbidden, discord.HTTPException):
             st.panel_message_id = None
 
     if announce and channel and (guild.voice_client and (guild.voice_client.is_playing() or guild.voice_client.is_paused())):
         try:
-            msg = await channel.send(embed=embed, view=view)
+            if layout:
+                msg = await channel.send(view=layout)
+            else:
+                msg = await channel.send(embed=embed, view=view)
             await set_panel_message_id(guild.id, msg.id)
         except Exception:
             pass

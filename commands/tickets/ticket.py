@@ -818,6 +818,28 @@ async def open_support_ticket(
         footer=footer_for("community_ticket_open"),
         client=interaction.client,
     )
+    from core.help_layout import help_layout_v2_enabled
+    from core.ticket_layout import TicketOpenLayout
+
+    if help_layout_v2_enabled():
+        try:
+            open_fields = [
+                ("Subject", subject, True),
+                ("Status", "Open", True),
+                ("Priority", priority_val.capitalize(), True),
+            ]
+            if tag_val:
+                open_fields.insert(1, ("Tag", tag_val, True))
+            layout = TicketOpenLayout(
+                ticket_id=ticket_id,
+                channel_mention=channel.mention,
+                fields=open_fields,
+                jump_url=channel.jump_url,
+            )
+            await interaction.followup.send(view=layout, ephemeral=True)
+            return
+        except Exception:
+            pass
     confirm_view = discord.ui.View(timeout=120)
     add_link_row(confirm_view, ticket_confirmation_buttons(channel_url=channel.jump_url))
     await interaction.followup.send(embed=confirm_embed_body, view=confirm_view, ephemeral=True)

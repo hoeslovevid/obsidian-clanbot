@@ -18,7 +18,6 @@ from core.utils import (
     render_bar,
 )
 from database import xp_for_level, xp_for_next_level
-from views import RefreshView
 
 
 async def _build_wallet_embed(interaction: discord.Interaction) -> discord.Embed:
@@ -128,27 +127,50 @@ def setup(bot, group=None):
 
         embed = await _build_wallet_embed(interaction)
 
+        async def _wallet_layout_for(inter: discord.Interaction):
+            from core.wallet_layout import WalletLayout
+
+            emb = await _build_wallet_embed(inter)
+            fields = [(f.name, f.value, f.inline) for f in emb.fields]
+            return WalletLayout(
+                title=emb.title or "💼 Your Wallet",
+                intro=emb.description or "",
+                fields=fields,
+                on_refresh=refresh_cb,
+            )
+
         async def refresh_cb(btn_interaction: discord.Interaction):
             if btn_interaction.user.id != interaction.user.id:
                 from core.utils import BUTTON_ONLY_RUNNER_MSG
 
                 return await btn_interaction.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
+            from core.wallet_layout import wallet_layout_v2_enabled
+
+            if wallet_layout_v2_enabled():
+                try:
+                    layout = await _wallet_layout_for(btn_interaction)
+                    await btn_interaction.response.edit_message(view=layout)
+                    return
+                except Exception:
+                    pass
             await btn_interaction.response.defer(ephemeral=True)
             new_embed = await _build_wallet_embed(btn_interaction)
+            from views import RefreshView
+
             view = RefreshView(refresh_cb)
             await btn_interaction.message.edit(embed=new_embed, view=view)
 
-        view = RefreshView(refresh_cb)
-        from core.wallet_layout import WalletSnapshotLayout, wallet_layout_v2_enabled
+        from core.wallet_layout import wallet_layout_v2_enabled
 
         if wallet_layout_v2_enabled():
-            data = await get_user_profile_data(interaction.guild.id, interaction.user.id)
-            body = (
-                f"**{format_number(int(data.get('balance') or 0))}** coins · "
-                f"Lv **{int(data.get('level') or 0)}** · streak **{int(data.get('daily_streak') or 0)}**d"
-            )
-            layout = WalletSnapshotLayout(title="💼 Wallet snapshot", body=body)
-            await interaction.response.send_message(view=layout, ephemeral=True)
-            await interaction.followup.send(embed=embed, view=view, ephemeral=True)
-        else:
-            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+            try:
+                layout = await _wallet_layout_for(interaction)
+                await interaction.response.send_message(view=layout, ephemeral=True)
+                return
+            except Exception:
+                pass
+
+        from views import RefreshView
+
+        view = RefreshView(refresh_cb)
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)

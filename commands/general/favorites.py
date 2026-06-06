@@ -90,6 +90,20 @@ def setup(bot, group=None):
             footer="Tip: type / then the command name — favorites are for quick reference",
             client=interaction.client,
         )
+        from core.compact_layouts import FavoritesLayout
+        from core.help_layout import help_layout_v2_enabled
+
+        if help_layout_v2_enabled():
+            try:
+                layout = FavoritesLayout(
+                    body="\n".join(lines),
+                    slots_used=len(favs),
+                    max_slots=MAX_FAVORITES,
+                )
+                await interaction.response.send_message(view=layout, ephemeral=True)
+                return
+            except Exception:
+                pass
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     fav_decorator = (

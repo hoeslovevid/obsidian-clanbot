@@ -65,6 +65,28 @@ def setup(bot, group=None):
             client=interaction.client,
         )
         view = LinkRowView(*help_link_buttons())
+        from core.help_layout import help_layout_v2_enabled
+        from core.status_layout import StatusLayout
+
+        if help_layout_v2_enabled():
+            try:
+                body = (
+                    f"**Version:** `{BOT_VERSION}`\n"
+                    f"**Gateway:** {latency_ms} ms · **Uptime:** {uptime}\n"
+                    f"**Servers:** {guilds}\n\n"
+                    f"{api_line}\n\n"
+                    f"{hint}"
+                )
+                layout = StatusLayout(
+                    title=status_title.replace("✅ ", "").replace("⚠️ ", ""),
+                    body=body,
+                    version=BOT_VERSION,
+                    degraded=degraded,
+                )
+                await interaction.followup.send(view=layout, ephemeral=True)
+                return
+            except Exception:
+                pass
         await interaction.followup.send(embed=embed, view=view, ephemeral=True)
 
     if group is not None:

@@ -364,4 +364,14 @@ async def _run_daily(interaction: discord.Interaction, force_reset: bool = False
             footer=footer_for("economy_daily"),
             client=interaction.client,
         )
+    from core.help_layout import help_layout_v2_enabled
+    from core.daily_layout import DailyLayout
+
+    if help_layout_v2_enabled():
+        try:
+            layout = DailyLayout(title=title, description=desc, fields=fields)
+            await interaction.followup.send(view=layout, ephemeral=True)
+            return
+        except Exception:
+            pass
     await interaction.followup.send(embed=embed, ephemeral=True)

@@ -229,6 +229,42 @@ async def send_onboarding_dm(member: discord.Member, bot) -> bool:
     ``onboarding_sent:{user_id}``; this function only handles DM mechanics.
     """
     try:
+        from core.help_layout import help_layout_v2_enabled
+        from core.onboarding_layout import OnboardingLayout
+
+        member_ref = member
+        guild_id = member.guild.id
+
+        async def _tz(inter: discord.Interaction):
+            view = OnboardingView(member_ref, guild_id=guild_id)
+            await view.tz_btn(inter, None)  # type: ignore[arg-type]
+
+        async def _platform(inter: discord.Interaction):
+            view = OnboardingView(member_ref, guild_id=guild_id)
+            await view.platform_btn(inter, None)  # type: ignore[arg-type]
+
+        async def _menu(inter: discord.Interaction):
+            view = OnboardingView(member_ref, guild_id=guild_id)
+            await view.menu_btn(inter, None)  # type: ignore[arg-type]
+
+        async def _done(inter: discord.Interaction):
+            view = OnboardingView(member_ref, guild_id=guild_id)
+            await view.done_btn(inter, None)  # type: ignore[arg-type]
+
+        if help_layout_v2_enabled():
+            try:
+                layout = OnboardingLayout(
+                    guild_name=member.guild.name,
+                    display_name=member.display_name,
+                    on_timezone=_tz,
+                    on_platform=_platform,
+                    on_menu=_menu,
+                    on_done=_done,
+                )
+                await member.send(view=layout)
+                return True
+            except Exception:
+                pass
         embed = _build_dm_embed(member, bot)
         view = OnboardingView(member, guild_id=member.guild.id)
         await member.send(embed=embed, view=view)

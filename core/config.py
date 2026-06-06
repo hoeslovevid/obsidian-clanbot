@@ -54,7 +54,7 @@ DB_PATH = os.getenv("DB_PATH", str(PROJECT_ROOT / "data" / "obsidian_clanbot.db"
 # Single source of truth for /about, /whatsnew, /status, release announce, and slash-command sync.
 # Set BOT_VERSION on Railway to match each production release; keep this code default in sync.
 # On release: bump BOT_VERSION here (and on Railway), then update CURRENT_RELEASE_* in core/changelog.py.
-BOT_VERSION = os.getenv("BOT_VERSION", "1.96.0")
+BOT_VERSION = os.getenv("BOT_VERSION", "1.97.0")
 BOT_CHANGELOG = os.getenv(
     "BOT_CHANGELOG",
     "v1.96.0 — Music Path C: temp VC, LFG radio, event soundtracks, VC bonus. See /whatsnew.",

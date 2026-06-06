@@ -642,9 +642,31 @@ async def create_lfg_post(
     )
     view = LFGView(lfg_id, has_radio=bool(radio_clean))
 
-    await interaction.response.send_message(content=mention if mention else None, embed=embed, view=view)
-    message = await interaction.original_response()
-    message_id = message.id
+    from core.help_layout import help_layout_v2_enabled
+    from core.lfg_layout import LFGPanelLayout
+
+    if help_layout_v2_enabled():
+        try:
+            layout = LFGPanelLayout(
+                lfg_id=lfg_id,
+                intro=f"> Host: {interaction.user.mention} · Mission **{mission_name}**",
+                fields=fields,
+                on_join=view.join,
+                on_leave=view.leave,
+                on_filled=view.mark_filled,
+                on_radio=view.start_radio if bool(radio_clean) else None,
+            )
+            await interaction.response.send_message(content=mention if mention else None, view=layout)
+            message = await interaction.original_response()
+            message_id = message.id
+        except Exception:
+            await interaction.response.send_message(content=mention if mention else None, embed=embed, view=view)
+            message = await interaction.original_response()
+            message_id = message.id
+    else:
+        await interaction.response.send_message(content=mention if mention else None, embed=embed, view=view)
+        message = await interaction.original_response()
+        message_id = message.id
 
     thread_id = None
     try:

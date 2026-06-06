@@ -174,6 +174,22 @@ def _hub_view(interaction: discord.Interaction, platform: str, guild_id: int) ->
             twitch_line=twitch,
             guild_id=guild_id,
         )
+        from core.help_layout import help_layout_v2_enabled
+        from core.warframe_hub_layout import WarframeHubLayout
+
+        if help_layout_v2_enabled():
+            try:
+                fields = [(f.name, f.value, f.inline) for f in new_emb.fields]
+                layout = WarframeHubLayout(
+                    title=new_emb.title or "🎮 Warframe Hub",
+                    intro=new_emb.description or "",
+                    fields=fields,
+                    on_refresh=on_refresh,
+                )
+                await btn_interaction.message.edit(view=layout)
+                return
+            except Exception:
+                pass
         view = _hub_view(interaction, platform, guild_id)
         await btn_interaction.message.edit(embed=new_emb, view=view)
 
@@ -334,4 +350,26 @@ def setup(bot, group=None):
             guild_id=guild_id,
         )
         view = _hub_view(interaction, platform, guild_id)
+        from core.help_layout import help_layout_v2_enabled
+        from core.warframe_hub_layout import WarframeHubLayout
+
+        if help_layout_v2_enabled():
+            try:
+                # Re-use refresh handler from the classic view's first child callback chain
+                refresh_cb = None
+                for child in view.children:
+                    if getattr(child, "label", None) == "Refresh":
+                        refresh_cb = child.callback
+                        break
+                fields = [(f.name, f.value, f.inline) for f in embed.fields]
+                layout = WarframeHubLayout(
+                    title=embed.title or "🎮 Warframe Hub",
+                    intro=embed.description or "",
+                    fields=fields,
+                    on_refresh=refresh_cb,
+                )
+                await interaction.edit_original_response(view=layout)
+                return
+            except Exception:
+                pass
         await interaction.edit_original_response(embed=embed, view=view)

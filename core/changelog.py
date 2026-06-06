@@ -12,17 +12,29 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-06"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Temp VC music** — Auto-stop when temp VC closes; `/vc transfer` hands off DJ control; optional temp-VC-only mode",
-    "**Squad radio** — LFG posts accept optional playlist/search; **Start squad radio** button queues music in your VC",
-    "**Event soundtracks** — Optional `soundtrack` on `/events event_create`; auto-plays at reminder/go-live when bot is in event VC",
-    "**VC music bonus** — Extra XP/coins while music plays in your VC (`MUSIC_VC_BONUS_MULTIPLIER`, guild override)",
-    "**Hub & Console** — `/warframe hub` shows listeners in VC; Clan Console embed includes now-playing status",
-    "**Quieter mode** — LFG radio and event soundtrack announcements respect guild quieter mode",
-    "**Config** — `/music config` adds temp VC only, event VC, soundtrack toggle, and bonus multiplier",
+    "**V2 Batch 1** — `/help` category browse, `/menu` picker, `/profile` full card, `/economy wallet` single LayoutView + Refresh",
+    "**V2 Batch 2** — `/status`, `/whatsnew`, `/search`, `/daily`, `/me`, `/ticket` open, `/warframe hub` refreshable layouts",
+    "**V2 Batch 3** — `/admin console`, `/onboarding`, `/about`, `/recent`, `/favorites`, `/preferences`, `/wfnotify setup` opening screen",
+    "**V2 Batch 4** — Music Now Playing panel, LFG post buttons, ticket open confirmation on LayoutView ActionRows",
+    "**V2 Batch 5** — `/admin dashboard` refresh snapshot (full dashboard stays classic); heavy mod tools deferred",
+    "**Shared** — `core/layout_v2.py` helpers; `HELP_LAYOUT_V2` gate with classic embed fallback on all surfaces",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "1.96.0",
+        "date": "2026-06-06",
+        "changes": [
+            "**Temp VC music** — Auto-stop when temp VC closes; `/vc transfer` hands off DJ control; optional temp-VC-only mode",
+            "**Squad radio** — LFG posts accept optional playlist/search; **Start squad radio** button queues music in your VC",
+            "**Event soundtracks** — Optional `soundtrack` on `/events event_create`; auto-plays at reminder/go-live when bot is in event VC",
+            "**VC music bonus** — Extra XP/coins while music plays in your VC (`MUSIC_VC_BONUS_MULTIPLIER`, guild override)",
+            "**Hub & Console** — `/warframe hub` shows listeners in VC; Clan Console embed includes now-playing status",
+            "**Quieter mode** — LFG radio and event soundtrack announcements respect guild quieter mode",
+            "**Config** — `/music config` adds temp VC only, event VC, soundtrack toggle, and bonus multiplier",
+        ],
+    },
     {
         "version": "1.95.0",
         "date": "2026-06-06",

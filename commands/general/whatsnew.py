@@ -170,6 +170,68 @@ def setup(bot, group=None):
         )
         subscribed = sub_val == "1"
 
+        from core.help_layout import help_layout_v2_enabled
+        from core.whatsnew_layout import WhatsNewLayout
+
+        if help_layout_v2_enabled():
+            try:
+                state = {"page": 0, "subscribed": subscribed}
+
+                async def _rebuild(inter: discord.Interaction):
+                    entry = pages[state["page"]]
+                    layout = WhatsNewLayout(
+                        version=str(entry.get("version", "?")),
+                        date=str(entry.get("date", "")).strip(),
+                        changes=list(entry.get("changes") or []),
+                        page=state["page"],
+                        total_pages=len(pages),
+                        subscribed=state["subscribed"],
+                        on_prev=_prev if len(pages) > 1 else None,
+                        on_next=_next if len(pages) > 1 else None,
+                        on_subscribe=_subscribe,
+                    )
+                    await inter.response.edit_message(view=layout)
+
+                async def _prev(inter: discord.Interaction):
+                    state["page"] = min(len(pages) - 1, state["page"] + 1)
+                    await _rebuild(inter)
+
+                async def _next(inter: discord.Interaction):
+                    state["page"] = max(0, state["page"] - 1)
+                    await _rebuild(inter)
+
+                async def _subscribe(inter: discord.Interaction):
+                    new_state = "0" if state["subscribed"] else "1"
+                    await set_guild_setting(
+                        inter.guild.id, f"user_changelog_dm:{inter.user.id}", new_state
+                    )
+                    state["subscribed"] = not state["subscribed"]
+                    await _rebuild(inter)
+                    try:
+                        await inter.followup.send(
+                            f"Changelog DMs {'enabled' if state['subscribed'] else 'disabled'}.",
+                            ephemeral=True,
+                        )
+                    except Exception:
+                        pass
+
+                entry = pages[0]
+                layout = WhatsNewLayout(
+                    version=str(entry.get("version", "?")),
+                    date=str(entry.get("date", "")).strip(),
+                    changes=list(entry.get("changes") or []),
+                    page=0,
+                    total_pages=len(pages),
+                    subscribed=subscribed,
+                    on_prev=_prev if len(pages) > 1 else None,
+                    on_next=_next if len(pages) > 1 else None,
+                    on_subscribe=_subscribe,
+                )
+                await interaction.response.send_message(view=layout, ephemeral=True)
+                return
+            except Exception:
+                pass
+
         view = WhatsNewView(pages, subscribed=subscribed, client=interaction.client)
         await interaction.response.send_message(
             embed=view.build_embed(), view=view, ephemeral=True

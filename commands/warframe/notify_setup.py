@@ -317,6 +317,34 @@ def setup(bot, group=None):
         await interaction.response.defer(ephemeral=True)
         view = NotifySetupView(interaction.user.id)
         embed = await _build_overview_embed(interaction)
+        from core.help_layout import help_layout_v2_enabled
+        from core.wfnotify_layout import WfNotifyConfigureLayout
+
+        if help_layout_v2_enabled():
+            try:
+                overview = embed.description or "Configure Warframe notification channels."
+                cats = [(slug, label) for slug, (label, _g, _s) in NOTIFY_CATEGORIES.items()]
+
+                async def _on_pick(inter: discord.Interaction, slug: str):
+                    picker = _ChannelPickerView(view, slug)
+                    await inter.response.edit_message(
+                        embed=await _build_overview_embed(inter, flash=f"Configuring **{NOTIFY_CATEGORIES[slug][0]}**…"),
+                        view=picker,
+                    )
+
+                layout = WfNotifyConfigureLayout(
+                    overview_text=overview,
+                    on_pick=_on_pick,
+                    categories=cats,
+                )
+                msg = await interaction.followup.send(view=layout, ephemeral=True)
+                try:
+                    view.message = msg  # type: ignore[attr-defined]
+                except Exception:
+                    pass
+                return
+            except Exception:
+                pass
         msg = await interaction.followup.send(embed=embed, view=view, ephemeral=True)
         try:
             view.message = msg  # type: ignore[attr-defined]

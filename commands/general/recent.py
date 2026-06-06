@@ -79,6 +79,17 @@ def setup(bot, group=None):
                 ephemeral=True,
             )
         embed = await _recent_embed(interaction)
+        from core.compact_layouts import RecentLayout
+        from core.help_layout import help_layout_v2_enabled
+
+        if help_layout_v2_enabled():
+            try:
+                body = embed.description or "No recent commands yet."
+                layout = RecentLayout(body=body)
+                await interaction.response.send_message(view=layout, ephemeral=True)
+                return
+            except Exception:
+                pass
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     if group:

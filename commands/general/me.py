@@ -221,6 +221,21 @@ async def _run_me(interaction: discord.Interaction):
         footer=footer,
         client=interaction.client,
     )
+    from core.help_layout import help_layout_v2_enabled
+    from core.me_layout import MeLayout
+
+    if help_layout_v2_enabled():
+        try:
+            layout = MeLayout(
+                title=f"👋 {interaction.user.display_name}",
+                intro=f"A quick snapshot of your account in **{interaction.guild.name}**.",
+                fields=fields,
+                footer=footer,
+            )
+            await interaction.followup.send(view=layout, ephemeral=True)
+            return
+        except Exception:
+            pass
     await interaction.followup.send(embed=embed, ephemeral=True)
 
 

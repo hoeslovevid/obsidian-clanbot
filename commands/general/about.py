@@ -83,4 +83,19 @@ def setup(bot, group=None):
             brand=True,
         )
 
+        from core.compact_layouts import AboutLayout
+        from core.help_layout import help_layout_v2_enabled
+
+        if help_layout_v2_enabled():
+            try:
+                layout = AboutLayout(
+                    title=f"About {bot_name}",
+                    intro=desc,
+                    fields=[(n, v, inl) for n, v, inl in fields],
+                )
+                await interaction.response.send_message(view=layout, ephemeral=True)
+                return
+            except Exception:
+                pass
+
         await interaction.response.send_message(embed=embed, ephemeral=True)

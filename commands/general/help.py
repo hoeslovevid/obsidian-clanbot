@@ -705,11 +705,34 @@ def setup(bot, group=None):
         async def _open_classic_picker(inter: discord.Interaction):
             await inter.response.edit_message(embed=embed, view=view)
 
+        async def _back_to_home(inter: discord.Interaction):
+            from core.help_layout import HelpHomeLayout
+
+            layout = HelpHomeLayout(is_mod=is_user_mod, on_browse=_open_browse)
+            await inter.response.edit_message(view=layout)
+
+        async def _open_browse(inter: discord.Interaction):
+            from core.help_layout import HelpBrowseLayout, help_layout_v2_enabled
+
+            if help_layout_v2_enabled():
+                try:
+                    layout = HelpBrowseLayout(
+                        bot,
+                        is_mod=is_user_mod,
+                        guild_id=inter.guild.id if inter.guild else None,
+                        on_home=_back_to_home,
+                    )
+                    await inter.response.edit_message(view=layout)
+                    return
+                except Exception:
+                    pass
+            await _open_classic_picker(inter)
+
         from core.help_layout import help_layout_v2_enabled, HelpHomeLayout
 
         if help_layout_v2_enabled():
             try:
-                layout = HelpHomeLayout(is_mod=is_user_mod, on_browse=_open_classic_picker)
+                layout = HelpHomeLayout(is_mod=is_user_mod, on_browse=_open_browse)
                 await interaction.response.send_message(view=layout, ephemeral=True)
                 return
             except Exception:
@@ -769,6 +792,21 @@ def setup(bot, group=None):
         fields = None
         if suggestion and matches and matches[0][2] < 25:
             fields = [("Did you mean?", f"`/{suggestion}`", False)]
+
+        from core.help_layout import HelpSearchLayout, help_layout_v2_enabled
+
+        if help_layout_v2_enabled():
+            try:
+                layout = HelpSearchLayout(
+                    query=q,
+                    lines=lines[:12],
+                    match_count=len(matches),
+                    suggestion=suggestion if suggestion and matches and matches[0][2] < 25 else None,
+                )
+                await interaction.response.send_message(view=layout, ephemeral=True)
+                return
+            except Exception:
+                pass
 
         embed = obsidian_embed(
             f"🔍 Command search — `{q}`",
