@@ -10,20 +10,32 @@ from __future__ import annotations
 from core.config import BOT_CHANGELOG, BOT_VERSION
 
 # Current release (version string comes from BOT_VERSION only).
-CURRENT_RELEASE_DATE = "2026-06-04"
+CURRENT_RELEASE_DATE = "2026-06-06"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Embeds** — showcase templates + contextual footers on giveaways, gambling, polls, warn, and community entry points",
-    "**Live edits** — `safe_message_edit` on poll results, giveaway entry counts, and LFG fill updates",
-    "**Tickets** — status chips on activity, mod quick-reply buttons (Looking into it / Need more info / Resolved)",
-    "**Discovery** — favorites surface in `/help` and `/menu`; onboarding 3-step flow (timezone → platform → menu)",
-    "**Trust** — presence shows `BOT_VERSION` + Warframe health; error embeds hint `/ticket` with error code",
-    "**Warframe** — platform footer notes on baro, status, and related commands",
-    "**V2** — `HELP_LAYOUT_V2` default; fixed warning template color bug in `embed_template`",
-    "**Ops** — incident mode embed shows auto-disable timestamp; embed asset env docs for Railway",
+    "**Batch A** — profile/shop/pets/mod context use showcase templates; View Profile matches `/profile` card",
+    "**Batch B** — V2 LayoutView default for help, menu, profile, wallet; mobile-friendly density + contextual footers",
+    "**Batch C** — `/warframe hub` refreshable hub; `/help` leads with 8 member essentials then category browse",
+    "**Batch D** — Warn absorbed into Mod Context; **Open Ticket About User** context menu (5-cap preserved)",
+    "**Batch E** — setup wizard adds changelog channel + console/feature-toggle next steps; error **Copy code** button",
+    "**Batch F** — `CATEGORY_THUMBNAIL_OVERRIDES` / `EMBED_THUMB_*` env docs; banner via `EMBED_BANNER_URL` on Railway",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "1.92.0",
+        "date": "2026-06-04",
+        "changes": [
+            "**Embeds** — showcase templates + contextual footers on giveaways, gambling, polls, warn, and community entry points",
+            "**Live edits** — `safe_message_edit` on poll results, giveaway entry counts, and LFG fill updates",
+            "**Tickets** — status chips on activity, mod quick-reply buttons (Looking into it / Need more info / Resolved)",
+            "**Discovery** — favorites surface in `/help` and `/menu`; onboarding 3-step flow (timezone → platform → menu)",
+            "**Trust** — presence shows `BOT_VERSION` + Warframe health; error embeds hint `/ticket` with error code",
+            "**Warframe** — platform footer notes on baro, status, and related commands",
+            "**V2** — `HELP_LAYOUT_V2` default; fixed warning template color bug in `embed_template`",
+            "**Ops** — incident mode embed shows auto-disable timestamp; embed asset env docs for Railway",
+        ],
+    },
     {
         "version": "1.91.2",
         "date": "2026-06-04",

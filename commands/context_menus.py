@@ -2,7 +2,9 @@
 import discord
 from discord import app_commands
 
-from core.utils import obsidian_embed, error_embed, feature_off_embed, ECONOMY_ENABLED, is_mod, format_timestamp_readable, EMBED_FOOTER_DEFAULT
+from core.embed_footers import footer_for
+from core.embed_templates import embed_template
+from core.utils import error_embed, feature_off_embed, ECONOMY_ENABLED, is_mod
 
 
 def setup(bot, group=None):
@@ -10,58 +12,23 @@ def setup(bot, group=None):
 
     @bot.tree.context_menu(name="View Profile")
     async def view_profile_context(interaction: discord.Interaction, member: discord.Member):
-        """View a user's profile from context menu."""
-        from commands.general.profile import get_user_profile_data
-        from database import xp_for_level, xp_for_next_level
-        from core.utils import XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT, now_utc
+        """View a user's profile from context menu (matches /profile template)."""
+        from commands.general.profile import build_profile_embed, get_user_profile_data
 
         await interaction.response.defer(ephemeral=True)
         if not interaction.guild:
             return await interaction.followup.send(
                 embed=error_embed("Invalid Context", "This can only be used in a server.", client=interaction.client),
-                ephemeral=True
+                ephemeral=True,
             )
         profile_data = await get_user_profile_data(interaction.guild.id, member.id)
-        target_user = member
-        current_level = profile_data["level"]
-        current_xp = profile_data["xp"]
-        xp_for_current = xp_for_level(current_level, XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT) if current_level > 0 else 0
-        xp_for_next = xp_for_next_level(current_level, XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT)
-        xp_progress = current_xp - xp_for_current
-        xp_range = xp_for_next - xp_for_current
-        progress_percent = int((xp_progress / xp_range * 100)) if xp_range > 0 else 0
-        voice_hours = profile_data["voice_minutes"] // 60
-        voice_mins = profile_data["voice_minutes"] % 60
-        voice_time = f"{voice_hours}h {voice_mins}m" if voice_hours > 0 else f"{voice_mins}m"
-        fields = []
-        if profile_data["balance"] > 0 or profile_data["total_earned"] > 0:
-            fields.append(("Economy", f"Balance: {profile_data['balance']:,} | Total: {profile_data['total_earned']:,}", True))
-        if profile_data["level"] > 0 or profile_data["xp"] > 0:
-            bar = "█" * (progress_percent // 5) + "░" * (20 - progress_percent // 5)
-            fields.append(("Leveling", f"Level {current_level} | {bar} {progress_percent}%", True))
-        fields.append(("Activity", f"Messages: {profile_data['messages_sent']:,} | Voice: {voice_time}", True))
-        desc_parts = [f"Profile for {target_user.mention}"]
-        if target_user.joined_at:
-            desc_parts.append(f"\n**Member since:** {format_timestamp_readable(target_user.joined_at, include_relative=True)}")
-        if profile_data.get("title"):
-            desc_parts.append(f"\n**Title:** {profile_data['title']}")
-        if profile_data.get("equipped_badge"):
-            e, n = profile_data["equipped_badge"]
-            desc_parts.append(f"\n**Badge:** {(e or '🏆')} {n or 'Badge'}")
-        if profile_data.get("showcase_badges"):
-            parts = [f"{(x or '🏆')} {y or 'Badge'}" for _, x, y in profile_data["showcase_badges"][:3]]
-            desc_parts.append(f"\n**Showcase:** {' '.join(parts)}")
-        desc = "".join(desc_parts)
-        embed = obsidian_embed(
-            f"👤 {target_user.display_name}'s Profile",
-            desc,
-            color=target_user.color if target_user.color.value != 0 else discord.Color.blurple(),
-            author=target_user,
-            fields=fields,
+        embed = await build_profile_embed(
+            interaction.guild,
+            member,
+            profile_data,
+            viewer=interaction.user,
             client=interaction.client,
         )
-        embed.set_thumbnail(url=target_user.display_avatar.url)
-        embed.set_footer(text=EMBED_FOOTER_DEFAULT)
         await interaction.followup.send(embed=embed, ephemeral=True)
 
     @bot.tree.context_menu(name="View Balance")
@@ -89,15 +56,17 @@ def setup(bot, group=None):
         balance = await get_user_balance(interaction.guild.id, member.id)
         fields = [
             ("Balance", f"**{balance:,}** coins", True),
-            ("Earning", f"Daily: {COINS_DAILY_REWARD:,} | Messages: {COINS_PER_MESSAGE}", False),
+            ("Earning", f"Daily: {COINS_DAILY_REWARD:,} | Messages: {COINS_PER_MESSAGE}", True),
         ]
-        embed = obsidian_embed(
-            f"{member.display_name}'s Balance",
-            "",
-            color=discord.Color.gold(),
+        embed = embed_template(
+            "showcase",
+            f"💰 {member.display_name}'s Balance",
+            f"> {member.mention}",
+            category="economy",
             author=member,
             thumbnail=member.display_avatar.url,
             fields=fields,
+            footer=footer_for("economy_wallet"),
             client=interaction.client,
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -147,31 +116,29 @@ def setup(bot, group=None):
         embed, view = await build_mod_context(interaction, member)
         await interaction.followup.send(embed=embed, view=view, ephemeral=True)
 
-    @bot.tree.context_menu(name="Warn User")
-    async def warn_user_context(interaction: discord.Interaction, member: discord.Member):
-        """Right-click user → Warn (mod only, opens modal for reason)."""
-        from core.modals import WarnUserModal
+    @bot.tree.context_menu(name="Open Ticket About User")
+    async def ticket_about_user_context(interaction: discord.Interaction, member: discord.Member):
+        """Right-click user → open a support ticket regarding this member."""
+        from core.modals import TicketAboutUserModal
+
         if not interaction.guild:
             return await interaction.response.send_message(
                 embed=error_embed("Invalid Context", "This can only be used in a server.", client=interaction.client),
                 ephemeral=True,
             )
-        if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
-            return await interaction.response.send_message(
-                embed=error_embed("Mods only", "Only administrators can warn users.", client=interaction.client),
-                ephemeral=True,
-            )
         if member.bot:
             return await interaction.response.send_message(
-                embed=error_embed("Invalid User", "You cannot warn bots.", client=interaction.client),
+                embed=error_embed("Invalid User", "You cannot open a ticket about bots.", client=interaction.client),
                 ephemeral=True,
             )
         if member.id == interaction.user.id:
             return await interaction.response.send_message(
-                embed=error_embed("Invalid User", "You cannot warn yourself.", client=interaction.client),
+                embed=error_embed("Use /ticket", "For your own issues, run **`/ticket`** directly.", client=interaction.client),
                 ephemeral=True,
             )
-        await interaction.response.send_modal(WarnUserModal(member))
+        await interaction.response.send_modal(TicketAboutUserModal(member))
+
+    # Warn User removed — use Mod Context → Warn (Discord 5 user context menu cap).
 
     @bot.tree.context_menu(name="Create LFG")
     async def create_lfg_context(interaction: discord.Interaction, message: discord.Message):
@@ -249,4 +216,4 @@ def setup(bot, group=None):
         from core.modals import AddAsEventModal
         await interaction.response.send_modal(AddAsEventModal(message))
 
-    # Create Ticket for User removed: Discord allows max 5 user context menus. Use /community ticket instead.
+    # User context menus (5): View Profile, View Balance, Transfer Coins, Mod Context, Open Ticket About User.

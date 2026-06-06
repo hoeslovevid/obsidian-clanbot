@@ -19,6 +19,9 @@ from pathlib import Path
 
 from core.config import GITHUB_RAW_REPO, PROJECT_ROOT, EMBED_BANNER_URL as _ENV_BANNER, EMBED_LOGO_URL
 
+# Local path for dev reference (not served by Discord — upload to CDN for production).
+LOCAL_BANNER_PATH = PROJECT_ROOT / "assets" / "obsidian_embed_banner.png"
+
 # Default: GitHub raw after deploy; override with EMBED_BANNER_URL on Railway
 _DEFAULT_BANNER = (
     f"https://raw.githubusercontent.com/{GITHUB_RAW_REPO}/main/"

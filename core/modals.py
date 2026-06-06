@@ -47,6 +47,42 @@ class TransferCoinsModal(discord.ui.Modal, title="Transfer Coins"):
         await run_transfer_with_modal(interaction, self.target_member, amount)
 
 
+class TicketAboutUserModal(discord.ui.Modal, title="Open ticket about user"):
+    subject = discord.ui.TextInput(
+        label="Subject",
+        placeholder="Brief summary (e.g. harassment, trade dispute)",
+        max_length=80,
+        required=True,
+    )
+    details = discord.ui.TextInput(
+        label="Details (optional)",
+        style=discord.TextStyle.paragraph,
+        placeholder="What happened? Include dates or message links if you can.",
+        max_length=500,
+        required=False,
+    )
+
+    def __init__(self, member: discord.Member):
+        super().__init__(timeout=300)
+        self.target_member = member
+
+    async def on_submit(self, interaction: discord.Interaction):
+        subject_base = (self.subject.value or "").strip()
+        if not subject_base:
+            return await interaction.response.send_message(
+                embed=error_embed("Missing subject", "Please enter a short subject.", client=interaction.client),
+                ephemeral=True,
+            )
+        subject = f"Regarding {self.target_member.display_name}: {subject_base}"
+        details = (self.details.value or "").strip()
+        preamble = f"**Regarding member:** {self.target_member.mention} (`{self.target_member.id}`)"
+        if details:
+            preamble += f"\n\n{details}"
+        from commands.tickets.ticket import open_support_ticket
+
+        await open_support_ticket(interaction, subject, channel_preamble=preamble)
+
+
 class WarnUserModal(discord.ui.Modal, title="Warn User"):
     reason = discord.ui.TextInput(label="Reason", placeholder="Reason for the warning", max_length=500)
 

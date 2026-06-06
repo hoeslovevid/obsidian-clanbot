@@ -194,6 +194,181 @@ async def get_user_profile_data(guild_id: int, user_id: int) -> dict:
     return data
 
 
+async def build_profile_embed(
+    guild: discord.Guild,
+    target_user: discord.Member,
+    profile_data: dict,
+    *,
+    viewer: discord.abc.User,
+    client,
+) -> discord.Embed:
+    """Shared profile card — used by /profile and View Profile context menu."""
+    from database import xp_for_level, xp_for_next_level
+    from core.utils import XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT, now_utc
+
+    is_self = isinstance(viewer, discord.Member) and viewer.id == target_user.id
+    current_level = profile_data["level"]
+    current_xp = profile_data["xp"]
+    xp_for_current = xp_for_level(current_level, XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT) if current_level > 0 else 0
+    xp_for_next = xp_for_next_level(current_level, XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT)
+    xp_progress = current_xp - xp_for_current
+    xp_range = xp_for_next - xp_for_current
+    progress_percent = int((xp_progress / xp_range * 100)) if xp_range > 0 else 0
+
+    voice_hours = profile_data["voice_minutes"] // 60
+    voice_mins = profile_data["voice_minutes"] % 60
+    voice_time = f"{voice_hours}h {voice_mins}m" if voice_hours > 0 else f"{voice_mins}m"
+
+    fields = []
+
+    if profile_data.get("pet"):
+        from commands.economy.pets import _apply_decay, HUNGER_DECAY_PER_HOUR, HAPPINESS_DECAY_PER_HOUR
+        pet = profile_data["pet"]
+        hunger = _apply_decay(pet["hunger"], pet.get("last_fed"), pet.get("created_at"), HUNGER_DECAY_PER_HOUR)
+        happiness = _apply_decay(pet["happiness"], pet.get("last_played"), pet.get("created_at"), HAPPINESS_DECAY_PER_HOUR)
+        hunger_emoji = "🍽️" if hunger < 50 else "✅"
+        happy_emoji = "😢" if happiness < 50 else "😊"
+        fields.append((
+            "🐾 Pet",
+            f"**{pet['name']}** ({pet['type']})\n"
+            f"Hunger: {hunger}/100 {hunger_emoji}\n"
+            f"Happiness: {happiness}/100 {happy_emoji}\n"
+            f"_Use `/pets feed` and `/pets play` to care for your pet._",
+            True,
+        ))
+
+    if profile_data["balance"] > 0 or profile_data["total_earned"] > 0:
+        fields.append((
+            "💰 Economy",
+            f"**Balance:** {profile_data['balance']:,} coins\n"
+            f"**Total Earned:** {profile_data['total_earned']:,} coins\n"
+            f"**Daily Streak:** {profile_data['daily_streak']} days",
+            True,
+        ))
+
+    if profile_data["level"] > 0 or profile_data["xp"] > 0:
+        fields.append((
+            "📊 Leveling",
+            f"**Level:** {profile_data['level']}\n"
+            f"**XP:** {profile_data['xp']:,} / {xp_for_next:,}\n"
+            f"{render_bar(progress_percent)}\n"
+            f"**Total XP:** {profile_data['total_xp']:,}",
+            True,
+        ))
+
+    fields.append((
+        "📈 Activity",
+        f"**Messages:** {profile_data['messages_sent']:,}\n"
+        f"**Voice Time:** {voice_time}\n"
+        f"**Commands Used:** {profile_data['commands_used']:,}\n"
+        f"**Events Attended:** {profile_data['events_attended']}",
+        True,
+    ))
+
+    community_text = f"**Reputation:** {profile_data['reputation']:+}\n"
+    if profile_data["applications"]["total"] > 0:
+        community_text += f"**Applications:** {profile_data['applications']['total']} (✓{profile_data['applications']['approved']})\n"
+    if profile_data["suggestions"]["total"] > 0:
+        community_text += f"**Suggestions:** {profile_data['suggestions']['total']} (✓{profile_data['suggestions']['accepted']})\n"
+    if profile_data["tickets"]["total"] > 0:
+        community_text += f"**Tickets:** {profile_data['tickets']['total']}\n"
+    if profile_data["complaints"]["total"] > 0:
+        community_text += f"**Complaints:** {profile_data['complaints']['total']}"
+
+    if community_text.strip() != "**Reputation:** 0":
+        fields.append(("👥 Community", community_text, True))
+
+    if profile_data["achievements_count"] > 0:
+        achievements_text = f"**Total:** {profile_data['achievements_count']} unlocked\n\n"
+        if profile_data["achievements"]:
+            achievements_text += "**Recent:**\n"
+            for ach_id, unlocked_at, name, desc in profile_data["achievements"][:3]:
+                ach_name = name or ach_id.replace("_", " ").title()
+                achievements_text += f"• {ach_name}\n"
+        fields.append(("🏆 Achievements", achievements_text, True))
+
+    if is_self:
+        try:
+            from core.achievement_nudges import get_achievement_nudges
+            nudges = await get_achievement_nudges(guild.id, target_user.id, profile_data)
+            if nudges:
+                fields.append((
+                    "🎯 Almost there",
+                    "\n".join(f"• {n}" for n in nudges),
+                    False,
+                ))
+        except Exception:
+            pass
+
+    if profile_data["warnings"] > 0 or (is_mod(viewer) and target_user.id != viewer.id):
+        fields.append(("🛡️ Moderation", f"**Warnings:** {profile_data['warnings']}", True))
+
+    if profile_data["weekly_score"] > 0 or profile_data["monthly_score"] > 0:
+        fields.append((
+            "⭐ Activity Scores",
+            f"**Weekly:** {profile_data['weekly_score']:,}\n"
+            f"**Monthly:** {profile_data['monthly_score']:,}",
+            True,
+        ))
+
+    desc_lines = []
+    identity_parts = []
+    if target_user.joined_at:
+        join_date_str = format_timestamp_readable(target_user.joined_at, include_relative=True)
+        identity_parts.append(f"📅 Member since {join_date_str}")
+    if profile_data.get("title"):
+        identity_parts.append(f"🏷️ {profile_data['title']}")
+    if identity_parts:
+        desc_lines.append("\n".join(f"> {p}" for p in identity_parts))
+
+    if profile_data.get("bio"):
+        desc_lines.append(f"*{profile_data['bio']}*")
+    if profile_data.get("equipped_badge"):
+        emoji, name = profile_data["equipped_badge"]
+        desc_lines.append(f"{emoji or '🏆'} **{name or 'Badge'}**")
+    if profile_data.get("showcase_badges"):
+        showcase = profile_data["showcase_badges"]
+        parts = [f"{(e or '🏆')}" for _, e, n in showcase[:5]]
+        desc_lines.append(f"Showcase: {'  '.join(parts)}")
+    if is_self:
+        desc_lines.append("-# This is your profile  ·  Use /general set_bio to add a bio")
+
+    desc = "\n".join(desc_lines)
+
+    footer_parts = []
+    if profile_data["last_activity"]:
+        try:
+            last_activity = datetime.fromisoformat(profile_data["last_activity"])
+            days_ago = (now_utc() - last_activity.replace(tzinfo=timezone.utc)).days
+            footer_parts.append(f"Last active {days_ago}d ago")
+        except Exception:
+            pass
+    if profile_data["achievements_count"] > 0:
+        footer_parts.append("/achievements for full list")
+    footer_text = " · ".join(footer_parts) if footer_parts else footer_for("profile")
+
+    if profile_data.get("pet"):
+        from commands.economy.pets import get_pet_emoji
+        _pet = profile_data["pet"]
+        _pname = _pet.get("name") or _pet.get("type") or "Pet"
+        footer_text = f"{get_pet_emoji(_pet.get('type'))} {_pname} · {footer_text}"
+
+    member_color = target_user.color if target_user.color.value != 0 else EMBED_COLORS["general"]
+
+    return obsidian_embed(
+        f"👤 {target_user.display_name}",
+        desc,
+        color=member_color,
+        template="profile",
+        profile_category="general",
+        author=target_user,
+        thumbnail=target_user.display_avatar.url,
+        fields=fields,
+        footer=footer_text,
+        client=client,
+    )
+
+
 def setup(bot, group=None):
     """Register the profile command under general and as top-level /profile shortcut."""
     @app_commands.describe(
@@ -227,195 +402,17 @@ def setup(bot, group=None):
         if not isinstance(target_user, discord.Member):
             return await interaction.followup.send("User not found in this server.", ephemeral=True)
         
-        # Get profile data
         profile_data = await get_user_profile_data(interaction.guild.id, target_user.id)
-        
-        # Calculate XP progress
-        from database import xp_for_level, xp_for_next_level
-        from core.utils import XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT
         current_level = profile_data["level"]
-        current_xp = profile_data["xp"]
-        xp_for_current = xp_for_level(current_level, XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT) if current_level > 0 else 0
-        xp_for_next = xp_for_next_level(current_level, XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT)
-        xp_needed = xp_for_next - current_xp
-        xp_progress = current_xp - xp_for_current
-        xp_range = xp_for_next - xp_for_current
-        progress_percent = int((xp_progress / xp_range * 100)) if xp_range > 0 else 0
-        
-        # Format voice time
         voice_hours = profile_data["voice_minutes"] // 60
         voice_mins = profile_data["voice_minutes"] % 60
         voice_time = f"{voice_hours}h {voice_mins}m" if voice_hours > 0 else f"{voice_mins}m"
-        
-        # Format join date (Discord timestamp for user's locale)
-        join_date_str = "Unknown"
-        if target_user.joined_at:
-            join_date = target_user.joined_at.replace(tzinfo=timezone.utc)
-            join_date_str = format_timestamp_readable(join_date, include_relative=True)
-            join_date_ts = int(target_user.joined_at.timestamp())
-        
-        # Build embed
-        fields = []
-        
-        # Pet section (if user has a pet)
-        if profile_data.get("pet"):
-            from commands.economy.pets import _apply_decay, HUNGER_DECAY_PER_HOUR, HAPPINESS_DECAY_PER_HOUR
-            pet = profile_data["pet"]
-            hunger = _apply_decay(pet["hunger"], pet.get("last_fed"), pet.get("created_at"), HUNGER_DECAY_PER_HOUR)
-            happiness = _apply_decay(pet["happiness"], pet.get("last_played"), pet.get("created_at"), HAPPINESS_DECAY_PER_HOUR)
-            hunger_emoji = "🍽️" if hunger < 50 else "✅"
-            happy_emoji = "😢" if happiness < 50 else "😊"
-            fields.append((
-                "🐾 Pet",
-                f"**{pet['name']}** ({pet['type']})\n"
-                f"Hunger: {hunger}/100 {hunger_emoji}\n"
-                f"Happiness: {happiness}/100 {happy_emoji}\n"
-                f"_Use `/pets feed` and `/pets play` to care for your pet._",
-                True
-            ))
 
-        # Economy section
-        if profile_data["balance"] > 0 or profile_data["total_earned"] > 0:
-            fields.append((
-                "💰 Economy",
-                f"**Balance:** {profile_data['balance']:,} coins\n"
-                f"**Total Earned:** {profile_data['total_earned']:,} coins\n"
-                f"**Daily Streak:** {profile_data['daily_streak']} days",
-                True
-            ))
-        
-        # Leveling section
-        if profile_data["level"] > 0 or profile_data["xp"] > 0:
-            fields.append((
-                "📊 Leveling",
-                f"**Level:** {profile_data['level']}\n"
-                f"**XP:** {profile_data['xp']:,} / {xp_for_next:,}\n"
-                f"{render_bar(progress_percent)}\n"
-                f"**Total XP:** {profile_data['total_xp']:,}",
-                True
-            ))
-        
-        # Activity section
-        fields.append((
-            "📈 Activity",
-            f"**Messages:** {profile_data['messages_sent']:,}\n"
-            f"**Voice Time:** {voice_time}\n"
-            f"**Commands Used:** {profile_data['commands_used']:,}\n"
-            f"**Events Attended:** {profile_data['events_attended']}",
-            True
-        ))
-        
-        # Community section
-        community_text = f"**Reputation:** {profile_data['reputation']:+}\n"
-        if profile_data["applications"]["total"] > 0:
-            community_text += f"**Applications:** {profile_data['applications']['total']} (✓{profile_data['applications']['approved']})\n"
-        if profile_data["suggestions"]["total"] > 0:
-            community_text += f"**Suggestions:** {profile_data['suggestions']['total']} (✓{profile_data['suggestions']['accepted']})\n"
-        if profile_data["tickets"]["total"] > 0:
-            community_text += f"**Tickets:** {profile_data['tickets']['total']}\n"
-        if profile_data["complaints"]["total"] > 0:
-            community_text += f"**Complaints:** {profile_data['complaints']['total']}"
-        
-        if community_text.strip() != "**Reputation:** 0":
-            fields.append(("👥 Community", community_text, True))
-        
-        # Achievements section
-        if profile_data["achievements_count"] > 0:
-            achievements_text = f"**Total:** {profile_data['achievements_count']} unlocked\n\n"
-            if profile_data["achievements"]:
-                achievements_text += "**Recent:**\n"
-                for ach_id, unlocked_at, name, desc in profile_data["achievements"][:3]:
-                    ach_name = name or ach_id.replace("_", " ").title()
-                    achievements_text += f"• {ach_name}\n"
-            fields.append(("🏆 Achievements", achievements_text, True))
-
-        # Near-miss achievement nudges (QoL #18)
-        if is_self:
-            try:
-                from core.achievement_nudges import get_achievement_nudges
-                nudges = await get_achievement_nudges(
-                    interaction.guild.id, target_user.id, profile_data
-                )
-                if nudges:
-                    fields.append((
-                        "🎯 Almost there",
-                        "\n".join(f"• {n}" for n in nudges),
-                        False,
-                    ))
-            except Exception:
-                pass
-        
-        # Moderation section (only if warnings > 0 or user is mod viewing)
-        if profile_data["warnings"] > 0 or (is_mod(interaction.user) and target_user.id != interaction.user.id):
-            mod_text = f"**Warnings:** {profile_data['warnings']}"
-            fields.append(("🛡️ Moderation", mod_text, True))
-        
-        # Activity scores
-        if profile_data["weekly_score"] > 0 or profile_data["monthly_score"] > 0:
-            fields.append((
-                "⭐ Activity Scores",
-                f"**Weekly:** {profile_data['weekly_score']:,}\n"
-                f"**Monthly:** {profile_data['monthly_score']:,}",
-                True
-            ))
-        
-        # Build description with blockquote highlight for the key identity info
-        desc_lines = []
-        # Identity block — blockquoted for visual prominence
-        identity_parts = []
-        if target_user.joined_at:
-            identity_parts.append(f"📅 Member since {join_date_str}")
-        if profile_data.get("title"):
-            identity_parts.append(f"🏷️ {profile_data['title']}")
-        if identity_parts:
-            desc_lines.append("\n".join(f"> {p}" for p in identity_parts))
-
-        if profile_data.get("bio"):
-            desc_lines.append(f"*{profile_data['bio']}*")
-        if profile_data.get("equipped_badge"):
-            emoji, name = profile_data["equipped_badge"]
-            desc_lines.append(f"{emoji or '🏆'} **{name or 'Badge'}**")
-        if profile_data.get("showcase_badges"):
-            showcase = profile_data["showcase_badges"]
-            parts = [f"{(e or '🏆')}" for _, e, n in showcase[:5]]
-            desc_lines.append(f"Showcase: {'  '.join(parts)}")
-        if target_user.id == interaction.user.id:
-            desc_lines.append("-# This is your profile  ·  Use /general set_bio to add a bio")
-
-        desc = "\n".join(desc_lines)
-
-        # Footer: last active + tip
-        footer_parts = []
-        if profile_data["last_activity"]:
-            try:
-                last_activity = datetime.fromisoformat(profile_data["last_activity"])
-                days_ago = (now_utc() - last_activity.replace(tzinfo=timezone.utc)).days
-                footer_parts.append(f"Last active {days_ago}d ago")
-            except Exception:
-                pass
-        if profile_data["achievements_count"] > 0:
-            footer_parts.append("/achievements for full list")
-        footer_text = " · ".join(footer_parts) if footer_parts else footer_for("profile")
-
-        # Prepend pet emoji + name when the user has a pet (tiny personal touch).
-        if profile_data.get("pet"):
-            from commands.economy.pets import get_pet_emoji
-            _pet = profile_data["pet"]
-            _pname = _pet.get("name") or _pet.get("type") or "Pet"
-            footer_text = f"{get_pet_emoji(_pet.get('type'))} {_pname} · {footer_text}"
-
-        member_color = target_user.color if target_user.color.value != 0 else EMBED_COLORS["general"]
-
-        embed = obsidian_embed(
-            f"👤 {target_user.display_name}",
-            desc,
-            color=member_color,
-            template="profile",
-            profile_category="general",
-            author=target_user,
-            thumbnail=target_user.display_avatar.url,
-            fields=fields,
-            footer=footer_text,
+        embed = await build_profile_embed(
+            interaction.guild,
+            target_user,
+            profile_data,
+            viewer=interaction.user,
             client=interaction.client,
         )
 

@@ -29,9 +29,12 @@ class HelpHomeLayout(ui.LayoutView):
 
         lines = [
             "## Command Reference",
-            "Pick a category, or use **`/search`**, **`/menu`**, **`/status`**, **`/recent`**, **`/wallet`**.",
+            "**8 essentials** — start here:",
             "",
-            "**Member essentials:** economy · warframe · community · tools · giveaways",
+            "📋 **`/menu`** · 🔍 **`/search`** · ✅ **`/status`** · 📝 **`/whatsnew`**",
+            "👤 **`/profile`** · 🎁 **`/daily`** · 🎮 **`/warframe hub`** · 🎫 **`/ticket`**",
+            "",
+            "Then **Browse categories** for everything else.",
         ]
         if is_mod:
             lines.append("**Staff tools:** `/admin dashboard` · `/mod purge` · `/automod status` · `/admin console`")

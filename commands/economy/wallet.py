@@ -148,7 +148,7 @@ def setup(bot, group=None):
                 f"Lv **{int(data.get('level') or 0)}** · streak **{int(data.get('daily_streak') or 0)}**d"
             )
             layout = WalletSnapshotLayout(title="💼 Wallet snapshot", body=body)
-            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-            await interaction.followup.send(view=layout, ephemeral=True)
+            await interaction.response.send_message(view=layout, ephemeral=True)
+            await interaction.followup.send(embed=embed, view=view, ephemeral=True)
         else:
             await interaction.response.send_message(embed=embed, view=view, ephemeral=True)

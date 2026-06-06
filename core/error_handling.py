@@ -130,6 +130,19 @@ async def send_error_reply(
     view = None
     if error_code:
         view = discord.ui.View(timeout=120)
+
+        class _CopyErrorCodeButton(discord.ui.Button):
+            def __init__(self, code: str):
+                super().__init__(label=f"Copy code: {code}", style=discord.ButtonStyle.secondary, emoji="📋")
+                self._code = code
+
+            async def callback(self, btn_interaction: discord.Interaction):
+                await btn_interaction.response.send_message(
+                    f"Copy for **`/ticket`**: `{self._code}`",
+                    ephemeral=True,
+                )
+
+        view.add_item(_CopyErrorCodeButton(error_code))
         add_link_row(view, help_link_buttons())
     try:
         if interaction.response.is_done():

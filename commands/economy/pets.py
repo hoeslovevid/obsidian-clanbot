@@ -5,6 +5,8 @@ from typing import Optional
 from datetime import datetime, timedelta, timezone
 import random
 
+from core.embed_footers import footer_for
+from core.embed_templates import embed_template
 from core.utils import obsidian_embed
 from database import DB_PATH, now_utc, get_user_balance, remove_coins, add_coins
 from views import ConfirmView
@@ -206,11 +208,12 @@ class PetShopView(discord.ui.View):
             lines.append(f"**{pet_type}** • {price:,} coins • Max Lv.{max_level}\n{desc}")
 
         desc = "Browse pets below. Use the buttons to change pages.\n\n" + "\n\n".join(lines)
-        footer = f"Page {self.page + 1}/{self.total_pages} • Use /pets buy to purchase"
-        return obsidian_embed(
+        footer = f"Page {self.page + 1}/{self.total_pages} · /pets buy to adopt"
+        return embed_template(
+            "showcase",
             "🐾 Pet Shop",
             desc,
-            color=discord.Color.gold(),
+            category="economy",
             thumbnail=thumbnail,
             footer=footer,
             client=self.client,

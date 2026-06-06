@@ -599,6 +599,197 @@ async def close_ticket(
         pass
 
 
+async def open_support_ticket(
+    interaction: discord.Interaction,
+    subject: str,
+    *,
+    tag_val: Optional[str] = None,
+    priority_val: str = "normal",
+    channel_preamble: Optional[str] = None,
+) -> None:
+    """Create a support ticket for the invoking member (used by /ticket and context menus)."""
+    if not interaction.guild:
+        return await interaction.response.send_message(
+            embed=obsidian_embed(
+                "❌ Invalid Context",
+                "This command can only be used in a server.",
+                color=discord.Color.red(),
+                client=interaction.client,
+            ),
+            ephemeral=True,
+        )
+
+    if not interaction.response.is_done():
+        await interaction.response.defer(ephemeral=True)
+
+    if not isinstance(interaction.user, discord.Member):
+        return await interaction.followup.send(
+            embed=obsidian_embed("❌ Error", "Could not create ticket.", color=discord.Color.red(), client=interaction.client),
+            ephemeral=True,
+        )
+
+    username = interaction.user.display_name or interaction.user.name
+    ticket_id = generate_ticket_id(username, subject)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("SELECT 1 FROM tickets WHERE guild_id=? AND ticket_id=?", (interaction.guild.id, ticket_id))
+        counter = 1
+        original_ticket_id = ticket_id
+        while await cur.fetchone():
+            ticket_id = f"{original_ticket_id}-{counter}"
+            if len(ticket_id) > 50:
+                max_base_len = 50 - len(str(counter)) - 1
+                ticket_id = f"{original_ticket_id[:max_base_len]}-{counter}"
+            cur = await db.execute("SELECT 1 FROM tickets WHERE guild_id=? AND ticket_id=?", (interaction.guild.id, ticket_id))
+            counter += 1
+
+    channel = await create_ticket_channel(interaction.guild, interaction.user, ticket_id, subject)
+    if not channel:
+        return await interaction.followup.send(
+            embed=obsidian_embed(
+                "❌ Permission Error",
+                "I don't have permission to create channels. Please contact an administrator.",
+                color=discord.Color.red(),
+                client=interaction.client,
+            ),
+            ephemeral=True,
+        )
+
+    priority_val = (priority_val or "normal").lower()
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            INSERT INTO tickets (guild_id, user_id, channel_id, ticket_id, subject, status, created_at, last_activity_at, tag, priority)
+            VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?, ?)
+        """, (
+            interaction.guild.id,
+            interaction.user.id,
+            channel.id,
+            ticket_id,
+            subject,
+            now_utc().isoformat(),
+            now_utc().isoformat(),
+            tag_val,
+            priority_val,
+        ))
+        await db.commit()
+        try:
+            from database import check_and_unlock_achievement
+            bot_ref = getattr(interaction.client, "bot", interaction.client)
+            await check_and_unlock_achievement(
+                interaction.guild.id, interaction.user.id, "ticket_creator", bot_ref, interaction=interaction
+            )
+        except Exception:
+            pass
+        cur = await db.execute("SELECT last_insert_rowid()")
+        ticket_db_id = (await cur.fetchone())[0]
+
+    fields = [
+        ("Subject", subject, True),
+        ("Status", "Open", True),
+        ("Priority", priority_val.capitalize(), True),
+        ("Created By", interaction.user.mention, True),
+    ]
+    if tag_val:
+        fields.insert(1, ("Tag", tag_val, True))
+    ticket_body = "Staff will respond shortly. Use `/ticket close` to close this ticket."
+    sla = await _ticket_sla_hint(interaction.guild.id)
+    if sla:
+        ticket_body += f"\n\n{sla}"
+    embed = ticket_embed(
+        f"Ticket #{ticket_id}",
+        ticket_body,
+        status="open",
+        priority=priority_val,
+        fields=fields,
+        author=interaction.user,
+        thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
+        footer=footer_for("community_ticket"),
+        client=interaction.client,
+    )
+    await channel.send(embed=embed)
+    if channel_preamble:
+        await channel.send(channel_preamble)
+
+    controls = TicketControlView(int(ticket_db_id), ticket_id)
+    ctrl_msg = await channel.send(
+        embed=ticket_embed(
+            "🎫 Ticket Controls",
+            "Staff controls: claim, add internal note, generate transcript, close.\n"
+            "(*Buttons are for moderators.*)",
+            status="open",
+            footer=footer_for("community_ticket"),
+            client=interaction.client,
+        ),
+        view=controls,
+    )
+    bot_ref = getattr(interaction.client, "bot", interaction.client)
+    if hasattr(bot_ref, "add_view"):
+        bot_ref.add_view(controls, message_id=ctrl_msg.id)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("UPDATE tickets SET control_message_id=? WHERE id=?", (ctrl_msg.id, ticket_db_id))
+        await db.commit()
+
+    await channel.send(f"{interaction.user.mention}, your ticket has been created!")
+
+    try:
+        from core.utils import get_mod_role
+        mod_role = get_mod_role(interaction.guild)
+        if mod_role:
+            online_mods = [
+                m for m in mod_role.members
+                if not m.bot and m.status != discord.Status.offline and m.id != interaction.user.id
+            ]
+            if online_mods:
+                import random as _random
+                assigned_mod = _random.choice(online_mods)
+                priority_str = priority_val.capitalize() if priority_val else "Normal"
+                tag_str = f" [{tag_val}]" if tag_val else ""
+                try:
+                    dm_embed = obsidian_embed(
+                        "🎫 New Ticket Assigned",
+                        f"> **{subject}**\n"
+                        f"A new ticket has been opened in **{interaction.guild.name}** and auto-assigned to you.",
+                        category="moderation",
+                        fields=[
+                            ("🆔 Ticket", f"`{ticket_id}`{tag_str}", True),
+                            ("👤 Opened by", interaction.user.mention, True),
+                            ("⚡ Priority", priority_str, True),
+                            ("📌 Channel", channel.mention, False),
+                        ],
+                        footer="You can claim it officially with the Claim button in the ticket channel.",
+                        client=interaction.client,
+                    )
+                    await assigned_mod.send(embed=dm_embed)
+                    async with aiosqlite.connect(DB_PATH) as _db:
+                        await _db.execute(
+                            "UPDATE tickets SET assigned_to=? WHERE id=?",
+                            (assigned_mod.id, ticket_db_id),
+                        )
+                        await _db.commit()
+                    await channel.send(
+                        f"📋 This ticket has been auto-assigned to {assigned_mod.mention}.",
+                        allowed_mentions=discord.AllowedMentions(users=True),
+                    )
+                except discord.Forbidden:
+                    pass
+    except Exception:
+        pass
+
+    confirm_embed_body = ticket_embed(
+        "✅ Ticket Created",
+        f"Your ticket has been created: {channel.mention}\n**Ticket ID:** `{ticket_id}`",
+        status="open",
+        priority=priority_val,
+        thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
+        footer=footer_for("community_ticket_open"),
+        client=interaction.client,
+    )
+    confirm_view = discord.ui.View(timeout=120)
+    add_link_row(confirm_view, ticket_confirmation_buttons(channel_url=channel.jump_url))
+    await interaction.followup.send(embed=confirm_embed_body, view=confirm_view, ephemeral=True)
+
+
 async def create_ticket_for_user(interaction: discord.Interaction, target_member: discord.Member, subject: str):
     """Create a ticket for another user (mod action)."""
     from core.utils import obsidian_embed, EMBED_COLORS
@@ -774,193 +965,14 @@ def setup(bot, group=None):
     ])
     async def ticket(interaction: discord.Interaction, subject: str, tag: app_commands.Choice[str] = None, priority: app_commands.Choice[str] = None):
         """Create a support ticket."""
-        if not interaction.guild:
-            return await interaction.response.send_message(
-                embed=obsidian_embed(
-                    "❌ Invalid Context",
-                    "This command can only be used in a server.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
-            )
-        
-        await interaction.response.defer(ephemeral=True)
-        
-        if not isinstance(interaction.user, discord.Member):
-            return await interaction.followup.send(
-                embed=obsidian_embed(
-                    "❌ Error",
-                    "Could not create ticket.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
-            )
-        
-        # Generate ticket ID based on username and subject
-        username = interaction.user.display_name or interaction.user.name
-        ticket_id = generate_ticket_id(username, subject)
-        
-        # Check if ticket ID already exists, append number if needed
-        async with aiosqlite.connect(DB_PATH) as db:
-            cur = await db.execute("SELECT 1 FROM tickets WHERE guild_id=? AND ticket_id=?", (interaction.guild.id, ticket_id))
-            counter = 1
-            original_ticket_id = ticket_id
-            while await cur.fetchone():
-                # Append counter to make it unique
-                ticket_id = f"{original_ticket_id}-{counter}"
-                # Ensure it doesn't exceed Discord's channel name limit (100 chars)
-                if len(ticket_id) > 50:
-                    # Truncate original and add counter
-                    max_base_len = 50 - len(str(counter)) - 1  # -1 for hyphen
-                    ticket_id = f"{original_ticket_id[:max_base_len]}-{counter}"
-                cur = await db.execute("SELECT 1 FROM tickets WHERE guild_id=? AND ticket_id=?", (interaction.guild.id, ticket_id))
-                counter += 1
-        
-        # Create ticket channel
-        channel = await create_ticket_channel(interaction.guild, interaction.user, ticket_id, subject)
-        
-        if not channel:
-            return await interaction.followup.send(
-                embed=obsidian_embed(
-                    "❌ Permission Error",
-                    "I don't have permission to create channels. Please contact an administrator.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
-            )
-        
         tag_val = tag.value if tag else None
         priority_val = (priority.value if priority else "normal").lower()
-        # Store ticket in database
-        async with aiosqlite.connect(DB_PATH) as db:
-            await db.execute("""
-                INSERT INTO tickets (guild_id, user_id, channel_id, ticket_id, subject, status, created_at, last_activity_at, tag, priority)
-                VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?, ?)
-            """, (interaction.guild.id, interaction.user.id, channel.id, ticket_id, subject, now_utc().isoformat(), now_utc().isoformat(), tag_val, priority_val))
-            await db.commit()
-
-            try:
-                from database import check_and_unlock_achievement
-                await check_and_unlock_achievement(interaction.guild.id, interaction.user.id, "ticket_creator", getattr(interaction.client, "bot", interaction.client), interaction=interaction)
-            except Exception:
-                pass
-
-            cur = await db.execute("SELECT last_insert_rowid()")
-            ticket_db_id = (await cur.fetchone())[0]
-        
-        # Send welcome message in ticket channel
-        fields = [
-            ("Subject", subject, True),
-            ("Status", "Open", True),
-            ("Priority", priority_val.capitalize(), True),
-            ("Created By", interaction.user.mention, True),
-        ]
-        if tag_val:
-            fields.insert(1, ("Tag", tag_val, True))
-        ticket_body = "Staff will respond shortly. Use `/ticket close` to close this ticket."
-        sla = await _ticket_sla_hint(interaction.guild.id)
-        if sla:
-            ticket_body += f"\n\n{sla}"
-        embed = ticket_embed(
-            f"Ticket #{ticket_id}",
-            ticket_body,
-            status="open",
-            priority=priority_val,
-            fields=fields,
-            author=interaction.user,
-            thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
-            footer=f"Ticket ID: {ticket_id}",
-            client=interaction.client,
+        await open_support_ticket(
+            interaction,
+            subject,
+            tag_val=tag_val,
+            priority_val=priority_val,
         )
-        await channel.send(embed=embed)
-
-        # Ticket control panel (persistent view)
-        controls = TicketControlView(int(ticket_db_id), ticket_id)
-        ctrl_msg = await channel.send(
-            embed=ticket_embed(
-                "🎫 Ticket Controls",
-                "Staff controls: claim, add internal note, generate transcript, close.\n"
-                "(*Buttons are for moderators.*)",
-                status="open",
-                footer=footer_for("community_ticket"),
-                client=interaction.client,
-            ),
-            view=controls,
-        )
-        bot.add_view(controls, message_id=ctrl_msg.id)  # persist for this message
-
-        # Store control message id
-        async with aiosqlite.connect(DB_PATH) as db:
-            await db.execute(
-                "UPDATE tickets SET control_message_id=? WHERE id=?",
-                (ctrl_msg.id, ticket_db_id),
-            )
-            await db.commit()
-
-        await channel.send(f"{interaction.user.mention}, your ticket has been created!")
-
-        # Auto-assign: ping a random online mod via DM
-        try:
-            from core.utils import get_mod_role
-            mod_role = get_mod_role(interaction.guild)
-            if mod_role:
-                online_mods = [
-                    m for m in mod_role.members
-                    if not m.bot and m.status != discord.Status.offline and m.id != interaction.user.id
-                ]
-                if online_mods:
-                    import random as _random
-                    assigned_mod = _random.choice(online_mods)
-                    priority_str = priority_val.capitalize() if priority_val else "Normal"
-                    tag_str = f" [{tag_val}]" if tag_val else ""
-                    try:
-                        dm_embed = obsidian_embed(
-                            "🎫 New Ticket Assigned",
-                            f"> **{subject}**\n"
-                            f"A new ticket has been opened in **{interaction.guild.name}** and auto-assigned to you.",
-                            category="moderation",
-                            fields=[
-                                ("🆔 Ticket", f"`{ticket_id}`{tag_str}", True),
-                                ("👤 Opened by", interaction.user.mention, True),
-                                ("⚡ Priority", priority_str, True),
-                                ("📌 Channel", channel.mention, False),
-                            ],
-                            footer="You can claim it officially with the Claim button in the ticket channel.",
-                            client=interaction.client,
-                        )
-                        await assigned_mod.send(embed=dm_embed)
-                        # Pre-assign in DB so the claim button shows the right owner
-                        async with aiosqlite.connect(DB_PATH) as _db:
-                            await _db.execute(
-                                "UPDATE tickets SET assigned_to=? WHERE id=?",
-                                (assigned_mod.id, ticket_db_id),
-                            )
-                            await _db.commit()
-                        await channel.send(
-                            f"📋 This ticket has been auto-assigned to {assigned_mod.mention}.",
-                            allowed_mentions=discord.AllowedMentions(users=True),
-                        )
-                    except discord.Forbidden:
-                        pass  # mod has DMs closed
-        except Exception:
-            pass  # never block ticket creation for notification errors
-
-        embed = ticket_embed(
-            "✅ Ticket Created",
-            f"Your ticket has been created: {channel.mention}\n**Ticket ID:** `{ticket_id}`\n\n"
-            "Use `/community ticket message` in the channel to add info, `/community ticket close` when done.",
-            status="open",
-            priority=priority_val,
-            thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
-            footer=f"Ticket ID: {ticket_id}",
-            client=interaction.client,
-        )
-        confirm_view = discord.ui.View(timeout=120)
-        add_link_row(confirm_view, ticket_confirmation_buttons(channel_url=channel.jump_url))
-        await interaction.followup.send(embed=embed, view=confirm_view, ephemeral=True)
     
     command_decorator = group.command(name="ticket_close", description="Close a support ticket (moderators only).") if group else bot.tree.command(name="ticket_close", description="Close a support ticket (moderators only).")
     

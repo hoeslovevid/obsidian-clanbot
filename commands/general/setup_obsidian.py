@@ -4,7 +4,8 @@ import discord
 from discord import app_commands
 from typing import Optional, List, Tuple
 
-from core.utils import obsidian_embed, is_mod
+from core.embed_templates import embed_template
+from core.utils import is_mod
 from database import get_guild_setting, set_guild_setting, get_configured_channel_id
 
 # Channel config: (setting_key, display_name, default_channel_name, channel_type)
@@ -14,6 +15,7 @@ CHANNEL_CONFIGS: List[Tuple[str, str, str, str]] = [
     ("events_channel_id", "Events (Ops Board)", "ops-board", "text"),
     ("complaints_channel_id", "Complaints (Docket)", "inheritor-docket", "text"),
     ("complaints_log_channel_id", "Complaints Log (Ledger)", "docket-ledger", "text"),
+    ("changelog_channel_id", "Changelog / Updates", "bot-updates", "text"),
     ("temp_vc_category_id", "Temp VC Category", "Temp VCs", "category"),
 ]
 
@@ -142,11 +144,12 @@ class SetupObsidianView(discord.ui.View):
         else:
             self._add_select()
             sk, display_name, _, _ = CHANNEL_CONFIGS[self.step_index]
-            embed = obsidian_embed(
+            embed = embed_template(
+                "showcase",
                 f"Setup • Step {self.step_index + 1}/{len(CHANNEL_CONFIGS)}: {display_name}",
                 f"Choose a channel for **{display_name}**, have the bot create one, or skip.\n\n"
                 f"*Previous: {result}*",
-                color=discord.Color.blurple(),
+                category="general",
                 client=interaction.client,
             )
             try:
@@ -191,7 +194,21 @@ class SetupChecklistView(discord.ui.View):
     @discord.ui.button(label="Configure Notifications", style=discord.ButtonStyle.secondary, emoji="🔔")
     async def setup_notifications(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message(
-            "Use `/wfnotify` commands to set channels for Baro, cycles, invasions, and Archon alerts.",
+            "Run **`/wfnotify configure`** (recommended) for Baro, cycles, and alerts.",
+            ephemeral=True,
+        )
+
+    @discord.ui.button(label="Post Clan Console", style=discord.ButtonStyle.primary, emoji="🜂")
+    async def post_console(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message(
+            "Run **`/admin console`** in your voice panel channel to pin the member hub.",
+            ephemeral=True,
+        )
+
+    @discord.ui.button(label="Feature toggles", style=discord.ButtonStyle.secondary, emoji="⚙️")
+    async def feature_toggles(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message(
+            "Run **`/mod feature_toggle`** to enable/disable pets, gambling, LFG, trade, polls, and more per guild.",
             ephemeral=True,
         )
 
@@ -216,7 +233,9 @@ async def build_setup_checklist(
     complaints_ch = await _get("complaints_channel_id")
     complaints_log = await _get("complaints_log_channel_id")
     temp_vc = await _get("temp_vc_category_id")
+    changelog_ch = await _get("changelog_channel_id")
     suggestions_ch = await _get("suggestions_channel_id")
+    console_hub = await _get("console_hub_channel_id")
 
     def _ok(val: Optional[str]) -> bool:
         return bool(val and val != "0")
@@ -227,7 +246,9 @@ async def build_setup_checklist(
         ("📋", "Complaints (Docket) channel", _ok(complaints_ch)),
         ("📝", "Complaints Log (Ledger) channel", _ok(complaints_log)),
         ("🔊", "Temp VC Category", _ok(temp_vc)),
+        ("📝", "Changelog channel", _ok(changelog_ch)),
         ("💡", "Suggestions channel", _ok(suggestions_ch)),
+        ("🜂", "Clan Console hub", _ok(console_hub)),
     ]
 
     configured = sum(1 for _, _, ok in checks if ok)
@@ -243,13 +264,15 @@ async def build_setup_checklist(
     desc = (
         f"**Channel configuration saved:**\n{channel_summary}\n\n"
         f"**Feature Checklist ({configured}/{total} configured):**\n{checklist_text}\n\n"
-        "Use the buttons below for common next steps, or run `/general setup_obsidian` again to reconfigure."
+        "**Next:** post **`/admin console`**, run **`/general setup_docket`**, and **`/wfnotify configure`**.\n"
+        "Use the buttons below, or run `/general setup` again to reconfigure."
     )
 
-    embed = obsidian_embed(
+    embed = embed_template(
+        "showcase",
         "✅ Setup Complete",
         desc,
-        color=discord.Color.green(),
+        category="success",
         client=client,
     )
     return embed, SetupChecklistView()
@@ -280,11 +303,12 @@ def setup(bot, group=None):
         try:
             await interaction.response.defer(ephemeral=True)
             sk, display_name, _, _ = CHANNEL_CONFIGS[0]
-            embed = obsidian_embed(
+            embed = embed_template(
+                "showcase",
                 f"Setup • Step 1/{len(CHANNEL_CONFIGS)}: {display_name}",
                 "Select an existing channel, create a new one, or skip. "
                 "Skipped channels will make related commands unavailable until configured.",
-                color=discord.Color.blurple(),
+                category="general",
                 client=interaction.client,
             )
             view = SetupObsidianView(interaction.guild, 0)

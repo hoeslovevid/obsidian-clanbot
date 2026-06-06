@@ -34,12 +34,10 @@ class MenuHomeLayout(ui.LayoutView):
         lines.extend(
             [
                 "",
-                "**Quick start** — daily, profile, baro, ticket, trade, and more.",
+                "**8 essentials** — `/menu` · `/search` · `/status` · `/whatsnew`",
+                "`/profile` · `/daily` · `/warframe hub` · `/ticket`",
                 "",
-                "👤 **Me** — `/daily` · `/profile` · `/me` · `/preferences`",
-                "🎮 **Warframe** — `/baro` · `/fissures` · `/lfg` · `/trade`",
-                "👥 **Community** — `/ticket` · `/case` · `/poll`",
-                "🔍 **Find anything** — `/search` · `/help`",
+                "Tap **Open picker** for favorites and quick actions.",
             ]
         )
 

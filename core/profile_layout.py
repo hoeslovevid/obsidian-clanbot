@@ -35,7 +35,7 @@ class ProfileSnapshotLayout(ui.LayoutView):
             "",
             stats_blurb.strip(),
             "",
-            "-# Full stats: `/profile` · badges: `/achievements`",
+            "-# `/profile` for full card · `/achievements` for badges · `/wallet` for coins",
         ]
         container = ui.Container(
             ui.TextDisplay(content="\n".join(lines)),

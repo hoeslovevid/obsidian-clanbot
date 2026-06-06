@@ -13,6 +13,8 @@ from typing import Optional
 import discord  # type: ignore
 import aiosqlite  # type: ignore
 
+from core.embed_footers import footer_for
+from core.embed_templates import embed_template
 from core.utils import (
     obsidian_embed,
     error_embed,
@@ -122,7 +124,8 @@ async def build_mod_context(interaction: discord.Interaction, member: discord.Me
     if incident:
         summary = "🚨 **Incident mode ACTIVE for this server**\n" + summary
 
-    embed = obsidian_embed(
+    embed = embed_template(
+        "showcase",
         f"🛡️ Mod Context • {member.display_name}",
         f"{member.mention} (`{member.id}`)\n{summary}",
         category="moderation",
@@ -132,9 +135,8 @@ async def build_mod_context(interaction: discord.Interaction, member: discord.Me
             ("Account", f"Created: {account_created}", True),
             ("Joined Server", joined, True),
             (f"Warnings ({warn_total})", warn_block, False),
-            ("Mod Notes (last 5)", note_block, False),
         ],
-        footer="Mod-only view • Actions are confirmed before they fire",
+        footer=f"{footer_for('moderation_warn')} · Warn via button below",
         client=interaction.client,
     )
     view = ModContextView(member, requester_id=interaction.user.id)

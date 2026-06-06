@@ -4,6 +4,8 @@ from discord import app_commands
 from typing import Optional
 from datetime import datetime, timezone, timedelta
 
+from core.embed_footers import footer_for
+from core.embed_templates import embed_template
 from core.utils import obsidian_embed, feature_off_embed, bullet_list, ECONOMY_ENABLED
 from database import DB_PATH, remove_coins, add_coins
 import aiosqlite  # type: ignore
@@ -53,13 +55,14 @@ def setup(bot, group=None):
         
         if not rows:
             return await interaction.followup.send(
-                embed=obsidian_embed(
+                embed=embed_template(
+                    "showcase",
                     "🛒 Shop",
-                    "No items available in the shop at the moment. Check back later!",
-                    color=discord.Color.orange(),
+                    "No items available right now. Check back later!",
+                    category="economy",
                     client=interaction.client,
                 ),
-                ephemeral=True
+                ephemeral=True,
             )
         
         item_type_emoji = {"role": "🎭", "coins": "💰", "xp": "⭐", "xp_boost": "⚡", "coin_boost": "💸", "custom": "🎁"}
@@ -80,16 +83,17 @@ def setup(bot, group=None):
         bar_str = "█" * filled + "░" * (bar_len - filled)
         balance_line = f"**{balance:,}** coins\n`[{bar_str}]` {pct}%"
         
-        embed = obsidian_embed(
+        embed = embed_template(
+            "showcase",
             "🛒 Shop",
-            "Use `/store buy <item_name>` to purchase.",
-            color=discord.Color.blue(),
+            "Use **`/store buy <item_name>`** to purchase.",
+            category="economy",
             thumbnail=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
             fields=[
                 ("💰 Your Balance", balance_line, True),
                 ("📦 Items", items_text.strip()[:1024], False),
             ],
-            footer=f"{len(rows)} item(s) • Use /store buy <item> to purchase",
+            footer=f"{len(rows)} item(s) · {footer_for('economy_wallet')}",
             client=interaction.client,
         )
         

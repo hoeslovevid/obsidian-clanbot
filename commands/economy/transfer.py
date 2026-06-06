@@ -71,13 +71,14 @@ async def run_transfer_with_modal(interaction: discord.Interaction, user: discor
                 ("💵 Your Balance", f"{sender_balance:,} coins", True),
                 ("💵 Their Balance", f"{receiver_balance:,} coins", True),
             ]
-            return obsidian_embed(
+            return embed_template(
+                "showcase",
                 "Transfer complete",
-                f"**{amount:,}** coins went to {user.mention}. Balances below are up to date. _(Only you see this.)_",
-                color=discord.Color.green(),
+                f"**{amount:,}** coins went to {user.mention}. _(Only you see this.)_",
+                category="economy",
                 thumbnail=user.display_avatar.url if user.display_avatar else None,
                 fields=fields,
-                footer=f"Bank transfer • Ref: {interaction.id & 0xFFFF:04X}",
+                footer=footer_for("economy_transfer_success"),
                 client=interaction.client,
             )
         balance = await get_user_balance(interaction.guild.id, interaction.user.id)

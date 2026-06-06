@@ -621,12 +621,12 @@ def setup(bot, group=None):
 
         desc = (
             fav_line
-            + "**Member essentials** — what most people use daily:\n\n"
-            "👤 **Me** — `/daily` · `/profile` · `/me` · `/preferences` · `/favorites`\n"
-            "🎮 **Warframe** — `/baro` · `/wfnotify configure` · `/fissures` · `/lfg` · `/trade`\n"
-            "👥 **Community** — `/ticket` · `/case` · `/poll` · `/community suggest`\n"
-            "🔍 **Find anything** — `/search` keyword · `/menu` quick picker · `/status` bot health\n"
-            "\n**Preferences** — `/preferences` includes platform, timezone, and **achievement notify** style (embed vs minimal).\n"
+            + "**8 member essentials** — start here:\n\n"
+            "📋 **`/menu`** — quick picker · 🔍 **`/search`** — find commands\n"
+            "✅ **`/status`** — bot health · 📝 **`/whatsnew`** — release notes\n"
+            "👤 **`/profile`** · 🎁 **`/daily`** · 🎮 **`/warframe hub`** · 🎫 **`/ticket`**\n"
+            "\n**Explore by category** (dropdown below) — economy, warframe, community, tools, and more.\n"
+            "\n**Preferences** — `/preferences` for platform, timezone, and achievement notify style.\n"
         )
         if is_user_mod:
             desc += (
