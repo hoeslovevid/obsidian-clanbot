@@ -286,8 +286,22 @@ async def delete_vc_panel_message(guild: discord.Guild, vc_id: int):
                 pass
 
 
-async def delete_temp_vc_and_panel(guild: discord.Guild, vc_id: int, *, reason: str) -> None:
+async def delete_temp_vc_and_panel(
+    guild: discord.Guild,
+    vc_id: int,
+    *,
+    reason: str,
+    bot: Optional[discord.Client] = None,
+) -> None:
     """Delete a temporary VC and its associated panel message."""
+    if bot is not None:
+        try:
+            from core.music_player import stop_if_in_channel
+
+            await stop_if_in_channel(guild, vc_id, bot)
+        except Exception as exc:
+            logger.debug("[channels] music stop on temp VC delete failed: %s", exc)
+
     vc = guild.get_channel(vc_id)
     if isinstance(vc, discord.VoiceChannel):
         try:

@@ -12,19 +12,32 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-06"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Music Path A** — Player logic in `core/music_player.py`; stop/pause/skip/queue/volume register at bot load (bug fix)",
-    "**Now Playing panel** — Showcase embed with Skip / Pause / Queue buttons; `safe_message_edit` updates; quieter mode reduces channel spam",
-    "**Auto-leave** — Disconnects when VC empty (`MUSIC_AUTO_LEAVE_MINUTES`, default 5)",
-    "**DJ & vote-skip** — `music_dj_role_id` guild setting; `/music voteskip` + panel skip for listeners",
-    "**Queue tools** — `/music shuffle`, `/music loop`, `/music remove`, `/music clear`, `/music config`",
-    "**Channel lock** — Optional `music_channel_id`; queue restore on startup (no auto voice reconnect)",
-    "**Playlists** — YouTube playlists up to 50 tracks; SoundCloud/direct URL support with clearer errors",
-    "**Feature toggle** — `music` in `/admin features`; hidden from `/search` when disabled",
-    "**Deploy** — `ffmpeg` added to Railpack `deploy.aptPackages` for Railway voice playback",
+    "**Temp VC music** — Auto-stop when temp VC closes; `/vc transfer` hands off DJ control; optional temp-VC-only mode",
+    "**Squad radio** — LFG posts accept optional playlist/search; **Start squad radio** button queues music in your VC",
+    "**Event soundtracks** — Optional `soundtrack` on `/events event_create`; auto-plays at reminder/go-live when bot is in event VC",
+    "**VC music bonus** — Extra XP/coins while music plays in your VC (`MUSIC_VC_BONUS_MULTIPLIER`, guild override)",
+    "**Hub & Console** — `/warframe hub` shows listeners in VC; Clan Console embed includes now-playing status",
+    "**Quieter mode** — LFG radio and event soundtrack announcements respect guild quieter mode",
+    "**Config** — `/music config` adds temp VC only, event VC, soundtrack toggle, and bonus multiplier",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "1.95.0",
+        "date": "2026-06-06",
+        "changes": [
+            "**Music Path A** — Player logic in `core/music_player.py`; stop/pause/skip/queue/volume register at bot load (bug fix)",
+            "**Now Playing panel** — Showcase embed with Skip / Pause / Queue buttons; `safe_message_edit` updates; quieter mode reduces channel spam",
+            "**Auto-leave** — Disconnects when VC empty (`MUSIC_AUTO_LEAVE_MINUTES`, default 5)",
+            "**DJ & vote-skip** — `music_dj_role_id` guild setting; `/music voteskip` + panel skip for listeners",
+            "**Queue tools** — `/music shuffle`, `/music loop`, `/music remove`, `/music clear`, `/music config`",
+            "**Channel lock** — Optional `music_channel_id`; queue restore on startup (no auto voice reconnect)",
+            "**Playlists** — YouTube playlists up to 50 tracks; SoundCloud/direct URL support with clearer errors",
+            "**Feature toggle** — `music` in `/admin features`; hidden from `/search` when disabled",
+            "**Deploy** — `ffmpeg` added to Railpack `deploy.aptPackages` for Railway voice playback",
+        ],
+    },
     {
         "version": "1.94.0",
         "date": "2026-06-06",

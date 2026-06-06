@@ -114,7 +114,9 @@ async def run_startup(bot: discord.Client) -> None:
                 vc_cur = await db.execute("SELECT guild_id, channel_id FROM temp_vcs")
                 vc_data = await vc_cur.fetchall()
 
-                lfg_cur = await db.execute("SELECT id FROM lfg_posts WHERE status='OPEN'")
+                lfg_cur = await db.execute(
+                    "SELECT id, radio_query FROM lfg_posts WHERE status='OPEN'"
+                )
                 lfg_data = await lfg_cur.fetchall()
 
                 complaint_cur = await db.execute("SELECT case_id FROM complaints WHERE status IN ('OPEN','ACKNOWLEDGED','NEEDS INFO')")
@@ -161,10 +163,12 @@ async def run_startup(bot: discord.Client) -> None:
             except Exception:
                 pass
 
-        for (lfg_id,) in view_data['lfg']:
+        for lfg_row in view_data['lfg']:
             try:
                 from commands.warframe.lfg import LFGView
-                bot.add_view(LFGView(int(lfg_id)))
+                lfg_id = int(lfg_row[0])
+                radio_q = lfg_row[1] if len(lfg_row) > 1 else None
+                bot.add_view(LFGView(lfg_id, has_radio=bool((radio_q or "").strip())))
             except Exception:
                 pass
 

@@ -158,6 +158,13 @@ async def _do_transfer(
     await _set_vc_owner(interaction.guild.id, vc.id, new_owner.id)
 
     try:
+        from core.music_player import transfer_dj_control
+
+        await transfer_dj_control(interaction.guild.id, new_owner.id)
+    except Exception as e:
+        logger.debug(f"[vc] music DJ transfer failed: {e}")
+
+    try:
         await new_owner.send(
             embed=success_embed(
                 "You're the new VC host",

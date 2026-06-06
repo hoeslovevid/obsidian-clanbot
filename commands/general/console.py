@@ -45,21 +45,31 @@ class ConsoleHubView(discord.ui.View):
         await self._hint(interaction, "/help", "searchable command reference.")
 
 
-def _hub_embed(client) -> discord.Embed:
+def _hub_embed(client, guild: discord.Guild | None = None) -> discord.Embed:
+    body = (
+        "Your command center for daily rewards, Warframe intel, support tickets, and help.\n\n"
+        "**Quick picks** — use the buttons below or slash commands:\n"
+        "• **`/menu`** — categorized command picker\n"
+        "• **`/daily`** — claim your coin streak\n"
+        "• **`/status`** — bot version, latency, Warframe API health\n"
+        "• **`/warframe status`** — Baro, alerts, cycles\n"
+        "• **`/ticket`** — open a support ticket\n"
+        "• **`/help`** — full command reference\n"
+        "• **`/favorite_add`** — pin commands; they show in `/menu` and `/help`"
+    )
+    if guild:
+        try:
+            from core.music_player import format_music_console_block
+
+            music_block = format_music_console_block(guild)
+            if music_block:
+                body += f"\n\n{music_block}"
+        except Exception:
+            pass
     return embed_template(
         "showcase",
         "🜂 Obsidian Clan Console",
-        (
-            "Your command center for daily rewards, Warframe intel, support tickets, and help.\n\n"
-            "**Quick picks** — use the buttons below or slash commands:\n"
-            "• **`/menu`** — categorized command picker\n"
-            "• **`/daily`** — claim your coin streak\n"
-            "• **`/status`** — bot version, latency, Warframe API health\n"
-            "• **`/warframe status`** — Baro, alerts, cycles\n"
-            "• **`/ticket`** — open a support ticket\n"
-            "• **`/help`** — full command reference\n"
-            "• **`/favorite_add`** — pin commands; they show in `/menu` and `/help`"
-        ),
+        body,
         category="general",
         footer=footer_for("console_hub"),
         client=client,
@@ -131,7 +141,7 @@ def setup(bot, group=None):
                 ephemeral=True,
             )
 
-        embed = _hub_embed(interaction.client)
+        embed = _hub_embed(interaction.client, interaction.guild)
         view = ConsoleHubView()
         msg = await target.send(embed=embed, view=view)
         # Optional website row as a second message is noisy; help links live in embed footer.

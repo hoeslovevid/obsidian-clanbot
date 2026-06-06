@@ -13,6 +13,21 @@ import aiosqlite
 
 logger = logging.getLogger(__name__)
 
+_LFG_COLUMNS_READY = False
+
+
+async def _ensure_lfg_columns() -> None:
+    global _LFG_COLUMNS_READY
+    if _LFG_COLUMNS_READY:
+        return
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("PRAGMA table_info(lfg_posts)")
+        cols = {row[1] for row in await cur.fetchall()}
+        if "radio_query" not in cols:
+            await db.execute("ALTER TABLE lfg_posts ADD COLUMN radio_query TEXT")
+            await db.commit()
+    _LFG_COLUMNS_READY = True
+
 
 # Item 35: cycle-aware nudges.
 # Mission type -> (cycle key, desired state, friendly noun).
@@ -142,6 +157,12 @@ class LFGQuickModal(discord.ui.Modal, title="Quick LFG Post"):
         max_length=500,
         required=False,
     )
+    radio_input = discord.ui.TextInput(
+        label="Squad radio (optional)",
+        placeholder="YouTube playlist URL or search query",
+        max_length=200,
+        required=False,
+    )
 
     def __init__(self, bot, *, mission_type: str, description: str = ""):
         super().__init__()
@@ -172,6 +193,7 @@ class LFGQuickModal(discord.ui.Modal, title="Quick LFG Post"):
             duration_hours,
             (self.notes_input.value or "").strip(),
             None,
+            radio_query=(self.radio_input.value or "").strip() or None,
         )
 
 
@@ -230,32 +252,111 @@ class LFGTemplateView(discord.ui.View):
 class LFGView(discord.ui.View):
     """View with RSVP buttons for LFG posts."""
     
-    def __init__(self, lfg_id: int):
+    def __init__(self, lfg_id: int, *, has_radio: bool = True):
         super().__init__(timeout=None)
         self.lfg_id = lfg_id
-        # Set custom_id for each button to make them persistent
-        # Custom IDs must be unique per LFG post
-        for item in self.children:
-            if isinstance(item, discord.ui.Button):
-                if item.label == "Join":
-                    item.custom_id = f"lfg:{lfg_id}:join"
-                elif item.label == "Leave":
-                    item.custom_id = f"lfg:{lfg_id}:leave"
-                elif item.label == "Mark as Filled":
-                    item.custom_id = f"lfg:{lfg_id}:complete"
+        join = discord.ui.Button(
+            label="Join",
+            style=discord.ButtonStyle.success,
+            emoji="✅",
+            custom_id=f"lfg:{lfg_id}:join",
+            row=0,
+        )
+        join.callback = self.join
+        self.add_item(join)
+        leave = discord.ui.Button(
+            label="Leave",
+            style=discord.ButtonStyle.danger,
+            emoji="❌",
+            custom_id=f"lfg:{lfg_id}:leave",
+            row=0,
+        )
+        leave.callback = self.leave
+        self.add_item(leave)
+        filled = discord.ui.Button(
+            label="Mark as Filled",
+            style=discord.ButtonStyle.primary,
+            emoji="✅",
+            custom_id=f"lfg:{lfg_id}:complete",
+            row=0,
+        )
+        filled.callback = self.mark_filled
+        self.add_item(filled)
+        if has_radio:
+            radio = discord.ui.Button(
+                label="Start squad radio",
+                style=discord.ButtonStyle.secondary,
+                emoji="🎵",
+                custom_id=f"lfg:{lfg_id}:radio",
+                row=1,
+            )
+            radio.callback = self.start_radio
+            self.add_item(radio)
     
-    @discord.ui.button(label="Join", style=discord.ButtonStyle.success, emoji="✅")
-    async def join(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def join(self, interaction: discord.Interaction):
         """Join the LFG group."""
         await self._handle_rsvp(interaction, "JOIN")
     
-    @discord.ui.button(label="Leave", style=discord.ButtonStyle.danger, emoji="❌")
-    async def leave(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def leave(self, interaction: discord.Interaction):
         """Leave the LFG group."""
         await self._handle_rsvp(interaction, "LEAVE")
+
+    async def start_radio(self, interaction: discord.Interaction):
+        """Queue the LFG radio playlist in the requester's VC."""
+        if not interaction.guild or not isinstance(interaction.user, discord.Member):
+            return await interaction.response.send_message("Server only.", ephemeral=True)
+        if not interaction.user.voice or not interaction.user.voice.channel:
+            return await interaction.response.send_message(
+                "Join a voice channel first, then tap **Start squad radio**.",
+                ephemeral=True,
+            )
+        await _ensure_lfg_columns()
+        await interaction.response.defer(ephemeral=True)
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT radio_query, status FROM lfg_posts WHERE id=?",
+                (self.lfg_id,),
+            )
+            row = await cur.fetchone()
+        if not row:
+            return await interaction.followup.send("LFG post not found.", ephemeral=True)
+        radio_query, status = row
+        if status != "OPEN":
+            return await interaction.followup.send("This LFG post is no longer open.", ephemeral=True)
+        if not (radio_query or "").strip():
+            return await interaction.followup.send(
+                "No squad radio was set for this LFG. Host can recreate with a playlist URL or search query.",
+                ephemeral=True,
+            )
+        from core.music_player import enqueue_query
+        from database import get_quieter_mode
+
+        text_ch_id = interaction.channel.id if interaction.channel else None
+        ok, msg = await enqueue_query(
+            interaction.guild,
+            interaction.client,
+            str(radio_query).strip(),
+            interaction.user.id,
+            interaction.user.voice.channel,
+            text_channel_id=text_ch_id,
+            announce=not await get_quieter_mode(interaction.guild.id),
+        )
+        if ok:
+            from core.utils import success_embed
+
+            await interaction.followup.send(
+                embed=success_embed("Squad Radio", msg, client=interaction.client),
+                ephemeral=True,
+            )
+        else:
+            from core.utils import error_embed
+
+            await interaction.followup.send(
+                embed=error_embed("Squad Radio", msg, client=interaction.client),
+                ephemeral=True,
+            )
     
-    @discord.ui.button(label="Mark as Filled", style=discord.ButtonStyle.primary, emoji="✅")
-    async def mark_filled(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def mark_filled(self, interaction: discord.Interaction):
         """Mark the group as filled (creator only) — keeps post visible with [FILLED] label."""
         from core.lfg_fill import mark_lfg_filled
 
@@ -437,6 +538,7 @@ async def create_lfg_post(
     *,
     role_tags: str | None = None,
     scheduled_at: str | None = None,
+    radio_query: str | None = None,
 ):
     """Create an LFG post. Used by both /lfg and the Quick LFG context menu."""
     from core.utils import get_mod_role
@@ -471,15 +573,18 @@ async def create_lfg_post(
 
     tags_clean = (role_tags or "").strip()[:200] or None
     sched_clean = (scheduled_at or "").strip()[:80] or None
+    radio_clean = (radio_query or "").strip()[:200] or None
+
+    await _ensure_lfg_columns()
 
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("""
             INSERT INTO lfg_posts (
                 guild_id, channel_id, message_id, creator_id, mission_type, player_count,
                 max_players, description, created_at, expires_at, status, ping_role_id,
-                role_tags, scheduled_at, reminder_sent
+                role_tags, scheduled_at, reminder_sent, radio_query
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?, 0)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?, 0, ?)
         """, (
             interaction.guild.id,
             interaction.channel.id,
@@ -494,6 +599,7 @@ async def create_lfg_post(
             int(ping_role_id or 0),
             tags_clean,
             sched_clean,
+            radio_clean,
         ))
         await db.commit()
         cur = await db.execute("SELECT last_insert_rowid()")
@@ -512,6 +618,8 @@ async def create_lfg_post(
         fields.append(("🏷️ Roles", tags_clean, True))
     if sched_clean:
         fields.append(("🕐 Scheduled", sched_clean, True))
+    if radio_clean:
+        fields.append(("🎵 Squad radio", f"`{radio_clean[:120]}`\nTap **Start squad radio** when you're in VC.", False))
     fields.append(("👥 Players", f"1. {interaction.user.display_name}\n\n_{max_players - 1} slot(s) remaining_", False))
 
     # Item 35: cycle-aware nudge for location-coupled missions. Silent on failure.
@@ -532,7 +640,7 @@ async def create_lfg_post(
         footer=f"{footer_for('community_lfg')} · ID {lfg_id}",
         client=interaction.client,
     )
-    view = LFGView(lfg_id)
+    view = LFGView(lfg_id, has_radio=bool(radio_clean))
 
     await interaction.response.send_message(content=mention if mention else None, embed=embed, view=view)
     message = await interaction.original_response()
@@ -623,6 +731,7 @@ def setup(bot, group=None):
         role_ping="Optional role to ping (mention or ID). If omitted, uses server default if set.",
         role_tags="Squad roles — DPS, Support, Steel Path, Sortie, etc. (comma-separated)",
         scheduled_at="When you plan to run (e.g. today 8pm) — reminder ~15m before",
+        radio_playlist="Optional YouTube playlist URL or search for squad radio",
     )
     @app_commands.choices(mission_type=[
         app_commands.Choice(name=mt, value=mt) for mt in MISSION_TYPES
@@ -636,6 +745,7 @@ def setup(bot, group=None):
         role_ping: str = "",
         role_tags: str = "",
         scheduled_at: str = "",
+        radio_playlist: str = "",
     ):
         """Create an LFG post for a Warframe mission."""
         if not interaction.guild:
@@ -667,4 +777,5 @@ def setup(bot, group=None):
             description or "", ping_role_id,
             role_tags=role_tags or None,
             scheduled_at=scheduled_at or None,
+            radio_query=radio_playlist or None,
         )

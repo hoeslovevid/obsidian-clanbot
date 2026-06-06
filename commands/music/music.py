@@ -12,6 +12,10 @@ from discord.ext import commands
 from core.embed_footers import footer_for
 from core.embed_templates import embed_template
 from core.music_player import (
+    EVENT_VC_CHANNEL_KEY,
+    MUSIC_EVENT_SOUNDTRACK_KEY,
+    MUSIC_TEMP_VC_ONLY_KEY,
+    MUSIC_VC_BONUS_KEY,
     PlaylistResult,
     YTDLSource,
     _cycle_loop_mode,
@@ -20,6 +24,7 @@ from core.music_player import (
     format_duration,
     get_state,
     get_vote_skip_ratio,
+    is_temp_vc_channel,
     loop_mode_label,
     persist_guild_state,
     play_next_in_queue,
@@ -133,6 +138,26 @@ async def _require_voice(interaction: discord.Interaction) -> bool:
         return True
     await interaction.response.send_message(
         embed=error_embed("Not in Voice", "You must be in a voice channel.", client=interaction.client),
+        ephemeral=True,
+    )
+    return False
+
+
+async def _temp_vc_allowed(interaction: discord.Interaction) -> bool:
+    assert interaction.guild and isinstance(interaction.user, discord.Member)
+    raw = await get_guild_setting(interaction.guild.id, MUSIC_TEMP_VC_ONLY_KEY)
+    if not raw or raw.lower() in ("0", "false", "off", "no"):
+        return True
+    ch = interaction.user.voice.channel if interaction.user.voice else None
+    if ch and await is_temp_vc_channel(interaction.guild.id, ch.id):
+        return True
+    await interaction.response.send_message(
+        embed=error_embed(
+            "Temp VC Only",
+            "Music is restricted to **temp squad VCs** in this server.",
+            action_hint="Create a squad via the join-to-create channel, then try again.",
+            client=interaction.client,
+        ),
         ephemeral=True,
     )
     return False
@@ -297,6 +322,8 @@ def setup(bot: commands.Bot, group=None):
         if not await _channel_allowed(interaction):
             return
         if not await _require_voice(interaction):
+            return
+        if not await _temp_vc_allowed(interaction):
             return
         if not await _require_dj(interaction):
             return
@@ -623,12 +650,20 @@ def setup(bot: commands.Bot, group=None):
         dj_role="Role allowed to control music (optional)",
         music_channel="Text channel for music commands (optional)",
         vote_skip_ratio="Fraction of listeners needed to skip (0.1–1.0, optional)",
+        temp_vc_only="Restrict /music play to temp squad VCs only (optional)",
+        event_soundtrack="Auto-play event soundtracks when bot is in event VC (optional)",
+        event_vc="Voice channel for event soundtracks (optional)",
+        vc_bonus_multiplier="XP/coin bonus while music plays in same VC (1.0–3.0, optional)",
     )
     async def config(
         interaction: discord.Interaction,
         dj_role: Optional[discord.Role] = None,
         music_channel: Optional[discord.TextChannel] = None,
         vote_skip_ratio: Optional[float] = None,
+        temp_vc_only: Optional[bool] = None,
+        event_soundtrack: Optional[bool] = None,
+        event_vc: Optional[discord.VoiceChannel] = None,
+        vc_bonus_multiplier: Optional[float] = None,
     ):
         if not await _guild_only(interaction):
             return
@@ -649,17 +684,42 @@ def setup(bot: commands.Bot, group=None):
             ratio = max(0.1, min(1.0, vote_skip_ratio))
             await set_guild_setting(interaction.guild.id, "music_vote_skip_ratio", str(ratio))
             updates.append(f"**Vote-skip ratio:** {ratio:.0%}")
+        if temp_vc_only is not None:
+            await set_guild_setting(interaction.guild.id, MUSIC_TEMP_VC_ONLY_KEY, "1" if temp_vc_only else "0")
+            updates.append(f"**Temp VC only:** {'On' if temp_vc_only else 'Off'}")
+        if event_soundtrack is not None:
+            await set_guild_setting(interaction.guild.id, MUSIC_EVENT_SOUNDTRACK_KEY, "1" if event_soundtrack else "0")
+            updates.append(f"**Event soundtracks:** {'On' if event_soundtrack else 'Off'}")
+        if event_vc is not None:
+            await set_guild_setting(interaction.guild.id, EVENT_VC_CHANNEL_KEY, str(event_vc.id))
+            updates.append(f"**Event VC:** {event_vc.mention}")
+        if vc_bonus_multiplier is not None:
+            bonus = max(1.0, min(3.0, vc_bonus_multiplier))
+            await set_guild_setting(interaction.guild.id, MUSIC_VC_BONUS_KEY, str(bonus))
+            updates.append(f"**VC music bonus:** {bonus:.2f}×")
         if not updates:
             dj_raw = await get_guild_setting(interaction.guild.id, MUSIC_DJ_ROLE_KEY)
             ch_raw = await get_guild_setting(interaction.guild.id, MUSIC_CHANNEL_KEY)
             ratio = await get_vote_skip_ratio(interaction.guild.id)
+            temp_raw = await get_guild_setting(interaction.guild.id, MUSIC_TEMP_VC_ONLY_KEY)
+            evt_snd = await get_guild_setting(interaction.guild.id, MUSIC_EVENT_SOUNDTRACK_KEY)
+            evt_vc = await get_guild_setting(interaction.guild.id, EVENT_VC_CHANNEL_KEY)
+            bonus_raw = await get_guild_setting(interaction.guild.id, MUSIC_VC_BONUS_KEY)
             dj_line = f"<@&{dj_raw}>" if dj_raw else "_Not set_"
             ch_line = f"<#{ch_raw}>" if ch_raw else "_Any channel_"
+            temp_line = "On" if temp_raw and temp_raw.lower() in ("1", "true", "on", "yes") else "Off"
+            snd_line = "On" if not evt_snd or evt_snd.lower() not in ("0", "false", "off", "no") else "Off"
+            evt_vc_line = f"<#{evt_vc}>" if evt_vc else "_Not set_"
+            bonus_line = bonus_raw if bonus_raw else "_Env default_"
             return await interaction.response.send_message(
                 embed=embed_template(
                     "showcase",
                     "🎵 Music Config",
-                    f"**DJ role:** {dj_line}\n**Music channel:** {ch_line}\n**Vote-skip ratio:** {ratio:.0%}",
+                    (
+                        f"**DJ role:** {dj_line}\n**Music channel:** {ch_line}\n**Vote-skip ratio:** {ratio:.0%}\n"
+                        f"**Temp VC only:** {temp_line}\n**Event soundtracks:** {snd_line}\n"
+                        f"**Event VC:** {evt_vc_line}\n**VC music bonus:** {bonus_line}"
+                    ),
                     category="music",
                     client=interaction.client,
                 ),

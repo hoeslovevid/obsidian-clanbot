@@ -25,6 +25,7 @@ from core.embed_links import add_link_row, baro_link_buttons, link_button
 from core.embed_templates import embed_template
 from core.utils import BUTTON_ONLY_RUNNER_MSG, warframe_data_unavailable_embed
 from core.warframe_platform import resolve_warframe_platform, warframe_footer_platform_note
+from core.music_player import format_guild_music_line
 from core.wf_hub_extras import (
     format_daily_ops_snippet,
     format_relic_planner_hint,
@@ -99,6 +100,13 @@ def build_hub_embed(
 
     if twitch_line:
         fields.append(("📺 Streams", twitch_line, False))
+
+    if guild_id and client:
+        guild = client.get_guild(guild_id)
+        if guild:
+            music_line = format_guild_music_line(guild)
+            if music_line:
+                fields.append(("🎵 Clan radio", music_line, False))
 
     plat_note = warframe_footer_platform_note(platform, pc_only_api=platform == "pc")
     footer = f"{footer_for('warframe_hub')} · {plat_note}"

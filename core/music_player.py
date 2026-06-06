@@ -21,7 +21,13 @@ logger = logging.getLogger(__name__)
 
 MUSIC_AUTO_LEAVE_MINUTES = int(os.getenv("MUSIC_AUTO_LEAVE_MINUTES", "5"))
 MUSIC_VOTE_SKIP_RATIO = float(os.getenv("MUSIC_VOTE_SKIP_RATIO", "0.5"))
+MUSIC_VC_BONUS_MULTIPLIER = float(os.getenv("MUSIC_VC_BONUS_MULTIPLIER", "1.25"))
 PLAYLIST_MAX_TRACKS = int(os.getenv("MUSIC_PLAYLIST_MAX", "50"))
+
+MUSIC_TEMP_VC_ONLY_KEY = "music_temp_vc_only"
+MUSIC_EVENT_SOUNDTRACK_KEY = "music_event_soundtrack_enabled"
+EVENT_VC_CHANNEL_KEY = "event_vc_channel_id"
+MUSIC_VC_BONUS_KEY = "music_vc_bonus_multiplier"
 
 yt_dlp.utils.bug_reports_message = lambda: ""
 
@@ -515,6 +521,251 @@ async def clear_guild_playback(
             await guild.voice_client.disconnect()
     await persist_guild_state(guild.id, is_playing=False)
     await update_now_playing_panel(guild, bot)
+
+
+async def is_temp_vc_channel(guild_id: int, channel_id: int) -> bool:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            "SELECT 1 FROM temp_vcs WHERE guild_id=? AND channel_id=? LIMIT 1",
+            (guild_id, channel_id),
+        )
+        return (await cur.fetchone()) is not None
+
+
+async def get_music_vc_bonus_multiplier(guild_id: int) -> float:
+    raw = await get_guild_setting(guild_id, MUSIC_VC_BONUS_KEY)
+    if raw:
+        try:
+            val = float(raw)
+            return max(1.0, min(3.0, val))
+        except ValueError:
+            pass
+    return max(1.0, MUSIC_VC_BONUS_MULTIPLIER)
+
+
+async def transfer_dj_control(guild_id: int, new_host_id: int) -> None:
+    """Reassign requested_by on current track and queue (temp VC host transfer)."""
+    st = get_state(guild_id)
+    if st.current_track:
+        st.current_track["requested_by"] = new_host_id
+    for track in st.queue:
+        track["requested_by"] = new_host_id
+
+
+def guild_is_playing_music(guild: discord.Guild) -> bool:
+    vc = guild.voice_client
+    if not vc or not vc.channel:
+        return False
+    return bool(vc.is_playing() or vc.is_paused())
+
+
+def format_guild_music_line(guild: discord.Guild) -> Optional[str]:
+    """One-line status for hub/console embeds."""
+    vc = guild.voice_client
+    if not vc or not vc.channel or not guild_is_playing_music(guild):
+        return None
+    st = get_state(guild.id)
+    listeners = len([m for m in vc.channel.members if not m.bot])
+    title = (st.current_track or {}).get("title", "Music")
+    if len(title) > 48:
+        title = title[:45] + "…"
+    queue_n = len(st.queue)
+    queue_hint = f" · **{queue_n}** queued" if queue_n else ""
+    return f"🎵 **{listeners}** listening in {vc.channel.mention} — _{title}_{queue_hint}"
+
+
+def format_music_console_block(guild: discord.Guild) -> Optional[str]:
+    """Richer block for Clan Console embed."""
+    line = format_guild_music_line(guild)
+    if not line:
+        return None
+    st = get_state(guild.id)
+    vc = guild.voice_client
+    assert vc and vc.channel
+    status = "Paused" if vc.is_paused() else "Playing"
+    return f"**Music** — {status}\n{line}"
+
+
+async def stop_if_in_channel(
+    guild: discord.Guild,
+    channel_id: int,
+    bot: discord.Client,
+) -> None:
+    """Stop playback and disconnect when a temp VC is deleted."""
+    vc = guild.voice_client
+    if not vc or not vc.channel or vc.channel.id != channel_id:
+        return
+    st = get_state(guild.id)
+    if not (vc.is_playing() or vc.is_paused() or st.current_track or st.queue):
+        return
+    logger.info("[music] stopping playback — temp VC %s deleted in guild %s", channel_id, guild.id)
+    await clear_guild_playback(guild, bot, disconnect=True)
+
+
+async def _ensure_voice(
+    guild: discord.Guild,
+    voice_channel: discord.VoiceChannel,
+) -> discord.VoiceClient:
+    vc = guild.voice_client
+    if vc and vc.channel and vc.channel.id != voice_channel.id:
+        await vc.move_to(voice_channel)
+        return vc
+    if vc:
+        return vc
+    return await voice_channel.connect()
+
+
+async def enqueue_query(
+    guild: discord.Guild,
+    bot: discord.Client,
+    query: str,
+    requested_by: int,
+    voice_channel: discord.VoiceChannel,
+    *,
+    text_channel_id: Optional[int] = None,
+    announce: Optional[bool] = None,
+) -> tuple[bool, str]:
+    """Connect (if needed), play or queue a URL/search. Used by LFG radio and event soundtracks."""
+    query = (query or "").strip()
+    if not query:
+        return False, "No playlist or search query provided."
+
+    try:
+        from core.utils import feature_enabled
+
+        if not await feature_enabled(guild.id, "music"):
+            return False, "Music is disabled in this server."
+    except Exception:
+        pass
+
+    st = get_state(guild.id)
+    if text_channel_id:
+        st.text_channel_id = text_channel_id
+    st.voice_channel_id = voice_channel.id
+
+    try:
+        voice_client = await _ensure_voice(guild, voice_channel)
+    except Exception as exc:
+        return False, f"Could not join voice: {exc}"
+
+    if announce is None:
+        announce = not await _quieter_announce(guild.id)
+
+    try:
+        player = await YTDLSource.from_url(query, loop=bot.loop, stream=True, volume=st.volume)
+    except PlaylistResult as pl:
+        tracks = [
+            YTDLSource.track_info_from_data(
+                entry,
+                query=entry.get("webpage_url") or entry.get("url") or query,
+                requested_by=requested_by,
+            )
+            for entry in pl.entries
+        ]
+        if voice_client.is_playing() or voice_client.is_paused() or st.current_track:
+            st.queue.extend(tracks)
+            await persist_guild_state(guild.id, is_playing=True)
+            await update_now_playing_panel(guild, bot, announce=announce)
+            return True, f"Added **{len(tracks)}** track(s) to the queue."
+
+        first = tracks[0]
+        first_query = first.get("query") or first.get("url") or query
+        sub_player = await YTDLSource.from_url(
+            first_query, loop=bot.loop, stream=True, volume=st.volume
+        )
+        first_info = YTDLSource.track_info_from_data(
+            sub_player.data, query=first_query, requested_by=requested_by
+        )
+        st.queue.extend(tracks[1:])
+        st.current_track = first_info
+
+        def _after(err):
+            if err:
+                logger.warning("[music] playback error guild=%s: %s", guild.id, err)
+            asyncio.run_coroutine_threadsafe(play_next_in_queue(guild.id, bot), bot.loop)
+
+        voice_client.play(sub_player, after=_after)
+        if voice_client.source:
+            voice_client.source.volume = st.volume
+        await persist_guild_state(guild.id, is_playing=True)
+        await update_now_playing_panel(guild, bot, announce=announce)
+        extra = f" (+{len(tracks) - 1} more queued)" if len(tracks) > 1 else ""
+        return True, f"Now playing **{first_info.get('title', 'track')}**{extra}"
+
+    except ValueError as exc:
+        return False, str(exc)
+    except Exception as exc:
+        logger.warning("[music] enqueue_query failed guild=%s: %s", guild.id, exc)
+        return False, f"Playback error: {exc}"
+
+    track_info = YTDLSource.track_info_from_data(
+        player.data, query=query, requested_by=requested_by
+    )
+
+    if voice_client.is_playing() or voice_client.is_paused():
+        st.queue.append(track_info)
+        await persist_guild_state(guild.id, is_playing=True)
+        await update_now_playing_panel(guild, bot, announce=announce)
+        return True, f"Queued **{track_info.get('title', 'track')}** (position {len(st.queue)})."
+
+    st.current_track = track_info
+
+    def _after_single(err):
+        if err:
+            logger.warning("[music] playback error guild=%s: %s", guild.id, err)
+        asyncio.run_coroutine_threadsafe(play_next_in_queue(guild.id, bot), bot.loop)
+
+    voice_client.play(player, after=_after_single)
+    if voice_client.source:
+        voice_client.source.volume = st.volume
+    await persist_guild_state(guild.id, is_playing=True)
+    await update_now_playing_panel(guild, bot, announce=announce)
+    return True, f"Now playing **{track_info.get('title', 'track')}**."
+
+
+async def try_start_event_soundtrack(
+    guild: discord.Guild,
+    bot: discord.Client,
+    soundtrack_query: str,
+    *,
+    event_title: str = "Event",
+) -> bool:
+    """Auto-queue event soundtrack when bot is already in the configured event VC."""
+    query = (soundtrack_query or "").strip()
+    if not query:
+        return False
+
+    enabled = await get_guild_setting(guild.id, MUSIC_EVENT_SOUNDTRACK_KEY)
+    if enabled and enabled.lower() in ("0", "false", "off", "no"):
+        return False
+
+    event_vc_raw = await get_guild_setting(guild.id, EVENT_VC_CHANNEL_KEY)
+    if not event_vc_raw:
+        return False
+    try:
+        event_vc_id = int(event_vc_raw)
+    except ValueError:
+        return False
+
+    vc = guild.voice_client
+    if not vc or not vc.channel or vc.channel.id != event_vc_id:
+        return False
+
+    events_ch_raw = await get_guild_setting(guild.id, "events_channel_id")
+    text_ch_id = int(events_ch_raw) if events_ch_raw and events_ch_raw.isdigit() else None
+
+    ok, msg = await enqueue_query(
+        guild,
+        bot,
+        query,
+        requested_by=guild.me.id if guild.me else 0,
+        voice_channel=vc.channel,
+        text_channel_id=text_ch_id,
+        announce=not await _quieter_announce(guild.id),
+    )
+    if ok:
+        logger.info("[music] event soundtrack started guild=%s event=%s: %s", guild.id, event_title, msg)
+    return ok
 
 
 async def music_auto_leave_tick(bot: discord.Client) -> None:

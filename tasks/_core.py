@@ -232,7 +232,7 @@ def setup_tasks(bot):
             for channel_id, last_nonempty_at in rows:
                 vc = guild.get_channel(int(channel_id))
                 if not isinstance(vc, discord.VoiceChannel):
-                    await delete_temp_vc_and_panel(guild, int(channel_id), reason="Cleanup missing VC")
+                    await delete_temp_vc_and_panel(guild, int(channel_id), reason="Cleanup missing VC", bot=bot)
                     continue
 
                 # Never delete join-to-create trigger
@@ -261,7 +261,7 @@ def setup_tasks(bot):
                             await _record_revival_intent(guild, vc, log_channel=panel_ch)
                     except Exception as e:
                         logger.debug(f"[vc-revival] could not record revival intent: {e}")
-                    await delete_temp_vc_and_panel(guild, vc.id, reason="Temp VC idle cleanup")
+                    await delete_temp_vc_and_panel(guild, vc.id, reason="Temp VC idle cleanup", bot=bot)
 
     @temp_vc_cleanup.before_loop
     async def before_temp_vc_cleanup():
@@ -269,6 +269,12 @@ def setup_tasks(bot):
 
     @tasks.loop(minutes=EVENT_REMINDER_LOOP_MINUTES)
     async def event_reminder_loop():
+        try:
+            from commands.events.event_create import _ensure_event_columns
+
+            await _ensure_event_columns()
+        except Exception:
+            pass
         for guild in bot.guilds:
             events_id = await resolve_channel_id(guild, "events_channel_id", EVENTS_CHANNEL_ID, EVENTS_CHANNEL_NAME)
             ch = guild.get_channel(events_id) if events_id else None
@@ -336,6 +342,62 @@ def setup_tasks(bot):
                         (guild.id, int(message_id)),
                     )
                     await db.commit()
+
+                try:
+                    from core.music_player import try_start_event_soundtrack
+
+                    async with aiosqlite.connect(DB_PATH) as db:
+                        cur = await db.execute(
+                            "SELECT soundtrack_query, soundtrack_started FROM events "
+                            "WHERE guild_id=? AND message_id=?",
+                            (guild.id, int(message_id)),
+                        )
+                        snd_row = await cur.fetchone()
+                    if snd_row:
+                        snd_query, snd_started = snd_row
+                        if snd_query and not int(snd_started or 0):
+                            played = await try_start_event_soundtrack(
+                                guild, bot, str(snd_query), event_title=str(title),
+                            )
+                            if played:
+                                async with aiosqlite.connect(DB_PATH) as db:
+                                    await db.execute(
+                                        "UPDATE events SET soundtrack_started=1 "
+                                        "WHERE guild_id=? AND message_id=?",
+                                        (guild.id, int(message_id)),
+                                    )
+                                    await db.commit()
+                except Exception as e:
+                    logger.debug(f"[music] event reminder soundtrack failed: {e}")
+
+            # Go-live soundtracks (event just started; bot already in event VC)
+            try:
+                from core.music_player import try_start_event_soundtrack
+
+                live_start = now_ts - 300
+                live_end = now_ts + 60
+                async with aiosqlite.connect(DB_PATH) as db:
+                    cur = await db.execute(
+                        "SELECT message_id, title, soundtrack_query FROM events "
+                        "WHERE guild_id=? AND ended=0 AND soundtrack_started=0 "
+                        "AND soundtrack_query IS NOT NULL AND soundtrack_query != '' "
+                        "AND start_ts BETWEEN ? AND ?",
+                        (guild.id, live_start, live_end),
+                    )
+                    live_rows = await cur.fetchall()
+                for msg_id, evt_title, snd_query in live_rows:
+                    played = await try_start_event_soundtrack(
+                        guild, bot, str(snd_query), event_title=str(evt_title),
+                    )
+                    if played:
+                        async with aiosqlite.connect(DB_PATH) as db:
+                            await db.execute(
+                                "UPDATE events SET soundtrack_started=1 WHERE guild_id=? AND message_id=?",
+                                (guild.id, int(msg_id)),
+                            )
+                            await db.commit()
+            except Exception as e:
+                logger.debug(f"[music] event go-live soundtrack failed: {e}")
 
     @event_reminder_loop.before_loop
     async def before_event_reminder_loop():
@@ -773,6 +835,7 @@ def setup_tasks(bot):
             return
 
         from core.utils import feature_enabled  # Item 85 — per-guild kill switch
+        from core.music_player import get_music_vc_bonus_multiplier, guild_is_playing_music
         now = now_utc()
 
         for guild in bot.guilds:
@@ -781,6 +844,12 @@ def setup_tasks(bot):
                     continue
             except Exception:
                 pass
+            music_bonus = 1.0
+            try:
+                if XP_ENABLED and await feature_enabled(guild.id, "music") and guild_is_playing_music(guild):
+                    music_bonus = await get_music_vc_bonus_multiplier(guild.id)
+            except Exception:
+                music_bonus = 1.0
             async with aiosqlite.connect(DB_PATH) as db:
                 # Get all active voice sessions
                 cur = await db.execute("""
@@ -828,20 +897,31 @@ def setup_tasks(bot):
                             from core.utils import get_active_multiplier as _get_mult
                             coins_mult = await _get_mult(guild.id, "coins")
                             xp_mult = await _get_mult(guild.id, "xp")
-                            coins = int(round(minutes_to_reward * COINS_PER_MINUTE_VOICE * coins_mult))
+                            vc_music_mult = 1.0
+                            if (
+                                music_bonus > 1.0
+                                and guild.voice_client
+                                and guild.voice_client.channel
+                                and guild.voice_client.channel.id == channel_id
+                            ):
+                                vc_music_mult = music_bonus
+                            coins = int(round(minutes_to_reward * COINS_PER_MINUTE_VOICE * coins_mult * vc_music_mult))
 
                             if coins > 0:
+                                reason = f"Voice activity in #{channel.name}"
+                                if vc_music_mult > 1.0:
+                                    reason += f" (music bonus {vc_music_mult:.2f}×)"
                                 await add_coins(
                                     guild.id,
                                     user_id,
                                     coins,
                                     "VOICE",
-                                    f"Voice activity in #{channel.name}",
+                                    reason,
                                 )
 
                                 # Award XP (if enabled)
                                 if XP_ENABLED:
-                                    xp_amount = int(round(minutes_to_reward * XP_PER_MINUTE_VOICE * xp_mult))
+                                    xp_amount = int(round(minutes_to_reward * XP_PER_MINUTE_VOICE * xp_mult * vc_music_mult))
                                     if xp_amount > 0:
                                         leveled_up = await add_xp(
                                             guild.id,

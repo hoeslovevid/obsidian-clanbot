@@ -12,6 +12,23 @@ import aiosqlite
 
 DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
+_EVENT_COLUMNS_READY = False
+
+
+async def _ensure_event_columns() -> None:
+    global _EVENT_COLUMNS_READY
+    if _EVENT_COLUMNS_READY:
+        return
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("PRAGMA table_info(events)")
+        cols = {row[1] for row in await cur.fetchall()}
+        if "soundtrack_query" not in cols:
+            await db.execute("ALTER TABLE events ADD COLUMN soundtrack_query TEXT")
+        if "soundtrack_started" not in cols:
+            await db.execute("ALTER TABLE events ADD COLUMN soundtrack_started INTEGER NOT NULL DEFAULT 0")
+        await db.commit()
+    _EVENT_COLUMNS_READY = True
+
 EVENT_TEMPLATES = {
     "sortie": ("Sortie Run", "Running today's sortie. Bring your A-game!"),
     "eidolon": ("Eidolon Hunt", "Eidolon cap. Cetus night cycle. Bring amp & frame."),
@@ -71,7 +88,15 @@ async def time_autocomplete(interaction: discord.Interaction, current: str) -> l
     return choices[:25]
 
 
-async def create_event_from_modal(interaction: discord.Interaction, title: str, when_str: str, description: str, duration_hours: int = 2):
+async def create_event_from_modal(
+    interaction: discord.Interaction,
+    title: str,
+    when_str: str,
+    description: str,
+    duration_hours: int = 2,
+    *,
+    soundtrack: str = "",
+):
     """Create event from modal (Add as Event context menu)."""
     from bot import resolve_channel_id, RSVPView
     from bot import EVENTS_CHANNEL_ID, EVENTS_CHANNEL_NAME
@@ -116,13 +141,22 @@ async def create_event_from_modal(interaction: discord.Interaction, title: str, 
     rsvp_empty = RSVPView.format_rsvp_summary({"GOING": 0, "MAYBE": 0, "NO": 0})
     embed.add_field(name="RSVP", value=rsvp_empty, inline=False)
     embed.set_footer(text=rsvp_empty)
+    snd_clean = (soundtrack or "").strip()[:200] or None
+    if snd_clean:
+        embed.add_field(
+            name="🎵 Soundtrack",
+            value=f"`{snd_clean}` — auto-plays at reminder if bot is in the event VC.",
+            inline=False,
+        )
+
     msg = await ch.send(embed=embed, view=RSVPView())
     thread_id = await _maybe_create_event_thread(msg, ch, title, dt)
+    await _ensure_event_columns()
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
-            "INSERT INTO events(guild_id,message_id,creator_id,title,start_ts,end_ts,description,role_id,created_at,reminder_sent,ended,recap_posted,recap_message_id,thread_id) "
-            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (interaction.guild.id, msg.id, interaction.user.id, title, ts, end_ts, description, 0, now_utc().isoformat(), 0, 0, 0, 0, thread_id or 0),
+            "INSERT INTO events(guild_id,message_id,creator_id,title,start_ts,end_ts,description,role_id,created_at,reminder_sent,ended,recap_posted,recap_message_id,thread_id,soundtrack_query,soundtrack_started) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (interaction.guild.id, msg.id, interaction.user.id, title, ts, end_ts, description, 0, now_utc().isoformat(), 0, 0, 0, 0, thread_id or 0, snd_clean, 0),
         )
         await db.commit()
     await interaction.followup.send(
@@ -150,9 +184,10 @@ def setup(bot, group=None):
         description="What are we running? (ignored if template used)",
         template="Quick fill: Sortie, Eidolon, Railjack, Fissure, etc.",
         role_ping="Optional role to ping when event is posted",
-        duration_hours="How long the event runs (default: 2)"
+        duration_hours="How long the event runs (default: 2)",
+        soundtrack="Optional playlist URL or search — auto-plays at reminder when bot is in event VC",
     )
-    async def event_create(interaction: discord.Interaction, when: str, title: str = "Ops Event", description: str = "Coordinate in the thread below.", template: Optional[app_commands.Choice[str]] = None, role_ping: Optional[discord.Role] = None, duration_hours: int = 2):
+    async def event_create(interaction: discord.Interaction, when: str, title: str = "Ops Event", description: str = "Coordinate in the thread below.", template: Optional[app_commands.Choice[str]] = None, role_ping: Optional[discord.Role] = None, duration_hours: int = 2, soundtrack: str = ""):
         # Import bot-specific functions inside to avoid circular imports
         from bot import resolve_channel_id, RSVPView
         from bot import EVENTS_CHANNEL_ID, EVENTS_CHANNEL_NAME, DB_PATH
@@ -222,15 +257,24 @@ def setup(bot, group=None):
         embed.add_field(name="RSVP", value=rsvp_empty, inline=False)
         embed.set_footer(text=rsvp_empty)
 
+        snd_clean = (soundtrack or "").strip()[:200] or None
+        if snd_clean:
+            embed.add_field(
+                name="🎵 Soundtrack",
+                value=f"`{snd_clean}` — auto-plays at reminder if bot is in the event VC.",
+                inline=False,
+            )
+
         msg = await ch.send(content=mention if mention else None, embed=embed, view=RSVPView())
 
         # Auto-thread for discussion (Item 65)
         thread_id = await _maybe_create_event_thread(msg, ch, title, dt)
 
+        await _ensure_event_columns()
         async with aiosqlite.connect(DB_PATH) as db:
             await db.execute(
-                "INSERT INTO events(guild_id,message_id,creator_id,title,start_ts,end_ts,description,role_id,created_at,reminder_sent,ended,recap_posted,recap_message_id,thread_id) "
-                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO events(guild_id,message_id,creator_id,title,start_ts,end_ts,description,role_id,created_at,reminder_sent,ended,recap_posted,recap_message_id,thread_id,soundtrack_query,soundtrack_started) "
+                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     interaction.guild.id,
                     msg.id,
@@ -246,6 +290,8 @@ def setup(bot, group=None):
                     0,
                     0,
                     thread_id or 0,
+                    snd_clean,
+                    0,
                 ),
             )
             await db.commit()
