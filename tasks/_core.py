@@ -1121,14 +1121,14 @@ def setup_tasks(bot):
                 
                 # Find expired posts
                 cur = await db.execute("""
-                    SELECT id, guild_id, channel_id, message_id
+                    SELECT id, guild_id, channel_id, message_id, thread_id
                     FROM lfg_posts
                     WHERE status='OPEN' AND expires_at < ?
                 """, (now,))
                 
                 expired = await cur.fetchall()
                 
-                for lfg_id, guild_id, channel_id, message_id in expired:
+                for lfg_id, guild_id, channel_id, message_id, thread_id in expired:
                     try:
                         guild = bot.get_guild(guild_id)
                         if not guild:
@@ -1164,6 +1164,14 @@ def setup_tasks(bot):
                             (lfg_id,)
                         )
                         await db.commit()
+
+                        try:
+                            from core.lfg_extras import post_lfg_thread_summary
+                            await post_lfg_thread_summary(
+                                bot, guild_id, lfg_id, thread_id, reason="expired",
+                            )
+                        except Exception:
+                            pass
                     except Exception as e:
                         logger.error(f"Error expiring LFG post {lfg_id}: {e}", exc_info=True)
                         continue
@@ -1172,6 +1180,66 @@ def setup_tasks(bot):
 
     @lfg_expire_loop.before_loop
     async def before_lfg_expire_loop():
+        await bot.wait_until_ready()
+
+    @tasks.loop(minutes=5)
+    async def lfg_scheduled_reminder_loop():
+        """DM creators ~15 minutes before scheduled LFG start time."""
+        try:
+            import dateparser
+            from core.embed_templates import embed_template
+            from core.embed_footers import footer_for
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute("""
+                    SELECT id, guild_id, creator_id, mission_type, scheduled_at
+                    FROM lfg_posts
+                    WHERE status='OPEN' AND scheduled_at IS NOT NULL AND scheduled_at != ''
+                      AND COALESCE(reminder_sent, 0) = 0
+                """)
+                rows = await cur.fetchall()
+            now = now_utc()
+            for lfg_id, guild_id, creator_id, mission, sched_raw in rows:
+                try:
+                    sched_dt = dateparser.parse(
+                        sched_raw,
+                        settings={"TIMEZONE": "UTC", "RETURN_AS_TIMEZONE_AWARE": True},
+                    )
+                    if not sched_dt:
+                        continue
+                    if sched_dt.tzinfo is None:
+                        sched_dt = sched_dt.replace(tzinfo=timezone.utc)
+                    delta = (sched_dt - now).total_seconds()
+                    if not (0 < delta <= 15 * 60):
+                        continue
+                    guild = bot.get_guild(guild_id)
+                    if not guild:
+                        continue
+                    member = guild.get_member(creator_id)
+                    if member:
+                        await member.send(
+                            embed=embed_template(
+                                "showcase",
+                                "⏰ LFG starting soon",
+                                f"Your **{mission}** squad is scheduled for <t:{int(sched_dt.timestamp())}:R>.\n"
+                                f"Head to your LFG post to rally your squad.",
+                                category="community",
+                                footer=footer_for("community_lfg"),
+                                client=bot,
+                            ),
+                        )
+                    async with aiosqlite.connect(DB_PATH) as db:
+                        await db.execute(
+                            "UPDATE lfg_posts SET reminder_sent=1 WHERE id=?",
+                            (lfg_id,),
+                        )
+                        await db.commit()
+                except Exception as e:
+                    logger.debug("[lfg_reminder] %s: %s", lfg_id, e)
+        except Exception as e:
+            logger.error(f"Error in lfg_scheduled_reminder_loop: {e}", exc_info=True)
+
+    @lfg_scheduled_reminder_loop.before_loop
+    async def before_lfg_scheduled_reminder_loop():
         await bot.wait_until_ready()
 
     @tasks.loop(hours=1)
@@ -2828,6 +2896,9 @@ def setup_tasks(bot):
     from tasks.digest_loop import create_digest_loop
     digest_dm_loop = create_digest_loop(bot)
 
+    from tasks.weekly_recap_loop import create_weekly_recap_loop
+    weekly_recap_loop = create_weekly_recap_loop(bot)
+
     # Start all tasks with error handling
     tasks_to_start = [
         ('temp_vc_cleanup', temp_vc_cleanup),
@@ -2842,6 +2913,7 @@ def setup_tasks(bot):
         ('baro_live_update_loop', baro_live_update_loop),
         ('warframe_achievement_roles_loop', warframe_achievement_roles_loop),
         ('lfg_expire_loop', lfg_expire_loop),
+        ('lfg_scheduled_reminder_loop', lfg_scheduled_reminder_loop),
         ('trading_expire_loop', trading_expire_loop),
         ('pet_decay_reminder_loop', pet_decay_reminder_loop),
         ('daily_streak_reminder_loop', daily_streak_reminder_loop),
@@ -2861,6 +2933,7 @@ def setup_tasks(bot):
         ('forum_check_loop', forum_check_loop),
         ('youtube_check_loop', youtube_check_loop),
         ('digest_dm_loop', digest_dm_loop),
+        ('weekly_recap_loop', weekly_recap_loop),
     ]
     
     started_tasks = {}

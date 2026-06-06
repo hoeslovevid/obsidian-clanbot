@@ -332,6 +332,7 @@ class ComplaintModView(discord.ui.View):
         self.add_item(discord.ui.Button(label="Close Docket", style=discord.ButtonStyle.success, emoji="🔒", custom_id=f"complaints:{case_id}:resolve"))
         self.add_item(discord.ui.Button(label="Dismiss", style=discord.ButtonStyle.secondary, emoji="❌", custom_id=f"complaints:{case_id}:reject"))
         self.add_item(discord.ui.Button(label="Request Evidence", style=discord.ButtonStyle.danger, emoji="❗", custom_id=f"complaints:{case_id}:needinfo"))
+        self.add_item(discord.ui.Button(label="Open Ticket", style=discord.ButtonStyle.secondary, emoji="🎫", custom_id=f"complaints:{case_id}:ticket"))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         member = interaction.user
@@ -468,7 +469,8 @@ class RSVPView(discord.ui.View):
 
         embed = interaction.message.embeds[0]
         summary = self.format_rsvp_summary(counts)
-        embed.set_footer(text=summary)
+        from core.embed_footers import footer_for
+        embed.set_footer(text=f"{summary} · {footer_for('community_rsvp')}")
         # Replace or add RSVP field
         rsvp_field_idx = next((i for i, f in enumerate(embed.fields) if f.name == "RSVP"), None)
         if rsvp_field_idx is not None:
@@ -887,19 +889,60 @@ class GiveawayView(discord.ui.View):
 
 
 class ApplicationManageView(discord.ui.View):
-    """View for moderators to manage applications."""
+    """View for moderators to manage applications — pipeline stages + approve/reject."""
     def __init__(self, application_id: int):
         super().__init__(timeout=None)
         self.application_id = application_id
-        
-        # Add buttons with custom_id for persistence
+
+        for label, stage, style in (
+            ("Interview", "interview", discord.ButtonStyle.primary),
+            ("Trial", "trial", discord.ButtonStyle.primary),
+            ("Accept", "accepted", discord.ButtonStyle.success),
+        ):
+            btn = discord.ui.Button(
+                label=label,
+                style=style,
+                custom_id=f"application:{application_id}:stage:{stage}",
+            )
+            btn.callback = self._make_stage_cb(stage, label)
+            self.add_item(btn)
+
         approve_button = discord.ui.Button(label="Approve", style=discord.ButtonStyle.success, emoji="✅", custom_id=f"application:{application_id}:approve")
         approve_button.callback = self.approve_button
         self.add_item(approve_button)
-        
+
         reject_button = discord.ui.Button(label="Reject", style=discord.ButtonStyle.danger, emoji="❌", custom_id=f"application:{application_id}:reject")
         reject_button.callback = self.reject_button
         self.add_item(reject_button)
+
+    def _make_stage_cb(self, stage: str, label: str):
+        async def _cb(interaction: discord.Interaction):
+            if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
+                return await interaction.response.send_message("Mods only.", ephemeral=True)
+            await interaction.response.defer(ephemeral=True)
+            status_map = {
+                "interview": "INTERVIEW",
+                "trial": "TRIAL",
+                "accepted": "ACCEPTED",
+            }
+            new_status = status_map.get(stage, "PENDING")
+            async with aiosqlite.connect(DB_PATH) as db:
+                await db.execute(
+                    "UPDATE applications SET pipeline_stage=?, status=? WHERE id=?",
+                    (stage, new_status if new_status != "ACCEPTED" else "PENDING", self.application_id),
+                )
+                await db.commit()
+            embed = interaction.message.embeds[0] if interaction.message and interaction.message.embeds else None
+            if embed:
+                for i, field in enumerate(embed.fields):
+                    if field.name == "Status":
+                        embed.set_field_at(i, name="Status", value=f"📋 {label}", inline=True)
+                        break
+                else:
+                    embed.add_field(name="Pipeline", value=label, inline=True)
+                await interaction.message.edit(embed=embed, view=self)
+            await interaction.followup.send(f"Stage set to **{label}**.", ephemeral=True)
+        return _cb
     
     async def approve_button(self, interaction: discord.Interaction):
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):

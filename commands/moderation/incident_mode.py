@@ -46,10 +46,15 @@ async def sync_incident_banner(
         if banner_id:
             try:
                 msg = await ch.fetch_message(banner_id)
+                from_ts = await get_guild_setting(guild.id, "incident_mode_until_ts")
+                started = await get_guild_setting(guild.id, "incident_mode_started_at")
+                summary = "Normal operations restored."
+                if started:
+                    summary += f"\n\n**Incident window:** {started[:16]} → cleared <t:{int(now_utc().timestamp())}:R>"
                 await msg.edit(
                     embed=obsidian_embed(
                         "✅ Incident Mode Cleared",
-                        "Normal operations restored. Non-critical commands are available again.",
+                        summary,
                         color=discord.Color.green(),
                         client=client,
                     ),
@@ -111,6 +116,7 @@ async def toggle_incident_mode(
         until = int((now_utc() + timedelta(minutes=max(5, min(duration_minutes, 24 * 60)))).timestamp())
         await set_guild_setting(guild_id, "incident_mode_enabled", "1")
         await set_guild_setting(guild_id, "incident_mode_until_ts", str(until))
+        await set_guild_setting(guild_id, "incident_mode_started_at", now_utc().isoformat())
         if message:
             await set_guild_setting(guild_id, "incident_mode_message", message)
         if guild and client:
@@ -126,6 +132,7 @@ async def toggle_incident_mode(
         await set_guild_setting(guild_id, "incident_mode_enabled", "0")
         await set_guild_setting(guild_id, "incident_mode_until_ts", "0")
         await set_guild_setting(guild_id, "incident_mode_message", "")
+        await set_guild_setting(guild_id, "incident_mode_started_at", "")
         if guild and client:
             await sync_incident_banner(guild, client, enabled=False)
     return new_state
@@ -217,6 +224,7 @@ def setup(bot, group=None):
         until = int((now_utc() + timedelta(minutes=minutes)).timestamp())
         await set_guild_setting(interaction.guild.id, "incident_mode_enabled", "1")
         await set_guild_setting(interaction.guild.id, "incident_mode_until_ts", str(until))
+        await set_guild_setting(interaction.guild.id, "incident_mode_started_at", now_utc().isoformat())
         await set_guild_setting(interaction.guild.id, "incident_mode_message", message or "")
         await sync_incident_banner(
             interaction.guild,

@@ -1,7 +1,7 @@
 """Economy bounties - daily quests for bonus coins."""
 import discord
 from discord import app_commands
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from core.embed_footers import footer_for
 from core.embed_templates import embed_template
@@ -13,13 +13,15 @@ BOUNTY_DEFS = [
     {"id": "daily", "name": "Daily Login", "desc": "Claim your daily reward", "check": "daily", "reward": 25},
     {"id": "earn_100", "name": "Earn 100 Coins", "desc": "Earn 100+ coins today", "check": "earn_100", "reward": 50},
     {"id": "voice_10", "name": "Voice Veteran", "desc": "Spend 10+ minutes in voice", "check": "voice_10", "reward": 40},
+    {"id": "lfg_weekly", "name": "Squad Builder", "desc": "Post 2 LFGs this week (Warframe-linked)", "check": "lfg_weekly", "reward": 75},
 ]
 
 
 async def _get_bounty_progress(guild_id: int, user_id: int) -> dict:
     """Get progress for each bounty type."""
     today = now_utc().date().isoformat()
-    result = {"daily": False, "earn_100": 0, "voice_10": 0}
+    week_start = (now_utc().date() - timedelta(days=now_utc().weekday())).isoformat()
+    result = {"daily": False, "earn_100": 0, "voice_10": 0, "lfg_weekly": 0}
     async with aiosqlite.connect(DB_PATH) as db:
         cur = await db.execute(
             "SELECT 1 FROM daily_claims WHERE guild_id=? AND user_id=? AND last_claim_date=?",
@@ -42,6 +44,14 @@ async def _get_bounty_progress(guild_id: int, user_id: int) -> dict:
         voice_coins = row[0] if row else 0
         from core.config import COINS_PER_MINUTE_VOICE
         result["voice_10"] = int(voice_coins / COINS_PER_MINUTE_VOICE) if COINS_PER_MINUTE_VOICE else 0
+        cur = await db.execute(
+            """
+            SELECT COUNT(*) FROM lfg_posts
+            WHERE guild_id=? AND creator_id=? AND date(created_at) >= ?
+            """,
+            (guild_id, user_id, week_start),
+        )
+        result["lfg_weekly"] = int((await cur.fetchone())[0] or 0)
     return result
 
 
@@ -78,11 +88,15 @@ def setup(bot, group=None):
 
         for b in BOUNTY_DEFS:
             bid = b["id"]
-            target_val = 1 if bid == "daily" else (100 if bid == "earn_100" else 10)
+            target_val = {
+                "daily": 1, "earn_100": 100, "voice_10": 10, "lfg_weekly": 2,
+            }.get(bid, 1)
             if bid == "daily":
                 current_val = 1 if progress["daily"] else 0
             elif bid == "earn_100":
                 current_val = min(int(progress["earn_100"]), 100)
+            elif bid == "lfg_weekly":
+                current_val = min(int(progress["lfg_weekly"]), 2)
             else:
                 current_val = min(int(progress["voice_10"]), 10)
 
@@ -103,6 +117,8 @@ def setup(bot, group=None):
                     progress_label = "0/1"
                 elif bid == "earn_100":
                     progress_label = f"{format_number(current_val)}/100 coins"
+                elif bid == "lfg_weekly":
+                    progress_label = f"{current_val}/2 LFGs"
                 else:
                     progress_label = f"{current_val}/10 min"
                 status_line = f"{bar} {progress_label}"

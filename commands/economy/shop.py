@@ -75,6 +75,11 @@ def setup(bot, group=None):
         items_text = bullet_list(items)
         if len(rows) > 15:
             items_text += f"\n_...and {len(rows) - 15} more_"
+
+        from database import get_guild_setting
+        rotation_week = await get_guild_setting(interaction.guild.id, "shop_rotation_week")
+        if rotation_week:
+            items_text += f"\n\n🔄 **Weekly rotation** — week `{rotation_week}`"
         
         bar_max = 100_000
         pct = min(100, int(100 * balance / bar_max)) if bar_max > 0 else 0

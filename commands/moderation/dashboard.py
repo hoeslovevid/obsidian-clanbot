@@ -62,6 +62,27 @@ async def _build_mod_dashboard_embed(
         """, (guild.id,))
         open_incidents = (await cur.fetchone())[0] or 0
 
+        cur = await db.execute(
+            "SELECT COUNT(*) FROM lfg_posts WHERE guild_id=? AND status='OPEN'",
+            (guild.id,),
+        )
+        open_lfg = int((await cur.fetchone())[0] or 0)
+
+        goal_line = ""
+        try:
+            cur = await db.execute(
+                """
+                SELECT metric, target FROM server_goals
+                WHERE guild_id=? AND completed=0 ORDER BY week_end DESC LIMIT 1
+                """,
+                (guild.id,),
+            )
+            goal_row = await cur.fetchone()
+            if goal_row:
+                goal_line = f"\n**Server goal:** {goal_row[0]} → {goal_row[1]:,}"
+        except Exception:
+            pass
+
         today_iso = date.today().isoformat()
         cur = await db.execute("""
             SELECT COUNT(*) FROM warnings
@@ -95,12 +116,14 @@ async def _build_mod_dashboard_embed(
 
     fields = [
         (
-            "📋 At a glance",
+            "📋 Officer live board",
             f"**Open incidents:** {open_incidents}\n"
+            f"**Open LFG:** {open_lfg}\n"
             f"**Warns today:** {warns_today}\n"
             f"**Incident mode:** {incident_summary}\n"
             f"**Automod:** {automod_summary}"
-            + sla_note,
+            + sla_note
+            + goal_line,
             False,
         ),
     ]

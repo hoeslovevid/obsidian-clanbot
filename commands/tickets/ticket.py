@@ -133,15 +133,34 @@ async def _send_transcript_to_log(
         priority_str = f"\n**Priority:** {(ticket_row['priority'] or 'normal').capitalize()}"
     except (KeyError, IndexError, TypeError):
         priority_str = ""
-    embed = obsidian_embed(
+    sla_lines: list[str] = []
+    try:
+        created = ticket_row["created_at"]
+        first_resp = ticket_row["first_response_at"] if "first_response_at" in ticket_row.keys() else None
+        closed = ticket_row["closed_at"]
+        if created and first_resp:
+            c_dt = datetime.fromisoformat(str(created).replace("Z", "+00:00"))
+            f_dt = datetime.fromisoformat(str(first_resp).replace("Z", "+00:00"))
+            mins = int((f_dt - c_dt).total_seconds() // 60)
+            sla_lines.append(f"First response: **{mins}m**")
+        if created and closed:
+            c_dt = datetime.fromisoformat(str(created).replace("Z", "+00:00"))
+            x_dt = datetime.fromisoformat(str(closed).replace("Z", "+00:00"))
+            mins = int((x_dt - c_dt).total_seconds() // 60)
+            sla_lines.append(f"Time to close: **{mins}m**")
+    except Exception:
+        pass
+    sla_block = ("\n" + " · ".join(sla_lines)) if sla_lines else ""
+
+    embed = ticket_embed(
         "🧾 Ticket Transcript",
         f"**Ticket:** `{ticket_row['ticket_id']}`\n"
         f"**Subject:** {ticket_row['subject']}\n"
         f"**User:** <@{ticket_row['user_id']}>\n"
         f"**Channel:** <#{ticket_row['channel_id']}>\n"
         f"**Created:** {_format_dt_iso(ticket_row['created_at'])}\n"
-        f"**Closed:** {_format_dt_iso(ticket_row['closed_at'])}{priority_str}",
-        color=discord.Color.dark_grey(),
+        f"**Closed:** {_format_dt_iso(ticket_row['closed_at'])}{priority_str}{sla_block}",
+        footer=footer_for("community_ticket"),
         client=None,
     )
     msg = await log_channel.send(embed=embed, file=f)
@@ -562,13 +581,27 @@ async def close_ticket(
     except Exception:
         pass
 
-    # Notify in channel
-    close_embed = obsidian_embed(
+    sla_note = ""
+    try:
+        created = ticket_row["created_at"]
+        first_resp = ticket_row["first_response_at"]
+        if created and first_resp:
+            c_dt = datetime.fromisoformat(str(created).replace("Z", "+00:00"))
+            f_dt = datetime.fromisoformat(str(first_resp).replace("Z", "+00:00"))
+            sla_note = f"\n**First response:** {int((f_dt - c_dt).total_seconds() // 60)} minutes"
+        if created:
+            c_dt = datetime.fromisoformat(str(created).replace("Z", "+00:00"))
+            x_dt = datetime.fromisoformat(now_iso.replace("Z", "+00:00"))
+            sla_note += f"\n**Resolution time:** {int((x_dt - c_dt).total_seconds() // 60)} minutes"
+    except Exception:
+        pass
+
+    close_embed = ticket_embed(
         f"Ticket `{ticket_row['ticket_id']}` Closed",
         f"**Closed by:** <@{closer_id}>\n"
-        f"**Reason:** {reason or 'No reason provided'}\n\n"
-        "This channel will be archived in 10 seconds.",
-        color=discord.Color.orange(),
+        f"**Reason:** {reason or 'No reason provided'}{sla_note}\n\n"
+        "Transcript saved to the log channel. This channel will be archived in 10 seconds.",
+        footer=footer_for("community_ticket"),
         client=interaction.client,
     )
     try:

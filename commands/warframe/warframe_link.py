@@ -135,6 +135,30 @@ def setup(bot, group=None):
 
         await link_steam_account(interaction.guild.id, interaction.user.id, steam_id, warframe_ign=ign)
 
+        from database import get_guild_setting, now_utc
+        import aiosqlite
+        from core.config import DB_PATH
+        verify_mode = await get_guild_setting(interaction.guild.id, "ign_verify_mode") or "auto"
+        status = "verified" if verify_mode.strip().lower() == "auto" else "pending"
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute(
+                """
+                INSERT OR REPLACE INTO ign_verifications
+                (guild_id, user_id, ign, status, verified_by, verified_at, created_at)
+                VALUES (?,?,?,?,?,?,?)
+                """,
+                (
+                    interaction.guild.id,
+                    interaction.user.id,
+                    ign,
+                    status,
+                    interaction.user.id if status == "verified" else None,
+                    now_utc().isoformat() if status == "verified" else None,
+                    now_utc().isoformat(),
+                ),
+            )
+            await db.commit()
+
         # Set server nickname to in-game name
         nick_set = False
         if isinstance(interaction.user, discord.Member):
@@ -173,10 +197,12 @@ def setup(bot, group=None):
                             pass
         if hours is None:
             nick_note = f"Your nickname has been set to **{ign}**.\n\n" if nick_set else ""
+            badge = "✅ IGN verified." if status == "verified" else "⏳ IGN pending mod verification."
             return await interaction.followup.send(
                 embed=obsidian_embed(
                     "⚠️ Linked (Playtime Private)",
-                    f"{nick_note}Your Steam account is linked, but playtime could not be fetched.\n\n"
+                    f"{nick_note}{badge}\n"
+                    "Your Steam account is linked, but playtime could not be fetched.\n\n"
                     "**Set your Game details to Public:**\n"
                     "Steam → Profile → Edit Profile → Privacy Settings → Game details: **Public**\n\n"
                     "Roles will be assigned once your playtime is visible.",
@@ -187,11 +213,13 @@ def setup(bot, group=None):
             )
 
         nick_msg = f"Your nickname has been set to **{ign}**.\n\n" if nick_set else ""
+        badge = "✅ IGN verified on your profile." if status == "verified" else "⏳ IGN pending mod verification."
         return await interaction.followup.send(
             embed=obsidian_embed(
                 "✅ Warframe Account Linked",
                 f"Your Steam account is linked. Warframe playtime: **{hours:,} hours**.\n\n"
-                f"{nick_msg}You'll receive roles automatically as you hit playtime milestones (if configured by moderators).",
+                f"{nick_msg}{badge}\n"
+                "You'll receive roles automatically as you hit playtime milestones (if configured by moderators).",
                 color=discord.Color.green(),
                 client=interaction.client,
             ),

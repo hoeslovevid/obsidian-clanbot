@@ -12,16 +12,32 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-06"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Batch A** — profile/shop/pets/mod context use showcase templates; View Profile matches `/profile` card",
-    "**Batch B** — V2 LayoutView default for help, menu, profile, wallet; mobile-friendly density + contextual footers",
-    "**Batch C** — `/warframe hub` refreshable hub; `/help` leads with 8 member essentials then category browse",
-    "**Batch D** — Warn absorbed into Mod Context; **Open Ticket About User** context menu (5-cap preserved)",
-    "**Batch E** — setup wizard adds changelog channel + console/feature-toggle next steps; error **Copy code** button",
-    "**Batch F** — `CATEGORY_THUMBNAIL_OVERRIDES` / `EMBED_THUMB_*` env docs; banner via `EMBED_BANNER_URL` on Railway",
+    "**Warframe hub** — Daily Ops, relic planner, Baro wishlist overlap, Twitch line, platform-aware fetches",
+    "**Weekly recap** — Optional Sunday channel post (`recap_channel_id` guild setting)",
+    "**LFG** — Role tags, scheduled squads + 15m reminder, interest subscribe (`/lfg subscribe`), thread summary on expiry",
+    "**Tickets** — Transcript showcase embed with SLA timings; complaint → ticket escalation button",
+    "**Clan ops** — Dojo public board, mentorship pairing (`/admin mentorship`), officer live board on dashboard",
+    "**Profile** — IGN verification badge, Steam playtime, live server-goal multiplier hint",
+    "**Economy** — Weekly LFG bounty; shop rotation week hint; pet gift already available via `/pets gift`",
+    "**Applications** — Pipeline stage buttons (Interview → Trial → Accept); incident post-summary embed",
+    "**Build** — Weapon/frame autocomplete + Overframe deep links",
+    "**Presence** — `PRESENCE_MODE` env: default, menu, degraded, event",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "1.93.0",
+        "date": "2026-06-06",
+        "changes": [
+            "**Batch A** — profile/shop/pets/mod context use showcase templates; View Profile matches `/profile` card",
+            "**Batch B** — V2 LayoutView default for help, menu, profile, wallet; mobile-friendly density + contextual footers",
+            "**Batch C** — `/warframe hub` refreshable hub; `/help` leads with 8 member essentials then category browse",
+            "**Batch D** — Warn absorbed into Mod Context; **Open Ticket About User** context menu (5-cap preserved)",
+            "**Batch E** — setup wizard adds changelog channel + console/feature-toggle next steps; error **Copy code** button",
+            "**Batch F** — `CATEGORY_THUMBNAIL_OVERRIDES` / `EMBED_THUMB_*` env docs; banner via `EMBED_BANNER_URL` on Railway",
+        ],
+    },
     {
         "version": "1.92.0",
         "date": "2026-06-04",

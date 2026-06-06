@@ -1640,6 +1640,74 @@ async def init_db() -> None:
             created_at TEXT NOT NULL
         )""")
 
+        # v1.94 — Baro wishlist, LFG interest, mentorship, IGN verification
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS baro_wishlist (
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            item_name TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (guild_id, user_id, item_name)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS lfg_interest_subscriptions (
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            tag TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (guild_id, user_id, tag)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS mentorship_pairs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            mentor_id INTEGER NOT NULL,
+            mentee_id INTEGER NOT NULL,
+            thread_id INTEGER,
+            status TEXT NOT NULL DEFAULT 'active',
+            created_by INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE(guild_id, mentee_id)
+        )""")
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS ign_verifications (
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            ign TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            verified_by INTEGER,
+            verified_at TEXT,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (guild_id, user_id)
+        )""")
+
+        try:
+            cur = await db.execute("PRAGMA table_info(lfg_posts)")
+            lfg_cols = [col[1] for col in await cur.fetchall()]
+            if "role_tags" not in lfg_cols:
+                await db.execute("ALTER TABLE lfg_posts ADD COLUMN role_tags TEXT")
+            if "scheduled_at" not in lfg_cols:
+                await db.execute("ALTER TABLE lfg_posts ADD COLUMN scheduled_at TEXT")
+            if "reminder_sent" not in lfg_cols:
+                await db.execute("ALTER TABLE lfg_posts ADD COLUMN reminder_sent INTEGER DEFAULT 0")
+            await db.commit()
+        except Exception as e:
+            logger.warning(f"[db] LFG v1.94 column migration: {e}")
+
+        try:
+            cur = await db.execute("PRAGMA table_info(applications)")
+            app_cols = [col[1] for col in await cur.fetchall()]
+            if "pipeline_stage" not in app_cols:
+                await db.execute(
+                    "ALTER TABLE applications ADD COLUMN pipeline_stage TEXT DEFAULT 'applied'"
+                )
+            await db.commit()
+        except Exception as e:
+            logger.warning(f"[db] applications pipeline_stage migration: {e}")
+
         # Create indexes for common queries to improve performance
         logger.info("[db] Creating indexes for performance optimization...")
         

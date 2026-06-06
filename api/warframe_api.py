@@ -45,6 +45,17 @@ def _wf_stat_url(path: str) -> str:
     return f"{_wf_stat_base_url()}/{path.lstrip('/')}"
 
 
+_VALID_PLATFORMS = frozenset({"pc", "xbox", "ps4", "switch"})
+
+
+def wf_platform_path(platform: str, endpoint: str) -> str:
+    """Build platform-prefixed warframestat.us path (pc/xbox/ps4/switch)."""
+    p = (platform or "pc").strip().lower()
+    if p not in _VALID_PLATFORMS:
+        p = "pc"
+    return f"{p}/{endpoint.lstrip('/')}"
+
+
 import re as _re
 import dateparser  # type: ignore
 from datetime import datetime, timezone, timedelta
@@ -702,20 +713,23 @@ async def get_baro_status() -> Tuple[bool, Optional[Dict[str, Any]]]:
         return (False, data)
 
 
-async def fetch_fissures() -> Optional[List[Dict[str, Any]]]:
+async def fetch_fissures(platform: str = "pc") -> Optional[List[Dict[str, Any]]]:
     """Fetch active Void Fissure missions. Falls back to content.warframe.com world state."""
     from core.cache_utils import get_cached
+    plat = (platform or "pc").strip().lower()
+    cache_key = f"warframe:fissures:{plat}"
     async def _fetch():
         try:
-            data = await _wf_stat_get(_wf_stat_url("pc/fissures"), _api_proxy())
+            data = await _wf_stat_get(_wf_stat_url(wf_platform_path(plat, "fissures")), _api_proxy())
             if data is not None:
                 return [f for f in data if not f.get("expired", False)]
         except Exception as e:
             logger.error("Error fetching fissures: %s: %s", type(e).__name__, e, exc_info=True)
-        # Fallback: parse ActiveMissions from official world state
-        ws = await _fetch_official_world_state()
-        return _ws_to_fissures(ws) if ws else None
-    return await get_cached("warframe:fissures", 60, _fetch)
+        if plat == "pc":
+            ws = await _fetch_official_world_state()
+            return _ws_to_fissures(ws) if ws else None
+        return None
+    return await get_cached(cache_key, 60, _fetch)
 
 
 async def fetch_sortie() -> Optional[Dict[str, Any]]:
@@ -733,40 +747,43 @@ async def fetch_sortie() -> Optional[Dict[str, Any]]:
     return await get_cached("warframe:sortie", 60, _fetch)
 
 
-async def fetch_steel_path() -> Optional[Dict[str, Any]]:
+async def fetch_steel_path(platform: str = "pc") -> Optional[Dict[str, Any]]:
     """Fetch Steel Path data (current missions). Cached 60s."""
     from core.cache_utils import get_cached
+    plat = (platform or "pc").strip().lower()
     async def _fetch():
         try:
-            return await _wf_stat_get(_wf_stat_url("pc/steelPath"), _api_proxy())
+            return await _wf_stat_get(_wf_stat_url(wf_platform_path(plat, "steelPath")), _api_proxy())
         except Exception as e:
             logger.error("Error fetching steel path: %s: %s", type(e).__name__, e, exc_info=True)
             return None
-    return await get_cached("warframe:steelPath", 60, _fetch)
+    return await get_cached(f"warframe:steelPath:{plat}", 60, _fetch)
 
 
-async def fetch_arbitration() -> Optional[Dict[str, Any]]:
+async def fetch_arbitration(platform: str = "pc") -> Optional[Dict[str, Any]]:
     """Fetch current Arbitration. Cached 60s."""
     from core.cache_utils import get_cached
+    plat = (platform or "pc").strip().lower()
     async def _fetch():
         try:
-            return await _wf_stat_get(_wf_stat_url("pc/arbitration"), _api_proxy())
+            return await _wf_stat_get(_wf_stat_url(wf_platform_path(plat, "arbitration")), _api_proxy())
         except Exception as e:
             logger.error("Error fetching arbitration: %s: %s", type(e).__name__, e, exc_info=True)
             return None
-    return await get_cached("warframe:arbitration", 60, _fetch)
+    return await get_cached(f"warframe:arbitration:{plat}", 60, _fetch)
 
 
-async def fetch_nightwave() -> Optional[Dict[str, Any]]:
+async def fetch_nightwave(platform: str = "pc") -> Optional[Dict[str, Any]]:
     """Fetch Nightwave challenges. Cached 300s (updates daily)."""
     from core.cache_utils import get_cached
+    plat = (platform or "pc").strip().lower()
     async def _fetch():
         try:
-            return await _wf_stat_get(_wf_stat_url("pc/nightwave"), _api_proxy())
+            return await _wf_stat_get(_wf_stat_url(wf_platform_path(plat, "nightwave")), _api_proxy())
         except Exception as e:
             logger.error("Error fetching nightwave: %s: %s", type(e).__name__, e, exc_info=True)
             return None
-    return await get_cached("warframe:nightwave", 300, _fetch)
+    return await get_cached(f"warframe:nightwave:{plat}", 300, _fetch)
 
 
 async def fetch_invasions() -> Optional[list]:

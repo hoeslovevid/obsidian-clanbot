@@ -7,8 +7,9 @@ from datetime import datetime, timezone
 from core.embed_footers import footer_for
 from core.utils import obsidian_embed, is_mod, format_timestamp_readable, EMBED_FOOTER_DEFAULT, render_bar, EMBED_COLORS
 from database import (
-    DB_PATH, now_utc, get_user_balance, get_user_xp, 
-    calculate_level, xp_for_next_level
+    DB_PATH, now_utc, get_user_balance, get_user_xp,
+    calculate_level, xp_for_next_level, get_guild_setting,
+    get_linked_steam_id,
 )
 import aiosqlite
 
@@ -69,8 +70,12 @@ async def get_user_profile_data(guild_id: int, user_id: int) -> dict:
         "title": None,
         "equipped_badge": None,  # tuple (emoji, name)
         "bio": None,
+        "ign_verified": False,
+        "warframe_ign": None,
+        "steam_playtime": None,
+        "goal_multiplier": None,
     }
-    
+
     g, u = guild_id, user_id
     async with aiosqlite.connect(DB_PATH) as db:
         # Query 1: Main stats via LEFT JOINs (single scan instead of 17 scalar subqueries)
@@ -190,6 +195,34 @@ async def get_user_profile_data(guild_id: int, user_id: int) -> dict:
         )
         bio_row = await cur.fetchone()
         data["bio"] = bio_row[0].strip() if bio_row and bio_row[0] else None
+
+        cur = await db.execute(
+            "SELECT ign, status FROM ign_verifications WHERE guild_id=? AND user_id=?",
+            (g, u),
+        )
+        ign_row = await cur.fetchone()
+        if ign_row:
+            data["warframe_ign"] = ign_row[0]
+            data["ign_verified"] = str(ign_row[1]).lower() == "verified"
+
+    steam_id = await get_linked_steam_id(g, u)
+    if steam_id:
+        try:
+            from api.warframe_api import fetch_steam_warframe_playtime
+            data["steam_playtime"] = await fetch_steam_warframe_playtime(steam_id)
+        except Exception:
+            pass
+
+    xp_until = await get_guild_setting(g, "xp_multiplier_until")
+    coins_until = await get_guild_setting(g, "coins_multiplier_until")
+    now_ts = int(now_utc().timestamp())
+    mult_parts = []
+    if xp_until and str(xp_until).isdigit() and int(xp_until) > now_ts:
+        mult_parts.append("XP boost live")
+    if coins_until and str(coins_until).isdigit() and int(coins_until) > now_ts:
+        mult_parts.append("Coin boost live")
+    if mult_parts:
+        data["goal_multiplier"] = " · ".join(mult_parts)
 
     return data
 
@@ -323,6 +356,14 @@ async def build_profile_embed(
 
     if profile_data.get("bio"):
         desc_lines.append(f"*{profile_data['bio']}*")
+    if profile_data.get("ign_verified") and profile_data.get("warframe_ign"):
+        desc_lines.append(f"✅ **Verified IGN:** {profile_data['warframe_ign']}")
+    elif profile_data.get("warframe_ign"):
+        desc_lines.append(f"🎮 IGN: {profile_data['warframe_ign']}")
+    if profile_data.get("steam_playtime") is not None:
+        desc_lines.append(f"🎮 Warframe: **{profile_data['steam_playtime']:,}h** on Steam")
+    if profile_data.get("goal_multiplier"):
+        desc_lines.append(f"🎯 {profile_data['goal_multiplier']}")
     if profile_data.get("equipped_badge"):
         emoji, name = profile_data["equipped_badge"]
         desc_lines.append(f"{emoji or '🏆'} **{name or 'Badge'}**")

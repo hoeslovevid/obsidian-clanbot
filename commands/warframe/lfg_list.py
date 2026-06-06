@@ -276,3 +276,57 @@ def setup(bot, group=None):
                 per_page=ITEMS_PER_PAGE,
             )
             await interaction.followup.send(embed=view._build_embed(), view=view, ephemeral=True)
+
+    subscribe_decorator = (
+        group.command(
+            name="subscribe",
+            description="Get a DM when a matching LFG is posted (DPS, Sortie, Steel Path, etc.).",
+        )
+        if group
+        else None
+    )
+    if subscribe_decorator:
+        @subscribe_decorator
+        @app_commands.describe(
+            tag="Role/mission tag to watch (e.g. DPS, Steel Path, Sortie)",
+            action="Subscribe or unsubscribe from this tag",
+        )
+        @app_commands.choices(action=[
+            app_commands.Choice(name="Subscribe", value="on"),
+            app_commands.Choice(name="Unsubscribe", value="off"),
+        ])
+        async def lfg_subscribe(
+            interaction: discord.Interaction,
+            tag: str,
+            action: app_commands.Choice[str],
+        ):
+            if not interaction.guild:
+                return await interaction.response.send_message("Server only.", ephemeral=True)
+            from core.lfg_extras import LFG_ROLE_TAGS
+            from database import now_utc
+
+            clean = tag.strip()[:40]
+            if not clean:
+                return await interaction.response.send_message("Tag required.", ephemeral=True)
+            async with aiosqlite.connect(DB_PATH) as db:
+                if action.value == "off":
+                    await db.execute(
+                        "DELETE FROM lfg_interest_subscriptions WHERE guild_id=? AND user_id=? AND tag=?",
+                        (interaction.guild.id, interaction.user.id, clean),
+                    )
+                    await db.commit()
+                    return await interaction.response.send_message(
+                        f"Unsubscribed from **{clean}** LFG alerts.", ephemeral=True,
+                    )
+                await db.execute(
+                    "INSERT OR REPLACE INTO lfg_interest_subscriptions "
+                    "(guild_id, user_id, tag, created_at) VALUES (?,?,?,?)",
+                    (interaction.guild.id, interaction.user.id, clean, now_utc().isoformat()),
+                )
+                await db.commit()
+            hints = ", ".join(LFG_ROLE_TAGS[:6])
+            await interaction.response.send_message(
+                f"Subscribed to **{clean}** — you'll get a DM when a matching LFG is posted.\n"
+                f"_Popular tags: {hints}_",
+                ephemeral=True,
+            )

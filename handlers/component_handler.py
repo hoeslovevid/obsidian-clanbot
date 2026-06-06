@@ -116,6 +116,32 @@ async def handle_component(bot: discord.Client, interaction: discord.Interaction
                     await interaction.followup.send(msg, ephemeral=True)
                     return
 
+                if action == "ticket":
+                    try:
+                        await interaction.response.defer(ephemeral=True)
+                    except (discord.errors.NotFound, discord.errors.InteractionResponded, discord.errors.HTTPException):
+                        return
+                    async with aiosqlite.connect(DB_PATH) as db:
+                        cur = await db.execute(
+                            "SELECT user_id, category FROM complaints WHERE guild_id=? AND case_id=?",
+                            (interaction.guild.id, case_id),
+                        )
+                        row = await cur.fetchone()
+                    if not row:
+                        return await interaction.followup.send("Case not found.", ephemeral=True)
+                    reporter_id, category = int(row[0]), row[1] or "complaint"
+                    from commands.tickets.ticket import open_support_ticket
+                    await open_support_ticket(
+                        interaction,
+                        f"[{case_id}] {category}",
+                        tag_val="complaint-escalation",
+                        priority_val="urgent",
+                        channel_preamble=(
+                            f"Escalated from complaint **{case_id}** — reporter <@{reporter_id}>."
+                        ),
+                    )
+                    return
+
                 if action == "needinfo":
                     # Check if interaction is still valid
                     if interaction.response.is_done():

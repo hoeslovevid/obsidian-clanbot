@@ -16,6 +16,7 @@ CHANNEL_CONFIGS: List[Tuple[str, str, str, str]] = [
     ("complaints_channel_id", "Complaints (Docket)", "inheritor-docket", "text"),
     ("complaints_log_channel_id", "Complaints Log (Ledger)", "docket-ledger", "text"),
     ("changelog_channel_id", "Changelog / Updates", "bot-updates", "text"),
+    ("recap_channel_id", "Weekly Clan Recap", "clan-recap", "text"),
     ("temp_vc_category_id", "Temp VC Category", "Temp VCs", "category"),
 ]
 

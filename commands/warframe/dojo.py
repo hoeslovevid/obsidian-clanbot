@@ -4,9 +4,11 @@ from discord import app_commands
 from typing import Optional
 import json
 
+from core.embed_footers import footer_for
+from core.embed_templates import embed_template
 from core.utils import obsidian_embed, is_mod, render_bar
 from core.dojo_utils import compute_dojo_progress
-from database import DB_PATH, now_utc
+from database import DB_PATH, now_utc, set_guild_setting
 import aiosqlite
 
 
@@ -28,9 +30,19 @@ def setup(bot, group=None):
         app_commands.Choice(name="update", value="update"),
         app_commands.Choice(name="complete", value="complete"),
         app_commands.Choice(name="list", value="list"),
+        app_commands.Choice(name="board", value="board"),
         app_commands.Choice(name="remove", value="remove"),
     ])
-    async def dojo_research(interaction: discord.Interaction, action: str, research_name: Optional[str] = None, research_type: Optional[str] = None, required_resources: Optional[str] = None, current_resources: Optional[str] = None):
+    @app_commands.describe(channel="Channel for public board post (board action only)")
+    async def dojo_research(
+        interaction: discord.Interaction,
+        action: str,
+        research_name: Optional[str] = None,
+        research_type: Optional[str] = None,
+        required_resources: Optional[str] = None,
+        current_resources: Optional[str] = None,
+        channel: Optional[discord.TextChannel] = None,
+    ):
         """Manage dojo research tracking."""
         if not interaction.guild:
             return await interaction.response.send_message(
@@ -199,6 +211,59 @@ def setup(bot, group=None):
                     ephemeral=True
                 )
             
+            elif action == "board":
+                cur = await db.execute("""
+                    SELECT research_name, research_type, status, current_resources, required_resources
+                    FROM dojo_research WHERE guild_id=? AND status != 'completed'
+                    ORDER BY research_name
+                """, (interaction.guild.id,))
+                rows = await cur.fetchall()
+                if not rows:
+                    return await interaction.followup.send(
+                        embed=obsidian_embed(
+                            "🔬 Dojo Board",
+                            "No in-progress research to display.",
+                            color=discord.Color.orange(),
+                            client=interaction.client,
+                        ),
+                        ephemeral=True,
+                    )
+                fields = []
+                for name, rtype, status, current, required in rows[:12]:
+                    pct, summary = compute_dojo_progress(required, current)
+                    bar = render_bar(pct, length=8)
+                    fields.append((f"{name} ({rtype})", f"{bar} **{pct:.0f}%**\n{summary}", False))
+                board_embed = embed_template(
+                    "showcase",
+                    "🏯 Clan Dojo Research",
+                    "Member-facing progress board — mods update via `/warframe dojo_research update`.",
+                    category="warframe",
+                    fields=fields,
+                    footer=footer_for("warframe_hub"),
+                    client=interaction.client,
+                )
+                target = channel
+                if target is None and isinstance(interaction.channel, discord.TextChannel):
+                    target = interaction.channel
+                if target is None:
+                    return await interaction.followup.send("Pick a **channel** for the board.", ephemeral=True)
+                msg = await target.send(embed=board_embed)
+                try:
+                    await msg.pin(reason="Dojo research board")
+                except (discord.Forbidden, discord.HTTPException):
+                    pass
+                await set_guild_setting(interaction.guild.id, "dojo_board_message_id", str(msg.id))
+                await set_guild_setting(interaction.guild.id, "dojo_board_channel_id", str(target.id))
+                return await interaction.followup.send(
+                    embed=obsidian_embed(
+                        "✅ Dojo Board Posted",
+                        f"Pinned research board in {target.mention}.",
+                        color=discord.Color.green(),
+                        client=interaction.client,
+                    ),
+                    ephemeral=True,
+                )
+
             elif action == "remove":
                 if not research_name:
                     return await interaction.followup.send(

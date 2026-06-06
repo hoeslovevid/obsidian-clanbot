@@ -426,7 +426,18 @@ class LFGView(discord.ui.View):
                 pass
 
 
-async def create_lfg_post(bot, interaction, mission_type: str, max_players: int, duration_hours: int, description: str, ping_role_id: int | None):
+async def create_lfg_post(
+    bot,
+    interaction,
+    mission_type: str,
+    max_players: int,
+    duration_hours: int,
+    description: str,
+    ping_role_id: int | None,
+    *,
+    role_tags: str | None = None,
+    scheduled_at: str | None = None,
+):
     """Create an LFG post. Used by both /lfg and the Quick LFG context menu."""
     from core.utils import get_mod_role
 
@@ -458,10 +469,17 @@ async def create_lfg_post(bot, interaction, mission_type: str, max_players: int,
         except Exception:
             pass
 
+    tags_clean = (role_tags or "").strip()[:200] or None
+    sched_clean = (scheduled_at or "").strip()[:80] or None
+
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("""
-            INSERT INTO lfg_posts (guild_id, channel_id, message_id, creator_id, mission_type, player_count, max_players, description, created_at, expires_at, status, ping_role_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?)
+            INSERT INTO lfg_posts (
+                guild_id, channel_id, message_id, creator_id, mission_type, player_count,
+                max_players, description, created_at, expires_at, status, ping_role_id,
+                role_tags, scheduled_at, reminder_sent
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?, 0)
         """, (
             interaction.guild.id,
             interaction.channel.id,
@@ -474,6 +492,8 @@ async def create_lfg_post(bot, interaction, mission_type: str, max_players: int,
             datetime.now(timezone.utc).isoformat(),
             expires_at.isoformat(),
             int(ping_role_id or 0),
+            tags_clean,
+            sched_clean,
         ))
         await db.commit()
         cur = await db.execute("SELECT last_insert_rowid()")
@@ -488,6 +508,10 @@ async def create_lfg_post(bot, interaction, mission_type: str, max_players: int,
     ]
     if description:
         fields.append(("📝 Notes", description[:500], False))
+    if tags_clean:
+        fields.append(("🏷️ Roles", tags_clean, True))
+    if sched_clean:
+        fields.append(("🕐 Scheduled", sched_clean, True))
     fields.append(("👥 Players", f"1. {interaction.user.display_name}\n\n_{max_players - 1} slot(s) remaining_", False))
 
     # Item 35: cycle-aware nudge for location-coupled missions. Silent on failure.
@@ -551,6 +575,18 @@ async def create_lfg_post(bot, interaction, mission_type: str, max_players: int,
         )
         await db.commit()
 
+    try:
+        from core.lfg_extras import notify_lfg_interest
+        await notify_lfg_interest(
+            bot, interaction.guild,
+            mission_type=mission_name,
+            role_tags=tags_clean,
+            lfg_id=lfg_id,
+            creator_id=interaction.user.id,
+        )
+    except Exception:
+        pass
+
 
 def setup(bot, group=None):
     """Register the lfg command."""
@@ -584,7 +620,9 @@ def setup(bot, group=None):
         max_players="Maximum number of players needed (default: 4)",
         description="Optional description or notes",
         duration_hours="Auto-expire after this many hours (default: 24, max: 168)",
-        role_ping="Optional role to ping (mention or ID). If omitted, uses server default if set."
+        role_ping="Optional role to ping (mention or ID). If omitted, uses server default if set.",
+        role_tags="Squad roles — DPS, Support, Steel Path, Sortie, etc. (comma-separated)",
+        scheduled_at="When you plan to run (e.g. today 8pm) — reminder ~15m before",
     )
     @app_commands.choices(mission_type=[
         app_commands.Choice(name=mt, value=mt) for mt in MISSION_TYPES
@@ -595,7 +633,9 @@ def setup(bot, group=None):
         max_players: int = 4,
         description: str = "",
         duration_hours: int = 24,
-        role_ping: str = ""
+        role_ping: str = "",
+        role_tags: str = "",
+        scheduled_at: str = "",
     ):
         """Create an LFG post for a Warframe mission."""
         if not interaction.guild:
@@ -622,4 +662,9 @@ def setup(bot, group=None):
             except Exception:
                 ping_role_id = None
 
-        await create_lfg_post(bot, interaction, mission_type.value, max_players, duration_hours, description or "", ping_role_id)
+        await create_lfg_post(
+            bot, interaction, mission_type.value, max_players, duration_hours,
+            description or "", ping_role_id,
+            role_tags=role_tags or None,
+            scheduled_at=scheduled_at or None,
+        )

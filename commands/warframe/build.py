@@ -3,9 +3,20 @@ import urllib.parse
 import discord  # type: ignore
 from discord import app_commands  # type: ignore
 
+from core.embed_footers import footer_for
+from core.embed_templates import embed_template
 from core.utils import obsidian_embed
 
-OVERFRAME_BASE = "https://overframe.gg/builds"
+OVERFRAME_BASE = "https://overframe.gg/build"
+OVERFRAME_SEARCH = "https://overframe.gg/builds"
+
+POPULAR_ITEMS = [
+    "Saryn", "Wisp", "Nekros", "Khora", "Hildryn", "Protea", "Gara", "Volt",
+    "Soma Prime", "Kuva Bramma", "Kuva Nukor", "Tenet Arca Plasmor", "Nikana Prime",
+    "Broken War", "Kuva Zarr", "Acceltra", "Laetum", "Phenmor", "Pax Securus",
+    "Amar's Anguish", "Revenant", "Baruuk", "Chroma", "Inaros", "Harrow",
+]
+
 BUILD_TIPS = {
     "warframe": (
         "**Modding tips:**\n"
@@ -40,6 +51,12 @@ BUILD_TIPS = {
 }
 
 
+async def item_autocomplete(interaction: discord.Interaction, current: str):
+    cur = (current or "").lower()
+    matches = [i for i in POPULAR_ITEMS if not cur or cur in i.lower()]
+    return [app_commands.Choice(name=m, value=m) for m in matches[:25]]
+
+
 def setup(bot, group=None):
     """Register the build command."""
     command_decorator = (
@@ -55,6 +72,7 @@ def setup(bot, group=None):
     )
 
     @command_decorator
+    @app_commands.autocomplete(item=item_autocomplete)
     @app_commands.choices(
         category=[
             app_commands.Choice(name="Warframe", value="warframe"),
@@ -81,20 +99,22 @@ def setup(bot, group=None):
                 ephemeral=True,
             )
 
-        url = f"{OVERFRAME_BASE}?search={urllib.parse.quote(search)}"
+        slug = urllib.parse.quote(search.replace(" ", "-").lower())
+        deep_url = f"{OVERFRAME_BASE}/{slug}"
+        search_url = f"{OVERFRAME_SEARCH}?search={urllib.parse.quote(search)}"
         tips = BUILD_TIPS.get(category_val, BUILD_TIPS["warframe"])
 
         fields = [
-            ("Link", f"[Browse builds on Overframe.gg]({url})", False),
+            ("Overframe", f"[Direct build page]({deep_url})\n[Search all builds]({search_url})", False),
             ("Modding tips", tips[:1024], False),
         ]
-        embed = obsidian_embed(
+        embed = embed_template(
+            "warframe_status",
             f"🔧 Build: {search}",
-            "",
-            category="warframe",
+            f"Community builds for **{search}** on Overframe.gg",
+            variant="world_state",
             fields=fields,
-            thumbnail=interaction.guild.icon.url if interaction.guild and interaction.guild.icon else None,
-            footer=f"Category: {category_val} · Community builds may vary",
+            footer=f"{footer_for('warframe_status')} · Category: {category_val}",
             client=interaction.client,
         )
         await interaction.response.send_message(embed=embed)
