@@ -10,16 +10,25 @@ from __future__ import annotations
 from core.config import BOT_CHANGELOG, BOT_VERSION
 
 # Current release (version string comes from BOT_VERSION only).
-CURRENT_RELEASE_DATE = "2026-06-06"
+CURRENT_RELEASE_DATE = "2026-06-07"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Cycles live panel** — `/wfnotify cycle_panel` posts a pinned, auto-updating embed (Cetus, Fortuna, Deimos + progress bars)",
-    "**Panel-only mode** — guilds with a live panel skip cycle flip ping spam; background loop refreshes every few minutes",
-    "**Notify setup** — `/wfnotify setup` hints to post the live panel after setting a cycles channel",
-    "**Config** — `CYCLE_LIVE_UPDATE_MINUTES` (default 5) controls panel refresh interval",
+    "**Perf** — stale-while-revalidate cache for `/fissures` and `/warframe alerts` (instant response while API refreshes in background)",
+    "**Perf** — `warframe_cache_warm_loop` prefetches fissures/alerts every minute; warm on bot ready",
+    "**Config** — `WARFRAME_CACHE_STALE_SECONDS` (default 300), `WARFRAME_CACHE_WARM_MINUTES` (default 1)",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "1.98.0",
+        "date": "2026-06-06",
+        "changes": [
+            "**Cycles live panel** — `/wfnotify cycle_panel` posts a pinned, auto-updating embed (Cetus, Fortuna, Deimos + progress bars)",
+            "**Panel-only mode** — guilds with a live panel skip cycle flip ping spam; background loop refreshes every few minutes",
+            "**Notify setup** — `/wfnotify setup` hints to post the live panel after setting a cycles channel",
+            "**Config** — `CYCLE_LIVE_UPDATE_MINUTES` (default 5) controls panel refresh interval",
+        ],
+    },
     {
         "version": "1.97.0",
         "date": "2026-06-06",

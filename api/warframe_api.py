@@ -25,6 +25,17 @@ def _wf_stat_retries() -> int:
     return int(v) if v.isdigit() and int(v) >= 1 else 2  # 2 retries default (was 4)
 WARFRAME_STAT_RETRIES = _wf_stat_retries()
 
+
+def _warframe_cache_stale_seconds() -> float:
+    """Serve stale cached fissures/alerts while refreshing (avoids 4s+ slash waits)."""
+    v = os.environ.get("WARFRAME_CACHE_STALE_SECONDS", "300").strip()
+    try:
+        n = float(v)
+        return max(0.0, n)
+    except ValueError:
+        return 300.0
+
+
 # Optional proxy for Warframe APIs (e.g. when datacenter IP gets 404)
 def _market_proxy() -> Optional[str]:
     return os.environ.get("WARFRAME_MARKET_PROXY") or os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY") or None
@@ -729,7 +740,7 @@ async def fetch_fissures(platform: str = "pc") -> Optional[List[Dict[str, Any]]]
             ws = await _fetch_official_world_state()
             return _ws_to_fissures(ws) if ws else None
         return None
-    return await get_cached(cache_key, 60, _fetch)
+    return await get_cached(cache_key, 60, _fetch, stale_seconds=_warframe_cache_stale_seconds())
 
 
 async def fetch_sortie() -> Optional[Dict[str, Any]]:
@@ -1026,7 +1037,12 @@ async def fetch_alerts() -> Optional[List[Dict[str, Any]]]:
         ws = await _fetch_official_world_state()
         return _ws_to_alerts(ws) if ws else None
 
-    return await get_cached("warframe:alerts", 60, _fetch)
+    return await get_cached("warframe:alerts", 60, _fetch, stale_seconds=_warframe_cache_stale_seconds())
+
+
+async def warm_hot_warframe_endpoints() -> None:
+    """Prefetch fissures + alerts so member slash commands hit warm cache."""
+    await asyncio.gather(fetch_fissures(), fetch_alerts(), return_exceptions=True)
 
 
 # Warframe Steam App ID (for playtime lookup)

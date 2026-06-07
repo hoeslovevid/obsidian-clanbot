@@ -1200,6 +1200,24 @@ def setup_tasks(bot):
     async def before_cycle_live_update_loop():
         await bot.wait_until_ready()
 
+    _WF_WARM_MINUTES = max(1, int(os.getenv("WARFRAME_CACHE_WARM_MINUTES", "1") or "1"))
+
+    @tasks.loop(minutes=_WF_WARM_MINUTES)
+    async def warframe_cache_warm_loop():
+        """Keep fissures/alerts cache warm so /fissures and /warframe alerts respond quickly."""
+        try:
+            if not bot.is_ready():
+                return
+            from api.warframe_api import warm_hot_warframe_endpoints
+
+            await warm_hot_warframe_endpoints()
+        except Exception as e:
+            logger.debug("[wf-warm] cache warm failed: %s", e)
+
+    @warframe_cache_warm_loop.before_loop
+    async def before_warframe_cache_warm_loop():
+        await bot.wait_until_ready()
+
     @tasks.loop(hours=6)  # Check every 6 hours for Warframe playtime role assignments
     async def warframe_achievement_roles_loop():
         """Assign roles based on Warframe playtime and other in-game achievements."""
@@ -3098,6 +3116,7 @@ def setup_tasks(bot):
         ('baro_check_loop', baro_check_loop),
         ('baro_live_update_loop', baro_live_update_loop),
         ('cycle_live_update_loop', cycle_live_update_loop),
+        ('warframe_cache_warm_loop', warframe_cache_warm_loop),
         ('warframe_achievement_roles_loop', warframe_achievement_roles_loop),
         ('lfg_expire_loop', lfg_expire_loop),
         ('lfg_scheduled_reminder_loop', lfg_scheduled_reminder_loop),

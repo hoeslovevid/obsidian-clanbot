@@ -66,6 +66,12 @@ async def run_startup(bot: discord.Client) -> None:
             from tasks import setup_tasks
             tasks_dict = setup_tasks(bot)
             print(f"[ready] Background tasks initialized: {len(tasks_dict)} tasks")
+            try:
+                from api.warframe_api import warm_hot_warframe_endpoints
+
+                asyncio.create_task(warm_hot_warframe_endpoints())
+            except Exception as warm_err:
+                logger.debug("[ready] Warframe cache warm skipped: %s", warm_err)
         except Exception as e:
             print(f"[ready] ERROR: Failed to setup background tasks: {e}")
             import traceback

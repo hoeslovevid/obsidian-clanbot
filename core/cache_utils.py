@@ -1,30 +1,84 @@
 """
 Simple TTL cache for expensive API calls (Warframe, leaderboards).
+
+Supports stale-while-revalidate and singleflight so slash commands return
+cached data immediately while a background refresh runs.
 """
 import asyncio
+import logging
 import time
-from typing import Any, Optional, Callable, Awaitable, TypeVar
+from typing import Any, Callable, Awaitable, TypeVar
 
 T = TypeVar("T")
 
-# In-memory cache: key -> (value, expiry_timestamp)
+logger = logging.getLogger(__name__)
+
+# key -> (value, expiry_monotonic)
 _cache: dict[str, tuple[Any, float]] = {}
+# key -> monotonic time when value was last fetched successfully
+_fetched_at: dict[str, float] = {}
+# key -> in-flight fetch task (singleflight)
+_inflight: dict[str, asyncio.Task[Any]] = {}
 _lock = asyncio.Lock()
 
 
-async def get_cached(key: str, ttl_seconds: float, fetch: Callable[[], Awaitable[T]]) -> T:
-    """Get value from cache or fetch and cache it. Thread-safe."""
+async def _store(key: str, val: Any, ttl_seconds: float) -> None:
+    now = time.monotonic()
+    async with _lock:
+        _cache[key] = (val, now + ttl_seconds)
+        _fetched_at[key] = now
+
+
+async def _run_fetch(key: str, ttl_seconds: float, fetch: Callable[[], Awaitable[T]]) -> T:
+    try:
+        val = await fetch()
+        await _store(key, val, ttl_seconds)
+        return val
+    finally:
+        async with _lock:
+            _inflight.pop(key, None)
+
+
+def _start_fetch_task(key: str, ttl_seconds: float, fetch: Callable[[], Awaitable[Any]]) -> asyncio.Task[Any]:
+    task = asyncio.create_task(_run_fetch(key, ttl_seconds, fetch))
+    _inflight[key] = task
+    return task
+
+
+async def get_cached(
+    key: str,
+    ttl_seconds: float,
+    fetch: Callable[[], Awaitable[T]],
+    *,
+    stale_seconds: float = 0,
+) -> T:
+    """Get value from cache or fetch and cache it.
+
+    When ``stale_seconds`` > 0, return the last good value immediately if it is
+    younger than ``stale_seconds`` even after TTL expiry, and refresh in the
+    background. Concurrent callers coalesce on a single in-flight fetch.
+    """
+    task_to_await: asyncio.Task[Any] | None = None
+
     async with _lock:
         now = time.monotonic()
         if key in _cache:
             val, expiry = _cache[key]
             if now < expiry:
                 return val
+            fetched = _fetched_at.get(key, 0)
+            if stale_seconds > 0 and (now - fetched) < stale_seconds:
+                if key not in _inflight or _inflight[key].done():
+                    _start_fetch_task(key, ttl_seconds, fetch)
+                return val
             del _cache[key]
-    val = await fetch()
-    async with _lock:
-        _cache[key] = (val, time.monotonic() + ttl_seconds)
-    return val
+
+        if key in _inflight:
+            task_to_await = _inflight[key]
+        else:
+            task_to_await = _start_fetch_task(key, ttl_seconds, fetch)
+
+    return await task_to_await
 
 
 def cache_stats() -> str:
@@ -47,8 +101,17 @@ def invalidate(key_prefix: str = "") -> int:
     if not key_prefix:
         n = len(_cache)
         _cache.clear()
+        _fetched_at.clear()
+        for task in _inflight.values():
+            if not task.done():
+                task.cancel()
+        _inflight.clear()
         return n
     to_remove = [k for k in _cache if k.startswith(key_prefix)]
     for k in to_remove:
         del _cache[k]
+        _fetched_at.pop(k, None)
+        task = _inflight.pop(k, None)
+        if task and not task.done():
+            task.cancel()
     return len(to_remove)
