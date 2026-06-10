@@ -154,33 +154,6 @@ class RefreshView(discord.ui.View):
     async def refresh_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         for c in self.children:
             c.disabled = True
-        # #region agent log
-        try:
-            import json
-            import time
-            from pathlib import Path
-
-            _p = Path(__file__).resolve().parent.parent / "debug-42c590.log"
-            _p.open("a", encoding="utf-8").write(
-                json.dumps(
-                    {
-                        "sessionId": "42c590",
-                        "runId": "refresh",
-                        "hypothesisId": "H-refresh",
-                        "location": "views/_core.py:RefreshView.refresh_btn",
-                        "message": "refresh clicked",
-                        "data": {
-                            "is_done_before_defer": interaction.response.is_done(),
-                            "user_id": getattr(interaction.user, "id", None),
-                        },
-                        "timestamp": int(time.time() * 1000),
-                    }
-                )
-                + "\n"
-            )
-        except Exception:
-            pass
-        # #endregion
         if not interaction.response.is_done():
             await interaction.response.defer()
         await self.refresh_callback(interaction)
