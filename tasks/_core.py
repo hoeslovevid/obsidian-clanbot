@@ -1204,7 +1204,7 @@ def setup_tasks(bot):
 
     @tasks.loop(minutes=_WF_WARM_MINUTES)
     async def warframe_cache_warm_loop():
-        """Keep fissures/alerts cache warm so /fissures and /warframe alerts respond quickly."""
+        """Keep baro/fissures/alerts cache warm so hot Warframe slash commands respond quickly."""
         try:
             if not bot.is_ready():
                 return

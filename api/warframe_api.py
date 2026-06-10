@@ -27,7 +27,7 @@ WARFRAME_STAT_RETRIES = _wf_stat_retries()
 
 
 def _warframe_cache_stale_seconds() -> float:
-    """Serve stale cached fissures/alerts while refreshing (avoids 4s+ slash waits)."""
+    """Serve stale cached baro/fissures/alerts while refreshing (avoids 4s+ slash waits)."""
     v = os.environ.get("WARFRAME_CACHE_STALE_SECONDS", "300").strip()
     try:
         n = float(v)
@@ -637,7 +637,7 @@ async def fetch_baro_data() -> Optional[Dict[str, Any]]:
         ws = await _fetch_official_world_state()
         return _ws_to_baro(ws) if ws else None
 
-    return await get_cached("warframe:baro", 60, _fetch)
+    return await get_cached("warframe:baro", 60, _fetch, stale_seconds=_warframe_cache_stale_seconds())
 
 
 async def fetch_cycle_data(cycle_type: str) -> Optional[Dict[str, Any]]:
@@ -1041,8 +1041,8 @@ async def fetch_alerts() -> Optional[List[Dict[str, Any]]]:
 
 
 async def warm_hot_warframe_endpoints() -> None:
-    """Prefetch fissures + alerts so member slash commands hit warm cache."""
-    await asyncio.gather(fetch_fissures(), fetch_alerts(), return_exceptions=True)
+    """Prefetch baro, fissures, and alerts so member slash commands hit warm cache."""
+    await asyncio.gather(fetch_baro_data(), fetch_fissures(), fetch_alerts(), return_exceptions=True)
 
 
 # Warframe Steam App ID (for playtime lookup)
