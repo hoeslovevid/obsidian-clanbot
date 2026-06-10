@@ -192,7 +192,14 @@ def setup(bot, group=None):
         # Parse duration
         ends_at = None
         if duration:
-            parsed_duration = dateparser.parse(duration, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True}, relative_base=datetime.now(timezone.utc))
+            parsed_duration = dateparser.parse(
+                duration,
+                settings={
+                    'TIMEZONE': 'UTC',
+                    'RETURN_AS_TIMEZONE_AWARE': True,
+                    'RELATIVE_BASE': datetime.now(timezone.utc),
+                },
+            )
             if parsed_duration:
                 ends_at = parsed_duration.isoformat()
         

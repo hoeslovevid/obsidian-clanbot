@@ -52,8 +52,12 @@ def setup(bot, group=None):
 
         send_time = dateparser.parse(
             when,
-            settings={"TIMEZONE": TIMEZONE, "RETURN_AS_TIMEZONE_AWARE": True, "TO_TIMEZONE": "UTC"},
-            relative_base=datetime.now(timezone.utc),
+            settings={
+                "TIMEZONE": TIMEZONE,
+                "RETURN_AS_TIMEZONE_AWARE": True,
+                "TO_TIMEZONE": "UTC",
+                "RELATIVE_BASE": datetime.now(timezone.utc),
+            },
         )
 
         if not send_time:

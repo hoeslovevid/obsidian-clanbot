@@ -10,15 +10,22 @@ from __future__ import annotations
 from core.config import BOT_CHANGELOG, BOT_VERSION
 
 # Current release (version string comes from BOT_VERSION only).
-CURRENT_RELEASE_DATE = "2026-06-07"
+CURRENT_RELEASE_DATE = "2026-06-10"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Perf** — stale-while-revalidate cache for `/fissures` and `/warframe alerts` (instant response while API refreshes in background)",
-    "**Perf** — `warframe_cache_warm_loop` prefetches fissures/alerts every minute; warm on bot ready",
-    "**Config** — `WARFRAME_CACHE_STALE_SECONDS` (default 300), `WARFRAME_CACHE_WARM_MINUTES` (default 1)",
+    "**Fix** — `/general poll`, `/general reminder`, and `/moderation schedule` duration parsing on dateparser 1.2.x (`RELATIVE_BASE` via settings)",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "1.98.1",
+        "date": "2026-06-07",
+        "changes": [
+            "**Perf** — stale-while-revalidate cache for `/fissures` and `/warframe alerts` (instant response while API refreshes in background)",
+            "**Perf** — `warframe_cache_warm_loop` prefetches fissures/alerts every minute; warm on bot ready",
+            "**Config** — `WARFRAME_CACHE_STALE_SECONDS` (default 300), `WARFRAME_CACHE_WARM_MINUTES` (default 1)",
+        ],
+    },
     {
         "version": "1.98.0",
         "date": "2026-06-06",

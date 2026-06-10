@@ -81,7 +81,15 @@ def setup(bot, group=None):
         # Parse when (use user timezone if set, else server default)
         user_tz = await get_user_timezone(interaction.guild.id, interaction.user.id)
         tz_for_parse = user_tz or TIMEZONE
-        remind_time = dateparser.parse(when, settings={'TIMEZONE': tz_for_parse, 'RETURN_AS_TIMEZONE_AWARE': True, 'TO_TIMEZONE': 'UTC'}, relative_base=datetime.now(timezone.utc))
+        remind_time = dateparser.parse(
+            when,
+            settings={
+                'TIMEZONE': tz_for_parse,
+                'RETURN_AS_TIMEZONE_AWARE': True,
+                'TO_TIMEZONE': 'UTC',
+                'RELATIVE_BASE': datetime.now(timezone.utc),
+            },
+        )
         
         if not remind_time:
             return await interaction.followup.send(
