@@ -125,7 +125,6 @@ def setup(bot, group=None):
         async def on_refresh(btn_interaction: discord.Interaction):
             if btn_interaction.user.id != interaction.user.id:
                 return await btn_interaction.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
-            await btn_interaction.response.defer()
             invalidate("warframe:invasions")
             new_data = await fetch_invasions()
             if new_data is None:

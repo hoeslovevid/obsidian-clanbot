@@ -196,7 +196,6 @@ def setup(bot, group=None):
                 message = None
 
         async def on_refresh(btn_interaction: discord.Interaction):
-            await btn_interaction.response.defer()
             from core.cache_utils import invalidate
 
             invalidate("warframe:baro")
@@ -270,7 +269,6 @@ def setup(bot, group=None):
         async def on_refresh(btn_interaction: discord.Interaction):
             if btn_interaction.user.id != interaction.user.id:
                 return await btn_interaction.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
-            await btn_interaction.response.defer()
             from core.cache_utils import invalidate
 
             invalidate("warframe:fissures")

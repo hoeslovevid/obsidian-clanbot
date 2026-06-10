@@ -74,7 +74,6 @@ def setup(bot, group=None):
         async def on_refresh(btn_i: discord.Interaction):
             if btn_i.user.id != interaction.user.id:
                 return await btn_i.response.send_message("Only the requester can refresh.", ephemeral=True)
-            await btn_i.response.defer()
             invalidate("warframe:fissures")
             nd = await fetch_fissures()
             if nd is None:

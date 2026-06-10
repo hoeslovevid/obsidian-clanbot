@@ -70,6 +70,31 @@ async def get_cached(
             if stale_seconds > 0 and (now - fetched) < stale_seconds:
                 if key not in _inflight or _inflight[key].done():
                     _start_fetch_task(key, ttl_seconds, fetch)
+                # #region agent log
+                if key.startswith("warframe:"):
+                    try:
+                        import json
+                        from pathlib import Path
+
+                        _p = Path(__file__).resolve().parent.parent / "debug-42c590.log"
+                        with _p.open("a", encoding="utf-8") as _f:
+                            _f.write(
+                                json.dumps(
+                                    {
+                                        "sessionId": "42c590",
+                                        "runId": "cache",
+                                        "hypothesisId": "H-cache-stale",
+                                        "location": "core/cache_utils.py:get_cached",
+                                        "message": "stale-while-revalidate hit",
+                                        "data": {"key": key, "age_s": round(now - fetched, 1)},
+                                        "timestamp": int(time.time() * 1000),
+                                    }
+                                )
+                                + "\n"
+                            )
+                    except Exception:
+                        pass
+                # #endregion
                 return val
             del _cache[key]
 

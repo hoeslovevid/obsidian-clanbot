@@ -45,7 +45,6 @@ def setup(bot, group=None):
         async def on_refresh(btn_i: discord.Interaction):
             if btn_i.user.id != interaction.user.id:
                 return await btn_i.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
-            await btn_i.response.defer()
             invalidate("warframe:steelPath")
             invalidate("warframe:arbitration")
             invalidate("warframe:nightwave")

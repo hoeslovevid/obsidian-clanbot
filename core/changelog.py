@@ -12,12 +12,20 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-10"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Perf** — stale-while-revalidate cache for `/warframe baro` (same pattern as fissures/alerts; ~4.5s waits eliminated)",
-    "**Perf** — `warm_hot_warframe_endpoints` and `warframe_cache_warm_loop` now prefetch baro; hub/status benefit via shared cache",
+    "**Fix** — `RefreshView` auto-defers before refresh callbacks; fixes broken **Update data** on `/warframe alerts`, baro, status, hub, and related commands",
+    "**Fix** — removed duplicate defer calls in Warframe refresh handlers that could cause `InteractionResponded` errors",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "1.98.3",
+        "date": "2026-06-10",
+        "changes": [
+            "**Perf** — stale-while-revalidate cache for `/warframe baro` (same pattern as fissures/alerts; ~4.5s waits eliminated)",
+            "**Perf** — `warm_hot_warframe_endpoints` and `warframe_cache_warm_loop` now prefetch baro; hub/status benefit via shared cache",
+        ],
+    },
     {
         "version": "1.98.2",
         "date": "2026-06-10",

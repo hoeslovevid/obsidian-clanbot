@@ -133,6 +133,8 @@ def setup(bot, group=None):
 
         async def on_refresh(btn_interaction: discord.Interaction):
             if btn_interaction.user.id != interaction.user.id:
+                if not btn_interaction.response.is_done():
+                    return await btn_interaction.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
                 return await btn_interaction.followup.send(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
             invalidate("warframe:alerts")
             new_data = await fetch_alerts()

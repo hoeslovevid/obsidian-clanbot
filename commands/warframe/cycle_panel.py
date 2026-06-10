@@ -83,7 +83,6 @@ def setup(bot, group=None):
                 message = None
 
         async def on_refresh(btn_interaction: discord.Interaction):
-            await btn_interaction.response.defer()
             from core.cache_utils import invalidate
 
             invalidate("warframe:cycles")
