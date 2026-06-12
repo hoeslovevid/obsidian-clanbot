@@ -125,7 +125,7 @@ class SetupObsidianView(discord.ui.View):
         self.step_index += 1
         if self.step_index >= len(CHANNEL_CONFIGS):
             # Done — ensure join-to-create channel if Temp VC category was configured
-            from bot import ensure_join_to_create_channel
+            from core.channels import ensure_join_to_create_channel
             temp_cat_id = await get_configured_channel_id(interaction.guild.id, "temp_vc_category_id")
             if temp_cat_id:
                 try:
