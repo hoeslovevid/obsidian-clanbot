@@ -6,6 +6,7 @@ import os
 
 import aiosqlite  # type: ignore
 from core.config import DB_PATH
+from core.db import configure_sqlite
 
 logger = logging.getLogger(__name__)
 
@@ -17,9 +18,8 @@ async def init_db() -> None:
         os.makedirs(db_dir, exist_ok=True)
 
     async with aiosqlite.connect(DB_PATH) as db:
-        # WAL mode: allows concurrent readers while a writer is active.
-        # synchronous=NORMAL is safe with WAL and much faster than FULL.
-        await db.execute("PRAGMA journal_mode=WAL")
+        # WAL + busy_timeout: concurrent readers/writers wait instead of failing locked.
+        await configure_sqlite(db)
         await db.execute("PRAGMA synchronous=NORMAL")
         await db.execute("PRAGMA cache_size=-32000")   # 32 MB page cache
         await db.execute("PRAGMA temp_store=MEMORY")

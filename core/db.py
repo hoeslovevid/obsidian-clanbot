@@ -1,8 +1,10 @@
-"""Shared SQLite connection on the bot instance (reduces connect churn)."""
+"""SQLite helpers — WAL, busy_timeout, and optional shared bot connection."""
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Optional
+import sqlite3
+from contextlib import asynccontextmanager
+from typing import TYPE_CHECKING, Awaitable, Callable, Optional, TypeVar
 
 import aiosqlite  # type: ignore
 
@@ -10,6 +12,53 @@ from core.config import DB_PATH
 
 if TYPE_CHECKING:
     from bot.app import ClanBot
+
+DEFAULT_BUSY_TIMEOUT_MS = 15_000
+
+T = TypeVar("T")
+
+
+async def configure_sqlite(
+    db: aiosqlite.Connection,
+    *,
+    busy_timeout_ms: int = DEFAULT_BUSY_TIMEOUT_MS,
+) -> None:
+    """Apply pragmas every connection should use (WAL is persistent on the file)."""
+    await db.execute("PRAGMA journal_mode=WAL")
+    await db.execute(f"PRAGMA busy_timeout={busy_timeout_ms}")
+
+
+def is_db_locked_error(exc: BaseException) -> bool:
+    return isinstance(exc, sqlite3.OperationalError) and "locked" in str(exc).lower()
+
+
+@asynccontextmanager
+async def open_db(path: str = DB_PATH, *, busy_timeout_ms: int = DEFAULT_BUSY_TIMEOUT_MS):
+    """Open SQLite with WAL + busy_timeout so concurrent handlers wait instead of failing."""
+    async with aiosqlite.connect(path) as db:
+        await configure_sqlite(db, busy_timeout_ms=busy_timeout_ms)
+        yield db
+
+
+async def run_db_with_retry(
+    fn: Callable[[], Awaitable[T]],
+    *,
+    retries: int = 4,
+    base_delay: float = 0.05,
+) -> T:
+    """Retry coroutine on transient database lock errors."""
+    last: Optional[BaseException] = None
+    for attempt in range(retries):
+        try:
+            return await fn()
+        except sqlite3.OperationalError as exc:
+            if not is_db_locked_error(exc) or attempt == retries - 1:
+                raise
+            last = exc
+            await asyncio.sleep(base_delay * (2**attempt))
+    if last is not None:
+        raise last
+    raise RuntimeError("run_db_with_retry exhausted without result")
 
 
 class BotDatabase:
@@ -24,8 +73,7 @@ class BotDatabase:
         async with self._lock:
             if self._conn is None:
                 self._conn = await aiosqlite.connect(self.path)
-                await self._conn.execute("PRAGMA journal_mode=WAL")
-                await self._conn.execute("PRAGMA busy_timeout=5000")
+                await configure_sqlite(self._conn)
             return self._conn
 
     async def close(self) -> None:

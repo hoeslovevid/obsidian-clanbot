@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 # ============================================================
 
 # Import config first (loads env, no heavy deps)
+from core.db import open_db, is_db_locked_error
 from core.config import (
     TOKEN, GUILD_ID, MOD_ROLE_NAME, BOT_STATUS, TIMEZONE, DB_PATH,
     BOT_VERSION, BOT_CHANGELOG,
@@ -404,7 +405,7 @@ def format_thread_name(
 
 
 async def log_complaint_action(guild: discord.Guild, case_id: str, actor_id: int, action: str, note: str = ""):
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute(
             "INSERT INTO complaint_actions(guild_id,case_id,actor_id,action,note,created_at) VALUES(?,?,?,?,?,?)",
             (guild.id, case_id, actor_id, action, note, now_utc().isoformat()),
@@ -458,7 +459,7 @@ async def post_vc_panel(guild: discord.Guild, vc: discord.VoiceChannel, owner: d
     view = VCPanelView(vc.id)
     msg = await panel_ch.send(embed=embed, view=view)
 
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute(
             "INSERT OR REPLACE INTO vc_panels(guild_id, channel_id, message_id) VALUES(?,?,?)",
             (guild.id, vc.id, msg.id),
@@ -476,7 +477,7 @@ _guild_vc_flush_tasks: Dict[int, asyncio.Task] = {}
 
 async def update_vc_panel_embed(guild: discord.Guild, vc_id: int, *, force: bool = False) -> None:
     """Edit the VC panel message with live member count and lock status."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         cur = await db.execute(
             "SELECT message_id FROM vc_panels WHERE guild_id=? AND channel_id=?",
             (guild.id, vc_id),
@@ -496,7 +497,7 @@ async def update_vc_panel_embed(guild: discord.Guild, vc_id: int, *, force: bool
     if not isinstance(panel_ch, discord.TextChannel):
         return
 
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         cur = await db.execute(
             "SELECT owner_id FROM temp_vcs WHERE guild_id=? AND channel_id=?",
             (guild.id, vc_id),
@@ -786,7 +787,7 @@ async def on_message(message: discord.Message):
         if isinstance(message.channel, discord.TextChannel) and message.channel.category and message.channel.category.name == "Tickets":
             now_iso = now_utc().isoformat()
             is_staff = isinstance(message.author, discord.Member) and is_mod(message.author)
-            async with aiosqlite.connect(DB_PATH) as db:
+            async with open_db() as db:
                 cur = await db.execute(
                     "SELECT user_id FROM tickets WHERE guild_id=? AND channel_id=? AND status!='closed'",
                     (message.guild.id, message.channel.id),
@@ -857,147 +858,20 @@ async def on_message(message: discord.Message):
     # Ignore commands (they're handled separately)
     if message.content.startswith("!"):
         return
-    
-    # Check cooldown (memory first; DB only when awarding)
-    if _message_cooldown_active(message.guild.id, message.author.id):
+
+    try:
+        await _award_message_economy(message)
+    except Exception as econ_err:
+        if is_db_locked_error(econ_err):
+            logger.warning(
+                "Message economy skipped (database locked): guild=%s user=%s",
+                message.guild.id,
+                message.author.id,
+            )
+            return
+        logger.error("Message economy error: %s", econ_err, exc_info=True)
         return
 
-    async with aiosqlite.connect(DB_PATH) as db:
-        cur = await db.execute(
-            "SELECT last_message_at FROM message_cooldowns WHERE guild_id=? AND user_id=?",
-            (message.guild.id, message.author.id),
-        )
-        row = await cur.fetchone()
-
-        if row:
-            last_message_at = datetime.fromisoformat(row[0])
-            time_since = (now_utc() - last_message_at).total_seconds()
-            if time_since < MESSAGE_COOLDOWN_SECONDS:
-                _message_cooldown_touch(message.guild.id, message.author.id)
-                return  # Still on cooldown
-
-        now_iso = now_utc().isoformat()
-        await db.execute("""
-            INSERT INTO message_cooldowns (guild_id, user_id, last_message_at)
-            VALUES (?, ?, ?)
-            ON CONFLICT(guild_id, user_id) DO UPDATE SET last_message_at=?
-        """, (message.guild.id, message.author.id, now_iso, now_iso))
-        await db.commit()
-
-    _message_cooldown_touch(message.guild.id, message.author.id)
-    
-    # Award coins (Item 72 — apply active server-goal multiplier when present)
-    from core.utils import get_active_multiplier
-    coins_mult = await get_active_multiplier(message.guild.id, "coins")
-    await add_coins(
-        message.guild.id,
-        message.author.id,
-        max(1, int(round(COINS_PER_MESSAGE * coins_mult))),
-        "MESSAGE",
-        f"Message in #{_channel_name_safe(message.channel)}",
-    )
-
-    # Award XP (if enabled)
-    from core.utils import XP_ENABLED, XP_PER_MESSAGE
-    if XP_ENABLED:
-        xp_mult = await get_active_multiplier(message.guild.id, "xp")
-        leveled_up = await add_xp(
-            message.guild.id,
-            message.author.id,
-            max(1, int(round(XP_PER_MESSAGE * xp_mult))),
-            "MESSAGE",
-        )
-        if leveled_up and isinstance(message.author, discord.Member):
-            # User leveled up! Assign level roles
-            xp, level, total_xp = await get_user_xp(message.guild.id, message.author.id)
-            logger.info(f"User {message.author.id} leveled up to level {level} in guild {message.guild.id}")
-            
-            # Send level-up announcement to configured channel
-            from core.utils import send_levelup_announcement
-            await send_levelup_announcement(message.guild, message.author, level, xp, total_xp)
-            
-            # Assign level roles
-            from database import get_all_level_roles_up_to
-            level_roles = await get_all_level_roles_up_to(message.guild.id, level)
-            if level_roles:
-                roles_to_add = []
-                for lr in level_roles:
-                    role = message.guild.get_role(lr["role_id"])
-                    if role and role not in message.author.roles:
-                        roles_to_add.append(role)
-                
-                if roles_to_add:
-                    try:
-                        await message.author.add_roles(*roles_to_add, reason=f"Leveled up to level {level}")
-                        logger.info(f"Assigned level roles to {message.author.id}: {[r.id for r in roles_to_add]}")
-                    except Exception as e:
-                        logger.error(f"Error assigning level roles: {e}")
-        
-        # Check for level milestones and achievements (optimized - single query for activity stats)
-        xp, level, total_xp = await get_user_xp(message.guild.id, message.author.id)
-        from database import check_and_record_milestone, check_and_unlock_achievement
-        
-        # Initialize achievements if needed (cached)
-        global _achievement_definitions_initialized
-        if not _achievement_definitions_initialized:
-            from database import initialize_achievement_definitions, initialize_badge_definitions, initialize_title_definitions
-            await initialize_achievement_definitions()
-            await initialize_badge_definitions()
-            await initialize_title_definitions()
-            _achievement_definitions_initialized = True
-        
-        # Batch database operations - get message count and update in one transaction
-        async with aiosqlite.connect(DB_PATH) as db:
-            # Get current message count
-            cur = await db.execute("""
-                SELECT messages_sent FROM activity_stats
-                WHERE guild_id=? AND user_id=?
-            """, (message.guild.id, message.author.id))
-            row = await cur.fetchone()
-            message_count = row[0] if row else 0
-            
-            # Update message count
-            await db.execute("""
-                INSERT INTO activity_stats (guild_id, user_id, messages_sent, last_activity_date)
-                VALUES (?, ?, 1, ?)
-                ON CONFLICT(guild_id, user_id) DO UPDATE SET
-                    messages_sent = messages_sent + 1,
-                    last_activity_date = excluded.last_activity_date
-            """, (message.guild.id, message.author.id, now_utc().isoformat()))
-            await db.commit()
-        
-        new_message_count = message_count + 1
-        
-        # Check level milestones
-        level_milestones = [10, 25, 50, 100]
-        for milestone_level in level_milestones:
-            if level >= milestone_level:
-                milestone_achieved = await check_and_record_milestone(
-                    message.guild.id, message.author.id, "level", milestone_level
-                )
-                if milestone_achieved:
-                    achievement_id = f"level_{milestone_level}"
-                    await check_and_unlock_achievement(message.guild.id, message.author.id, achievement_id, bot)
-        
-        # Check message count milestones
-        message_milestones = [1, 100, 1000, 10000]
-        for milestone_count in message_milestones:
-            if new_message_count >= milestone_count:
-                milestone_achieved = await check_and_record_milestone(
-                    message.guild.id, message.author.id, "message_count", milestone_count
-                )
-                if milestone_achieved:
-                    achievement_map = {
-                        1: "first_message",
-                        100: "hundred_messages",
-                        1000: "thousand_messages",
-                        10000: "ten_thousand_messages"
-                    }
-                    if milestone_count in achievement_map:
-                        await check_and_unlock_achievement(
-                            message.guild.id, message.author.id, achievement_map[milestone_count], bot
-                        )
-    
     # Item 83 — proactively clear the inactive role when a tagged member returns.
     if isinstance(message.author, discord.Member):
         try:
@@ -1057,7 +931,7 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
             ch_after is not None and not (after.self_mute or after.self_deaf)
         )
         if needs_voice_db:
-            async with aiosqlite.connect(DB_PATH) as db:
+            async with open_db() as db:
                 if ch_before:
                     await db.execute(
                         "DELETE FROM voice_activity WHERE guild_id=? AND user_id=? AND channel_id=?",
@@ -1112,7 +986,7 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
                 if await _is_temp_vc(db):
                     await schedule_vc_panel_embed_update(guild, channel.id)
                 return
-            async with aiosqlite.connect(DB_PATH) as conn:
+            async with open_db() as conn:
                 if await _is_temp_vc(conn):
                     await schedule_vc_panel_embed_update(guild, channel.id)
         except Exception:
@@ -1122,7 +996,7 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
     ch_after_vc = after.channel if isinstance(after.channel, discord.VoiceChannel) else None
     panel_channels = [c for c in (ch_before_vc, ch_after_vc) if c is not None]
     if panel_channels:
-        async with aiosqlite.connect(DB_PATH) as vc_db:
+        async with open_db() as vc_db:
             for ch in panel_channels:
                 await _maybe_refresh_vc_panel(ch, db=vc_db)
 
@@ -1143,7 +1017,7 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
         ]
         if nonempty_channels:
             now_iso = now_utc().isoformat()
-            async with aiosqlite.connect(DB_PATH) as db:
+            async with open_db() as db:
                 for ch in nonempty_channels:
                     cur = await db.execute(
                         "SELECT 1 FROM temp_vcs WHERE guild_id=? AND channel_id=?",
@@ -1180,7 +1054,7 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
         reason="Join-to-create temp VC",
     )
 
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute(
             "INSERT OR REPLACE INTO temp_vcs(guild_id,channel_id,owner_id,created_at,last_nonempty_at) VALUES(?,?,?,?,?)",
             (guild.id, new_vc.id, member.id, now_utc().isoformat(), now_utc().isoformat()),
@@ -1319,6 +1193,171 @@ _achievement_definitions_initialized = False
 _MESSAGE_COOLDOWN_CACHE: Dict[Tuple[int, int], datetime] = {}
 
 
+async def _award_message_economy(message: discord.Message) -> None:
+    """Award passive coins/XP for a qualifying message (cooldown-gated)."""
+    if not message.guild:
+        return
+
+    if _message_cooldown_active(message.guild.id, message.author.id):
+        return
+
+    async with open_db() as db:
+        cur = await db.execute(
+            "SELECT last_message_at FROM message_cooldowns WHERE guild_id=? AND user_id=?",
+            (message.guild.id, message.author.id),
+        )
+        row = await cur.fetchone()
+
+        if row:
+            last_message_at = datetime.fromisoformat(row[0])
+            time_since = (now_utc() - last_message_at).total_seconds()
+            if time_since < MESSAGE_COOLDOWN_SECONDS:
+                _message_cooldown_touch(message.guild.id, message.author.id)
+                return
+
+        now_iso = now_utc().isoformat()
+        await db.execute(
+            """
+            INSERT INTO message_cooldowns (guild_id, user_id, last_message_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(guild_id, user_id) DO UPDATE SET last_message_at=?
+            """,
+            (message.guild.id, message.author.id, now_iso, now_iso),
+        )
+        await db.commit()
+
+    _message_cooldown_touch(message.guild.id, message.author.id)
+
+    from core.utils import get_active_multiplier
+
+    coins_mult = await get_active_multiplier(message.guild.id, "coins")
+    await add_coins(
+        message.guild.id,
+        message.author.id,
+        max(1, int(round(COINS_PER_MESSAGE * coins_mult))),
+        "MESSAGE",
+        f"Message in #{_channel_name_safe(message.channel)}",
+    )
+
+    from core.utils import XP_ENABLED, XP_PER_MESSAGE
+
+    if not XP_ENABLED:
+        return
+
+    xp_mult = await get_active_multiplier(message.guild.id, "xp")
+    leveled_up = await add_xp(
+        message.guild.id,
+        message.author.id,
+        max(1, int(round(XP_PER_MESSAGE * xp_mult))),
+        "MESSAGE",
+    )
+    if leveled_up and isinstance(message.author, discord.Member):
+        xp, level, total_xp = await get_user_xp(message.guild.id, message.author.id)
+        logger.info(
+            "User %s leveled up to level %s in guild %s",
+            message.author.id,
+            level,
+            message.guild.id,
+        )
+        from core.utils import send_levelup_announcement
+
+        await send_levelup_announcement(message.guild, message.author, level, xp, total_xp)
+
+        from database import get_all_level_roles_up_to
+
+        level_roles = await get_all_level_roles_up_to(message.guild.id, level)
+        if level_roles:
+            roles_to_add = []
+            for lr in level_roles:
+                role = message.guild.get_role(lr["role_id"])
+                if role and role not in message.author.roles:
+                    roles_to_add.append(role)
+            if roles_to_add:
+                try:
+                    await message.author.add_roles(
+                        *roles_to_add, reason=f"Leveled up to level {level}"
+                    )
+                    logger.info(
+                        "Assigned level roles to %s: %s",
+                        message.author.id,
+                        [r.id for r in roles_to_add],
+                    )
+                except Exception as e:
+                    logger.error("Error assigning level roles: %s", e)
+
+    xp, level, total_xp = await get_user_xp(message.guild.id, message.author.id)
+    from database import check_and_record_milestone, check_and_unlock_achievement
+
+    global _achievement_definitions_initialized
+    if not _achievement_definitions_initialized:
+        from database import (
+            initialize_achievement_definitions,
+            initialize_badge_definitions,
+            initialize_title_definitions,
+        )
+
+        await initialize_achievement_definitions()
+        await initialize_badge_definitions()
+        await initialize_title_definitions()
+        _achievement_definitions_initialized = True
+
+    async with open_db() as db:
+        cur = await db.execute(
+            """
+            SELECT messages_sent FROM activity_stats
+            WHERE guild_id=? AND user_id=?
+            """,
+            (message.guild.id, message.author.id),
+        )
+        row = await cur.fetchone()
+        message_count = row[0] if row else 0
+        await db.execute(
+            """
+            INSERT INTO activity_stats (guild_id, user_id, messages_sent, last_activity_date)
+            VALUES (?, ?, 1, ?)
+            ON CONFLICT(guild_id, user_id) DO UPDATE SET
+                messages_sent = messages_sent + 1,
+                last_activity_date = excluded.last_activity_date
+            """,
+            (message.guild.id, message.author.id, now_utc().isoformat()),
+        )
+        await db.commit()
+
+    new_message_count = message_count + 1
+
+    for milestone_level in (10, 25, 50, 100):
+        if level >= milestone_level:
+            milestone_achieved = await check_and_record_milestone(
+                message.guild.id, message.author.id, "level", milestone_level
+            )
+            if milestone_achieved:
+                await check_and_unlock_achievement(
+                    message.guild.id,
+                    message.author.id,
+                    f"level_{milestone_level}",
+                    bot,
+                )
+
+    achievement_map = {
+        1: "first_message",
+        100: "hundred_messages",
+        1000: "thousand_messages",
+        10000: "ten_thousand_messages",
+    }
+    for milestone_count in (1, 100, 1000, 10000):
+        if new_message_count >= milestone_count:
+            milestone_achieved = await check_and_record_milestone(
+                message.guild.id, message.author.id, "message_count", milestone_count
+            )
+            if milestone_achieved and milestone_count in achievement_map:
+                await check_and_unlock_achievement(
+                    message.guild.id,
+                    message.author.id,
+                    achievement_map[milestone_count],
+                    bot,
+                )
+
+
 def _message_cooldown_active(guild_id: int, user_id: int) -> bool:
     """True if user is still within MESSAGE_COOLDOWN_SECONDS (memory only)."""
     last = _MESSAGE_COOLDOWN_CACHE.get((guild_id, user_id))
@@ -1385,7 +1424,7 @@ async def on_member_join(member: discord.Member):
     except Exception as e:
         logger.error(f"[milestones] Error checking member count milestone: {e}")
     
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         cur = await db.execute("""
             SELECT channel_id, message, enabled FROM welcome_settings
             WHERE guild_id = ? AND enabled = 1
@@ -1455,7 +1494,7 @@ async def on_member_remove(member: discord.Member):
             if entry.target and entry.target.id == member.id:
                 was_kicked = True
                 # Log kick
-                async with aiosqlite.connect(DB_PATH) as db:
+                async with open_db() as db:
                     cur = await db.execute("""
                         SELECT channel_id FROM log_channels
                         WHERE guild_id=? AND log_type='member_kick' AND enabled=1
@@ -1483,7 +1522,7 @@ async def on_member_remove(member: discord.Member):
         pass
     
     # Original leave message code
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         cur = await db.execute("""
             SELECT channel_id, message, enabled FROM leave_settings
             WHERE guild_id = ? AND enabled = 1
@@ -1519,7 +1558,7 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
         guild = bot.get_guild(payload.guild_id)
         if guild:
             # Phase 1: read-only DB fetch (connection opened and closed quickly)
-            async with aiosqlite.connect(DB_PATH) as db:
+            async with open_db() as db:
                 cur = await db.execute(
                     "SELECT channel_id, threshold, emoji FROM starboard_settings WHERE guild_id=?",
                     (guild.id,),
@@ -1540,7 +1579,7 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
 
                             if reaction and reaction.count >= threshold:
                                 # Phase 2: check existing starboard entry (brief connection)
-                                async with aiosqlite.connect(DB_PATH) as db:
+                                async with open_db() as db:
                                     cur = await db.execute("""
                                         SELECT starboard_message_id, stars FROM starboard_messages
                                         WHERE guild_id=? AND original_message_id=?
@@ -1558,14 +1597,14 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
                                                 embed.set_footer(text=f"{reaction.count} {emoji} | {_channel_mention_safe(message.channel)}")
                                                 await starboard_msg.edit(embed=embed)
                                             # Phase 3: write (separate short connection)
-                                            async with aiosqlite.connect(DB_PATH) as db:
+                                            async with open_db() as db:
                                                 await db.execute("""
                                                     UPDATE starboard_messages SET stars=?
                                                     WHERE guild_id=? AND original_message_id=?
                                                 """, (reaction.count, guild.id, message.id))
                                                 await db.commit()
                                         except discord.NotFound:
-                                            async with aiosqlite.connect(DB_PATH) as db:
+                                            async with open_db() as db:
                                                 await db.execute("""
                                                     DELETE FROM starboard_messages
                                                     WHERE guild_id=? AND original_message_id=?
@@ -1585,7 +1624,7 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
                                         embed.set_image(url=message.attachments[0].url)
                                     starboard_msg = await starboard_channel.send(embed=embed)
                                     # Phase 3: write result
-                                    async with aiosqlite.connect(DB_PATH) as db:
+                                    async with open_db() as db:
                                         await db.execute("""
                                             INSERT INTO starboard_messages (guild_id, original_message_id, starboard_message_id, stars)
                                             VALUES (?, ?, ?, ?)
@@ -1601,7 +1640,7 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
     if payload.member and payload.member.bot:
         return
 
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         cur = await db.execute("""
             SELECT role_id FROM reaction_roles
             WHERE guild_id = ? AND message_id = ? AND emoji = ?
@@ -1668,7 +1707,7 @@ async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
     if gid_rm is None:
         return
 
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         cur = await db.execute("""
             SELECT role_id FROM reaction_roles
             WHERE guild_id = ? AND message_id = ? AND emoji = ?
@@ -1741,7 +1780,7 @@ async def on_message_delete(message: discord.Message):
     if message.embeds:
         embeds_json = json.dumps([embed.to_dict() for embed in message.embeds])
     
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         # Store deleted message
         await db.execute("""
             INSERT OR REPLACE INTO deleted_messages 
@@ -1794,7 +1833,7 @@ async def on_message_edit(before: discord.Message, after: discord.Message):
         return
     
     # Store edit and check log channel in single transaction
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         # Store edit
         await db.execute("""
             INSERT INTO edited_messages 
@@ -1841,7 +1880,7 @@ async def on_message_edit(before: discord.Message, after: discord.Message):
 @bot.event
 async def on_member_ban(guild: discord.Guild, user: discord.User):
     """Log member bans."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         cur = await db.execute("""
             SELECT channel_id FROM log_channels
             WHERE guild_id=? AND log_type='member_ban' AND enabled=1
@@ -1957,7 +1996,7 @@ async def on_member_update(before: discord.Member, after: discord.Member):
     if not added_roles and not removed_roles:
         return
     
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         cur = await db.execute("""
             SELECT channel_id FROM log_channels
             WHERE guild_id=? AND log_type='role_change' AND enabled=1
@@ -2020,7 +2059,7 @@ async def main():
             logger.info(f"[startup] Database directory is writable: {db_dir}")
     
     # Verify update log tables exist
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         # Check if update_log_settings table exists
         cur = await db.execute("""
             SELECT name FROM sqlite_master 

@@ -32,6 +32,7 @@ except ImportError:
 
 # Use config for DB_PATH (single source of truth)
 from core.config import DB_PATH
+from core.db import open_db
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +96,7 @@ async def get_guild_setting(guild_id: int, key: str) -> Optional[str]:
     hit, cached = _cache_get(guild_id, key)
     if hit:
         return cached
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         cur = await db.execute(
             "SELECT value FROM guild_settings WHERE guild_id=? AND key=?",
             (guild_id, key),
@@ -130,7 +131,7 @@ async def set_guild_setting(guild_id: int, key: str, value: str) -> None:
         invalidate_channel_resolve_cache(guild_id, key)
     except Exception:
         pass
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute(
             "INSERT OR REPLACE INTO guild_settings (guild_id, key, value) VALUES (?, ?, ?)",
             (guild_id, key, value),
@@ -142,7 +143,7 @@ async def set_guild_setting(guild_id: int, key: str, value: str) -> None:
 async def delete_guild_setting(guild_id: int, key: str) -> None:
     """Remove a guild_setting row if present."""
     _cache_invalidate(guild_id, key)
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute(
             "DELETE FROM guild_settings WHERE guild_id=? AND key=?",
             (guild_id, key),
@@ -174,7 +175,7 @@ async def record_command_usage(guild_id: int, user_id: int, command_name: str, w
         return
     weekday = max(0, min(6, int(weekday)))
     now_iso = now_utc().isoformat()
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute(
             """
             INSERT INTO command_usage_stats (guild_id, user_id, command_name, weekday, count, last_used_at)
@@ -193,7 +194,7 @@ async def get_user_command_stats(guild_id: int, user_id: int, *, top_n: int = 10
     Shape: ``{"top": [(command, count), …], "total": int, "by_weekday": [int]*7,
     "first_used": iso_or_None, "last_used": iso_or_None}``.
     """
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         cur = await db.execute(
             """
             SELECT command_name, SUM(count) AS total
@@ -312,7 +313,7 @@ async def set_achievement_notify_style(guild_id: int, user_id: int, style: str) 
 
 async def get_log_channel_id(guild_id: int, log_type: str) -> Optional[int]:
     """Get the channel ID for a log type, or None if not configured."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         cur = await db.execute(
             "SELECT channel_id FROM log_channels WHERE guild_id=? AND log_type=? AND enabled=1",
             (guild_id, log_type),
@@ -324,7 +325,7 @@ async def get_log_channel_id(guild_id: int, log_type: str) -> Optional[int]:
 # --------------------- Economy Functions ---------------------
 async def get_user_balance(guild_id: int, user_id: int) -> int:
     """Get a user's coin balance."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         cur = await db.execute(
             "SELECT balance FROM user_balances WHERE guild_id=? AND user_id=?",
             (guild_id, user_id),
@@ -348,7 +349,7 @@ async def add_coins(guild_id: int, user_id: int, amount: int, transaction_type: 
                     amount = int(amount * float(mult_str))
         except Exception:
             pass
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         # Insert or update balance
         await db.execute("""
             INSERT INTO user_balances (guild_id, user_id, balance, total_earned)
@@ -370,7 +371,7 @@ async def add_coins(guild_id: int, user_id: int, amount: int, transaction_type: 
 
 async def remove_coins(guild_id: int, user_id: int, amount: int, transaction_type: str, description: Optional[str] = None) -> bool:
     """Remove coins from a user's balance. Returns True if successful."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         # Check balance
         cur = await db.execute(
             "SELECT balance FROM user_balances WHERE guild_id=? AND user_id=?",
@@ -403,7 +404,7 @@ async def transfer_coins(guild_id: int, from_user_id: int, to_user_id: int, amou
     if amount <= 0 or from_user_id == to_user_id:
         return False
     
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         # Check sender balance
         cur = await db.execute(
             "SELECT balance FROM user_balances WHERE guild_id=? AND user_id=?",
@@ -466,7 +467,7 @@ def xp_for_next_level(current_level: int, multiplier: int = 100, exponent: float
 async def get_user_xp(guild_id: int, user_id: int) -> Tuple[int, int, int]:
     """Get a user's XP, level, and total XP. Returns (xp, level, total_xp)."""
     from core.utils import XP_LEVEL_MULTIPLIER, XP_LEVEL_EXPONENT
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         cur = await db.execute(
             "SELECT xp, level, total_xp FROM user_xp WHERE guild_id=? AND user_id=?",
             (guild_id, user_id),
@@ -502,7 +503,7 @@ async def add_xp(guild_id: int, user_id: int, amount: int, source: str = "ACTIVI
                 amount = int(amount * float(mult_str))
     except Exception:
         pass
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         # Get current XP
         cur = await db.execute(
             "SELECT xp, level, total_xp FROM user_xp WHERE guild_id=? AND user_id=?",
@@ -545,7 +546,7 @@ async def remove_xp(guild_id: int, user_id: int, amount: int) -> bool:
     if amount <= 0:
         return False
     
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         # Get current XP
         cur = await db.execute(
             "SELECT xp, level, total_xp FROM user_xp WHERE guild_id=? AND user_id=?",
@@ -583,7 +584,7 @@ async def log_complaint_action(guild_id: int, case_id: str, actor_id: int, actio
     Log a complaint action.
     If guild and bot are provided, also sends a notification to the ledger channel.
     """
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute("""
             INSERT INTO complaint_actions (guild_id, case_id, actor_id, action, note, created_at)
             VALUES (?, ?, ?, ?, ?, ?)
@@ -621,7 +622,7 @@ async def log_complaint_action(guild_id: int, case_id: str, actor_id: int, actio
 # --------------------- Activity Functions ---------------------
 async def track_command_usage(guild_id: int, user_id: int):
     """Track that a user used a command."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         now = now_utc()
         today = now.date().isoformat()
         
@@ -647,7 +648,7 @@ async def track_command_usage(guild_id: int, user_id: int):
 
 async def track_event_attendance(guild_id: int, user_id: int):
     """Track that a user attended an event."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         now = now_utc()
         today = now.date().isoformat()
         
@@ -688,7 +689,7 @@ async def track_event_attendance(guild_id: int, user_id: int):
 
 async def update_activity_voice_minutes(guild_id: int, user_id: int, minutes: int):
     """Update voice minutes in activity stats."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         # Get current voice minutes from voice_activity table
         cur = await db.execute("""
             SELECT SUM(total_minutes) FROM voice_activity
@@ -720,7 +721,7 @@ async def increment_activity_voice_minutes(guild_id: int, user_id: int, delta_mi
     Returns the user's new cumulative ``voice_minutes`` for this guild.
     """
     if delta_minutes <= 0:
-        async with aiosqlite.connect(DB_PATH) as db:
+        async with open_db() as db:
             cur = await db.execute(
                 "SELECT voice_minutes FROM activity_stats WHERE guild_id=? AND user_id=?",
                 (guild_id, user_id),
@@ -731,7 +732,7 @@ async def increment_activity_voice_minutes(guild_id: int, user_id: int, delta_mi
     today = now_utc().date().isoformat()
     points = delta_minutes // 10  # mirrors per-minute voice rewards
 
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute(
             """
             INSERT INTO activity_stats (guild_id, user_id, voice_minutes, last_activity_date, weekly_score, monthly_score)
@@ -755,14 +756,14 @@ async def increment_activity_voice_minutes(guild_id: int, user_id: int, delta_mi
 
 async def reset_weekly_scores():
     """Reset weekly scores (should be called weekly)."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute("UPDATE activity_stats SET weekly_score = 0")
         await db.commit()
 
 
 async def reset_monthly_scores():
     """Reset monthly scores (should be called monthly)."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute("UPDATE activity_stats SET monthly_score = 0")
         await db.commit()
 
@@ -770,7 +771,7 @@ async def reset_monthly_scores():
 # --------------------- Auto-Moderation Functions ---------------------
 async def get_auto_mod_settings(guild_id: int) -> Optional[dict]:
     """Get auto-moderation settings for a guild."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         cur = await db.execute("""
             SELECT enabled, spam_enabled, spam_threshold, spam_interval,
                    caps_enabled, caps_threshold, caps_min_length,
@@ -832,7 +833,7 @@ async def update_auto_mod_settings(guild_id: int, **kwargs):
         defaults.update(kwargs)
         settings = defaults
     
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute("""
             INSERT INTO auto_mod_settings (
                 guild_id, enabled, spam_enabled, spam_threshold, spam_interval,
@@ -878,7 +879,7 @@ async def update_auto_mod_settings(guild_id: int, **kwargs):
 
 async def log_auto_mod_violation(guild_id: int, user_id: int, violation_type: str, message_content: str, action_taken: str):
     """Log an auto-moderation violation."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute("""
             INSERT INTO auto_mod_violations (guild_id, user_id, violation_type, message_content, action_taken, created_at)
             VALUES (?, ?, ?, ?, ?, ?)
@@ -888,7 +889,7 @@ async def log_auto_mod_violation(guild_id: int, user_id: int, violation_type: st
 
 async def get_spam_tracking(guild_id: int, user_id: int) -> Optional[dict]:
     """Get spam tracking data for a user."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         cur = await db.execute("""
             SELECT message_count, first_message_time, last_message_time
             FROM auto_mod_spam_tracking WHERE guild_id = ? AND user_id = ?
@@ -907,7 +908,7 @@ async def get_spam_tracking(guild_id: int, user_id: int) -> Optional[dict]:
 
 async def update_spam_tracking(guild_id: int, user_id: int, message_count: int, first_message_time: str, last_message_time: str):
     """Update spam tracking for a user."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute("""
             INSERT INTO auto_mod_spam_tracking (guild_id, user_id, message_count, first_message_time, last_message_time)
             VALUES (?, ?, ?, ?, ?)
@@ -921,7 +922,7 @@ async def update_spam_tracking(guild_id: int, user_id: int, message_count: int, 
 
 async def reset_spam_tracking(guild_id: int, user_id: int):
     """Reset spam tracking for a user."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute("""
             DELETE FROM auto_mod_spam_tracking WHERE guild_id = ? AND user_id = ?
         """, (guild_id, user_id))
@@ -931,7 +932,7 @@ async def reset_spam_tracking(guild_id: int, user_id: int):
 # --------------------- Self-Assignable Roles Functions ---------------------
 async def add_self_assignable_role(guild_id: int, role_id: int, category: Optional[str] = None, description: Optional[str] = None, max_roles: Optional[int] = None):
     """Add a self-assignable role."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute("""
             INSERT INTO self_assignable_roles (guild_id, role_id, category, description, max_roles, created_at)
             VALUES (?, ?, ?, ?, ?, ?)
@@ -945,7 +946,7 @@ async def add_self_assignable_role(guild_id: int, role_id: int, category: Option
 
 async def remove_self_assignable_role(guild_id: int, role_id: int):
     """Remove a self-assignable role."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute("""
             DELETE FROM self_assignable_roles WHERE guild_id = ? AND role_id = ?
         """, (guild_id, role_id))
@@ -954,7 +955,7 @@ async def remove_self_assignable_role(guild_id: int, role_id: int):
 
 async def get_self_assignable_roles(guild_id: int, category: Optional[str] = None) -> list:
     """Get all self-assignable roles for a guild, optionally filtered by category."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         if category:
             cur = await db.execute("""
                 SELECT role_id, category, description, max_roles
@@ -975,7 +976,7 @@ async def get_self_assignable_roles(guild_id: int, category: Optional[str] = Non
 
 async def get_self_assignable_categories(guild_id: int) -> list:
     """Get all categories for self-assignable roles."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         cur = await db.execute("""
             SELECT DISTINCT category FROM self_assignable_roles
             WHERE guild_id = ? AND category IS NOT NULL
@@ -987,7 +988,7 @@ async def get_self_assignable_categories(guild_id: int) -> list:
 
 async def get_self_assignable_roles_and_categories(guild_id: int) -> tuple[list, list]:
     """Get roles and categories in one connection. Returns (roles_list, categories_list)."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         cur = await db.execute("""
             SELECT role_id, category, description, max_roles
             FROM self_assignable_roles
@@ -1009,7 +1010,7 @@ async def get_self_assignable_roles_and_categories(guild_id: int) -> tuple[list,
 # --------------------- Level Roles Functions ---------------------
 async def add_level_role(guild_id: int, level: int, role_id: int):
     """Add a level role (role assigned at a specific level)."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute("""
             INSERT INTO level_roles (guild_id, level, role_id, created_at)
             VALUES (?, ?, ?, ?)
@@ -1020,7 +1021,7 @@ async def add_level_role(guild_id: int, level: int, role_id: int):
 
 async def remove_level_role(guild_id: int, level: int):
     """Remove a level role."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute("""
             DELETE FROM level_roles WHERE guild_id = ? AND level = ?
         """, (guild_id, level))
@@ -1029,7 +1030,7 @@ async def remove_level_role(guild_id: int, level: int):
 
 async def get_level_roles(guild_id: int) -> list:
     """Get all level roles for a guild."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         cur = await db.execute("""
             SELECT level, role_id FROM level_roles
             WHERE guild_id = ?
@@ -1041,7 +1042,7 @@ async def get_level_roles(guild_id: int) -> list:
 
 async def get_level_role_for_level(guild_id: int, level: int) -> Optional[int]:
     """Get the role ID for a specific level."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         cur = await db.execute("""
             SELECT role_id FROM level_roles
             WHERE guild_id = ? AND level = ?
@@ -1052,7 +1053,7 @@ async def get_level_role_for_level(guild_id: int, level: int) -> Optional[int]:
 
 async def get_all_level_roles_up_to(guild_id: int, level: int) -> list:
     """Get all level roles up to and including a specific level."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         cur = await db.execute("""
             SELECT level, role_id FROM level_roles
             WHERE guild_id = ? AND level <= ?
@@ -1065,7 +1066,7 @@ async def get_all_level_roles_up_to(guild_id: int, level: int) -> list:
 # --------------------- Warframe Achievement Roles (Steam playtime, etc.) ---------------------
 async def link_steam_account(guild_id: int, user_id: int, steam_id_64: str, warframe_ign: Optional[str] = None):
     """Link a Discord user's Steam account for Warframe playtime tracking."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute("""
             INSERT OR REPLACE INTO linked_steam_accounts (guild_id, user_id, steam_id_64, warframe_ign, linked_at)
             VALUES (?, ?, ?, ?, ?)
@@ -1075,7 +1076,7 @@ async def link_steam_account(guild_id: int, user_id: int, steam_id_64: str, warf
 
 async def unlink_steam_account(guild_id: int, user_id: int):
     """Unlink a user's Steam account."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute(
             "DELETE FROM linked_steam_accounts WHERE guild_id=? AND user_id=?",
             (guild_id, user_id),
@@ -1085,7 +1086,7 @@ async def unlink_steam_account(guild_id: int, user_id: int):
 
 async def get_linked_steam_id(guild_id: int, user_id: int) -> Optional[str]:
     """Get linked Steam 64 ID for a user, or None."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         cur = await db.execute(
             "SELECT steam_id_64 FROM linked_steam_accounts WHERE guild_id=? AND user_id=?",
             (guild_id, user_id),
@@ -1096,7 +1097,7 @@ async def get_linked_steam_id(guild_id: int, user_id: int) -> Optional[str]:
 
 async def get_all_linked_steam_accounts(guild_id: int) -> list:
     """Get all (user_id, steam_id_64) for a guild."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         cur = await db.execute(
             "SELECT user_id, steam_id_64 FROM linked_steam_accounts WHERE guild_id=?",
             (guild_id,),
@@ -1106,7 +1107,7 @@ async def get_all_linked_steam_accounts(guild_id: int) -> list:
 
 async def update_steam_playtime(guild_id: int, user_id: int, hours: int):
     """Update stored playtime and last checked time."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute("""
             UPDATE linked_steam_accounts
             SET last_playtime_hours=?, last_checked_at=?
@@ -1117,7 +1118,7 @@ async def update_steam_playtime(guild_id: int, user_id: int, hours: int):
 
 async def add_warframe_achievement_role(guild_id: int, achievement_type: str, threshold_value: int, role_id: int):
     """Add a role to assign when user reaches a playtime threshold."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute("""
             INSERT OR REPLACE INTO warframe_achievement_roles (guild_id, achievement_type, threshold_value, role_id)
             VALUES (?, ?, ?, ?)
@@ -1127,7 +1128,7 @@ async def add_warframe_achievement_role(guild_id: int, achievement_type: str, th
 
 async def remove_warframe_achievement_role(guild_id: int, achievement_type: str, threshold_value: int):
     """Remove a warframe achievement role."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute("""
             DELETE FROM warframe_achievement_roles
             WHERE guild_id=? AND achievement_type=? AND threshold_value=?
@@ -1137,7 +1138,7 @@ async def remove_warframe_achievement_role(guild_id: int, achievement_type: str,
 
 async def get_warframe_achievement_roles(guild_id: int) -> list:
     """Get all warframe achievement role configs: (achievement_type, threshold_value, role_id)."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         cur = await db.execute("""
             SELECT achievement_type, threshold_value, role_id
             FROM warframe_achievement_roles WHERE guild_id=?
@@ -1148,7 +1149,7 @@ async def get_warframe_achievement_roles(guild_id: int) -> list:
 
 async def record_warframe_achievement_unlock(guild_id: int, user_id: int, achievement_type: str, threshold_value: int):
     """Record that a user has been assigned a role for this achievement."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute("""
             INSERT OR IGNORE INTO warframe_achievement_unlocks
             (guild_id, user_id, achievement_type, threshold_value, unlocked_at)
@@ -1159,7 +1160,7 @@ async def record_warframe_achievement_unlock(guild_id: int, user_id: int, achiev
 
 async def has_warframe_achievement_unlock(guild_id: int, user_id: int, achievement_type: str, threshold_value: int) -> bool:
     """Check if user has already received this achievement role."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         cur = await db.execute("""
             SELECT 1 FROM warframe_achievement_unlocks
             WHERE guild_id=? AND user_id=? AND achievement_type=? AND threshold_value=?
@@ -1170,7 +1171,7 @@ async def has_warframe_achievement_unlock(guild_id: int, user_id: int, achieveme
 # --------------------- AFK Functions ---------------------
 async def set_afk(guild_id: int, user_id: int, reason: Optional[str] = None):
     """Set a user as AFK."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute("""
             INSERT INTO afk_users (guild_id, user_id, reason, set_at)
             VALUES (?, ?, ?, ?)
@@ -1183,7 +1184,7 @@ async def set_afk(guild_id: int, user_id: int, reason: Optional[str] = None):
 
 async def remove_afk(guild_id: int, user_id: int):
     """Remove a user's AFK status."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute("""
             DELETE FROM afk_users WHERE guild_id = ? AND user_id = ?
         """, (guild_id, user_id))
@@ -1192,7 +1193,7 @@ async def remove_afk(guild_id: int, user_id: int):
 
 async def get_afk_status(guild_id: int, user_id: int) -> Optional[dict]:
     """Get a user's AFK status."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         cur = await db.execute("""
             SELECT reason, set_at FROM afk_users
             WHERE guild_id = ? AND user_id = ?
@@ -1206,7 +1207,7 @@ async def get_afk_status(guild_id: int, user_id: int) -> Optional[dict]:
 # --------------------- Server Stats Functions ---------------------
 async def set_server_stats_channel(guild_id: int, channel_id: int, stats_type: str = "members"):
     """Set the server stats channel."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute("""
             INSERT INTO server_stats_channels (guild_id, channel_id, stats_type, enabled)
             VALUES (?, ?, ?, 1)
@@ -1220,7 +1221,7 @@ async def set_server_stats_channel(guild_id: int, channel_id: int, stats_type: s
 
 async def remove_server_stats_channel(guild_id: int):
     """Remove the server stats channel."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute("""
             UPDATE server_stats_channels SET enabled = 0 WHERE guild_id = ?
         """, (guild_id,))
@@ -1229,7 +1230,7 @@ async def remove_server_stats_channel(guild_id: int):
 
 async def get_server_stats_channel(guild_id: int) -> Optional[dict]:
     """Get the server stats channel settings."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         cur = await db.execute("""
             SELECT channel_id, stats_type, enabled FROM server_stats_channels
             WHERE guild_id = ?
@@ -1243,7 +1244,7 @@ async def get_server_stats_channel(guild_id: int) -> Optional[dict]:
 # --------------------- Milestone Functions ---------------------
 async def check_and_record_milestone(guild_id: int, user_id: int, milestone_type: str, milestone_value: int) -> bool:
     """Check if milestone should be recorded and record it. Returns True if milestone was newly achieved."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         # Atomic insert — avoids UNIQUE races when many messages arrive at once.
         cur = await db.execute("""
             INSERT OR IGNORE INTO member_milestones (guild_id, user_id, milestone_type, milestone_value, achieved_at, notified)
@@ -1267,7 +1268,7 @@ async def check_and_unlock_achievement(
     When *interaction* is provided and the achievement is newly unlocked, an
     ephemeral embed is sent to the user via interaction.followup.send().
     """
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         # Check if already unlocked
         cur = await db.execute("""
             SELECT 1 FROM achievements
@@ -1450,7 +1451,7 @@ async def check_and_unlock_achievement(
 
 async def check_voice_lifetime_achievements(guild_id: int, user_id: int, bot: Optional[Any] = None) -> None:
     """Unlock voice-time achievements (and linked badges) from cumulative ``activity_stats.voice_minutes``."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         cur = await db.execute(
             "SELECT voice_minutes FROM activity_stats WHERE guild_id=? AND user_id=?",
             (guild_id, user_id),
@@ -1513,7 +1514,7 @@ async def initialize_achievement_definitions():
         ("suggestion_first", "Idea Person", "Submit your first suggestion", "social", "Submit 1 suggestion", 25, 10, None),
     ]
 
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         for achievement_id, name, description, category, requirement, reward_coins, reward_xp, unlock_title_id in default_achievements:
             await db.execute("""
                 INSERT OR IGNORE INTO achievement_definitions
@@ -1532,7 +1533,7 @@ async def initialize_achievement_definitions():
 
 async def get_all_title_definitions() -> list:
     """Get all title definitions."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         cur = await db.execute("""
             SELECT id, name, description, unlock_type, unlock_value, cost_coins
             FROM title_definitions ORDER BY cost_coins ASC, name ASC
@@ -1542,7 +1543,7 @@ async def get_all_title_definitions() -> list:
 
 async def get_user_unlocked_titles(guild_id: int, user_id: int) -> set:
     """Get set of title IDs unlocked by user."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         cur = await db.execute("""
             SELECT title_id FROM user_unlocked_titles
             WHERE guild_id=? AND user_id=?
@@ -1553,7 +1554,7 @@ async def get_user_unlocked_titles(guild_id: int, user_id: int) -> set:
 
 async def unlock_title_for_user(guild_id: int, user_id: int, title_id: str):
     """Record that user unlocked a title."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute("""
             INSERT OR IGNORE INTO user_unlocked_titles (guild_id, user_id, title_id, unlocked_at)
             VALUES (?, ?, ?, ?)
@@ -1582,20 +1583,20 @@ async def check_and_unlock_eligible_titles(guild_id: int, user_id: int) -> list:
             elif u_type == "months" and u_val:
                 months_needed = int(u_val)
                 if months_needed <= 6:
-                    async with aiosqlite.connect(DB_PATH) as db:
+                    async with open_db() as db:
                         cur = await db.execute("""
                             SELECT 1 FROM achievements WHERE guild_id=? AND user_id=? AND achievement_id=?
                         """, (guild_id, user_id, f"months_{months_needed}"))
                         met = (await cur.fetchone()) is not None
                 else:
-                    async with aiosqlite.connect(DB_PATH) as db:
+                    async with open_db() as db:
                         cur = await db.execute("""
                             SELECT 1 FROM member_milestones
                             WHERE guild_id=? AND user_id=? AND milestone_type='join_anniversary' AND milestone_value>=?
                         """, (guild_id, user_id, months_needed // 12))
                         met = (await cur.fetchone()) is not None
             elif u_type == "messages" and u_val:
-                async with aiosqlite.connect(DB_PATH) as db:
+                async with open_db() as db:
                     cur = await db.execute("""
                         SELECT messages_sent FROM activity_stats WHERE guild_id=? AND user_id=?
                     """, (guild_id, user_id))
@@ -1622,7 +1623,7 @@ async def initialize_title_definitions():
         ("obsidian", "Obsidian", "Premium server title", "purchase", None, 100000),
         ("founder", "Founder", "Support the server", "purchase", None, 250000),
     ]
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         for tid, name, desc, u_type, u_val, cost in default_titles:
             await db.execute("""
                 INSERT OR IGNORE INTO title_definitions (id, name, description, unlock_type, unlock_value, cost_coins)
@@ -1659,7 +1660,7 @@ async def initialize_badge_definitions():
         ("ticket_creator", "Ticket Opener", "Create first ticket", "🎫", "common"),
         ("suggestion_first", "Idea Person", "Submit first suggestion", "💡", "common"),
     ]
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         for badge_id, name, description, icon_emoji, rarity in default_badges:
             await db.execute("""
                 INSERT OR IGNORE INTO badge_definitions (badge_id, name, description, icon_emoji, rarity)
@@ -1671,7 +1672,7 @@ async def initialize_badge_definitions():
 # --------------------- Shop Functions ---------------------
 async def initialize_default_shop_items(guild_id: int):
     """Initialize default shop items for a guild if none exist."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         # Check if shop already has items
         cur = await db.execute("""
             SELECT COUNT(*) FROM shop_items WHERE guild_id=?
