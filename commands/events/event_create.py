@@ -112,7 +112,8 @@ async def create_event_from_modal(
             ),
             ephemeral=True,
         )
-    dt = parse_time_natural(when_str)
+    from core.user_time import parse_time_for_user
+    dt = await parse_time_for_user(interaction.guild.id, interaction.user.id, when_str)
     if not dt:
         return await interaction.followup.send(
             embed=obsidian_embed("❌ Invalid Time", f"Couldn't parse '{when_str}'. Try: tomorrow 8pm, in 2 hours", color=discord.Color.red(), client=interaction.client),
@@ -207,7 +208,9 @@ def setup(bot, group=None):
             title = t_title
             description = t_desc
         
-        dt = parse_time_natural(when)
+        from core.user_time import parse_time_for_user
+        gid = interaction.guild.id if interaction.guild else 0
+        dt = await parse_time_for_user(gid, interaction.user.id, when)
         if not dt:
             return await interaction.response.send_message(
                 "Couldn't parse that time. Try: `tomorrow 8pm`, `Jan 14 7:30pm`, etc.",

@@ -39,6 +39,14 @@ async def run_startup(bot: discord.Client) -> None:
     await bot.change_presence(activity=activity, status=discord.Status.online)
     print(f"[ready] Status set: Watching {activity.name}")
 
+    # Build clickable command-mention registry (</name:id>) now that the tree
+    # is registered with Discord. Best-effort: failure just falls back to text.
+    try:
+        from core.command_mentions import refresh_command_mentions
+        await refresh_command_mentions(bot)
+    except Exception as e:
+        logger.warning(f"[ready] command-mention registry init failed: {e}")
+
     guild_list = sorted(bot.guilds, key=lambda g: (g.name or "").lower())
     guild_count = len(guild_list)
     print(f"[ready] Servers ({guild_count}):")

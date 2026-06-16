@@ -73,6 +73,9 @@ class EmbedPaginator(discord.ui.View):
                 c.disabled = self.page <= 0
             elif getattr(c, "custom_id", "") == "paginator_next":
                 c.disabled = self.page >= self.total_pages - 1
+            elif getattr(c, "custom_id", "") == "paginator_jump":
+                # Jumping only makes sense with 3+ pages.
+                c.disabled = self.total_pages <= 2
 
     def _build_embed(self) -> discord.Embed:
         p = self.pages[self.page]
@@ -118,6 +121,39 @@ class EmbedPaginator(discord.ui.View):
         self.page = min(self.total_pages - 1, self.page + 1)
         self._update_buttons()
         await interaction.response.edit_message(embed=self._build_embed(), view=self)
+
+    @discord.ui.button(label="Jump", emoji="🔢", style=discord.ButtonStyle.secondary, custom_id="paginator_jump")
+    async def jump_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(_PageJumpModal(self))
+
+
+class _PageJumpModal(discord.ui.Modal, title="Jump to page"):
+    """Modal to jump directly to a page in an EmbedPaginator."""
+
+    def __init__(self, paginator: "EmbedPaginator"):
+        super().__init__(timeout=120)
+        self.paginator = paginator
+        self.page_input = discord.ui.TextInput(
+            label=f"Page number (1-{paginator.total_pages})",
+            placeholder=f"Enter 1-{paginator.total_pages}",
+            required=True,
+            max_length=6,
+        )
+        self.add_item(self.page_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        raw = (self.page_input.value or "").strip()
+        if not raw.lstrip("+-").isdigit():
+            return await interaction.response.send_message(
+                f"'{raw}' isn't a number. Enter a page between 1 and {self.paginator.total_pages}.",
+                ephemeral=True,
+            )
+        target = max(1, min(self.paginator.total_pages, int(raw)))
+        self.paginator.page = target - 1
+        self.paginator._update_buttons()
+        await interaction.response.edit_message(
+            embed=self.paginator._build_embed(), view=self.paginator
+        )
 
 
 class RetryView(discord.ui.View):

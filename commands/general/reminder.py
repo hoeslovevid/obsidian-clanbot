@@ -185,8 +185,14 @@ def setup(bot, group=None):
             rows_raw = await cur.fetchall()
             rows = [(r[0], r[1], r[2], r[3] if len(r) > 3 else None) for r in rows_raw]
         if not rows:
+            from core.utils import empty_state_embed
             return await interaction.followup.send(
-                embed=obsidian_embed("📋 No Pending Reminders", "You have no active reminders. Use `/tools remind` to set one.", color=discord.Color.blue(), client=interaction.client),
+                embed=empty_state_embed(
+                    "📋 No Pending Reminders",
+                    "You have no active reminders yet.",
+                    suggestions=["tools remind"],
+                    client=interaction.client,
+                ),
                 ephemeral=True,
             )
         per_page = 15

@@ -72,8 +72,7 @@ def setup(bot, group=None):
         embed = _build_embed(data, interaction.client, tier_filter=tier_filter)
 
         async def on_refresh(btn_i: discord.Interaction):
-            if btn_i.user.id != interaction.user.id:
-                return await btn_i.response.send_message("Only the requester can refresh.", ephemeral=True)
+            # Read-only public data — anyone may refresh.
             invalidate("warframe:fissures")
             nd = await fetch_fissures()
             if nd is None:

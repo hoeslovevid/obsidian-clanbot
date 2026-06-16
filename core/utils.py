@@ -536,15 +536,19 @@ def is_mod(member: discord.Member) -> bool:
     return member.guild_permissions.administrator
 
 
-def parse_time_natural(text: str) -> Optional[datetime]:
+def parse_time_natural(text: str, tz: Optional[str] = None) -> Optional[datetime]:
     """
     Parse natural language time strings into timezone-aware datetime in UTC.
     Accepts: "tomorrow 8pm", "Jan 15 7:30pm", etc.
+
+    ``tz`` is an IANA timezone name (e.g. "America/New_York") used as the
+    reference zone for ambiguous/absolute times. Falls back to the server
+    ``TIMEZONE`` when not provided.
     """
     dt = dateparser.parse(
         text,
         settings={
-            "TIMEZONE": TIMEZONE,
+            "TIMEZONE": tz or TIMEZONE,
             "RETURN_AS_TIMEZONE_AWARE": True,
             "TO_TIMEZONE": "UTC",
             "PREFER_DATES_FROM": "future",
@@ -555,6 +559,33 @@ def parse_time_natural(text: str) -> Optional[datetime]:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(timezone.utc)
+
+
+def empty_state_embed(
+    title: str,
+    body: str,
+    *,
+    client=None,
+    suggestions: Optional[list] = None,
+    color=None,
+):
+    """Friendly empty-state embed with clickable command CTAs.
+
+    ``suggestions`` is a list of qualified command paths (e.g. ``["tools remind"]``)
+    that render as clickable command mentions when registered, else ``/path`` text.
+    """
+    from core.command_mentions import command_mention
+
+    desc = body
+    if suggestions:
+        links = " · ".join(command_mention(s) for s in suggestions)
+        desc = f"{body}\n\n**Get started:** {links}"
+    return obsidian_embed(
+        title,
+        desc,
+        color=color or EMBED_COLORS.get("general", discord.Color.blue()),
+        client=client,
+    )
 
 
 def extract_id(text: str) -> Optional[int]:

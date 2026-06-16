@@ -132,10 +132,7 @@ def setup(bot, group=None):
             return obsidian_embed("📢 Active Alerts", d, category="warframe", footer="warframestat.us · Refreshes every 60s", client=interaction.client)
 
         async def on_refresh(btn_interaction: discord.Interaction):
-            if btn_interaction.user.id != interaction.user.id:
-                if not btn_interaction.response.is_done():
-                    return await btn_interaction.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
-                return await btn_interaction.followup.send(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
+            # Read-only public data — anyone may refresh.
             invalidate("warframe:alerts")
             new_data = await fetch_alerts()
             if new_data is None:

@@ -5,9 +5,21 @@ from discord import app_commands  # type: ignore
 from datetime import datetime, timezone
 
 from core.config import TIMEZONE
-from core.utils import obsidian_embed, is_mod
+from core.utils import obsidian_embed, is_mod, TIME_AUTOCOMPLETE_CHOICES
 from database import DB_PATH, now_utc
 import aiosqlite  # type: ignore
+
+
+async def _schedule_when_autocomplete(
+    interaction: discord.Interaction, current: str
+) -> list[app_commands.Choice[str]]:
+    current_lower = (current or "").lower()
+    choices = [
+        app_commands.Choice(name=label, value=value)
+        for value, label in TIME_AUTOCOMPLETE_CHOICES
+        if not current_lower or current_lower in value.lower()
+    ]
+    return choices[:25]
 
 
 def setup(bot, group=None):
@@ -19,6 +31,7 @@ def setup(bot, group=None):
     )
 
     @command_decorator
+    @app_commands.autocomplete(when=_schedule_when_autocomplete)
     @app_commands.describe(
         channel="Channel to send the message in",
         when="When to send (e.g. 'tomorrow 8pm', 'in 2 hours')",
@@ -50,10 +63,12 @@ def setup(bot, group=None):
 
         await interaction.response.defer(ephemeral=True)
 
+        from database import get_user_timezone
+        tz_for_parse = await get_user_timezone(interaction.guild.id, interaction.user.id) or TIMEZONE
         send_time = dateparser.parse(
             when,
             settings={
-                "TIMEZONE": TIMEZONE,
+                "TIMEZONE": tz_for_parse,
                 "RETURN_AS_TIMEZONE_AWARE": True,
                 "TO_TIMEZONE": "UTC",
                 "RELATIVE_BASE": datetime.now(timezone.utc),

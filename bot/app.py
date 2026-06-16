@@ -1102,6 +1102,29 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
         pass
 
 
+# --------------------- Global auto-defer safety net ---------------------
+# Discord invalidates an interaction that isn't acknowledged within 3s. Most
+# slow commands defer themselves, but this watchdog defers any straggler so a
+# cold DB/Warframe call never surfaces to the user as "This interaction failed".
+# Modal-opening commands respond instantly (well under the threshold), so they
+# are never affected.
+AUTO_DEFER_AFTER_SECONDS = float(os.getenv("AUTO_DEFER_AFTER_SECONDS", "2.5"))
+
+
+async def _auto_defer_watchdog(interaction: discord.Interaction) -> None:
+    """Defer a slash command that hasn't responded yet, to dodge the 3s timeout."""
+    try:
+        await asyncio.sleep(AUTO_DEFER_AFTER_SECONDS)
+        if interaction.response.is_done():
+            return
+        await interaction.response.defer()
+    except (discord.HTTPException, discord.InteractionResponded):
+        # Already answered/expired in the race — nothing to do.
+        pass
+    except Exception as exc:  # never let the watchdog crash the event loop
+        logger.debug(f"[auto_defer] watchdog skipped: {exc}")
+
+
 # --------------------- Component Router ---------------------
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
@@ -1112,6 +1135,8 @@ async def on_interaction(interaction: discord.Interaction):
     Component interactions → handlers/component_handler.py
     """
     if interaction.type == discord.InteractionType.application_command:
+        # Safety net: ensure the command is acknowledged within Discord's 3s window.
+        asyncio.create_task(_auto_defer_watchdog(interaction))
         if isinstance(interaction.user, discord.Member) and interaction.guild:
             idata_cmd: Any = interaction.data or {}
             command_name = idata_cmd.get("name", "")

@@ -37,11 +37,12 @@ def setup(bot, group=None):
             rows = await cur.fetchall()
         
         if not rows:
+            from core.utils import empty_state_embed
             return await interaction.followup.send(
-                embed=obsidian_embed(
+                embed=empty_state_embed(
                     "💼 No Active Listings",
-                    "You don't have any active trading listings. Use `/trade` to create one.",
-                    color=discord.Color.orange(),
+                    "You don't have any active trading listings yet.",
+                    suggestions=["trade", "trading trade_search"],
                     client=interaction.client,
                 ),
                 ephemeral=True

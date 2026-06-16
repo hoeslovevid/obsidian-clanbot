@@ -145,9 +145,31 @@ def setup(bot, group=None):
         await _on_poll_reaction(payload)
 
     
+    async def _poll_duration_autocomplete(
+        interaction: discord.Interaction, current: str
+    ) -> list[app_commands.Choice[str]]:
+        presets = [
+            ("15 minutes", "15 minutes"),
+            ("30 minutes", "30 minutes"),
+            ("1 hour", "1 hour"),
+            ("2 hours", "2 hours"),
+            ("6 hours", "6 hours"),
+            ("12 hours", "12 hours"),
+            ("1 day", "1 day"),
+            ("3 days", "3 days"),
+            ("1 week", "1 week"),
+        ]
+        cl = (current or "").lower()
+        return [
+            app_commands.Choice(name=label, value=value)
+            for value, label in presets
+            if not cl or cl in value.lower()
+        ][:25]
+
     command_decorator = group.command(name="poll", description="Create a server poll — members vote with number reactions.") if group else bot.tree.command(name="poll", description="Create a poll.")
     
     @command_decorator
+    @app_commands.autocomplete(duration=_poll_duration_autocomplete)
     @app_commands.describe(question="The poll question", options="Comma-separated options (max 10)", duration="How long the poll should last (e.g., '1 hour', '30 minutes')")
     async def poll(interaction: discord.Interaction, question: str, options: str, duration: Optional[str] = None):
         """Create a poll."""
@@ -192,11 +214,14 @@ def setup(bot, group=None):
         # Parse duration
         ends_at = None
         if duration:
+            from database import get_user_timezone
+            tz_for_parse = await get_user_timezone(interaction.guild.id, interaction.user.id) or 'UTC'
             parsed_duration = dateparser.parse(
                 duration,
                 settings={
-                    'TIMEZONE': 'UTC',
+                    'TIMEZONE': tz_for_parse,
                     'RETURN_AS_TIMEZONE_AWARE': True,
+                    'TO_TIMEZONE': 'UTC',
                     'RELATIVE_BASE': datetime.now(timezone.utc),
                 },
             )

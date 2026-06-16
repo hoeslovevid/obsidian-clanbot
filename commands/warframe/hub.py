@@ -158,8 +158,7 @@ class BaroWishlistModal(discord.ui.Modal, title="Baro wishlist item"):
 
 def _hub_view(interaction: discord.Interaction, platform: str, guild_id: int) -> discord.ui.View:
     async def on_refresh(btn_interaction: discord.Interaction):
-        if btn_interaction.user.id != interaction.user.id:
-            return await btn_interaction.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
+        # Read-only public data — anyone may refresh.
         from api.warframe_api import invalidate
 
         invalidate("warframe:baro")

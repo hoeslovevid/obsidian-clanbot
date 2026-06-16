@@ -201,24 +201,28 @@ async def get_mention_reply(
     Get reply for a mention. Tries keyword match first, then a fuzzy
     command-name suggestion (Item 9), then AI fallback.
     """
+    from core.command_mentions import linkify_command_mentions
+
     query = _strip_mention(content, bot_id)
     if not query:
-        return (
+        reply = (
             "Hi! I'm the Obsidian Clan Bot. Use **`/help`** to explore.\n"
             "Quick: **`/balance`** · **`/daily`** · **`/profile`** · **`/warframe status`**"
         )
-    canned = _match_keyword(query)
-    if canned:
-        return canned
-    # Item 9: suggest a close-match command before falling back to AI / generic.
-    suggestion = fuzzy_command_suggestion(query, bot)
-    if suggestion:
-        return suggestion
-    if openai_api_key:
-        ai_reply = await get_ai_response(query, openai_api_key)
-        if ai_reply:
-            return ai_reply
-    return (
-        f"I'm not sure how to help with that. Use **`/help`** to explore, "
-        "or try: Baro, alerts, cycles, daily, balance, or profile!"
-    )
+    else:
+        canned = _match_keyword(query)
+        suggestion = None if canned else fuzzy_command_suggestion(query, bot)
+        if canned:
+            reply = canned
+        elif suggestion:
+            # Item 9: suggest a close-match command before falling back to AI.
+            reply = suggestion
+        elif openai_api_key and (ai_reply := await get_ai_response(query, openai_api_key)):
+            reply = ai_reply
+        else:
+            reply = (
+                "I'm not sure how to help with that. Use **`/help`** to explore, "
+                "or try: Baro, alerts, cycles, daily, balance, or profile!"
+            )
+    # Upgrade any `/command` references to clickable mentions where possible.
+    return linkify_command_mentions(reply)

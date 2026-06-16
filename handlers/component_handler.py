@@ -456,21 +456,30 @@ async def handle_component(bot: discord.Client, interaction: discord.Interaction
             logger.warning(f"[outer_handler] Interaction expired (404), cannot send error message: {e}")
             return  # Interaction expired, can't respond
 
-        # Only try to send error message if interaction is still valid
+        # Send a consistent, user-friendly error embed (with error code + copy
+        # button) instead of leaking the raw exception string. send_error_reply
+        # handles response-vs-followup and swallows expired-interaction errors.
         try:
-            if interaction.response.is_done():
-                # Try followup, but it might also fail if interaction expired
-                try:
-                    await interaction.followup.send(f"Something went wrong: {str(e)}", ephemeral=True)
-                except (discord.errors.NotFound, discord.errors.InteractionResponded, discord.errors.HTTPException):
-                    # Interaction expired or already handled - can't send error
-                    logger.warning(f"[outer_handler] Could not send error via followup (interaction expired/handled)")
-            else:
-                try:
-                    await interaction.response.send_message(f"Something went wrong: {str(e)}", ephemeral=True)
-                except (discord.errors.NotFound, discord.errors.InteractionResponded, discord.errors.HTTPException):
-                    # Interaction already expired or handled
-                    logger.warning(f"[outer_handler] Could not send error via response (interaction expired/handled)")
+            from core.error_handling import (
+                classify_exception,
+                record_error,
+                send_error_reply,
+            )
+
+            user_message, action_hint, error_code = classify_exception(e)
+            record_error(
+                error_code=error_code,
+                command_name=cid,
+                guild_id=interaction.guild.id if interaction.guild else None,
+                exc=e,
+                user_message=user_message,
+            )
+            await send_error_reply(
+                interaction,
+                user_message,
+                action_hint=action_hint,
+                error_code=error_code,
+            )
         except Exception as err:
             # If we can't send error message, log it
             logger.error(f"[outer_handler] Could not send error message: {err}", exc_info=True)

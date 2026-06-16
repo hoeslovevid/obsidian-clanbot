@@ -306,7 +306,11 @@ async def handle_app_command_error(
             wait_str = "**a moment**"
         cmd_name = getattr(interaction.command, "qualified_name", None)
         cmd_str = f"`/{cmd_name}` " if cmd_name else "This command "
-        msg = f"⏳ Slow down! {cmd_str}can be used again in {wait_str}."
+        ready_ts = int(now_utc().timestamp() + retry_after)
+        msg = (
+            f"⏳ Slow down! {cmd_str}can be used again in {wait_str}.\n"
+            f"Ready <t:{ready_ts}:R> (<t:{ready_ts}:t>)."
+        )
         await send_error_reply(
             interaction, msg, action_hint="Use /help to explore other commands while you wait."
         )

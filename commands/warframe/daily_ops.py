@@ -43,8 +43,7 @@ def setup(bot, group=None):
         embed = _build_embed(sp, arb, nw, interaction.client)
 
         async def on_refresh(btn_i: discord.Interaction):
-            if btn_i.user.id != interaction.user.id:
-                return await btn_i.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
+            # Read-only public data — anyone may refresh.
             invalidate("warframe:steelPath")
             invalidate("warframe:arbitration")
             invalidate("warframe:nightwave")

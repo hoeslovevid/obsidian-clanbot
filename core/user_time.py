@@ -15,6 +15,18 @@ async def get_user_time_format(guild_id: int, user_id: int) -> str:
     return "24" if val == "24" else "12"
 
 
+async def parse_time_for_user(guild_id: int, user_id: int, text: str) -> Optional[datetime]:
+    """Parse natural-language time using the user's saved timezone (falls back to server tz)."""
+    from core.utils import parse_time_natural
+    from database import get_user_timezone
+
+    try:
+        tz = await get_user_timezone(guild_id, user_id)
+    except Exception:
+        tz = None
+    return parse_time_natural(text, tz=tz or None)
+
+
 async def format_user_time(
     guild_id: int,
     user_id: int,
