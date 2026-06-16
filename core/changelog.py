@@ -12,19 +12,26 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-16"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Reminders** — snooze buttons (+10m / +1h / Tomorrow) on delivery, one-tap **Undo** when you cancel, and timezone-aware time parsing",
-    "**Discovery** — new `/search` command palette, clickable command mentions in suggestions and bot replies, and data-backed autocomplete (reminder IDs, schedule/poll durations)",
-    "**`/economy cooldowns`** — daily, message-reward, and investment cooldowns in one view; the daily claim now links straight to bounties",
-    "**Reliability** — global auto-defer prevents *This interaction failed*, DM fallback when the bot can't post a channel message, consistent component error replies, and cooldown messages now show the ready time",
-    "**`/admin setup_status`** — shows configured vs missing channels with clickable setup commands",
-    "**Preferences** — new `private_results` option keeps personal command output (e.g. `/profile`) private by default",
-    "**Warframe** — anyone can refresh public data embeds; a **🔔 Notify me when back** button DMs you once the API recovers",
-    "**Empty states** — friendlier list screens with clickable next-step commands (reminders, trades, badges)",
-    "**Paginators** — First / Last and jump-to-page buttons with longer session timeouts",
+    "**Docs** — the in-app changelog now updates with every commit, so `/whatsnew` always reflects the latest release",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "1.99.0",
+        "date": "2026-06-16",
+        "changes": [
+            "**Reminders** — snooze buttons (+10m / +1h / Tomorrow) on delivery, one-tap **Undo** when you cancel, and timezone-aware time parsing",
+            "**Discovery** — new `/search` command palette, clickable command mentions in suggestions and bot replies, and data-backed autocomplete (reminder IDs, schedule/poll durations)",
+            "**`/economy cooldowns`** — daily, message-reward, and investment cooldowns in one view; the daily claim now links straight to bounties",
+            "**Reliability** — global auto-defer prevents *This interaction failed*, DM fallback when the bot can't post a channel message, consistent component error replies, and cooldown messages now show the ready time",
+            "**`/admin setup_status`** — shows configured vs missing channels with clickable setup commands",
+            "**Preferences** — new `private_results` option keeps personal command output (e.g. `/profile`) private by default",
+            "**Warframe** — anyone can refresh public data embeds; a **🔔 Notify me when back** button DMs you once the API recovers",
+            "**Empty states** — friendlier list screens with clickable next-step commands (reminders, trades, badges)",
+            "**Paginators** — First / Last and jump-to-page buttons with longer session timeouts",
+        ],
+    },
     {
         "version": "1.98.4",
         "date": "2026-06-10",

@@ -1,0 +1,33 @@
+---
+description: Update the /whatsnew changelog on every commit and push
+alwaysApply: true
+---
+
+# Update the changelog on every commit & push
+
+Whenever you create a git commit (and before pushing), you MUST update the
+`/whatsnew` changelog so it reflects the changes in that commit. Never push
+user-facing changes without doing this.
+
+## Source of truth
+- Bullets live in `core/changelog.py` → `CURRENT_RELEASE_CHANGES` / `CURRENT_RELEASE_DATE`.
+- The version label comes from `BOT_VERSION` in `core/config.py` (with `BOT_CHANGELOG` one-liner).
+- History lives in `core/changelog.py` → `CHANGELOG_HISTORY` (newest first).
+
+## Required steps for each commit
+1. Bump `BOT_VERSION` in `core/config.py` (patch for fixes, minor for features).
+2. Archive the outgoing release: move the current `CURRENT_RELEASE_DATE` +
+   `CURRENT_RELEASE_CHANGES` into a new top entry of `CHANGELOG_HISTORY` using the
+   **previous** `BOT_VERSION` string.
+3. Set `CURRENT_RELEASE_DATE` to today and replace `CURRENT_RELEASE_CHANGES` with
+   concise bullets describing this commit's changes.
+4. Update the `BOT_CHANGELOG` one-liner in `core/config.py` to `vX.Y.Z — summary; see /whatsnew.`
+5. Compile-check (`python -m py_compile core/changelog.py core/config.py`) before committing.
+
+## Bullet style (match existing entries)
+- Newest-first, grouped, e.g. `"**Reminders** — snooze buttons (+10m / +1h) on delivery"`.
+- Wrap commands/identifiers in backticks: `` `/economy cooldowns` ``.
+
+## Deploy note
+Remind the user to set `BOT_VERSION` on the host (Railway) to the new version so
+the release announcement fires and the version label matches.
