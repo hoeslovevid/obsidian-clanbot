@@ -84,6 +84,7 @@ def load_all_commands(bot):
         "commands.general.member_count",
         "commands.general.setup_obsidian",
         "commands.general.setup_docket",
+        "commands.general.setup_status",
         "commands.general.sync_commands",
         "commands.general.welcome_setup",
         "commands.general.milestones",
@@ -329,6 +330,7 @@ def load_all_commands(bot):
         "commands.general.member_count": general_group,
         "commands.general.setup_obsidian": general_group,
         "commands.general.setup_docket": general_group,
+        "commands.general.setup_status": admin_group,
         "commands.general.sync_commands": general_group,
         "commands.general.welcome_setup": general_group,
         "commands.general.milestones": admin_group,           # Moved: general_group payload >8000 bytes

@@ -426,6 +426,11 @@ def setup(bot, group=None):
         # Viewing own profile without share: ephemeral.
         is_self = user is None or (isinstance(interaction.user, discord.Member) and user.id == interaction.user.id)
         defer_ephemeral = is_self and not share
+        if not share and not defer_ephemeral and interaction.guild:
+            # Respect the user's "private results" preference even when viewing others.
+            from core.user_prefs import results_ephemeral
+            if await results_ephemeral(interaction.guild.id, interaction.user.id):
+                defer_ephemeral = True
         await interaction.response.defer(ephemeral=defer_ephemeral)
 
         if not interaction.guild:

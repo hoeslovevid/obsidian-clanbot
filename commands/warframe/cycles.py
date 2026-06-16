@@ -45,6 +45,8 @@ def setup(bot, group=None):
                 await btn_interaction.message.edit(embed=emb, view=None)
 
             view = RetryView(on_retry)
+            from core.wf_recovery import attach_notify_when_back
+            attach_notify_when_back(view, get_all_cycles)
             return await interaction.followup.send(embed=embed, view=view, ephemeral=True)
 
         fields = _build_cycle_fields(success)

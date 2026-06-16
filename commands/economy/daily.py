@@ -338,9 +338,12 @@ async def _run_daily(interaction: discord.Interaction, force_reset: bool = False
         title, cat = "🎁 Daily Reward Claimed!", "economy"
 
     freeze_note = "\n-# Used your monthly streak freeze." if used_freeze else ""
+    from core.command_mentions import command_mention
+    bounties_cta = command_mention("economy bounties", fallback="`/economy bounties`")
     desc = (
         f"> **+{format_number(coins_awarded)}** {pluralize(coins_awarded, 'coin')} claimed!\n\n"
-        f"Come back after reset for the next one!{freeze_note}"
+        f"Come back after reset for the next one!{freeze_note}\n"
+        f"-# 💡 Claim today's bounties too: {bounties_cta}"
     )
     thumb = interaction.user.display_avatar.url if interaction.user.display_avatar else None
     if cat in ("economy", "prestige"):
