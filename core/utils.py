@@ -568,11 +568,14 @@ def empty_state_embed(
     client=None,
     suggestions: Optional[list] = None,
     color=None,
+    **embed_kwargs,
 ):
     """Friendly empty-state embed with clickable command CTAs.
 
     ``suggestions`` is a list of qualified command paths (e.g. ``["tools remind"]``)
     that render as clickable command mentions when registered, else ``/path`` text.
+    Extra keyword args (e.g. ``author``, ``thumbnail``, ``footer``) are forwarded
+    to :func:`obsidian_embed`.
     """
     from core.command_mentions import command_mention
 
@@ -585,6 +588,7 @@ def empty_state_embed(
         desc,
         color=color or EMBED_COLORS.get("general", discord.Color.blue()),
         client=client,
+        **embed_kwargs,
     )
 
 
@@ -778,12 +782,12 @@ async def send_levelup_announcement(
         brand=True,
     )
 
-    try:
-        await channel.send(embed=embed)
-        return True
-    except Exception as e:
-        logger.warning(f"Failed to send level-up announcement: {e}")
-        return False
+    from core.safe_send import safe_channel_send
+
+    # Post to the level-up channel; if the bot can't post there, DM the member
+    # so the achievement isn't silently lost.
+    sent = await safe_channel_send(channel, dm_user=member, embed=embed)
+    return sent is not None
 
 
 def render_bar(pct: float, length: int = 12, *, show_pct: bool = True) -> str:

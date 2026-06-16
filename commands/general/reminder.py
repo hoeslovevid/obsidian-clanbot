@@ -35,6 +35,75 @@ def _next_recurrence(remind_at: datetime, rule: str) -> Optional[datetime]:
     return None
 
 
+class ReminderSnoozeView(discord.ui.View):
+    """Snooze buttons attached to a delivered reminder (re-schedules it)."""
+
+    def __init__(self, *, guild_id: int, user_id: int, channel_id: Optional[int], reminder_text: str):
+        super().__init__(timeout=6 * 3600)  # buttons stay live for 6 hours
+        self.guild_id = guild_id
+        self.user_id = user_id
+        self.channel_id = channel_id
+        self.reminder_text = reminder_text
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message(
+                "Only the person being reminded can snooze this.", ephemeral=True
+            )
+            return False
+        return True
+
+    async def _snooze(self, interaction: discord.Interaction, minutes: int) -> None:
+        from core.db import open_db
+
+        remind_at = now_utc() + timedelta(minutes=minutes)
+        try:
+            async with open_db() as db:
+                await db.execute(
+                    """
+                    INSERT INTO reminders (guild_id, user_id, channel_id, reminder_text, remind_at, created_at, sent, recurrence_rule)
+                    VALUES (?, ?, ?, ?, ?, ?, 0, NULL)
+                    """,
+                    (
+                        self.guild_id,
+                        self.user_id,
+                        self.channel_id,
+                        self.reminder_text,
+                        remind_at.isoformat(),
+                        now_utc().isoformat(),
+                    ),
+                )
+                await db.commit()
+        except Exception:
+            return await interaction.response.send_message(
+                "Couldn't snooze that reminder — please set a new one with `/tools remind`.",
+                ephemeral=True,
+            )
+        for child in self.children:
+            if isinstance(child, discord.ui.Button):
+                child.disabled = True
+        try:
+            await interaction.response.edit_message(view=self)
+        except discord.HTTPException:
+            pass
+        await interaction.followup.send(
+            f"⏰ Snoozed — I'll remind you again <t:{int(remind_at.timestamp())}:R>.",
+            ephemeral=True,
+        )
+
+    @discord.ui.button(label="+10 min", emoji="⏱️", style=discord.ButtonStyle.secondary)
+    async def snooze_10m(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._snooze(interaction, 10)
+
+    @discord.ui.button(label="+1 hour", emoji="🕐", style=discord.ButtonStyle.secondary)
+    async def snooze_1h(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._snooze(interaction, 60)
+
+    @discord.ui.button(label="Tomorrow", emoji="📅", style=discord.ButtonStyle.secondary)
+    async def snooze_1d(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._snooze(interaction, 60 * 24)
+
+
 async def remind_when_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
     """Autocomplete for natural time strings."""
     current_lower = (current or "").lower()

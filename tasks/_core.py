@@ -2574,6 +2574,16 @@ def setup_tasks(bot):
                     prefer_dm = (await get_guild_setting(guild_id, "reminders_prefer_dm") or "").lower() in ("1", "true", "yes")
                     if await get_quieter_mode(guild_id):
                         prefer_dm = True  # Quieter mode: prefer DM to avoid channel pings
+                    from commands.general.reminder import ReminderSnoozeView
+
+                    def _snooze_view():
+                        return ReminderSnoozeView(
+                            guild_id=guild_id,
+                            user_id=user_id,
+                            channel_id=channel_id,
+                            reminder_text=reminder_text,
+                        )
+
                     sent = False
                     if prefer_dm or not channel or not isinstance(channel, discord.TextChannel):
                         try:
@@ -2583,7 +2593,7 @@ def setup_tasks(bot):
                                 color=discord.Color.blue(),
                                 client=bot,
                             )
-                            await user.send(embed=embed)
+                            await user.send(embed=embed, view=_snooze_view())
                             sent = True
                         except Exception:
                             pass  # User has DMs disabled
@@ -2594,7 +2604,7 @@ def setup_tasks(bot):
                             color=discord.Color.blue(),
                             client=bot,
                         )
-                        await channel.send(embed=embed)
+                        await channel.send(embed=embed, view=_snooze_view())
                     
                     # Mark as sent and optionally re-insert recurring reminder
                     async with aiosqlite.connect(DB_PATH) as db:

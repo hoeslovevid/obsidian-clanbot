@@ -271,7 +271,10 @@ async def handle_app_command_error(
                     all_names.append(cmd.name)
             similar = find_similar_commands(command_name, all_names)
             if similar:
-                hint = f" Did you mean: **{'** or **'.join(similar[:3])}**?"
+                from core.command_mentions import command_mention
+
+                chips = " or ".join(command_mention(name) for name in similar[:3])
+                hint = f" Did you mean: {chips}?"
                 await send_error_reply(interaction, f"Unknown command `{command_name}`.{hint}")
                 return
         except Exception:

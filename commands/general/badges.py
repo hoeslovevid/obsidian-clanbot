@@ -93,9 +93,11 @@ def setup(bot, group=None):
         badges_list = await get_user_badges(interaction.guild.id, target_user.id)
         
         if not badges_list:
-            embed = obsidian_embed(
+            from core.utils import empty_state_embed
+            embed = empty_state_embed(
                 f"🏆 {target_user.display_name}'s Badges",
                 "No badges unlocked yet.\n\n*Earn badges by completing achievements and milestones!*",
+                suggestions=["tools achievements", "economy daily"],
                 color=discord.Color.blurple(),
                 author=target_user,
                 client=interaction.client,
