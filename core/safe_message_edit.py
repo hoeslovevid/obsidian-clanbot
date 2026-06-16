@@ -30,6 +30,14 @@ async def safe_message_edit(message: discord.Message, **kwargs: Any) -> bool:
             await message.edit(**kwargs)
             _channel_last_edit[ch_id] = time.monotonic()
             return True
+        except (discord.Forbidden, discord.NotFound) as exc:
+            logger.warning(
+                "[safe_edit] cannot edit message=%s channel=%s: %s",
+                message.id,
+                ch_id,
+                exc,
+            )
+            return False
         except discord.HTTPException as exc:
             if exc.status == 429:
                 logger.debug(

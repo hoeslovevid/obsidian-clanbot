@@ -81,7 +81,11 @@ async def get_ai_response(query: str, api_key: str) -> Optional[str]:
         text = response.choices[0].message.content
         return (text or "").strip() if text else None
     except Exception as e:
-        logger.warning(f"[mention_chat] OpenAI error: {e}")
+        err = str(e)
+        if "insufficient_quota" in err:
+            logger.info("[mention_chat] OpenAI quota exhausted — keyword fallback only")
+        else:
+            logger.warning("[mention_chat] OpenAI error: %s", e)
         return None
 
 

@@ -14,6 +14,23 @@ from database import DB_PATH, now_utc, log_complaint_action
 logger = logging.getLogger(__name__)
 
 
+async def _interaction_followup_ephemeral(interaction: discord.Interaction, content: str) -> None:
+    try:
+        await interaction.followup.send(content, ephemeral=True)
+    except discord.HTTPException:
+        pass
+
+
+async def _reenable_view_buttons(interaction: discord.Interaction, view: discord.ui.View) -> None:
+    for c in view.children:
+        c.disabled = False
+    try:
+        if interaction.message:
+            await interaction.message.edit(view=view)
+    except Exception:
+        pass
+
+
 async def _update_giveaway_entry_embed(message: discord.Message, entry_count: int) -> None:
     """Update public giveaway embed entry count; skip if unchanged."""
     if not message or not message.embeds:
@@ -126,9 +143,28 @@ class RetryView(discord.ui.View):
     async def retry_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         for c in self.children:
             c.disabled = True
-        # Let the retry callback handle acknowledging the interaction (defer/edit).
-        # This avoids double-responding, which causes InteractionResponded errors.
-        await self.retry_callback(interaction)
+        try:
+            await self.retry_callback(interaction)
+        except discord.NotFound:
+            await _interaction_followup_ephemeral(
+                interaction, "This message was deleted — run the command again."
+            )
+        except discord.Forbidden:
+            logger.warning(
+                "[RetryView] missing access editing message in channel=%s",
+                getattr(interaction.channel, "id", None),
+            )
+            await _interaction_followup_ephemeral(
+                interaction,
+                "I can't update this message anymore (missing channel access). Run the command again.",
+            )
+            await _reenable_view_buttons(interaction, self)
+        except discord.HTTPException as exc:
+            logger.debug("[RetryView] refresh edit failed: %s", exc)
+            await _interaction_followup_ephemeral(
+                interaction, "Couldn't refresh — try again in a moment."
+            )
+            await _reenable_view_buttons(interaction, self)
 
 
 class RefreshView(discord.ui.View):
@@ -156,7 +192,28 @@ class RefreshView(discord.ui.View):
             c.disabled = True
         if not interaction.response.is_done():
             await interaction.response.defer()
-        await self.refresh_callback(interaction)
+        try:
+            await self.refresh_callback(interaction)
+        except discord.NotFound:
+            await _interaction_followup_ephemeral(
+                interaction, "This message was deleted — run the command again."
+            )
+        except discord.Forbidden:
+            logger.warning(
+                "[RefreshView] missing access editing message in channel=%s",
+                getattr(interaction.channel, "id", None),
+            )
+            await _interaction_followup_ephemeral(
+                interaction,
+                "I can't update this message anymore (missing channel access). Run the command again.",
+            )
+            await _reenable_view_buttons(interaction, self)
+        except discord.HTTPException as exc:
+            logger.debug("[RefreshView] refresh edit failed: %s", exc)
+            await _interaction_followup_ephemeral(
+                interaction, "Couldn't refresh — try again in a moment."
+            )
+            await _reenable_view_buttons(interaction, self)
 
 
 class ConfirmView(discord.ui.View):
