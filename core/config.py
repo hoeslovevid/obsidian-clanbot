@@ -54,10 +54,10 @@ DB_PATH = os.getenv("DB_PATH", str(PROJECT_ROOT / "data" / "obsidian_clanbot.db"
 # Single source of truth for /about, /whatsnew, /status, release announce, and slash-command sync.
 # Set BOT_VERSION on Railway to match each production release; keep this code default in sync.
 # On release: bump BOT_VERSION here (and on Railway), then update CURRENT_RELEASE_* in core/changelog.py.
-BOT_VERSION = os.getenv("BOT_VERSION", "1.98.4")
+BOT_VERSION = os.getenv("BOT_VERSION", "1.99.0")
 BOT_CHANGELOG = os.getenv(
     "BOT_CHANGELOG",
-    "v1.98.4 — RefreshView defer fix and WF cache perf; see /whatsnew.",
+    "v1.99.0 — QoL overhaul: /search, /economy cooldowns, /admin setup_status, reminder snooze + undo, and more; see /whatsnew.",
 )
 
 # Presence rotation: default | menu | degraded | event
