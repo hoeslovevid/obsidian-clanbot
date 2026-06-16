@@ -55,7 +55,7 @@ async def _update_giveaway_entry_embed(message: discord.Message, entry_count: in
 class EmbedPaginator(discord.ui.View):
     """Reusable paginated embed view with Prev/Next buttons."""
 
-    def __init__(self, title: str, pages: list, *, color=None, client=None, timeout: float = 120, total_items: int = None, per_page: int = 15):
+    def __init__(self, title: str, pages: list, *, color=None, client=None, timeout: float = 300, total_items: int = None, per_page: int = 15):
         super().__init__(timeout=timeout)
         self.title = title
         self.pages = pages
@@ -68,12 +68,19 @@ class EmbedPaginator(discord.ui.View):
         self._update_buttons()
 
     def _update_buttons(self):
+        at_start = self.page <= 0
+        at_end = self.page >= self.total_pages - 1
         for c in self.children:
-            if getattr(c, "custom_id", "") == "paginator_prev":
-                c.disabled = self.page <= 0
-            elif getattr(c, "custom_id", "") == "paginator_next":
-                c.disabled = self.page >= self.total_pages - 1
-            elif getattr(c, "custom_id", "") == "paginator_jump":
+            cid = getattr(c, "custom_id", "")
+            if cid == "paginator_first":
+                c.disabled = at_start or self.total_pages <= 2
+            elif cid == "paginator_prev":
+                c.disabled = at_start
+            elif cid == "paginator_next":
+                c.disabled = at_end
+            elif cid == "paginator_last":
+                c.disabled = at_end or self.total_pages <= 2
+            elif cid == "paginator_jump":
                 # Jumping only makes sense with 3+ pages.
                 c.disabled = self.total_pages <= 2
 
@@ -110,6 +117,12 @@ class EmbedPaginator(discord.ui.View):
         except Exception:
             pass
 
+    @discord.ui.button(label="⏮", style=discord.ButtonStyle.secondary, custom_id="paginator_first")
+    async def first_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.page = 0
+        self._update_buttons()
+        await interaction.response.edit_message(embed=self._build_embed(), view=self)
+
     @discord.ui.button(label="◀ Prev", style=discord.ButtonStyle.secondary, custom_id="paginator_prev")
     async def prev_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.page = max(0, self.page - 1)
@@ -119,6 +132,12 @@ class EmbedPaginator(discord.ui.View):
     @discord.ui.button(label="Next ▶", style=discord.ButtonStyle.secondary, custom_id="paginator_next")
     async def next_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.page = min(self.total_pages - 1, self.page + 1)
+        self._update_buttons()
+        await interaction.response.edit_message(embed=self._build_embed(), view=self)
+
+    @discord.ui.button(label="⏭", style=discord.ButtonStyle.secondary, custom_id="paginator_last")
+    async def last_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.page = self.total_pages - 1
         self._update_buttons()
         await interaction.response.edit_message(embed=self._build_embed(), view=self)
 
@@ -154,6 +173,55 @@ class _PageJumpModal(discord.ui.Modal, title="Jump to page"):
         await interaction.response.edit_message(
             embed=self.paginator._build_embed(), view=self.paginator
         )
+
+
+class UndoView(discord.ui.View):
+    """A short-lived "Undo" button for reversible actions.
+
+    ``undo_callback(interaction)`` performs the reversal and is responsible for
+    responding to the interaction (e.g. ``edit_message``). Only the original
+    requester may press it, and it can only fire once.
+    """
+
+    def __init__(self, undo_callback, *, requester_id: int, timeout: float = 60):
+        super().__init__(timeout=timeout)
+        self.undo_callback = undo_callback
+        self.requester_id = requester_id
+        self._used = False
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.requester_id:
+            await interaction.response.send_message(
+                "Only the person who ran this can undo it.", ephemeral=True
+            )
+            return False
+        return True
+
+    async def on_timeout(self):
+        for c in self.children:
+            if isinstance(c, discord.ui.Button):
+                c.disabled = True
+        try:
+            if self.message:
+                await self.message.edit(view=self)
+        except Exception:
+            pass
+
+    @discord.ui.button(label="Undo", emoji="↩️", style=discord.ButtonStyle.secondary)
+    async def undo_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self._used:
+            return await interaction.response.send_message("Already undone.", ephemeral=True)
+        self._used = True
+        for c in self.children:
+            if isinstance(c, discord.ui.Button):
+                c.disabled = True
+        try:
+            await self.undo_callback(interaction)
+        except Exception:
+            logger.warning("[UndoView] undo callback failed", exc_info=True)
+            await _interaction_followup_ephemeral(
+                interaction, "Couldn't undo that — please redo it manually."
+            )
 
 
 class RetryView(discord.ui.View):

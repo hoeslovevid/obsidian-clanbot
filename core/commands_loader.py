@@ -97,6 +97,7 @@ def load_all_commands(bot):
         "commands.general.onboarding",
         "commands.general.milestones_next",
         "commands.general.menu",
+        "commands.general.search",
         "commands.general.recent",
         "commands.general.whatsnew",
         "commands.general.reputation",
@@ -389,6 +390,7 @@ def load_all_commands(bot):
     TOP_LEVEL_ONLY = {
         "commands.general.favorites",
         "commands.general.menu",
+        "commands.general.search",
         "commands.general.milestones_next",
         "commands.general.whatsnew",
         "commands.general.status",

@@ -219,7 +219,32 @@ def setup(bot, group=None):
     from core.utils import is_mod
     list_decorator = group.command(name="remind_list", description="List your pending reminders. Optionally cancel one.") if group else bot.tree.command(name="remind_list", description="List your pending reminders.")
 
+    async def remind_cancel_autocomplete(interaction: discord.Interaction, current: str):
+        if not interaction.guild:
+            return []
+        from core.db import open_db
+
+        try:
+            async with open_db() as db:
+                cur = await db.execute(
+                    "SELECT id, reminder_text FROM reminders WHERE guild_id=? AND user_id=? AND sent=0 "
+                    "AND datetime(remind_at) > datetime('now') ORDER BY remind_at ASC LIMIT 25",
+                    (interaction.guild.id, interaction.user.id),
+                )
+                rows = await cur.fetchall()
+        except Exception:
+            return []
+        cur_s = (current or "").strip().lower()
+        choices = []
+        for rid, text in rows:
+            if cur_s and cur_s not in str(rid) and cur_s not in (text or "").lower():
+                continue
+            label = f"#{rid}: {text}"[:100]
+            choices.append(app_commands.Choice(name=label, value=int(rid)))
+        return choices[:25]
+
     @list_decorator
+    @app_commands.autocomplete(cancel_id=remind_cancel_autocomplete)
     @app_commands.describe(cancel_id="Optional: reminder ID to cancel (from list)")
     async def remind_list(interaction: discord.Interaction, cancel_id: Optional[int] = None):
         """List or cancel reminders."""
@@ -243,10 +268,56 @@ def setup(bot, group=None):
                     )
                 await db.execute("DELETE FROM reminders WHERE id=?", (cancel_id,))
                 await db.commit()
-                return await interaction.followup.send(
-                    embed=obsidian_embed("✅ Cancelled", f"Reminder '{row[1][:50]}...' cancelled." if len(row[1]) > 50 else f"Reminder '{row[1]}' cancelled.", color=EMBED_COLORS["success"], client=interaction.client),
+
+                from views._core import UndoView
+
+                deleted_text = row[1]
+                deleted_when = row[2]
+                cancel_channel_id = interaction.channel_id
+
+                async def _undo_cancel(undo_i: discord.Interaction):
+                    from core.db import open_db
+
+                    async with open_db() as db2:
+                        await db2.execute(
+                            """
+                            INSERT INTO reminders (guild_id, user_id, channel_id, reminder_text, remind_at, created_at, sent, recurrence_rule)
+                            VALUES (?, ?, ?, ?, ?, ?, 0, NULL)
+                            """,
+                            (
+                                undo_i.guild.id,
+                                undo_i.user.id,
+                                cancel_channel_id,
+                                deleted_text,
+                                deleted_when,
+                                now_utc().isoformat(),
+                            ),
+                        )
+                        await db2.commit()
+                    await undo_i.response.edit_message(
+                        embed=obsidian_embed(
+                            "↩️ Reminder Restored",
+                            "Your reminder is back on the schedule.",
+                            color=EMBED_COLORS["success"],
+                            client=undo_i.client,
+                        ),
+                        view=None,
+                    )
+
+                shown = f"{deleted_text[:50]}..." if len(deleted_text) > 50 else deleted_text
+                undo_view = UndoView(_undo_cancel, requester_id=interaction.user.id, timeout=60)
+                msg = await interaction.followup.send(
+                    embed=obsidian_embed(
+                        "✅ Cancelled",
+                        f"Reminder '{shown}' cancelled.",
+                        color=EMBED_COLORS["success"],
+                        client=interaction.client,
+                    ),
+                    view=undo_view,
                     ephemeral=True,
                 )
+                undo_view.message = msg
+                return
             cur = await db.execute(
                 "SELECT id, reminder_text, remind_at, recurrence_rule FROM reminders WHERE guild_id=? AND user_id=? AND sent=0 AND datetime(remind_at) > datetime('now') ORDER BY remind_at ASC LIMIT 50",
                 (interaction.guild.id, interaction.user.id),
