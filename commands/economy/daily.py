@@ -134,6 +134,68 @@ class GracePeriodView(discord.ui.View):
         await _run_daily(interaction, force_reset=True)
 
 
+class _ClaimBountiesView(discord.ui.View):
+    """One-tap claim for completed bounties, offered right after a daily claim."""
+
+    def __init__(self, guild_id: int, user_id: int):
+        super().__init__(timeout=120)
+        self.guild_id = guild_id
+        self.user_id = user_id
+
+    @discord.ui.button(label="Claim bounties", emoji="🎯", style=discord.ButtonStyle.primary)
+    async def claim(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("Only for you.", ephemeral=True)
+        from commands.economy.bounties import claim_bounties
+
+        total, count = await claim_bounties(self.guild_id, self.user_id)
+        for c in self.children:
+            if isinstance(c, discord.ui.Button):
+                c.disabled = True
+        await interaction.response.edit_message(view=self)
+        if count:
+            await interaction.followup.send(
+                embed=obsidian_embed(
+                    "🎯 Bounties Claimed!",
+                    f"**+{format_number(total)}** coins from {count} {pluralize(count, 'bounty')}!",
+                    color=EMBED_COLORS["success"],
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+        else:
+            await interaction.followup.send("Nothing left to claim — already grabbed them!", ephemeral=True)
+
+
+async def _offer_bounty_claim(interaction: discord.Interaction):
+    """After a daily claim, offer a one-tap button to also claim completed bounties."""
+    if not interaction.guild:
+        return
+    try:
+        from commands.economy.bounties import get_claimable_bounties
+
+        claimable = await get_claimable_bounties(interaction.guild.id, interaction.user.id)
+    except Exception:
+        return
+    if not claimable:
+        return
+    total_b = sum(b["reward"] for b in claimable)
+    try:
+        await interaction.followup.send(
+            embed=obsidian_embed(
+                "🎯 Bounties Ready",
+                f"You also have **{len(claimable)}** completed {pluralize(len(claimable), 'bounty')} "
+                f"worth **{format_number(total_b)}** coins.",
+                category="economy",
+                client=interaction.client,
+            ),
+            view=_ClaimBountiesView(interaction.guild.id, interaction.user.id),
+            ephemeral=True,
+        )
+    except Exception:
+        pass
+
+
 def setup(bot, group=None):
     """Register the daily command under /economy and as top-level /daily shortcut."""
     async def daily_callback(interaction: discord.Interaction):
@@ -374,7 +436,9 @@ async def _run_daily(interaction: discord.Interaction, force_reset: bool = False
         try:
             layout = DailyLayout(title=title, description=desc, fields=fields)
             await interaction.followup.send(view=layout, ephemeral=True)
+            await _offer_bounty_claim(interaction)
             return
         except Exception:
             pass
     await interaction.followup.send(embed=embed, ephemeral=True)
+    await _offer_bounty_claim(interaction)

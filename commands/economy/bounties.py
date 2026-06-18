@@ -55,6 +55,56 @@ async def _get_bounty_progress(guild_id: int, user_id: int) -> dict:
     return result
 
 
+_BOUNTY_TARGETS = {"daily": 1, "earn_100": 100, "voice_10": 10, "lfg_weekly": 2}
+
+
+def _bounty_done(bid: str, progress: dict) -> bool:
+    """Whether a bounty's completion requirement is met."""
+    if bid == "daily":
+        return bool(progress.get("daily"))
+    if bid == "earn_100":
+        return progress.get("earn_100", 0) >= 100
+    if bid == "lfg_weekly":
+        return progress.get("lfg_weekly", 0) >= 2
+    if bid == "voice_10":
+        return progress.get("voice_10", 0) >= 10
+    return False
+
+
+async def get_claimable_bounties(guild_id: int, user_id: int) -> list[dict]:
+    """Bounties that are complete and not yet claimed today."""
+    progress = await _get_bounty_progress(guild_id, user_id)
+    today = now_utc().date().isoformat()
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            "SELECT bounty_type FROM economy_bounties WHERE guild_id=? AND user_id=? "
+            "AND date(created_at)=? AND claimed=1",
+            (guild_id, user_id, today),
+        )
+        claimed = {r[0] for r in await cur.fetchall()}
+    return [b for b in BOUNTY_DEFS if b["id"] not in claimed and _bounty_done(b["id"], progress)]
+
+
+async def claim_bounties(guild_id: int, user_id: int) -> tuple[int, int]:
+    """Claim all completed-unclaimed bounties. Returns (total_coins, count)."""
+    to_claim = await get_claimable_bounties(guild_id, user_id)
+    if not to_claim:
+        return (0, 0)
+    total = sum(b["reward"] for b in to_claim)
+    await add_coins(guild_id, user_id, total, "BOUNTY", "Daily bounties")
+    async with aiosqlite.connect(DB_PATH) as db:
+        for b in to_claim:
+            tgt = _BOUNTY_TARGETS.get(b["id"], 1)
+            await db.execute(
+                """INSERT INTO economy_bounties (guild_id, user_id, bounty_type, progress, target, reward, claimed, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, 1, ?)
+                   ON CONFLICT(guild_id, user_id, bounty_type) DO UPDATE SET claimed=1, progress=excluded.progress""",
+                (guild_id, user_id, b["id"], tgt, tgt, b["reward"], now_utc().isoformat()),
+            )
+        await db.commit()
+    return (total, len(to_claim))
+
+
 def setup(bot, group=None):
     cmd = group.command(name="bounties", description="View and claim daily bounties for bonus coins.") if group else bot.tree.command(name="bounties", description="View daily bounties.")
 
@@ -149,35 +199,9 @@ def setup(bot, group=None):
                     if btn_i.user.id != interaction.user.id:
                         return await btn_i.response.send_message("Only for you.", ephemeral=True)
                     await btn_i.response.defer(ephemeral=True)
-                    prog = await _get_bounty_progress(gid, uid)
-                    to_claim = []
-                    for b in BOUNTY_DEFS:
-                        bid = b["id"]
-                        done = prog["daily"] if bid == "daily" else (prog["earn_100"] >= 100 if bid == "earn_100" else prog["voice_10"] >= 10)
-                        if not done:
-                            continue
-                        async with aiosqlite.connect(DB_PATH) as db:
-                            cur = await db.execute(
-                                "SELECT 1 FROM economy_bounties WHERE guild_id=? AND user_id=? AND bounty_type=? AND date(created_at)=? AND claimed=1",
-                                (gid, uid, bid, today),
-                            )
-                            if await cur.fetchone() is None:
-                                to_claim.append(b)
-                    if not to_claim:
+                    total, count = await claim_bounties(gid, uid)
+                    if not count:
                         return await btn_i.followup.send("Nothing to claim.", ephemeral=True)
-                    total = sum(b["reward"] for b in to_claim)
-                    await add_coins(gid, uid, total, "BOUNTY", "Daily bounties")
-                    async with aiosqlite.connect(DB_PATH) as db:
-                        for b in to_claim:
-                            tgt = 100 if b["id"] == "earn_100" else (10 if b["id"] == "voice_10" else 1)
-                            prog = tgt
-                            await db.execute(
-                                """INSERT INTO economy_bounties (guild_id, user_id, bounty_type, progress, target, reward, claimed, created_at)
-                                   VALUES (?, ?, ?, ?, ?, ?, 1, ?)
-                                   ON CONFLICT(guild_id, user_id, bounty_type) DO UPDATE SET claimed=1, progress=excluded.progress""",
-                                (gid, uid, b["id"], prog, tgt, b["reward"], now_utc().isoformat()),
-                            )
-                        await db.commit()
                     for c in self.children:
                         c.disabled = True
                     try:

@@ -1569,12 +1569,16 @@ def setup_tasks(bot):
                 return  # Only fire in the 60-90 min window before midnight UTC
 
             today_str = now.date().isoformat()
+            # At-risk users claimed YESTERDAY but not yet today: their streak resets
+            # at tonight's midnight UTC unless they claim again today. (Users who
+            # already claimed today are safe and must NOT be pinged.)
+            yesterday_str = (now.date() - timedelta(days=1)).isoformat()
             async with aiosqlite.connect(DB_PATH) as db:
                 cur = await db.execute("""
                     SELECT guild_id, user_id, streak_days
                     FROM daily_claims
-                    WHERE last_claim_date = ?
-                """, (today_str,))
+                    WHERE last_claim_date = ? AND streak_days >= 1
+                """, (yesterday_str,))
                 claimants = await cur.fetchall()
 
             for guild_id, user_id, streak_days in claimants:

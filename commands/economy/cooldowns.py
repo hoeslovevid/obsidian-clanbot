@@ -89,6 +89,47 @@ def setup(bot, group=None):
             elif mat:
                 lines.append(f"📈 **Investment** — matures <t:{int(mat.timestamp())}:R>")
 
+        # --- Daily bounties (reset at next midnight UTC) ----------------------
+        try:
+            from commands.economy.bounties import _get_bounty_progress, BOUNTY_DEFS
+
+            prog = await _get_bounty_progress(gid, uid)
+            today = datetime.now(timezone.utc).date().isoformat()
+            async with open_db() as db:
+                cur = await db.execute(
+                    "SELECT bounty_type FROM economy_bounties WHERE guild_id=? AND user_id=? "
+                    "AND date(created_at)=? AND claimed=1",
+                    (gid, uid, today),
+                )
+                claimed = {r[0] for r in await cur.fetchall()}
+            ready = 0
+            for b in BOUNTY_DEFS:
+                bid = b["id"]
+                if bid in claimed:
+                    continue
+                if bid == "daily":
+                    done = bool(prog.get("daily"))
+                elif bid == "earn_100":
+                    done = prog.get("earn_100", 0) >= 100
+                elif bid == "lfg_weekly":
+                    done = prog.get("lfg_weekly", 0) >= 2
+                else:
+                    done = prog.get("voice_10", 0) >= 10
+                if done:
+                    ready += 1
+            midnight = datetime.now(timezone.utc).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            ) + timedelta(days=1)
+            if ready:
+                lines.append(
+                    f"🎯 **Bounties** — {ready} ready to claim · "
+                    f"{command_mention('economy bounties', fallback='`/economy bounties`')}"
+                )
+            else:
+                lines.append(f"🎯 **Bounties** — reset <t:{int(midnight.timestamp())}:R>")
+        except Exception:
+            pass
+
         embed = obsidian_embed(
             "⏳ Your Cooldowns",
             "\n".join(lines),

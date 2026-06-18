@@ -12,13 +12,23 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-18"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Warframe** — the **🔔 Notify me when back** button now appears on every Warframe command when the API is down (`/warframe baro`, `status`, `hub`, `alerts`, `fissures`, `sortie`, `invasions`, `daily_ops`, `world_state`, `cycles`)",
-    "**`/search`** — now also matches Warframe item names and links them to `/trading trade_price`",
-    "**Warframe** — embeds show a subtle *data ~Nm old* note when served from cache",
+    "**`/economy daily`** — after claiming, a one-tap **Claim bounties** button grabs all completed bounties too",
+    "**`/economy cooldowns`** — now also shows daily bounty status and reset time",
+    "**Fix** — the bounties **Claim** button no longer skips the weekly LFG bounty",
+    "**Fix** — the daily streak reminder now DMs users who are actually at risk (claimed yesterday, not today) instead of those who already claimed",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "1.99.2",
+        "date": "2026-06-18",
+        "changes": [
+            "**Warframe** — the **🔔 Notify me when back** button now appears on every Warframe command when the API is down (`/warframe baro`, `status`, `hub`, `alerts`, `fissures`, `sortie`, `invasions`, `daily_ops`, `world_state`, `cycles`)",
+            "**`/search`** — now also matches Warframe item names and links them to `/trading trade_price`",
+            "**Warframe** — embeds show a subtle *data ~Nm old* note when served from cache",
+        ],
+    },
     {
         "version": "1.99.1",
         "date": "2026-06-16",
