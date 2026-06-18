@@ -401,7 +401,7 @@ async def build_profile_embed(
         desc,
         color=member_color,
         template="profile",
-        profile_category="general",
+        category="general",
         author=target_user,
         thumbnail=target_user.display_avatar.url,
         fields=fields,

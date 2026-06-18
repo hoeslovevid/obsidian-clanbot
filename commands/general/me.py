@@ -213,7 +213,7 @@ async def _run_me(interaction: discord.Interaction):
         f"A quick snapshot of your account in **{interaction.guild.name}**.",
         color=EMBED_COLORS["general"],
         template="profile",
-        profile_category="general",
+        category="general",
         author=interaction.user if isinstance(interaction.user, discord.Member) else None,
         thumbnail=(
             interaction.user.display_avatar.url
