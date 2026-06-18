@@ -10,13 +10,22 @@ from __future__ import annotations
 from core.config import BOT_CHANGELOG, BOT_VERSION
 
 # Current release (version string comes from BOT_VERSION only).
-CURRENT_RELEASE_DATE = "2026-06-16"
+CURRENT_RELEASE_DATE = "2026-06-18"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Docs** — the in-app changelog now updates with every commit, so `/whatsnew` always reflects the latest release",
+    "**Warframe** — the **🔔 Notify me when back** button now appears on every Warframe command when the API is down (`/warframe baro`, `status`, `hub`, `alerts`, `fissures`, `sortie`, `invasions`, `daily_ops`, `world_state`, `cycles`)",
+    "**`/search`** — now also matches Warframe item names and links them to `/trading trade_price`",
+    "**Warframe** — embeds show a subtle *data ~Nm old* note when served from cache",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "1.99.1",
+        "date": "2026-06-16",
+        "changes": [
+            "**Docs** — the in-app changelog now updates with every commit, so `/whatsnew` always reflects the latest release",
+        ],
+    },
     {
         "version": "1.99.0",
         "date": "2026-06-16",

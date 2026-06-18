@@ -81,6 +81,27 @@ async def get_cached(
     return await task_to_await
 
 
+def cache_age_seconds(key: str) -> float | None:
+    """Seconds since ``key`` was last fetched, or ``None`` if never fetched."""
+    fetched = _fetched_at.get(key)
+    if not fetched:
+        return None
+    return max(0.0, time.monotonic() - fetched)
+
+
+def freshness_note(key: str, *, stale_after: float = 120) -> str:
+    """Footer-ready note (e.g. ' • data ~3m old') when cached data is getting old.
+
+    Returns an empty string when data is fresh or age is unknown, so it's safe to
+    append unconditionally to any footer.
+    """
+    age = cache_age_seconds(key)
+    if age is None or age < stale_after:
+        return ""
+    mins = int(age // 60)
+    return f" • data ~{mins}m old" if mins >= 1 else " • data updating"
+
+
 def cache_stats() -> str:
     """Short summary for /admin health."""
     return f"{len(_cache)} API entries"

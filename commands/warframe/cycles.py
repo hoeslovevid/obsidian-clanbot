@@ -57,13 +57,14 @@ def setup(bot, group=None):
         else:
             desc = None
 
+        from core.cache_utils import freshness_note
         embed = obsidian_embed(
             "🌍 Open World Cycles",
             desc or "",
             color=EMBED_COLORS["warframe"],
             fields=fields if fields else None,
             thumbnail=interaction.guild.icon.url if interaction.guild and interaction.guild.icon else None,
-            footer=f"See also: /warframe baro, /warframe alerts • **Update data** refreshes",
+            footer=f"See also: /warframe baro, /warframe alerts • **Update data** refreshes{freshness_note('warframe:cycles')}",
             client=interaction.client,
         )
 

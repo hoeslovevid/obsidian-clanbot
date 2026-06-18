@@ -7,6 +7,20 @@ from discord import app_commands
 from core.utils import obsidian_embed, EMBED_COLORS
 
 
+def _matching_items(query: str, limit: int = 6) -> list[str]:
+    """Warframe item names from the trade_price popular list matching the query."""
+    try:
+        from commands.trading.trade_price import POPULAR_ITEMS
+    except Exception:
+        return []
+    q = query.lower()
+    if len(q) < 2:
+        return []
+    starts = [i for i in POPULAR_ITEMS if i.lower().startswith(q)]
+    contains = [i for i in POPULAR_ITEMS if q in i.lower() and i not in starts]
+    return (starts + contains)[:limit]
+
+
 def _all_leaf_commands(client: discord.Client):
     """Yield (qualified_name, description) for every non-group command in the tree."""
     out = []
@@ -71,8 +85,9 @@ def setup(bot, group=None):
         ]
         scored.sort(key=lambda t: t[0], reverse=True)
         top = scored[:8]
+        items = _matching_items(q)
 
-        if not top:
+        if not top and not items:
             return await interaction.followup.send(
                 embed=obsidian_embed(
                     "🔎 No matches",
@@ -86,17 +101,28 @@ def setup(bot, group=None):
                 ephemeral=True,
             )
 
-        lines = []
-        for _, name, desc in top:
-            mention = command_mention(name, fallback=f"`/{name}`")
-            short = (desc[:80] + "…") if len(desc) > 80 else desc
-            lines.append(f"{mention} — {short}" if short else mention)
+        fields = []
+        if top:
+            lines = []
+            for _, name, desc in top:
+                mention = command_mention(name, fallback=f"`/{name}`")
+                short = (desc[:80] + "…") if len(desc) > 80 else desc
+                lines.append(f"{mention} — {short}" if short else mention)
+            fields.append(("Commands", "\n".join(lines), False))
+
+        if items:
+            tp = command_mention("trading trade_price", fallback="`/trading trade_price`")
+            item_lines = " · ".join(f"`{name}`" for name in items)
+            fields.append(
+                ("Warframe items", f"{item_lines}\n-# Look up prices with {tp}", False)
+            )
 
         await interaction.followup.send(
             embed=obsidian_embed(
                 f"🔎 Results for “{q}”",
-                "\n".join(lines),
+                "",
                 color=EMBED_COLORS.get("general", discord.Color.blue()),
+                fields=fields,
                 footer="Tip: click a command to run it instantly",
                 client=interaction.client,
             ),

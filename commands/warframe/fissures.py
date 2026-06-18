@@ -61,9 +61,10 @@ def setup(bot, group=None):
                     )
                 emb = _build_embed(nd, interaction.client, tier_filter=tier_filter)
                 await btn_i.message.edit(embed=emb, view=None)
+            from core.wf_recovery import attach_notify_when_back
             return await interaction.followup.send(
                 embed=warframe_data_unavailable_embed(interaction.client),
-                view=RetryView(on_retry),
+                view=attach_notify_when_back(RetryView(on_retry)),
             )
         if not data:
             return await interaction.followup.send(

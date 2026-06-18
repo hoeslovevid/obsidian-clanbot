@@ -51,12 +51,19 @@ async def _watch(user: discord.abc.User, fetch_fn: Callable[[], Awaitable]) -> N
         _pending.discard(user.id)
 
 
-def watch_for_recovery(user: discord.abc.User, fetch_fn: Callable[[], Awaitable]) -> bool:
+async def _default_probe():
+    """Cheap "is the Warframe API back" probe (lazy import avoids cycles)."""
+    from api.warframe_api import get_all_cycles
+
+    return await get_all_cycles()
+
+
+def watch_for_recovery(user: discord.abc.User, fetch_fn: Callable[[], Awaitable] | None = None) -> bool:
     """Start watching for API recovery for ``user``. Returns False if already watching."""
     if user.id in _pending:
         return False
     _pending.add(user.id)
-    asyncio.create_task(_watch(user, fetch_fn))
+    asyncio.create_task(_watch(user, fetch_fn or _default_probe))
     return True
 
 
@@ -64,8 +71,13 @@ def is_watching(user_id: int) -> bool:
     return user_id in _pending
 
 
-def attach_notify_when_back(view: discord.ui.View, fetch_fn: Callable[[], Awaitable]) -> None:
-    """Append a "Notify me when back" button to an existing view."""
+def attach_notify_when_back(view: discord.ui.View, fetch_fn: Callable[[], Awaitable] | None = None):
+    """Append a "Notify me when back" button to an existing view and return it.
+
+    ``fetch_fn`` defaults to a generic Warframe-API health probe, so any command
+    can opt in with a single ``attach_notify_when_back(view)`` call. Returns the
+    same view so it can be used inline: ``view=attach_notify_when_back(RetryView(cb))``.
+    """
     button = discord.ui.Button(
         label="Notify me when back",
         emoji="🔔",
@@ -87,3 +99,4 @@ def attach_notify_when_back(view: discord.ui.View, fetch_fn: Callable[[], Awaita
 
     button.callback = _callback
     view.add_item(button)
+    return view

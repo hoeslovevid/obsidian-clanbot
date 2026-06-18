@@ -86,9 +86,10 @@ def setup(bot, group=None):
                     emb = obsidian_embed("📢 Active Alerts", desc, category="warframe", footer=f"{len(new_data)} active · warframestat.us", client=interaction.client)
                 await btn_interaction.message.edit(embed=emb, view=None)
 
+            from core.wf_recovery import attach_notify_when_back
             return await interaction.followup.send(
                 embed=warframe_data_unavailable_embed(interaction.client),
-                view=RetryView(on_retry),
+                view=attach_notify_when_back(RetryView(on_retry)),
             )
 
         if not alerts_data:

@@ -36,9 +36,10 @@ def setup(bot, group=None):
                 sp2, arb2, nw2 = await asyncio.gather(fetch_steel_path(), fetch_arbitration(), fetch_nightwave())
                 emb = _build_embed(sp2, arb2, nw2, interaction.client)
                 await btn_i.message.edit(embed=emb, view=None)
+            from core.wf_recovery import attach_notify_when_back
             return await interaction.followup.send(
                 embed=warframe_data_unavailable_embed(interaction.client),
-                view=RetryView(on_retry),
+                view=attach_notify_when_back(RetryView(on_retry)),
             )
         embed = _build_embed(sp, arb, nw, interaction.client)
 

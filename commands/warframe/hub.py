@@ -339,9 +339,10 @@ def setup(bot, group=None):
                 view = _hub_view(interaction, platform, guild_id)
                 await btn_interaction.message.edit(embed=emb, view=view)
 
+            from core.wf_recovery import attach_notify_when_back
             return await interaction.edit_original_response(
                 embed=warframe_data_unavailable_embed(interaction.client),
-                view=RetryView(on_retry),
+                view=attach_notify_when_back(RetryView(on_retry)),
             )
 
         wishlist_line = None

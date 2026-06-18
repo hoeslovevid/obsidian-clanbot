@@ -272,9 +272,10 @@ def setup(bot, group=None):
                     ia, bd, ar, cr, fr, sr, interaction.client, ir, platform=platform
                 )
                 await btn_interaction.message.edit(embed=emb, view=None)
+            from core.wf_recovery import attach_notify_when_back
             return await interaction.edit_original_response(
                 embed=warframe_data_unavailable_embed(interaction.client),
-                view=RetryView(on_retry),
+                view=attach_notify_when_back(RetryView(on_retry)),
             )
 
         embed = build_status_embed(
