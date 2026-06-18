@@ -108,6 +108,13 @@ async def build_health_embed(
             inline=False,
         )
 
+    if cmd_stats.headroom_warnings:
+        embed.add_field(
+            name="📊 Command headroom (≥23/25)",
+            value="\n".join(cmd_stats.headroom_warnings[:8]),
+            inline=False,
+        )
+
     if RECENT_ERRORS:
         lines = []
         for entry in list(RECENT_ERRORS)[-5:]:
@@ -191,4 +198,66 @@ def setup(bot, group=None):
 
         await interaction.response.defer(ephemeral=True)
         embed = await build_health_embed(interaction.client, interaction.guild)
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
+    errors_decorator = (
+        group.command(name="errors", description="Recent slash-command errors (session digest).")
+        if group
+        else bot.tree.command(name="errors", description="Recent slash-command errors.")
+    )
+
+    @errors_decorator
+    async def errors(interaction: discord.Interaction):
+        if (
+            not interaction.guild
+            or not isinstance(interaction.user, discord.Member)
+            or not is_mod(interaction.user)
+        ):
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Permission Denied",
+                    "Only moderators can view error analytics.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+
+        await interaction.response.defer(ephemeral=True)
+        if not RECENT_ERRORS:
+            return await interaction.followup.send(
+                embed=obsidian_embed(
+                    "📋 Session errors",
+                    "No errors recorded this session.",
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+
+        from collections import Counter
+
+        by_code: Counter[str] = Counter()
+        by_cmd: Counter[str] = Counter()
+        lines = []
+        for entry in list(RECENT_ERRORS)[-15:]:
+            code = str(entry.get("code", "?"))
+            cmd = str(entry.get("command") or "?")
+            by_code[code] += 1
+            by_cmd[cmd] += 1
+            at = str(entry.get("at", ""))[:19]
+            exc_type = entry.get("exc_type", "?")
+            lines.append(f"• `{code}` · `/{cmd}` · {exc_type} · {at}")
+
+        top_codes = ", ".join(f"`{c}`×{n}" for c, n in by_code.most_common(5))
+        top_cmds = ", ".join(f"`/{c}`×{n}" for c, n in by_cmd.most_common(5))
+        embed = obsidian_embed(
+            "📋 Session error digest",
+            f"**{len(RECENT_ERRORS)}** error(s) in memory (max 20).\n\n"
+            f"**Top codes:** {top_codes or '—'}\n"
+            f"**Top commands:** {top_cmds or '—'}",
+            color=discord.Color.orange(),
+            fields=[("Recent", "\n".join(lines[-10:]), False)],
+            footer="Also shown in /admin health · clears on bot restart",
+            client=interaction.client,
+        )
         await interaction.followup.send(embed=embed, ephemeral=True)

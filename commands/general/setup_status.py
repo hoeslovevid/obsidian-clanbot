@@ -1,9 +1,10 @@
 """/admin setup_status — at-a-glance view of configured vs missing features."""
+import aiosqlite
 import discord
 from discord import app_commands
 
 from core.utils import obsidian_embed, EMBED_COLORS, is_mod, render_bar
-from database import get_configured_channel_id
+from database import DB_PATH, get_configured_channel_id, get_log_channel_id
 
 # (label, guild_settings key, setup command path for the CTA)
 _CORE_CHECKS = [
@@ -17,16 +18,21 @@ _WF_CHECKS = [
     ("▶️ Warframe YouTube feed", "youtube_notify_channel_id", "wfnotify configure"),
     ("📺 Warframe devstreams", "devstream_notify_channel_id", "wfnotify configure"),
 ]
+_MOD_CHECKS = [
+    ("🛡️ Mod audit log", "audit", "mod logging setup"),
+    ("⚠️ Bot error log", "bot_error", "mod logging setup"),
+    ("📋 Ticket transcripts", "ticket_transcript", "mod logging setup"),
+]
 
 
-async def compute_setup_health(guild: discord.Guild) -> tuple[int, int, str, str]:
-    """Return (configured, total, core_block, wf_block) for the guild's setup."""
+async def compute_setup_health(guild: discord.Guild) -> tuple[int, int, str, str, str, str]:
+    """Return (configured, total, core_block, wf_block, mod_block, extra_block)."""
     from core.command_mentions import command_mention
 
     configured = 0
     total = 0
 
-    async def _section(checks):
+    async def _channel_section(checks):
         nonlocal configured, total
         rows = []
         for label, key, cta in checks:
@@ -42,21 +48,62 @@ async def compute_setup_health(guild: discord.Guild) -> tuple[int, int, str, str
                 rows.append(f"❌ {label} — set up with {command_mention(cta, fallback=f'`/{cta}`')}")
         return "\n".join(rows)
 
-    core_block = await _section(_CORE_CHECKS)
-    wf_block = await _section(_WF_CHECKS)
-    return configured, total, core_block, wf_block
+    async def _log_section(checks):
+        nonlocal configured, total
+        rows = []
+        for label, log_type, cta in checks:
+            total += 1
+            ch_id = await get_log_channel_id(guild.id, log_type)
+            ch = guild.get_channel(ch_id) if ch_id else None
+            if ch_id and ch:
+                configured += 1
+                rows.append(f"✅ {label} → {ch.mention}")
+            elif ch_id and not ch:
+                rows.append(f"⚠️ {label} → set, but channel is missing/deleted")
+            else:
+                rows.append(f"❌ {label} — set up with {command_mention(cta, fallback=f'`/{cta}`')}")
+        return "\n".join(rows)
+
+    async def _extra_section():
+        nonlocal configured, total
+        rows = []
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT channel_id FROM starboard_settings WHERE guild_id=?",
+                (guild.id,),
+            )
+            row = await cur.fetchone()
+        total += 1
+        if row and row[0]:
+            ch = guild.get_channel(int(row[0]))
+            if ch:
+                configured += 1
+                rows.append(f"✅ ⭐ Starboard → {ch.mention}")
+            else:
+                rows.append("⚠️ ⭐ Starboard → configured channel was deleted")
+        else:
+            rows.append(
+                f"❌ ⭐ Starboard — set up with {command_mention('mod starboard_setup', fallback='`/mod starboard_setup`')}"
+            )
+        return "\n".join(rows)
+
+    core_block = await _channel_section(_CORE_CHECKS)
+    wf_block = await _channel_section(_WF_CHECKS)
+    mod_block = await _log_section(_MOD_CHECKS)
+    extra_block = await _extra_section()
+    return configured, total, core_block, wf_block, mod_block, extra_block
 
 
 async def setup_health_line(guild: discord.Guild) -> str:
     """One-line setup health summary for use in /status and similar commands."""
-    configured, total, _core, _wf = await compute_setup_health(guild)
+    configured, total, _c, _w, _m, _e = await compute_setup_health(guild)
     pct = int(100 * configured / total) if total else 0
     icon = "✅" if configured == total else ("⚠️" if configured else "❌")
     return f"{icon} **{configured}/{total}** core features configured ({pct}%)"
 
 
 async def _build_setup_status_embed(guild: discord.Guild, client) -> discord.Embed:
-    configured, total, core_block, wf_block = await compute_setup_health(guild)
+    configured, total, core_block, wf_block, mod_block, extra_block = await compute_setup_health(guild)
     pct = int(100 * configured / total) if total else 0
     header = f"{render_bar(pct)}  **{configured}/{total}** configured"
     return obsidian_embed(
@@ -66,6 +113,8 @@ async def _build_setup_status_embed(guild: discord.Guild, client) -> discord.Emb
         fields=[
             ("Core", core_block, False),
             ("Warframe feeds", wf_block, False),
+            ("Moderation logs", mod_block, False),
+            ("Community", extra_block, False),
         ],
         footer="Tip: click a setup command above, then press Refresh to re-check",
         client=client,

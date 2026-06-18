@@ -369,6 +369,7 @@ def obsidian_embed(
     severity: Optional[str] = None,
     error_code: Optional[str] = None,
     cached_at: Optional[datetime] = None,
+    compact: bool = False,
 ) -> discord.Embed:
     """Create a standardized Obsidian-themed embed.
 
@@ -406,6 +407,10 @@ def obsidian_embed(
     
     title = str(title)[:EMBED_TITLE_MAX]
     desc = truncate_desc(str(desc), EMBED_DESC_MAX)
+    if compact:
+        import re
+        desc = re.sub(r"\n{3,}", "\n\n", desc).strip()
+        timestamp = False
     e = discord.Embed(title=title, description=desc, color=color)
     
     # Only add timestamp if requested (default True for consistency)

@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Optional
 
 import discord  # type: ignore
 from discord import app_commands  # type: ignore
@@ -82,7 +81,9 @@ def setup(bot, group=None):
                 ),
                 ephemeral=True,
             )
-        lines = [f"{i + 1}. `/{path}`" for i, path in enumerate(favs)]
+        from core.command_mentions import command_mention
+
+        lines = [f"{i + 1}. {command_mention(path, fallback=f'`/{path}`')}" for i, path in enumerate(favs)]
         embed = obsidian_embed(
             "⭐ Your Favorites",
             "\n".join(lines) + f"\n\n_{len(favs)}/{MAX_FAVORITES} slots used_",

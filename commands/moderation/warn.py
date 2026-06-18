@@ -181,7 +181,7 @@ async def execute_warn(interaction: discord.Interaction, user: discord.Member, r
         ("Warning Count", warn_bar + action_text, True),
     ]
     case_bit = f"Case {copy_friendly_id(case_id)} · " if case_id else ""
-    await interaction.followup.send(
+    msg = await interaction.followup.send(
         embed=embed_template(
             "warning",
             "✅ User Warned",
@@ -193,6 +193,28 @@ async def execute_warn(interaction: discord.Interaction, user: discord.Member, r
             client=interaction.client,
         )
     )
+
+    if case_id:
+
+        async def _undo_warn(undo_i: discord.Interaction):
+            async with aiosqlite.connect(DB_PATH) as db:
+                await db.execute("DELETE FROM warnings WHERE id=?", (case_id,))
+                await db.commit()
+            await undo_i.response.edit_message(
+                embed=success_embed(
+                    "Warning removed",
+                    f"Undid warning case **#{case_id}** for {user.mention}.",
+                    client=interaction.client,
+                ),
+                view=None,
+            )
+
+        from views._core import UndoView
+
+        try:
+            await msg.edit(view=UndoView(_undo_warn, requester_id=interaction.user.id, timeout=60))
+        except Exception:
+            pass
 
 
 def setup(bot, group=None):

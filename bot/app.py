@@ -713,6 +713,32 @@ async def check_auto_mod(message: discord.Message) -> bool:
                 message.content[:500],
                 action_taken
             )
+
+            # DM user with appeal affordance
+            log_ch_id = settings.get("log_channel_id")
+            try:
+                from views._core import AutoModAppealView
+
+                appeal = AutoModAppealView(
+                    guild_id=message.guild.id,
+                    user_id=message.author.id,
+                    violation_type=violation_type,
+                    preview=message.content[:300],
+                    log_channel_id=int(log_ch_id) if log_ch_id else None,
+                )
+                await message.author.send(
+                    embed=obsidian_embed(
+                        "🛡️ Message removed",
+                        f"Auto-mod removed your message in {_channel_mention_safe(message.channel)} "
+                        f"for **{violation_type}**.\n\n"
+                        "If this was a mistake, tap **Report false positive** below.",
+                        color=discord.Color.orange(),
+                        client=bot,
+                    ),
+                    view=appeal,
+                )
+            except Exception:
+                pass
             
             # Send log message if channel is set
             if settings["log_channel_id"]:

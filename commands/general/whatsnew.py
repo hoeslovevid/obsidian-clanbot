@@ -21,6 +21,7 @@ from discord import app_commands  # type: ignore
 from core.changelog import get_changelog_pages
 from core.utils import obsidian_embed, error_embed, EMBED_COLORS, EMBED_FOOTER_DEFAULT, bullet_list
 from database import DB_PATH, get_guild_setting, set_guild_setting
+from views import EmbedPaginator
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +54,7 @@ class _SubscribeButton(discord.ui.Button):
         self.subscribed = subscribed
 
     async def callback(self, interaction: discord.Interaction):
-        view = cast(WhatsNewView, self.view)
+        view = self.view
         if not interaction.guild:
             return await interaction.response.send_message(
                 embed=error_embed("Invalid Context", "Use this in a server.", client=interaction.client),
@@ -70,7 +71,10 @@ class _SubscribeButton(discord.ui.Button):
         self.style = (
             discord.ButtonStyle.secondary if self.subscribed else discord.ButtonStyle.primary
         )
-        await interaction.response.edit_message(view=view)
+        await interaction.response.edit_message(
+            embed=view._build_embed() if hasattr(view, "_build_embed") else None,
+            view=view,
+        )
         state_text = "enabled" if self.subscribed else "disabled"
         try:
             await interaction.followup.send(
@@ -78,6 +82,48 @@ class _SubscribeButton(discord.ui.Button):
             )
         except Exception:
             pass
+
+
+class ChangelogPaginator(EmbedPaginator):
+    """Changelog viewer built on the shared EmbedPaginator (no jump — room for subscribe)."""
+
+    def __init__(
+        self,
+        entries: list[dict],
+        *,
+        subscribed: bool,
+        client: discord.Client | None = None,
+    ):
+        pages = []
+        for entry in entries:
+            version = str(entry.get("version", "?"))
+            date = str(entry.get("date", "")).strip()
+            changes = entry.get("changes") or []
+            header = f"Released {date}" if date else "Recent changes"
+            pages.append({
+                "description": f"_v{version} · {header}_\n\n" + bullet_list([str(c) for c in changes[:25]]),
+            })
+        super().__init__(
+            "📝 What's New",
+            pages,
+            color=EMBED_COLORS.get("general", discord.Color.blue()),
+            client=client,
+        )
+        self._entries = entries
+        self.subscribe_btn = _SubscribeButton(subscribed=subscribed)
+        jump = next((c for c in self.children if getattr(c, "custom_id", "") == "paginator_jump"), None)
+        if jump is not None:
+            self.remove_item(jump)
+        self.add_item(self.subscribe_btn)
+
+    def _build_embed(self) -> discord.Embed:
+        embed = super()._build_embed()
+        entry = self._entries[self.page]
+        version = str(entry.get("version", "?"))
+        embed.title = f"📝 What's New • v{version}"
+        if embed.footer and embed.footer.text:
+            embed.set_footer(text=embed.footer.text + f" · {EMBED_FOOTER_DEFAULT}")
+        return embed
 
 
 class WhatsNewView(discord.ui.View):
@@ -256,9 +302,9 @@ def setup(bot, group=None):
             except Exception:
                 pass
 
-        view = WhatsNewView(pages, subscribed=subscribed, client=interaction.client)
+        view = ChangelogPaginator(pages, subscribed=subscribed, client=interaction.client)
         await interaction.response.send_message(
-            embed=view.build_embed(), view=view, ephemeral=True
+            embed=view._build_embed(), view=view, ephemeral=True
         )
 
     # Always expose a top-level /whatsnew shortcut (registered first so a full

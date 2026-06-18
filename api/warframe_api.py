@@ -917,6 +917,24 @@ async def _fetch_warframe_market_items_list() -> List[Dict[str, Any]]:
     return await get_cached("warframe_market:items_list", 300, _fetch)
 
 
+async def autocomplete_market_item_names(current: str, *, limit: int = 25) -> list[str]:
+    """Return item display names matching ``current`` for slash autocomplete."""
+    items = await _fetch_warframe_market_items_list()
+    if not items:
+        return []
+    current_lower = (current or "").lower().strip()
+    names = [str(it.get("item_name") or "").strip() for it in items if it.get("item_name")]
+    if not current_lower:
+        return names[:limit]
+    exact = [n for n in names if n.lower() == current_lower]
+    start = [n for n in names if n.lower().startswith(current_lower) and n not in exact]
+    contains = [
+        n for n in names
+        if current_lower in n.lower() and n not in exact and n not in start
+    ]
+    return (exact + start + contains)[:limit]
+
+
 async def search_warframe_market_item(item_name: str, platform: str = "pc") -> Optional[Dict[str, Any]]:
     """
     Search for an item on Warframe Market. Uses cached items list, then fuzzy-matches.

@@ -19,17 +19,24 @@ POPULAR_ITEMS = [
 
 
 async def item_autocomplete(interaction: discord.Interaction, current: str):
-    """Autocomplete for item names. Paginated: top 25 by relevance."""
+    """Autocomplete for item names. Uses live market list with popular fallback."""
     from core.utils import AUTOCOMPLETE_MAX_CHOICES
+    from api.warframe_api import autocomplete_market_item_names
+
     current_lower = (current or "").lower().strip()
-    if not current_lower:
-        matches = POPULAR_ITEMS[:AUTOCOMPLETE_MAX_CHOICES]
-    else:
-        exact = [i for i in POPULAR_ITEMS if i.lower() == current_lower]
-        start = [i for i in POPULAR_ITEMS if i.lower().startswith(current_lower) and i not in exact]
-        contains = [i for i in POPULAR_ITEMS if current_lower in i.lower() and i not in exact and i not in start]
-        matches = (exact + start + contains)[:AUTOCOMPLETE_MAX_CHOICES]
-    return [app_commands.Choice(name=m, value=m) for m in matches]
+    try:
+        matches = await autocomplete_market_item_names(current_lower, limit=AUTOCOMPLETE_MAX_CHOICES)
+    except Exception:
+        matches = []
+    if not matches:
+        if not current_lower:
+            matches = POPULAR_ITEMS[:AUTOCOMPLETE_MAX_CHOICES]
+        else:
+            exact = [i for i in POPULAR_ITEMS if i.lower() == current_lower]
+            start = [i for i in POPULAR_ITEMS if i.lower().startswith(current_lower) and i not in exact]
+            contains = [i for i in POPULAR_ITEMS if current_lower in i.lower() and i not in exact and i not in start]
+            matches = (exact + start + contains)[:AUTOCOMPLETE_MAX_CHOICES]
+    return [app_commands.Choice(name=m[:100], value=m[:100]) for m in matches]
 
 
 def _build_trade_embed(item_data: dict, price_data: dict, platform_val: str, client, author=None, fetched_at=None) -> discord.Embed:

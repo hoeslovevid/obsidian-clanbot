@@ -404,7 +404,7 @@ def setup(bot, group=None):
             from core.first_run_nudge import maybe_first_run_hint
 
             embed.description = await maybe_first_run_hint(
-                interaction.guild.id, interaction.user.id, embed.description
+                interaction.guild.id, interaction.user.id, embed.description, feature="baro"
             )
 
         async def on_refresh(btn_interaction: discord.Interaction):

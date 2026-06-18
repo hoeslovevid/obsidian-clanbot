@@ -195,7 +195,23 @@ async def check_and_notify_baro_arrival(bot):
                 sub_ping = None
 
             try:
-                await ch.send(content=sub_ping, embed=embed)
+                from core.safe_send import safe_channel_send
+
+                await safe_channel_send(ch, content=sub_ping, embed=embed)
+                
+                # Wishlist DMs for members in this guild
+                try:
+                    from core.wf_hub_extras import dm_baro_wishlist_matches
+
+                    inv = data_to_use.get("inventory", []) or []
+                    await dm_baro_wishlist_matches(
+                        bot,
+                        guild.id,
+                        inv,
+                        location=data_to_use.get("location", ""),
+                    )
+                except Exception as wish_exc:
+                    logger.debug(f"Baro wishlist DMs skipped for {guild.id}: {wish_exc}")
                 
                 # Mark as notified
                 if visit_id:
@@ -2411,7 +2427,9 @@ def setup_tasks(bot):
                             )
                             
                             try:
-                                await channel.send(embed=embed)
+                                from core.safe_send import safe_channel_send
+
+                                await safe_channel_send(channel, embed=embed)
                                 # Mark as notified
                                 await db.execute("""
                                     INSERT INTO alert_notifications_sent (guild_id, alert_id, notified_at)
@@ -2606,7 +2624,14 @@ def setup_tasks(bot):
                             color=discord.Color.blue(),
                             client=bot,
                         )
-                        sent_message = await channel.send(embed=embed, view=ReminderSnoozeView())
+                        from core.safe_send import safe_channel_send
+
+                        sent_message = await safe_channel_send(
+                            channel,
+                            dm_user=user,
+                            embed=embed,
+                            view=ReminderSnoozeView(),
+                        )
 
                     if sent_message is not None:
                         await store_snooze_context(

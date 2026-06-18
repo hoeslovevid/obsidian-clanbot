@@ -569,6 +569,7 @@ class RSVPView(discord.ui.View):
         self.add_item(discord.ui.Button(label="Going", style=discord.ButtonStyle.success, emoji="✅", custom_id="events:rsvp:going"))
         self.add_item(discord.ui.Button(label="Maybe", style=discord.ButtonStyle.primary, emoji="❔", custom_id="events:rsvp:maybe"))
         self.add_item(discord.ui.Button(label="Can't", style=discord.ButtonStyle.danger, emoji="❌", custom_id="events:rsvp:no"))
+        self.add_item(discord.ui.Button(label="+15m late", style=discord.ButtonStyle.secondary, emoji="⏱️", custom_id="events:delay:15"))
 
     @staticmethod
     def format_rsvp_summary(counts: dict[str, int]) -> str:
@@ -640,6 +641,110 @@ class RSVPView(discord.ui.View):
             embed.add_field(name="RSVP", value=summary, inline=False)
         await interaction.message.edit(embed=embed, view=self)
         await interaction.response.send_message("RSVP recorded.", ephemeral=True)
+
+    async def delay_event(self, interaction: discord.Interaction, minutes: int = 15):
+        if not interaction.guild:
+            return await interaction.response.send_message("Server only.", ephemeral=True)
+        msg_id = interaction.message.id
+        guild_id = interaction.guild.id
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT creator_id, start_ts, end_ts FROM events WHERE guild_id=? AND message_id=?",
+                (guild_id, msg_id),
+            )
+            row = await cur.fetchone()
+        if not row:
+            return await interaction.response.send_message("Event not found.", ephemeral=True)
+        creator_id, start_ts, end_ts = int(row[0]), int(row[1]), int(row[2])
+        from core.utils import is_mod
+
+        if interaction.user.id != creator_id and not (
+            isinstance(interaction.user, discord.Member) and is_mod(interaction.user)
+        ):
+            return await interaction.response.send_message(
+                "Only the event creator or a moderator can delay this event.",
+                ephemeral=True,
+            )
+        delta = minutes * 60
+        new_start = start_ts + delta
+        new_end = end_ts + delta
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute(
+                "UPDATE events SET start_ts=?, end_ts=? WHERE guild_id=? AND message_id=?",
+                (new_start, new_end, guild_id, msg_id),
+            )
+            await db.commit()
+        embed = interaction.message.embeds[0]
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT title, description FROM events WHERE guild_id=? AND message_id=?",
+                (guild_id, msg_id),
+            )
+            ev = await cur.fetchone()
+        briefing = ev[1] if ev and ev[1] else ""
+        embed.description = (
+            f"**When:** <t:{new_start}:F>  _( <t:{new_start}:R> )_\n\n"
+            f"**Ends:** <t:{new_end}:t>\n\n"
+            f"⏱️ _Delayed +{minutes}m by {interaction.user.display_name}_\n\n"
+            f"**Briefing:**\n{briefing}"
+        )
+        await interaction.message.edit(embed=embed, view=self)
+        await interaction.response.send_message(
+            f"Event pushed back **{minutes} minutes**.", ephemeral=True
+        )
+
+
+class AutoModAppealView(discord.ui.View):
+    """Short-lived button for users to flag an automod removal."""
+
+    def __init__(
+        self,
+        *,
+        guild_id: int,
+        user_id: int,
+        violation_type: str,
+        preview: str,
+        log_channel_id: int | None,
+    ):
+        super().__init__(timeout=3600)
+        self.guild_id = guild_id
+        self.user_id = user_id
+        self.violation_type = violation_type
+        self.preview = preview[:300]
+        self.log_channel_id = log_channel_id
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("This appeal is not for you.", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="Report false positive", emoji="🚩", style=discord.ButtonStyle.secondary)
+    async def report_fp(self, interaction: discord.Interaction, button: discord.ui.Button):
+        for c in self.children:
+            c.disabled = True
+        guild = interaction.client.get_guild(self.guild_id)
+        sent = False
+        if guild and self.log_channel_id:
+            ch = guild.get_channel(self.log_channel_id)
+            if isinstance(ch, discord.TextChannel):
+                try:
+                    await ch.send(
+                        embed=obsidian_embed(
+                            "🚩 Automod false-positive report",
+                            f"**User:** <@{self.user_id}> ({self.user_id})\n"
+                            f"**Violation type:** {self.violation_type}\n"
+                            f"**Message preview:** {self.preview}",
+                            color=discord.Color.orange(),
+                            client=interaction.client,
+                        )
+                    )
+                    sent = True
+                except Exception:
+                    pass
+        await interaction.response.edit_message(view=self)
+        note = "Mods have been notified." if sent else "Couldn't reach the mod log channel — tell staff manually."
+        await interaction.followup.send(f"Thanks — {note}", ephemeral=True)
 
 
 class TradingPostView(discord.ui.View):

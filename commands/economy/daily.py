@@ -424,7 +424,7 @@ async def _run_daily(interaction: discord.Interaction, force_reset: bool = False
         desc += f"\n-# 💡 Check {bounties_cta} for bonus coins today"
 
     from core.first_run_nudge import maybe_first_run_hint
-    desc = await maybe_first_run_hint(interaction.guild.id, interaction.user.id, desc)
+    desc = await maybe_first_run_hint(interaction.guild.id, interaction.user.id, desc, feature="daily")
     thumb = interaction.user.display_avatar.url if interaction.user.display_avatar else None
     if cat in ("economy", "prestige"):
         embed = embed_template(

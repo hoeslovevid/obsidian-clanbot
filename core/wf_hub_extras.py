@@ -5,6 +5,7 @@ import os
 from typing import Optional
 
 import aiosqlite
+import discord
 
 from database import DB_PATH, now_utc
 
@@ -77,6 +78,60 @@ async def get_baro_wishlist_overlap(guild_id: int, baro_inventory: list | None) 
     shown = ", ".join(hits[:5])
     extra = f" +{len(hits) - 5} more" if len(hits) > 5 else ""
     return f"🛒 Clan wants: {shown}{extra}"
+
+
+async def dm_baro_wishlist_matches(
+    bot,
+    guild_id: int,
+    baro_inventory: list | None,
+    *,
+    location: str = "",
+) -> None:
+    """DM users whose Baro wishlist items appear in the current inventory."""
+    if not baro_inventory:
+        return
+    inv_names = {
+        str(item.get("item") or item.get("name") or "").strip().lower()
+        for item in baro_inventory
+        if item
+    }
+    inv_names.discard("")
+    if not inv_names:
+        return
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            "SELECT user_id, item_name FROM baro_wishlist WHERE guild_id=?",
+            (guild_id,),
+        )
+        rows = await cur.fetchall()
+    by_user: dict[int, list[str]] = {}
+    for user_id, item_name in rows:
+        if item_name.strip().lower() in inv_names:
+            by_user.setdefault(int(user_id), []).append(item_name)
+    if not by_user:
+        return
+    guild = bot.get_guild(guild_id)
+    loc = f" at **{location}**" if location else ""
+    from core.utils import obsidian_embed
+
+    for user_id, items in by_user.items():
+        member = guild.get_member(user_id) if guild else None
+        user = member or bot.get_user(user_id)
+        if not user:
+            continue
+        shown = ", ".join(f"**{n}**" for n in items[:6])
+        extra = f" +{len(items) - 6} more" if len(items) > 6 else ""
+        try:
+            await user.send(
+                embed=obsidian_embed(
+                    "🛒 Baro wishlist match",
+                    f"Baro is here{loc} with items on your wishlist:\n{shown}{extra}",
+                    color=discord.Color.gold(),
+                    client=bot,
+                )
+            )
+        except Exception:
+            pass
 
 
 async def toggle_baro_wishlist(guild_id: int, user_id: int, item_name: str) -> tuple[bool, str]:

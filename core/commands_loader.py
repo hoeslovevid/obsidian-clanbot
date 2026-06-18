@@ -396,6 +396,7 @@ def load_all_commands(bot):
         "commands.general.milestones_next",
         "commands.general.whatsnew",
         "commands.general.status",
+        "commands.economy.claim",
     }
 
     loaded_count = 0

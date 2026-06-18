@@ -189,6 +189,15 @@ async def handle_component(bot: discord.Client, interaction: discord.Interaction
                 await view._set_rsvp(interaction, "NO")
                 return
 
+        if cid.startswith("events:delay:"):
+            try:
+                minutes = int(cid.split(":")[-1])
+            except ValueError:
+                minutes = 15
+            view = RSVPView()
+            await view.delay_event(interaction, minutes)
+            return
+
         # Voice: VC panel actions: vc:{vc_id}:{action}
         if cid.startswith("vc:"):
             parts = cid.split(":")

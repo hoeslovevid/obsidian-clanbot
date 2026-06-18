@@ -58,6 +58,8 @@ def setup(bot, group=None):
         typo_helper="Reply with a slash-command suggestion when you mis-type one in chat",
         hide_leaderboards="Show as Hidden on coin, XP, voice, and achievement leaderboards",
         private_results="Make your personal results (e.g. /profile, /me) private to you by default",
+        compact_embeds="Shorter embeds: tighter spacing, no timestamp",
+        fissure_tier="Default void fissure tier filter for /fissures (or 'all' / 'off' to clear)",
         quiet_hours="Suppress nudge DMs during these local hours, e.g. '22-7' (or 'off' to clear)",
         digest_section="Pick a daily-digest section to turn on/off (use together with digest_state)",
         digest_state="On/off for the chosen digest_section",
@@ -112,6 +114,19 @@ def setup(bot, group=None):
         app_commands.Choice(name="On (private to me)", value="1"),
         app_commands.Choice(name="Off (default visibility)", value="0"),
     ])
+    @app_commands.choices(compact_embeds=[
+        app_commands.Choice(name="On (compact)", value="1"),
+        app_commands.Choice(name="Off (default)", value="0"),
+    ])
+    @app_commands.choices(fissure_tier=[
+        app_commands.Choice(name="All tiers", value="all"),
+        app_commands.Choice(name="Lith", value="Lith"),
+        app_commands.Choice(name="Meso", value="Meso"),
+        app_commands.Choice(name="Neo", value="Neo"),
+        app_commands.Choice(name="Axi", value="Axi"),
+        app_commands.Choice(name="Requiem", value="Requiem"),
+        app_commands.Choice(name="(clear preset)", value="-"),
+    ])
     @app_commands.choices(digest_section=[
         app_commands.Choice(name="Economy (daily / streak)", value="economy"),
         app_commands.Choice(name="Events", value="events"),
@@ -137,6 +152,8 @@ def setup(bot, group=None):
         typo_helper: Optional[app_commands.Choice[str]] = None,
         hide_leaderboards: Optional[app_commands.Choice[str]] = None,
         private_results: Optional[app_commands.Choice[str]] = None,
+        compact_embeds: Optional[app_commands.Choice[str]] = None,
+        fissure_tier: Optional[app_commands.Choice[str]] = None,
         quiet_hours: Optional[str] = None,
         digest_section: Optional[app_commands.Choice[str]] = None,
         digest_state: Optional[app_commands.Choice[str]] = None,
@@ -248,6 +265,24 @@ def setup(bot, group=None):
             state = "On (private)" if private_results.value == "1" else "Off (default)"
             updated.append(f"**Private results:** {state}")
 
+        if compact_embeds:
+            await set_guild_setting(
+                interaction.guild.id,
+                f"user_compact_embeds:{interaction.user.id}",
+                compact_embeds.value,
+            )
+            state = "On" if compact_embeds.value == "1" else "Off"
+            updated.append(f"**Compact embeds:** {state}")
+
+        if fissure_tier:
+            key = f"user_fissure_tier:{interaction.user.id}"
+            if fissure_tier.value == "-":
+                await set_guild_setting(interaction.guild.id, key, "")
+                updated.append("**Fissure tier preset:** cleared (shows all)")
+            else:
+                await set_guild_setting(interaction.guild.id, key, fissure_tier.value)
+                updated.append(f"**Fissure tier preset:** {fissure_tier.name}")
+
         if quiet_hours is not None:
             from core.quiet_hours import parse_quiet_hours
             raw = quiet_hours.strip().lower()
@@ -306,6 +341,10 @@ def setup(bot, group=None):
             lb_hidden = lb_val == "1"
             pr_val = await get_guild_setting(interaction.guild.id, f"user_private_results:{interaction.user.id}")
             pr_on = pr_val == "1"
+            ce_val = await get_guild_setting(interaction.guild.id, f"user_compact_embeds:{interaction.user.id}")
+            ce_on = ce_val == "1"
+            ft_val = await get_guild_setting(interaction.guild.id, f"user_fissure_tier:{interaction.user.id}")
+            ft_text = ft_val if ft_val and ft_val != "all" else "All tiers"
             from core.quiet_hours import parse_quiet_hours
             qh = parse_quiet_hours(await get_guild_setting(interaction.guild.id, f"user_quiet_hours:{interaction.user.id}"))
             qh_text = f"{qh[0]:02d}:00–{qh[1]:02d}:00 (local)" if qh else "Off"
@@ -320,6 +359,8 @@ def setup(bot, group=None):
             lines.append(f"**Typo helper:** {'On 💡' if th_on else 'Off'}")
             lines.append(f"**Leaderboard privacy:** {'On 🕵️' if lb_hidden else 'Off (name shown)'}")
             lines.append(f"**Private results:** {'On 🔒' if pr_on else 'Off (default)'}")
+            lines.append(f"**Compact embeds:** {'On 📐' if ce_on else 'Off'}")
+            lines.append(f"**Fissure tier preset:** {ft_text}")
             lines.append(f"**Quiet hours:** {qh_text}")
             if isinstance(interaction.user, discord.Member) and is_mod(interaction.user):
                 lines.append(f"**Quieter mode:** {'On' if quieter_on else 'Off'}")

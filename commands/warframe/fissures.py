@@ -42,10 +42,16 @@ def setup(bot, group=None):
     cmd = group.command(name="fissures", description="Void fissure missions — Lith, Meso, Neo, Axi, Requiem tiers.") if group else bot.tree.command(name="fissures", description="View active Void Fissure missions.")
 
     @cmd
-    @app_commands.describe(tier="Filter by relic tier (default: all)")
+    @app_commands.describe(tier="Filter by relic tier (default: your saved preset or all)")
     @app_commands.choices(tier=FISSURE_TIER_CHOICES)
     async def fissures(interaction: discord.Interaction, tier: Optional[app_commands.Choice[str]] = None):
-        tier_filter = tier.value if tier else "all"
+        if interaction.guild and tier is None:
+            from core.user_prefs import default_fissure_tier
+
+            saved = await default_fissure_tier(interaction.guild.id, interaction.user.id)
+            tier_filter = saved or "all"
+        else:
+            tier_filter = tier.value if tier else "all"
         await interaction.response.defer()
         data = await fetch_fissures()
         if data is None:
