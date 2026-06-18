@@ -256,18 +256,65 @@ class _TicketFeedbackPrompt(discord.ui.View):
 
 
 class TicketSatisfactionView(discord.ui.View):
-    def __init__(self, ticket_db_id: int):
-        super().__init__(timeout=60 * 60 * 24 * 3)  # 3 days
+    def __init__(self, ticket_db_id: int, *, owner_id: int | None = None):
+        super().__init__(timeout=60 * 60 * 24)  # 24h reopen window
         self.ticket_db_id = ticket_db_id
+        self.owner_id = owner_id
 
         for rating in range(1, 6):
             btn = discord.ui.Button(
                 label=str(rating),
                 style=discord.ButtonStyle.secondary if rating < 4 else discord.ButtonStyle.success,
                 custom_id=f"ticket:rate:{ticket_db_id}:{rating}",
+                row=0,
             )
             btn.callback = self._rate  # type: ignore
             self.add_item(btn)
+
+        reopen = discord.ui.Button(
+            label="Reopen ticket",
+            style=discord.ButtonStyle.primary,
+            emoji="🔄",
+            custom_id=f"ticket:reopen:{ticket_db_id}",
+            row=1,
+        )
+        reopen.callback = self._reopen  # type: ignore
+        self.add_item(reopen)
+
+    async def _reopen(self, interaction: discord.Interaction):
+        if self.owner_id and interaction.user.id != self.owner_id:
+            return await interaction.response.send_message("Only the ticket opener can reopen.", ephemeral=True)
+        ticket_row = await _get_ticket_row_by_id(self.ticket_db_id)
+        if not ticket_row:
+            return await interaction.response.send_message("Ticket not found.", ephemeral=True)
+        closed_at = ticket_row["closed_at"]
+        if not closed_at:
+            return await interaction.response.send_message("This ticket is still open.", ephemeral=True)
+        try:
+            from datetime import datetime, timezone, timedelta
+            c_dt = datetime.fromisoformat(str(closed_at).replace("Z", "+00:00"))
+            if c_dt.tzinfo is None:
+                c_dt = c_dt.replace(tzinfo=timezone.utc)
+            if now_utc() - c_dt > timedelta(hours=24):
+                return await interaction.response.send_message(
+                    "Reopen window expired (24h). Open a new ticket with `/ticket`.",
+                    ephemeral=True,
+                )
+        except Exception:
+            pass
+        subject = f"Reopen: {ticket_row['subject']}"[:100]
+        guild = interaction.client.get_guild(int(ticket_row["guild_id"]))
+        gname = guild.name if guild else "the server"
+        if interaction.guild and guild and interaction.guild.id == guild.id:
+            if not interaction.response.is_done():
+                await interaction.response.defer(ephemeral=True)
+            await open_support_ticket(interaction, subject, tag_val=ticket_row["tag"] if ticket_row["tag"] else None)
+            return
+        await interaction.response.send_message(
+            f"Run **`/ticket`** in **{gname}** with subject:\n`{subject}`\n"
+            "_You have 24 hours from close to reopen._",
+            ephemeral=True,
+        )
 
     async def _rate(self, interaction: discord.Interaction):
         # Works in DMs too
@@ -658,7 +705,10 @@ async def close_ticket(
                 color=discord.Color.blurple(),
                 client=interaction.client,
             )
-            await user.send(embed=dm_embed, view=TicketSatisfactionView(ticket_db_id))
+            await user.send(
+                embed=dm_embed,
+                view=TicketSatisfactionView(ticket_db_id, owner_id=int(ticket_row["user_id"])),
+            )
     except Exception:
         pass
 
@@ -668,6 +718,19 @@ async def close_ticket(
         await channel.delete(reason=f"Ticket closed by {closer_id}")
     except discord.Forbidden:
         pass
+
+
+async def _ticket_confirm_body(
+    interaction: discord.Interaction, channel: discord.TextChannel, ticket_id: str
+) -> str:
+    body = f"Your ticket has been created: {channel.mention}\n**Ticket ID:** `{ticket_id}`"
+    if interaction.guild:
+        from core.first_run_nudge import maybe_first_run_hint
+
+        body = await maybe_first_run_hint(
+            interaction.guild.id, interaction.user.id, body, feature="ticket"
+        )
+    return body
 
 
 async def open_support_ticket(
@@ -849,7 +912,7 @@ async def open_support_ticket(
 
     confirm_embed_body = ticket_embed(
         "✅ Ticket Created",
-        f"Your ticket has been created: {channel.mention}\n**Ticket ID:** `{ticket_id}`",
+        await _ticket_confirm_body(interaction, channel, ticket_id),
         status="open",
         priority=priority_val,
         thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,

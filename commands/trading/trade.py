@@ -215,10 +215,19 @@ def setup(bot, group=None):
                 """, (message.id, trading_channel.id, listing_id))
                 await db.commit()
             
+            desc = (
+                f"Your {listing_type_val} listing has been posted in {trading_channel.mention}."
+            )
+            if interaction.guild:
+                from core.first_run_nudge import maybe_first_run_hint
+
+                desc = await maybe_first_run_hint(
+                    interaction.guild.id, interaction.user.id, desc, feature="trade"
+                )
             await interaction.followup.send(
                 embed=obsidian_embed(
                     "✅ Listing Posted",
-                    f"Your {listing_type_val} listing has been posted in {trading_channel.mention}.",
+                    desc,
                     color=discord.Color.green(),
                     client=interaction.client,
                 ),

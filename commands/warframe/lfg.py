@@ -717,6 +717,20 @@ async def create_lfg_post(
     except Exception:
         pass
 
+    try:
+        from core.first_run_nudge import maybe_first_run_hint
+
+        hint = await maybe_first_run_hint(
+            interaction.guild.id,
+            interaction.user.id,
+            "✅ Your LFG post is live.",
+            feature="lfg",
+        )
+        if "💡" in hint:
+            await interaction.followup.send(hint, ephemeral=True)
+    except Exception:
+        pass
+
 
 def setup(bot, group=None):
     """Register the lfg command."""

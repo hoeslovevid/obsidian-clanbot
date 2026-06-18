@@ -22,12 +22,14 @@ async def _run_cooldowns(interaction: discord.Interaction):
         return await interaction.response.send_message(
             "This command can only be used inside a server.", ephemeral=True
         )
-    await interaction.response.defer(ephemeral=True)
-
-    from core.command_mentions import command_mention
-
     gid = interaction.guild.id
     uid = interaction.user.id
+    from core.user_prefs import results_ephemeral
+
+    defer_ephemeral = await results_ephemeral(gid, uid, default=True)
+    await interaction.response.defer(ephemeral=defer_ephemeral)
+
+    from core.command_mentions import command_mention
     lines: list[str] = []
 
     today = datetime.now(timezone.utc).date().isoformat()

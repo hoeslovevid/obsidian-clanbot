@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 # Item 81 — onboarding step ledger
 # ---------------------------------------------------------------------------
 ONBOARDING_STEP_NAMES: tuple[str, ...] = (
-    "set_timezone", "set_platform", "open_menu",
+    "set_timezone", "set_platform", "open_menu", "open_claim", "wf_notify", "price_watch",
 )
 
 
@@ -194,7 +194,52 @@ class OnboardingView(discord.ui.View):
             ephemeral=True,
         )
 
-    @discord.ui.button(label="Done", style=discord.ButtonStyle.secondary, emoji="✅", row=1)
+    @discord.ui.button(label="4 · Claim", style=discord.ButtonStyle.secondary, emoji="💰", row=1)
+    async def claim_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await _record_onboarding_step(self.guild_id, interaction.user.id, "open_claim")
+        from core.command_mentions import command_mention
+        claim = command_mention("claim", fallback="`/claim`")
+        await interaction.response.send_message(
+            embed=embed_template(
+                "showcase",
+                "💰 Claim hub",
+                f"Run {claim} to see daily, bounties, and investment readiness in one place.",
+                category="economy",
+                client=interaction.client,
+            ),
+            ephemeral=True,
+        )
+
+    @discord.ui.button(label="5 · WF notify", style=discord.ButtonStyle.secondary, emoji="🔔", row=1)
+    async def notify_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await _record_onboarding_step(self.guild_id, interaction.user.id, "wf_notify")
+        await interaction.response.send_message(
+            embed=embed_template(
+                "showcase",
+                "🔔 Warframe notifications",
+                "Run **`/wfnotify configure`** for Baro, cycles, and alerts — "
+                "or use the subscribe panel in your WF channel.",
+                category="warframe",
+                client=interaction.client,
+            ),
+            ephemeral=True,
+        )
+
+    @discord.ui.button(label="6 · Price watch", style=discord.ButtonStyle.secondary, emoji="💎", row=1)
+    async def price_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await _record_onboarding_step(self.guild_id, interaction.user.id, "price_watch")
+        await interaction.response.send_message(
+            embed=embed_template(
+                "showcase",
+                "💎 Market price watch",
+                "Use **`/price_watch`** with an item and max platinum — I'll DM you when it hits your target.",
+                category="trading",
+                client=interaction.client,
+            ),
+            ephemeral=True,
+        )
+
+    @discord.ui.button(label="Done", style=discord.ButtonStyle.secondary, emoji="✅", row=2)
     async def done_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         for child in self.children:
             child.disabled = True  # type: ignore[attr-defined]
@@ -214,7 +259,7 @@ def _build_dm_embed(member: discord.Member, client) -> discord.Embed:
         "showcase",
         f"👋 Welcome to {member.guild.name}!",
         f"Hi {member.display_name} — tap a button to get started:\n\n"
-        "**1.** Timezone · **2.** Platform (`/preferences`) · **3.** `/menu` quick picks\n\n"
+        "**1–3:** Timezone · Platform · `/menu` · **4–6:** Claim · WF notify · Price watch\n\n"
         "_Re-open anytime with `/onboarding resume`._",
         category="general",
         client=client,

@@ -276,3 +276,70 @@ def setup(bot, group=None):
             client=interaction.client,
         )
         await interaction.followup.send(embed=embed, ephemeral=True)
+
+    export_decorator = (
+        group.command(name="errors_export", description="Export persisted errors (last 24h) as a text file.")
+        if group
+        else bot.tree.command(name="errors_export", description="Export persisted errors (last 24h).")
+    )
+
+    @export_decorator
+    async def errors_export(interaction: discord.Interaction):
+        if (
+            not interaction.guild
+            or not isinstance(interaction.user, discord.Member)
+            or not is_mod(interaction.user)
+        ):
+            return await interaction.response.send_message(
+                embed=obsidian_embed(
+                    "❌ Permission Denied",
+                    "Only moderators can export error logs.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+        await interaction.response.defer(ephemeral=True)
+        lines: list[str] = []
+        try:
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='bot_error_log'"
+                )
+                if await cur.fetchone():
+                    cur = await db.execute(
+                        """
+                        SELECT at, code, command, exc_type, exc_msg
+                        FROM bot_error_log
+                        WHERE datetime(at) >= datetime('now', '-1 day')
+                        ORDER BY id DESC
+                        LIMIT 200
+                        """
+                    )
+                    for at, code, cmd, exc_type, exc_msg in await cur.fetchall():
+                        lines.append(
+                            f"{str(at)[:19]} | {code} | /{cmd or '?'} | {exc_type} | {(exc_msg or '')[:120]}"
+                        )
+        except Exception as exc:
+            lines.append(f"Export failed: {exc}")
+        if not lines:
+            lines.append("No persisted errors in the last 24 hours.")
+        body = "\n".join(lines)
+        if len(body) > 1900:
+            import io
+            fp = io.BytesIO(body.encode("utf-8"))
+            fp.seek(0)
+            await interaction.followup.send(
+                "Error log export (last 24h):",
+                file=discord.File(fp, filename="bot_errors_24h.txt"),
+                ephemeral=True,
+            )
+        else:
+            await interaction.followup.send(
+                embed=obsidian_embed(
+                    "📋 Error export (24h)",
+                    f"```\n{body[:1800]}\n```",
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )

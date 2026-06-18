@@ -125,6 +125,7 @@ async def _build_user_digest(guild_id: int, user_id: int, *, quieter: bool) -> s
     baro_on = await _section_on(guild_id, user_id, "baro")
     invest_on = await _section_on(guild_id, user_id, "investments")
     pets_on = await _section_on(guild_id, user_id, "pets")
+    market_on = await _section_on(guild_id, user_id, "market")
 
     if economy_on:
         streak_line = await _streak_at_risk_line(guild_id, user_id, today_str)
@@ -186,6 +187,16 @@ async def _build_user_digest(guild_id: int, user_id: int, *, quieter: bool) -> s
                     lines.append(
                         f"🐾 **{pet[5] or 'Pet'}** needs care — `/economy pets`"
                     )
+        except Exception:
+            pass
+
+    if market_on:
+        try:
+            from core.price_watchlist import digest_market_line
+
+            mline = await digest_market_line(guild_id, user_id)
+            if mline:
+                lines.append(mline)
         except Exception:
             pass
 

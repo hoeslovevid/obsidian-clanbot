@@ -611,9 +611,13 @@ def setup(bot, group=None):
 
                 favs = await get_user_favorites(interaction.guild.id, interaction.user.id)
                 if favs:
+                    from core.command_mentions import command_mention
+
                     fav_line = (
                         "\n**Your favorites** — "
-                        + " · ".join(f"`/{p}`" for p in favs[:6])
+                        + " · ".join(
+                            command_mention(p, fallback=f"`/{p}`") for p in favs[:6]
+                        )
                         + "\n"
                     )
             except Exception:

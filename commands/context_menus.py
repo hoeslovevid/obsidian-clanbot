@@ -140,6 +140,48 @@ def setup(bot, group=None):
 
     # Warn User removed — use Mod Context → Warn (Discord 5 user context menu cap).
 
+    @bot.tree.context_menu(name="Look up market price")
+    async def market_lookup_context(interaction: discord.Interaction, message: discord.Message):
+        """Right-click message → look up Warframe Market price from message text."""
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                embed=error_embed("Invalid Context", "This can only be used in a server.", client=interaction.client),
+                ephemeral=True,
+            )
+        text = (message.content or "").strip()
+        if message.embeds:
+            emb = message.embeds[0]
+            if emb.title:
+                text = text or emb.title
+        item = text.split(":")[-1].strip() if ":" in text else text
+        item = item.replace("WTS", "").replace("WTB", "").strip()[:120]
+        if not item:
+            return await interaction.response.send_message(
+                "Couldn't find an item name in that message.",
+                ephemeral=True,
+            )
+        await interaction.response.defer(ephemeral=True)
+        from database import get_user_platform
+        from api.warframe_api import search_warframe_market_item, get_warframe_market_price
+
+        platform = await get_user_platform(interaction.guild.id, interaction.user.id) or "pc"
+        found = await search_warframe_market_item(item, platform)
+        if not found:
+            return await interaction.followup.send(
+                f"No market listing found for **{item}** on {platform.upper()}.",
+                ephemeral=True,
+            )
+        price_data = await get_warframe_market_price(found.get("url_name", ""), platform)
+        lowest = price_data.get("lowest_sell") if price_data else None
+        highest = price_data.get("highest_buy") if price_data else None
+        lines = [f"**{found.get('item_name', item)}** ({platform.upper()})"]
+        if lowest is not None:
+            lines.append(f"Lowest sell: **{lowest}p**")
+        if highest is not None:
+            lines.append(f"Highest buy: **{highest}p**")
+        lines.append("\nUse `/price_watch` to get a DM when price drops.")
+        await interaction.followup.send("\n".join(lines), ephemeral=True)
+
     @bot.tree.context_menu(name="Create LFG")
     async def create_lfg_context(interaction: discord.Interaction, message: discord.Message):
         """Right-click message → Create LFG post in this channel, pre-filled with message content."""

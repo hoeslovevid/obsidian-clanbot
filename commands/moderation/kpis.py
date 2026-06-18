@@ -144,6 +144,34 @@ def setup(bot, group=None):
             )
             events_created = (await cur.fetchone())[0]
 
+            # Week-over-week ticket volume
+            cur = await db.execute(
+                """
+                SELECT COUNT(*) FROM tickets
+                WHERE guild_id=? AND datetime(created_at) >= datetime('now', '-7 days')
+                """,
+                (interaction.guild.id,),
+            )
+            tickets_week = int((await cur.fetchone())[0] or 0)
+            cur = await db.execute(
+                """
+                SELECT COUNT(*) FROM tickets
+                WHERE guild_id=? AND datetime(created_at) >= datetime('now', '-14 days')
+                  AND datetime(created_at) < datetime('now', '-7 days')
+                """,
+                (interaction.guild.id,),
+            )
+            tickets_prev_week = int((await cur.fetchone())[0] or 0)
+
+        def trend_arrow(current: int, previous: int) -> str:
+            if previous == 0:
+                return "→" if current == 0 else "↑"
+            if current > previous:
+                return "↑"
+            if current < previous:
+                return "↓"
+            return "→"
+
         def fmt_minutes(val) -> str:
             if val is None:
                 return "—"
@@ -173,7 +201,7 @@ def setup(bot, group=None):
             sat_text = f"**{float(avg_sat):.1f}/5** ({int(sat_count)} ratings)"
 
         fields = [
-            ("🎫 Tickets", f"**Created:** {int(t_created or 0)}\n**Closed:** {int(t_closed or 0)}", True),
+            ("🎫 Tickets", f"**Created:** {int(t_created or 0)}\n**Closed:** {int(t_closed or 0)}\n**7d trend:** {trend_arrow(tickets_week, tickets_prev_week)} ({tickets_week} vs {tickets_prev_week} prior wk)", True),
             ("⏱️ SLA", f"**Avg first response:** {fmt_minutes(avg_first)}\n**Avg close:** {fmt_minutes(avg_close)}", True),
             ("⭐ Satisfaction", sat_text, True),
             ("🧑‍⚖️ Top closers", fmt_top(top_closers), True),

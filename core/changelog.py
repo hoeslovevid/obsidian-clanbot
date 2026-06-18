@@ -12,36 +12,31 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-18"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Discovery** — `/menu` adds claim hub + cooldowns; `/recent` uses clickable mentions; `/search` uses live market items",
-    "**Shortcuts** — top-level `/cooldowns`; `/claim` in shortcuts; per-feature first-run nudges (ticket, trade, LFG, events)",
-    "**Warframe** — notify-when-back persists across restarts; invasion faction preset; Baro wishlist in channel embed",
-    "**Market** — `/price_watch`, `/price_unwatch`, `/price_watches` DM when price target is hit",
-    "**Events** — **Starting now** ping for GOING RSVPs; **Cancel event** button; **+15m late** (prior release)",
-    "**Economy** — `/claim` action buttons (bounties, collect investment); pets in `/cooldowns` + digest",
-    "**LFG** — auto-bump stale posts after 30 minutes with no replies",
-    "**Moderation** — automod warn DMs; ticket rating optional comment; KPI satisfaction avg; errors persist to DB",
-    "**Ops** — `/status` shows your prefs; startup headroom alert to bot-error log; streak reminder uses `/daily` mention",
-    "**/me** — shows XP remaining to next level",
+    "**Batch I** — first-run nudges on ticket/trade/LFG/event; `private_results` on `/cooldowns`; compact embeds on `/me`",
+    "**Batch J** — hub **My fissures** button; `/claim` Layout v2; clickable favorites in `/help`; onboarding steps 4–6",
+    "**Batch J** — right-click **Look up market price** on messages",
+    "**Batch K** — price-watch DMs respect quiet hours + **Stop watching** button; digest **Market** section",
+    "**Batch L** — LFG creator DM after 2h; trade listing 24h expiry warning; ticket **Reopen** within 24h",
+    "**Batch M** — `/admin errors_export`; KPI 7-day ticket trend; notification panel compact/private toggles",
+    "**Claim hub** — pets readiness line alongside daily/bounties/investment",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
     {
-        "version": "1.99.8",
+        "version": "1.99.9",
         "date": "2026-06-18",
         "changes": [
-            "**`/claim`** — new hub shows daily, bounty, and investment readiness with clickable shortcuts",
-            "**Favorites** — pinned commands are now clickable mentions instead of plain text",
-            "**Setup** — `/admin setup_status` covers mod logs, ticket transcripts, and starboard",
-            "**Warframe** — `/trading trade_price` autocomplete uses the live market item list",
-            "**Baro** — wishlist matches DM you when Baro arrives with items you wanted",
-            "**Fissures** — save a default tier via `/general preferences fissure_tier`",
-            "**Moderation** — warn undo button, `/admin errors` session digest, automod false-positive reports",
-            "**Health** — `/admin health` shows command-group headroom warnings (≥23/25)",
-            "**`/whatsnew`** — uses shared EmbedPaginator with subscribe button",
-            "**Preferences** — `compact_embeds` for shorter embeds; events get a **+15m late** button",
-            "**Reliability** — more background notifications use safe_send with DM fallback",
-            "**Discovery** — first-run nudges are per-feature (daily vs baro) instead of one global flag",
+            "**Discovery** — `/menu` adds claim hub + cooldowns; `/recent` uses clickable mentions; `/search` uses live market items",
+            "**Shortcuts** — top-level `/cooldowns`; `/claim` in shortcuts; per-feature first-run nudges (ticket, trade, LFG, events)",
+            "**Warframe** — notify-when-back persists across restarts; invasion faction preset; Baro wishlist in channel embed",
+            "**Market** — `/price_watch`, `/price_unwatch`, `/price_watches` DM when price target is hit",
+            "**Events** — **Starting now** ping for GOING RSVPs; **Cancel event** button; **+15m late** (prior release)",
+            "**Economy** — `/claim` action buttons (bounties, collect investment); pets in `/cooldowns` + digest",
+            "**LFG** — auto-bump stale posts after 30 minutes with no replies",
+            "**Moderation** — automod warn DMs; ticket rating optional comment; KPI satisfaction avg; errors persist to DB",
+            "**Ops** — `/status` shows your prefs; startup headroom alert to bot-error log; streak reminder uses `/daily` mention",
+            "**/me** — shows XP remaining to next level",
         ],
     },
     {

@@ -74,6 +74,26 @@ def setup(bot, group=None):
         except Exception:
             lines.append("🎯 **Bounties** — unavailable")
 
+        try:
+            from commands.economy.pets import _apply_decay, HUNGER_DECAY_PER_HOUR, HAPPINESS_DECAY_PER_HOUR
+
+            async with open_db() as db:
+                cur = await db.execute(
+                    "SELECT hunger, happiness, last_fed, last_played, created_at, name "
+                    "FROM pets WHERE guild_id=? AND user_id=?",
+                    (gid, uid),
+                )
+                pet = await cur.fetchone()
+            if pet:
+                h = _apply_decay(pet[0] or 100, pet[2], pet[4], HUNGER_DECAY_PER_HOUR)
+                hp = _apply_decay(pet[1] or 100, pet[3], pet[4], HAPPINESS_DECAY_PER_HOUR)
+                if h < 50 or hp < 50:
+                    lines.append(f"🐾 **{pet[5] or 'Pet'}** — needs care")
+                else:
+                    lines.append(f"🐾 **{pet[5] or 'Pet'}** — ✅ doing fine")
+        except Exception:
+            pass
+
         invest_id = None
         async with open_db() as db:
             cur = await db.execute(
@@ -180,6 +200,23 @@ def setup(bot, group=None):
                         ephemeral=True,
                     )
 
+            body = "\n".join(lines) or "Nothing to claim right now."
+            from core.help_layout import help_layout_v2_enabled
+            from core.claim_layout import ClaimLayout
+
+            if help_layout_v2_enabled():
+                try:
+                    view = _ClaimHubView()
+                    layout = ClaimLayout(
+                        body=body,
+                        on_bounties=view._claim_bounties if bounty_ready else None,
+                        on_invest=view._collect_invest if invest_ready else None,
+                        on_daily=view._run_daily if daily_ready else None,
+                    )
+                    await interaction.followup.send(view=layout, ephemeral=True)
+                    return
+                except Exception:
+                    pass
             await interaction.followup.send(embed=embed, view=_ClaimHubView(), ephemeral=True)
             return
 

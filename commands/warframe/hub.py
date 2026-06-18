@@ -270,6 +270,30 @@ def _hub_view(interaction: discord.Interaction, platform: str, guild_id: int) ->
 
     lfg.callback = lfg_hint_cb  # type: ignore
     view.add_item(lfg)
+
+    fissures = discord.ui.Button(
+        label="My fissures",
+        style=discord.ButtonStyle.secondary,
+        emoji="💎",
+        custom_id="wf_hub:my_fissures",
+    )
+
+    async def fissures_cb(btn_interaction: discord.Interaction):
+        if not btn_interaction.guild:
+            return await btn_interaction.response.send_message("Server only.", ephemeral=True)
+        from core.user_prefs import default_fissure_tier
+
+        tier = await default_fissure_tier(btn_interaction.guild.id, btn_interaction.user.id)
+        tier_note = f" (preset: **{tier}**)" if tier and tier != "all" else ""
+        fiss_cmd = "`/warframe fissures`"
+        await btn_interaction.response.send_message(
+            f"Run {fiss_cmd} to see void fissures{tier_note}.\n"
+            "-# Set a default tier in `/general preferences fissure_tier`.",
+            ephemeral=True,
+        )
+
+    fissures.callback = fissures_cb  # type: ignore
+    view.add_item(fissures)
     return view
 
 

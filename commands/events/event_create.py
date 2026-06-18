@@ -301,10 +301,17 @@ def setup(bot, group=None):
             )
             await db.commit()
 
+        success_body = f"**{title}** has been posted to the events channel."
+        if interaction.guild:
+            from core.first_run_nudge import maybe_first_run_hint
+
+            success_body = await maybe_first_run_hint(
+                interaction.guild.id, interaction.user.id, success_body, feature="event"
+            )
         await interaction.followup.send(
             embed=success_embed(
                 "Ops Event Posted",
-                f"**{title}** has been posted to the events channel.",
+                success_body,
                 flair="Members can use the ✅/❔/❌ buttons to RSVP.",
                 client=interaction.client,
             ),

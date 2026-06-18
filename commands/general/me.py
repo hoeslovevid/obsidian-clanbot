@@ -206,6 +206,8 @@ async def _run_me(interaction: discord.Interaction):
     else:
         footer = footer_for("me")
 
+    from core.embed_prefs import embed_kwargs
+
     embed = obsidian_embed(
         f"👋 {interaction.user.display_name}",
         f"A quick snapshot of your account in **{interaction.guild.name}**.",
@@ -221,6 +223,7 @@ async def _run_me(interaction: discord.Interaction):
         fields=fields,
         footer=footer,
         client=interaction.client,
+        **(await embed_kwargs(interaction.guild.id, interaction.user.id)),
     )
     from core.help_layout import help_layout_v2_enabled
     from core.me_layout import MeLayout

@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 
 import aiosqlite
+import discord
 
 from database import DB_PATH, now_utc
 
@@ -82,10 +83,23 @@ async def list_watches(guild_id: int, user_id: int) -> list[tuple[str, int, str]
         return [(str(r[0]), int(r[1]), str(r[2])) for r in await cur.fetchall()]
 
 
+async def digest_market_line(guild_id: int, user_id: int) -> str | None:
+    """One-line summary of active watches for the daily digest."""
+    rows = await list_watches(guild_id, user_id)
+    if not rows:
+        return None
+    parts = [f"**{name}** ≤{price}p" for name, price, _ in rows[:4]]
+    extra = f" +{len(rows) - 4} more" if len(rows) > 4 else ""
+    return f"💎 **Price watches** ({len(rows)}) — " + ", ".join(parts) + extra
+
+
 async def check_price_watches(bot) -> None:
     """DM users when watched items drop to their target price."""
     await ensure_price_watch_table()
     from api.warframe_api import get_warframe_market_price, search_warframe_market_item
+    from core.quiet_hours import in_quiet_hours
+    from core.command_mentions import command_mention
+    from views.price_watch_unwatch import PriceWatchUnwatchView
 
     async with aiosqlite.connect(DB_PATH) as db:
         cur = await db.execute(
@@ -94,8 +108,12 @@ async def check_price_watches(bot) -> None:
         )
         rows = await cur.fetchall()
 
+    trade_price = command_mention("trading trade_price", fallback="`/trading trade_price`")
+
     for row_id, guild_id, user_id, item_name, max_price, platform, last_notified in rows:
         try:
+            if await in_quiet_hours(int(guild_id), int(user_id)):
+                continue
             item = await search_warframe_market_item(item_name, platform)
             if not item:
                 continue
@@ -114,19 +132,20 @@ async def check_price_watches(bot) -> None:
                     user = await bot.fetch_user(int(user_id))
                 except Exception:
                     continue
-            import discord
-
-            await user.send(
-                embed=discord.Embed(
-                    title="💎 Price watch triggered",
-                    description=(
-                        f"**{item_name}** has sellers at **{lowest}p** "
-                        f"(your target: ≤{max_price}p on {platform.upper()}).\n\n"
-                        f"Check `/trading trade_price` for details."
-                    ),
-                    color=discord.Color.gold(),
-                )
+            embed = discord.Embed(
+                title="💎 Price watch triggered",
+                description=(
+                    f"**{item_name}** has sellers at **{lowest}p** "
+                    f"(your target: ≤{max_price}p on {platform.upper()}).\n\n"
+                    f"Check {trade_price} for details."
+                ),
+                color=discord.Color.gold(),
             )
+            view = PriceWatchUnwatchView(int(guild_id), int(user_id), item_name)
+            try:
+                await user.send(embed=embed, view=view)
+            except discord.Forbidden:
+                continue
             async with aiosqlite.connect(DB_PATH) as db:
                 await db.execute(
                     "UPDATE price_watches SET last_notified_at=? WHERE id=?",

@@ -141,6 +141,7 @@ def setup(bot, group=None):
         app_commands.Choice(name="Baro", value="baro"),
         app_commands.Choice(name="Investments", value="investments"),
         app_commands.Choice(name="Pets", value="pets"),
+        app_commands.Choice(name="Market watches", value="market"),
     ])
     @app_commands.choices(digest_state=[
         app_commands.Choice(name="On", value="1"),
@@ -501,6 +502,14 @@ def setup(bot, group=None):
         @discord.ui.button(label="Typo helper", emoji="💡", style=discord.ButtonStyle.secondary)
         async def typo_btn(self, btn_interaction: discord.Interaction, button: discord.ui.Button):
             await self._flip(btn_interaction, "user_typo_helper", "Typo helper")
+
+        @discord.ui.button(label="Compact embeds", emoji="📐", style=discord.ButtonStyle.secondary, row=1)
+        async def compact_btn(self, btn_interaction: discord.Interaction, button: discord.ui.Button):
+            await self._flip(btn_interaction, "user_compact_embeds", "Compact embeds")
+
+        @discord.ui.button(label="Private results", emoji="🕵️", style=discord.ButtonStyle.secondary, row=1)
+        async def private_btn(self, btn_interaction: discord.Interaction, button: discord.ui.Button):
+            await self._flip(btn_interaction, "user_private_results", "Private results")
 
     class _RestoreDefaultsView(discord.ui.View):
         def __init__(self, requester_id: int):
