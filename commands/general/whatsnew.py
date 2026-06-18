@@ -93,20 +93,44 @@ class WhatsNewView(discord.ui.View):
         self.next_btn = discord.ui.Button(
             label="Newer ▶", style=discord.ButtonStyle.secondary, custom_id="whatsnew:next"
         )
+        self.first_btn = discord.ui.Button(
+            label="⏮", style=discord.ButtonStyle.secondary, custom_id="whatsnew:first"
+        )
+        self.last_btn = discord.ui.Button(
+            label="⏭", style=discord.ButtonStyle.secondary, custom_id="whatsnew:last"
+        )
+        self.first_btn.callback = self._first
+        self.last_btn.callback = self._last
         self.prev_btn.callback = self._prev
         self.next_btn.callback = self._next
+        self.add_item(self.first_btn)
         self.add_item(self.prev_btn)
         self.add_item(self.next_btn)
+        self.add_item(self.last_btn)
         self.subscribe_btn = _SubscribeButton(subscribed=subscribed)
         self.add_item(self.subscribe_btn)
         self._sync_buttons()
 
     def _sync_buttons(self):
-        self.prev_btn.disabled = self.page >= len(self.pages) - 1  # older = higher index
-        self.next_btn.disabled = self.page <= 0
+        at_newest = self.page <= 0
+        at_oldest = self.page >= len(self.pages) - 1
+        self.first_btn.disabled = at_newest or len(self.pages) <= 2
+        self.prev_btn.disabled = at_oldest
+        self.next_btn.disabled = at_newest
+        self.last_btn.disabled = at_oldest or len(self.pages) <= 2
 
     def build_embed(self) -> discord.Embed:
         return _entry_to_embed(self.pages[self.page], self.page, len(self.pages), self.client)
+
+    async def _first(self, interaction: discord.Interaction):
+        self.page = 0
+        self._sync_buttons()
+        await interaction.response.edit_message(embed=self.build_embed(), view=self)
+
+    async def _last(self, interaction: discord.Interaction):
+        self.page = len(self.pages) - 1
+        self._sync_buttons()
+        await interaction.response.edit_message(embed=self.build_embed(), view=self)
 
     async def _prev(self, interaction: discord.Interaction):
         self.page = min(len(self.pages) - 1, self.page + 1)

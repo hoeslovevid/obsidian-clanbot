@@ -41,8 +41,10 @@ def setup(bot, group=None):
         
         if limit < 1 or limit > 25:
             limit = 10
-        
-        await interaction.response.defer(ephemeral=False)
+
+        from core.user_prefs import results_ephemeral
+        defer_ephemeral = await results_ephemeral(interaction.guild.id, interaction.user.id)
+        await interaction.response.defer(ephemeral=defer_ephemeral)
         
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute("""
@@ -131,4 +133,4 @@ def setup(bot, group=None):
             client=interaction.client,
         )
         
-        await interaction.followup.send(embed=embed, ephemeral=False)
+        await interaction.followup.send(embed=embed, ephemeral=defer_ephemeral)

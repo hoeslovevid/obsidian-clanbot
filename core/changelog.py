@@ -12,12 +12,27 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-18"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**`/admin setup_status`** — now has a **🔄 Refresh** button to re-check after you configure a feature",
-    "**`/status`** — moderators now see a one-line setup-health summary (configured vs missing features)",
+    "**Daily** — `/economy daily` now auto-claims completed bounties in the same result (no extra button tap)",
+    "**Errors** — repeated failures (3× in 10m) escalate with an **Open ticket** button and mod digest alert",
+    "**Reminders** — snooze buttons survive bot restarts via persistent views + DB-backed context",
+    "**Discovery** — first-run nudge on `/daily` and `/warframe baro` points new users to `/search` and `/onboarding`",
+    "**Safety** — `/roletools mass_remove` and `/admin data_retention cleanup` now require confirmation",
+    "**Privacy** — `private_results` preference applies to coin and XP leaderboards",
+    "**Admin** — `/admin setup_status` adds **Core setup** and **WF notify** quick-launch buttons",
+    "**`/whatsnew`** — First/Last page navigation alongside Older/Newer",
+    "**Warframe** — `/warframe duviri` gets the **Notify me when back** button when the API is down",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "1.99.6",
+        "date": "2026-06-18",
+        "changes": [
+            "**`/admin setup_status`** — now has a **🔄 Refresh** button to re-check after you configure a feature",
+            "**`/status`** — moderators now see a one-line setup-health summary (configured vs missing features)",
+        ],
+    },
     {
         "version": "1.99.5",
         "date": "2026-06-18",

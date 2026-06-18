@@ -46,7 +46,9 @@ def setup(bot, group=None):
         if limit < 1 or limit > 25:
             limit = 15
         order_col = "total_earned" if sort_by and sort_by.value == "total_earned" else "balance"
-        await interaction.response.defer(ephemeral=False)
+        from core.user_prefs import results_ephemeral
+        defer_ephemeral = await results_ephemeral(interaction.guild.id, interaction.user.id)
+        await interaction.response.defer(ephemeral=defer_ephemeral)
         sort_label = "total earned" if order_col == "total_earned" else "balance"
 
         async with aiosqlite.connect(DB_PATH) as db:
@@ -201,7 +203,7 @@ def setup(bot, group=None):
                 await btn_interaction.message.edit(embed=new_embed, view=refresh_view)
 
             refresh_view = RefreshView(on_refresh, timeout=300)
-            await interaction.followup.send(embed=embed, view=refresh_view, ephemeral=False)
+            await interaction.followup.send(embed=embed, view=refresh_view, ephemeral=defer_ephemeral)
         else:
             paginator_pages = []
             for p in pages:
@@ -222,7 +224,7 @@ def setup(bot, group=None):
                 footer=paginator_pages[0]["footer"] or footer_for("economy_leaderboard"),
                 client=interaction.client,
             )
-            await interaction.followup.send(embed=first_embed, view=paginator, ephemeral=False)
+            await interaction.followup.send(embed=first_embed, view=paginator, ephemeral=defer_ephemeral)
 
     group.command(name="leaderboard", description="View the top coin earners.")(leaderboard_callback)
     shortcut = app_commands.Command(name="leaderboard", description="View top coin earners (shortcut for /economy leaderboard)", callback=leaderboard_callback)

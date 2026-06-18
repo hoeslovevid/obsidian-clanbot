@@ -130,6 +130,8 @@ def setup(bot, group=None):
         except Exception:
             pass
 
+        lines.append("🎲 **Gambling** — no per-bet cooldown")
+
         embed = obsidian_embed(
             "⏳ Your Cooldowns",
             "\n".join(lines),

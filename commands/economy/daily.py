@@ -401,12 +401,30 @@ async def _run_daily(interaction: discord.Interaction, force_reset: bool = False
 
     freeze_note = "\n-# Used your monthly streak freeze." if used_freeze else ""
     from core.command_mentions import command_mention
-    bounties_cta = command_mention("economy bounties", fallback="`/economy bounties`")
+
+    bounty_total, bounty_count = 0, 0
+    try:
+        from commands.economy.bounties import claim_bounties
+
+        bounty_total, bounty_count = await claim_bounties(interaction.guild.id, interaction.user.id)
+    except Exception:
+        pass
+
     desc = (
         f"> **+{format_number(coins_awarded)}** {pluralize(coins_awarded, 'coin')} claimed!\n\n"
-        f"Come back after reset for the next one!{freeze_note}\n"
-        f"-# 💡 Claim today's bounties too: {bounties_cta}"
+        f"Come back after reset for the next one!{freeze_note}"
     )
+    if bounty_count:
+        desc += (
+            f"\n\n🎯 Also claimed **+{format_number(bounty_total)}** "
+            f"from {bounty_count} {pluralize(bounty_count, 'bounty')}!"
+        )
+    else:
+        bounties_cta = command_mention("economy bounties", fallback="`/economy bounties`")
+        desc += f"\n-# 💡 Check {bounties_cta} for bonus coins today"
+
+    from core.first_run_nudge import maybe_first_run_hint
+    desc = await maybe_first_run_hint(interaction.guild.id, interaction.user.id, desc)
     thumb = interaction.user.display_avatar.url if interaction.user.display_avatar else None
     if cat in ("economy", "prestige"):
         embed = embed_template(
@@ -436,9 +454,7 @@ async def _run_daily(interaction: discord.Interaction, force_reset: bool = False
         try:
             layout = DailyLayout(title=title, description=desc, fields=fields)
             await interaction.followup.send(view=layout, ephemeral=True)
-            await _offer_bounty_claim(interaction)
             return
         except Exception:
             pass
     await interaction.followup.send(embed=embed, ephemeral=True)
-    await _offer_bounty_claim(interaction)

@@ -96,6 +96,13 @@ async def run_startup(bot: discord.Client) -> None:
         except Exception as e:
             logger.debug(f"[ready] ConsoleHubView registration skipped: {e}")
 
+        # Reminder snooze buttons survive restarts (DB-backed, stateless view).
+        try:
+            from commands.general.reminder import ReminderSnoozeView
+            bot.add_view(ReminderSnoozeView())
+        except Exception as e:
+            logger.debug(f"[ready] ReminderSnoozeView registration skipped: {e}")
+
         # Item 47: re-register pending VC revival vote buttons.
         try:
             from commands.voice.vc import RevivalView

@@ -3,8 +3,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 import traceback
-from collections import deque
+from collections import defaultdict, deque
 from datetime import datetime, timezone
 from typing import Any, Callable, Optional
 
@@ -19,6 +20,21 @@ logger = logging.getLogger(__name__)
 
 RECENT_ERRORS: deque[dict[str, Any]] = deque(maxlen=20)
 _resync_scheduled = False
+
+# Per-user recent failures (monotonic timestamps) for repeated-failure escalation.
+_USER_FAILURES: dict[int, deque] = defaultdict(lambda: deque(maxlen=10))
+_REPEAT_WINDOW_SEC = 600  # 10 minutes
+_REPEAT_THRESHOLD = 3
+
+
+def _note_user_failure(user_id: Optional[int]) -> int:
+    """Record a failure for the user and return how many happened in the window."""
+    if not user_id:
+        return 0
+    dq = _USER_FAILURES[user_id]
+    now = time.monotonic()
+    dq.append(now)
+    return sum(1 for t in dq if now - t <= _REPEAT_WINDOW_SEC)
 
 # exc type name -> (user_message, action_hint, error_code)
 KNOWN_EXCEPTIONS: dict[str, tuple[str, Optional[str], str]] = {
@@ -114,6 +130,7 @@ async def send_error_reply(
     ephemeral: bool = True,
     action_hint: Optional[str] = None,
     error_code: Optional[str] = None,
+    repeated: bool = False,
 ) -> None:
     """Send a consistent error embed, using followup if the response was already sent."""
     from core.utils import error_embed
@@ -125,10 +142,15 @@ async def send_error_reply(
     merged_hint = action_hint
     if ticket_hint:
         merged_hint = f"{action_hint}\n\n{ticket_hint}" if action_hint else ticket_hint
+    if repeated:
+        repeat_note = "🚨 This keeps failing — staff have been alerted automatically."
+        merged_hint = f"{merged_hint}\n\n{repeat_note}" if merged_hint else repeat_note
 
     emb = error_embed("Error", message, action_hint=merged_hint, client=interaction.client, error_code=error_code)
     view = None
     if error_code:
+        from core.command_mentions import command_mention
+
         view = discord.ui.View(timeout=120)
 
         class _CopyErrorCodeButton(discord.ui.Button):
@@ -143,6 +165,22 @@ async def send_error_reply(
                 )
 
         view.add_item(_CopyErrorCodeButton(error_code))
+
+        if repeated:
+            class _OpenTicketButton(discord.ui.Button):
+                def __init__(self, code: str):
+                    super().__init__(label="Open ticket", emoji="🎫", style=discord.ButtonStyle.primary)
+                    self._code = code
+
+                async def callback(self, btn_interaction: discord.Interaction):
+                    await btn_interaction.response.send_message(
+                        f"Run {command_mention('ticket', fallback='`/ticket`')} and paste: "
+                        f"`Error code: {self._code}`",
+                        ephemeral=True,
+                    )
+
+            view.add_item(_OpenTicketButton(error_code))
+
         add_link_row(view, help_link_buttons())
     try:
         if interaction.response.is_done():
@@ -160,6 +198,7 @@ async def notify_mods_error_digest(
     error_code: str,
     user_message: str,
     exc: BaseException,
+    repeated_count: int = 0,
 ) -> None:
     """Post a compact error digest to the guild bot-error log channel (best-effort)."""
     if not interaction.guild:
@@ -197,6 +236,12 @@ async def notify_mods_error_digest(
         inline=True,
     )
     embed.add_field(name="Exception", value=f"`{type(exc).__name__}`", inline=True)
+    if repeated_count >= _REPEAT_THRESHOLD:
+        embed.add_field(
+            name="Escalation",
+            value=f"User hit **{repeated_count}** failures in {_REPEAT_WINDOW_SEC // 60}m",
+            inline=True,
+        )
     embed.add_field(name="Traceback (tail)", value=f"```\n{tb_short}\n```", inline=False)
 
     try:
@@ -396,8 +441,14 @@ async def handle_app_command_error(
             user_message=user_message,
         )
         logger.error(f"[commands] Command error ({error_code}): {orig}", exc_info=orig)
+        fail_count = _note_user_failure(interaction.user.id if interaction.user else None)
+        repeated = fail_count >= _REPEAT_THRESHOLD
         await send_error_reply(
-            interaction, user_message, action_hint=action_hint, error_code=error_code
+            interaction,
+            user_message,
+            action_hint=action_hint,
+            error_code=error_code,
+            repeated=repeated,
         )
         await notify_mods_error_digest(
             bot,
@@ -405,6 +456,7 @@ async def handle_app_command_error(
             error_code=error_code,
             user_message=user_message,
             exc=orig,
+            repeated_count=fail_count if repeated else 0,
         )
         return
 
@@ -418,8 +470,14 @@ async def handle_app_command_error(
         user_message=user_message,
     )
     logger.error(f"[commands] Unhandled command error ({error_code}): {error}", exc_info=error)
+    fail_count = _note_user_failure(interaction.user.id if interaction.user else None)
+    repeated = fail_count >= _REPEAT_THRESHOLD
     await send_error_reply(
-        interaction, user_message, action_hint=action_hint, error_code=error_code
+        interaction,
+        user_message,
+        action_hint=action_hint,
+        error_code=error_code,
+        repeated=repeated,
     )
     await notify_mods_error_digest(
         bot,
@@ -427,4 +485,5 @@ async def handle_app_command_error(
         error_code=error_code,
         user_message=user_message,
         exc=error,
+        repeated_count=fail_count if repeated else 0,
     )

@@ -400,6 +400,12 @@ def setup(bot, group=None):
         embed = build_baro_embed(
             baro_data, is_active, interaction.client, guild_id=guild_id, mark_new=mark_new,
         )
+        if interaction.guild and embed.description:
+            from core.first_run_nudge import maybe_first_run_hint
+
+            embed.description = await maybe_first_run_hint(
+                interaction.guild.id, interaction.user.id, embed.description
+            )
 
         async def on_refresh(btn_interaction: discord.Interaction):
             # Read-only public data — anyone may refresh.

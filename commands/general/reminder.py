@@ -35,18 +35,85 @@ def _next_recurrence(remind_at: datetime, rule: str) -> Optional[datetime]:
     return None
 
 
-class ReminderSnoozeView(discord.ui.View):
-    """Snooze buttons attached to a delivered reminder (re-schedules it)."""
+async def _ensure_snooze_table(db) -> None:
+    await db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS reminder_snoozes (
+            message_id INTEGER PRIMARY KEY,
+            guild_id INTEGER,
+            user_id INTEGER,
+            channel_id INTEGER,
+            reminder_text TEXT,
+            created_at TEXT
+        )
+        """
+    )
 
-    def __init__(self, *, guild_id: int, user_id: int, channel_id: Optional[int], reminder_text: str):
-        super().__init__(timeout=6 * 3600)  # buttons stay live for 6 hours
-        self.guild_id = guild_id
-        self.user_id = user_id
-        self.channel_id = channel_id
-        self.reminder_text = reminder_text
+
+async def store_snooze_context(
+    message_id: int, guild_id: Optional[int], user_id: int, channel_id: Optional[int], reminder_text: str
+) -> None:
+    """Persist the context needed to snooze a delivered reminder after a restart."""
+    from core.db import open_db
+
+    try:
+        async with open_db() as db:
+            await _ensure_snooze_table(db)
+            await db.execute(
+                """
+                INSERT OR REPLACE INTO reminder_snoozes
+                    (message_id, guild_id, user_id, channel_id, reminder_text, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (message_id, guild_id, user_id, channel_id, reminder_text, now_utc().isoformat()),
+            )
+            await db.commit()
+    except Exception:
+        pass
+
+
+async def _get_snooze_context(message_id: int):
+    from core.db import open_db
+
+    try:
+        async with open_db() as db:
+            await _ensure_snooze_table(db)
+            cur = await db.execute(
+                "SELECT guild_id, user_id, channel_id, reminder_text FROM reminder_snoozes WHERE message_id=?",
+                (message_id,),
+            )
+            return await cur.fetchone()
+    except Exception:
+        return None
+
+
+def _extract_reminder_text(message: Optional[discord.Message]) -> str:
+    """Best-effort recovery of the reminder text from a delivered reminder embed."""
+    import re
+
+    if message and message.embeds:
+        desc = message.embeds[0].description or ""
+        m = re.search(r"\*\*(.+?)\*\*", desc, re.DOTALL)
+        if m:
+            return m.group(1).strip()
+    return "your reminder"
+
+
+class ReminderSnoozeView(discord.ui.View):
+    """Persistent snooze buttons on a delivered reminder (re-schedules it).
+
+    Stateless + DB-backed so the buttons keep working across bot restarts. A
+    single instance is registered via ``bot.add_view`` at startup; per-message
+    context is recovered from the ``reminder_snoozes`` table (falling back to the
+    embed text when no row exists).
+    """
+
+    def __init__(self):
+        super().__init__(timeout=None)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if interaction.user.id != self.user_id:
+        ctx = await _get_snooze_context(interaction.message.id) if interaction.message else None
+        if ctx and ctx[1] and ctx[1] != interaction.user.id:
             await interaction.response.send_message(
                 "Only the person being reminded can snooze this.", ephemeral=True
             )
@@ -55,6 +122,15 @@ class ReminderSnoozeView(discord.ui.View):
 
     async def _snooze(self, interaction: discord.Interaction, minutes: int) -> None:
         from core.db import open_db
+
+        ctx = await _get_snooze_context(interaction.message.id) if interaction.message else None
+        if ctx:
+            guild_id, user_id, channel_id, reminder_text = ctx
+        else:
+            guild_id = interaction.guild_id
+            user_id = interaction.user.id
+            channel_id = interaction.channel_id
+            reminder_text = _extract_reminder_text(interaction.message)
 
         remind_at = now_utc() + timedelta(minutes=minutes)
         try:
@@ -65,10 +141,10 @@ class ReminderSnoozeView(discord.ui.View):
                     VALUES (?, ?, ?, ?, ?, ?, 0, NULL)
                     """,
                     (
-                        self.guild_id,
-                        self.user_id,
-                        self.channel_id,
-                        self.reminder_text,
+                        guild_id,
+                        user_id,
+                        channel_id,
+                        reminder_text,
                         remind_at.isoformat(),
                         now_utc().isoformat(),
                     ),
@@ -91,15 +167,15 @@ class ReminderSnoozeView(discord.ui.View):
             ephemeral=True,
         )
 
-    @discord.ui.button(label="+10 min", emoji="⏱️", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="+10 min", emoji="⏱️", style=discord.ButtonStyle.secondary, custom_id="rem_snooze:10")
     async def snooze_10m(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self._snooze(interaction, 10)
 
-    @discord.ui.button(label="+1 hour", emoji="🕐", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="+1 hour", emoji="🕐", style=discord.ButtonStyle.secondary, custom_id="rem_snooze:60")
     async def snooze_1h(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self._snooze(interaction, 60)
 
-    @discord.ui.button(label="Tomorrow", emoji="📅", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="Tomorrow", emoji="📅", style=discord.ButtonStyle.secondary, custom_id="rem_snooze:1440")
     async def snooze_1d(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self._snooze(interaction, 60 * 24)
 

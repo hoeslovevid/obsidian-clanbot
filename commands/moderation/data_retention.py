@@ -269,23 +269,44 @@ def setup(bot, group=None):
             )
         
         elif action == "cleanup":
+            from views import ConfirmView
+            from core.embed_templates import confirm_embed
+
             settings = await get_retention_settings(interaction.guild.id)
-            stats = await cleanup_old_data(interaction.guild.id, settings)
-            
-            total_deleted = sum(stats.values())
-            
-            if total_deleted == 0:
-                message = "No old data found to clean up."
-            else:
-                message = f"Cleanup completed. **{total_deleted:,}** records deleted:\n\n"
-                for key, count in stats.items():
-                    if count > 0:
-                        message += f"• {key.replace('_', ' ').title()}: {count:,}\n"
-            
-            embed = obsidian_embed(
-                "🧹 Data Cleanup Complete",
-                message,
-                color=discord.Color.green() if total_deleted > 0 else discord.Color.blue(),
+            policy_lines = [
+                f"• **{k.replace('_', ' ').title()}**: {v} days" if v else f"• **{k.replace('_', ' ').title()}**: disabled"
+                for k, v in settings.items()
+            ]
+            confirm = confirm_embed(
+                "⚠️ Confirm Data Cleanup",
+                "Permanently delete old records matching your retention policies?\n\n"
+                + ("\n".join(policy_lines[:8]) if policy_lines else "_No policies configured._"),
                 client=interaction.client,
             )
-            await interaction.followup.send(embed=embed, ephemeral=True)
+
+            async def on_confirm(btn_interaction: discord.Interaction, confirmed: bool):
+                if not confirmed:
+                    return await btn_interaction.followup.send("Cancelled.", ephemeral=True)
+                if btn_interaction.user.id != interaction.user.id:
+                    return await btn_interaction.followup.send(
+                        "Only the person who started this can confirm.", ephemeral=True
+                    )
+                stats = await cleanup_old_data(interaction.guild.id, settings)
+                total_deleted = sum(stats.values())
+                if total_deleted == 0:
+                    message = "No old data found to clean up."
+                else:
+                    message = f"Cleanup completed. **{total_deleted:,}** records deleted:\n\n"
+                    for key, count in stats.items():
+                        if count > 0:
+                            message += f"• {key.replace('_', ' ').title()}: {count:,}\n"
+                embed = obsidian_embed(
+                    "🧹 Data Cleanup Complete",
+                    message,
+                    color=discord.Color.green() if total_deleted > 0 else discord.Color.blue(),
+                    client=btn_interaction.client,
+                )
+                await btn_interaction.followup.send(embed=embed, ephemeral=True)
+
+            view = ConfirmView(on_confirm)
+            await interaction.followup.send(embed=confirm, view=view, ephemeral=True)

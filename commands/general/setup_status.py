@@ -73,7 +73,7 @@ async def _build_setup_status_embed(guild: discord.Guild, client) -> discord.Emb
 
 
 class _SetupStatusView(discord.ui.View):
-    """Refresh action so mods can re-check after configuring a feature."""
+    """Refresh + quick-launch setup wizards."""
 
     def __init__(self, requester_id: int):
         super().__init__(timeout=300)
@@ -91,6 +91,26 @@ class _SetupStatusView(discord.ui.View):
             return await interaction.response.send_message("Server only.", ephemeral=True)
         embed = await _build_setup_status_embed(interaction.guild, interaction.client)
         await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="Core setup", emoji="⚙️", style=discord.ButtonStyle.primary)
+    async def core_setup_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        from core.command_mentions import command_mention
+
+        cmd = command_mention("general setup_obsidian", fallback="`/general setup_obsidian`")
+        await interaction.response.send_message(
+            f"Run {cmd} to configure events, level-up, and voice channels.",
+            ephemeral=True,
+        )
+
+    @discord.ui.button(label="WF notify", emoji="🔔", style=discord.ButtonStyle.primary)
+    async def wf_setup_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        from core.command_mentions import command_mention
+
+        cmd = command_mention("wfnotify configure", fallback="`/wfnotify configure`")
+        await interaction.response.send_message(
+            f"Run {cmd} to set up Warframe alert feeds.",
+            ephemeral=True,
+        )
 
 
 def setup(bot, group=None):

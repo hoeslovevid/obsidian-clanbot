@@ -285,37 +285,53 @@ def setup(bot, group=None):
             )
 
         scope = f"members with **{filter_role.name}**" if filter_role else "all members"
-        await interaction.followup.send(
-            embed=obsidian_embed(
-                "⏳ Mass Role Remove",
-                f"Removing {role.mention} from **{len(candidates)}** {scope}…\nThis may take a while.",
-                category="moderation",
-                client=interaction.client,
-            ),
-            ephemeral=True,
+
+        from views import ConfirmView
+        from core.embed_templates import confirm_embed
+
+        confirm = confirm_embed(
+            "⚠️ Confirm Mass Role Remove",
+            f"Remove {role.mention} from **{len(candidates)}** {scope}?\nThis cannot be undone in one click.",
+            client=interaction.client,
         )
 
-        success, failed = 0, 0
-        for member in candidates:
-            try:
-                await member.remove_roles(role, reason=f"Mass remove by {interaction.user}")
-                success += 1
-            except discord.Forbidden:
-                failed += 1
-            except discord.HTTPException:
-                failed += 1
-            await asyncio.sleep(0.5)
+        async def on_confirm(btn_interaction: discord.Interaction, confirmed: bool):
+            if not confirmed:
+                return await btn_interaction.followup.send("Cancelled.", ephemeral=True)
+            if btn_interaction.user.id != interaction.user.id:
+                return await btn_interaction.followup.send(
+                    "Only the person who started this can confirm.", ephemeral=True
+                )
+            await btn_interaction.followup.send(
+                embed=obsidian_embed(
+                    "⏳ Mass Role Remove",
+                    f"Removing {role.mention} from **{len(candidates)}** {scope}…\nThis may take a while.",
+                    category="moderation",
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+            success, failed = 0, 0
+            for member in candidates:
+                try:
+                    await member.remove_roles(role, reason=f"Mass remove by {interaction.user}")
+                    success += 1
+                except (discord.Forbidden, discord.HTTPException):
+                    failed += 1
+                await asyncio.sleep(0.5)
+            await btn_interaction.followup.send(
+                embed=obsidian_embed(
+                    "✅ Mass Role Remove Complete",
+                    f"Removed {role.mention} from **{success}** member(s)."
+                    + (f"\n⚠️ Failed for **{failed}** member(s)." if failed else ""),
+                    category="moderation",
+                    client=btn_interaction.client,
+                ),
+                ephemeral=True,
+            )
 
-        await interaction.followup.send(
-            embed=obsidian_embed(
-                "✅ Mass Role Remove Complete",
-                f"Removed {role.mention} from **{success}** member(s)."
-                + (f"\n⚠️ Failed for **{failed}** member(s)." if failed else ""),
-                category="moderation",
-                client=interaction.client,
-            ),
-            ephemeral=True,
-        )
+        view = ConfirmView(on_confirm)
+        await interaction.followup.send(embed=confirm, view=view, ephemeral=True)
 
     command_decorator = group.command(name="assign", description="Assign or remove a self-assignable role.") if group else bot.tree.command(name="assign", description="Assign or remove a self-assignable role.")
     

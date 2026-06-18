@@ -2583,17 +2583,10 @@ def setup_tasks(bot):
                     prefer_dm = (await get_guild_setting(guild_id, "reminders_prefer_dm") or "").lower() in ("1", "true", "yes")
                     if await get_quieter_mode(guild_id):
                         prefer_dm = True  # Quieter mode: prefer DM to avoid channel pings
-                    from commands.general.reminder import ReminderSnoozeView
-
-                    def _snooze_view():
-                        return ReminderSnoozeView(
-                            guild_id=guild_id,
-                            user_id=user_id,
-                            channel_id=channel_id,
-                            reminder_text=reminder_text,
-                        )
+                    from commands.general.reminder import ReminderSnoozeView, store_snooze_context
 
                     sent = False
+                    sent_message = None
                     if prefer_dm or not channel or not isinstance(channel, discord.TextChannel):
                         try:
                             embed = obsidian_embed(
@@ -2602,7 +2595,7 @@ def setup_tasks(bot):
                                 color=discord.Color.blue(),
                                 client=bot,
                             )
-                            await user.send(embed=embed, view=_snooze_view())
+                            sent_message = await user.send(embed=embed, view=ReminderSnoozeView())
                             sent = True
                         except Exception:
                             pass  # User has DMs disabled
@@ -2613,7 +2606,12 @@ def setup_tasks(bot):
                             color=discord.Color.blue(),
                             client=bot,
                         )
-                        await channel.send(embed=embed, view=_snooze_view())
+                        sent_message = await channel.send(embed=embed, view=ReminderSnoozeView())
+
+                    if sent_message is not None:
+                        await store_snooze_context(
+                            sent_message.id, guild_id, user_id, channel_id, reminder_text
+                        )
                     
                     # Mark as sent and optionally re-insert recurring reminder
                     async with aiosqlite.connect(DB_PATH) as db:
