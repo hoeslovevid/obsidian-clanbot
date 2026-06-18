@@ -1593,6 +1593,11 @@ def setup_tasks(bot):
                     if last_sent == today_str:
                         continue
 
+                    # Respect user quiet hours (bot-initiated nudge)
+                    from core.quiet_hours import in_quiet_hours
+                    if await in_quiet_hours(guild_id, user_id):
+                        continue
+
                     user = bot.get_user(user_id)
                     if not user:
                         try:

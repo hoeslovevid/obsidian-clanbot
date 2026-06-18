@@ -12,12 +12,20 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-18"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Privacy** — your `private_results` preference now also applies to `/economy balance` (others' view) and `/warframe baro`",
-    "**Safety** — `/economy manage_coins` now asks for confirmation on large changes (≥100,000 coins)",
+    "**Quiet hours** — set `/general preferences quiet_hours:22-7` to silence bot nudge DMs (daily reminder, digest) during your chosen local hours",
+    "**Daily digest** — turn individual sections on/off with `/general preferences digest_section:… digest_state:…` (Economy, Events, Baro, Investments)",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "1.99.4",
+        "date": "2026-06-18",
+        "changes": [
+            "**Privacy** — your `private_results` preference now also applies to `/economy balance` (others' view) and `/warframe baro`",
+            "**Safety** — `/economy manage_coins` now asks for confirmation on large changes (≥100,000 coins)",
+        ],
+    },
     {
         "version": "1.99.3",
         "date": "2026-06-18",

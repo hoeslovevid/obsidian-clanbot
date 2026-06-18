@@ -108,27 +108,40 @@ def _in_digest_send_window(guild_id: int, user_id: int, tz_name: str | None) -> 
     return _DIGEST_HOUR_START <= local.hour < _DIGEST_HOUR_END
 
 
+async def _section_on(guild_id: int, user_id: int, section: str) -> bool:
+    """Per-feature digest opt-out: section is ON unless explicitly set to '0'."""
+    val = await get_guild_setting(guild_id, f"user_digest_feat:{user_id}:{section}")
+    return val != "0"
+
+
 async def _build_user_digest(guild_id: int, user_id: int, *, quieter: bool) -> str | None:
     """Compose digest body or None when there is nothing worth sending."""
     today = now_utc().date()
     today_str = today.isoformat()
     lines: list[str] = []
 
-    streak_line = await _streak_at_risk_line(guild_id, user_id, today_str)
-    if streak_line:
-        lines.append(streak_line)
+    economy_on = await _section_on(guild_id, user_id, "economy")
+    events_on = await _section_on(guild_id, user_id, "events")
+    baro_on = await _section_on(guild_id, user_id, "baro")
+    invest_on = await _section_on(guild_id, user_id, "investments")
+
+    if economy_on:
+        streak_line = await _streak_at_risk_line(guild_id, user_id, today_str)
+        if streak_line:
+            lines.append(streak_line)
 
     async with aiosqlite.connect(DB_PATH) as db:
-        cur = await db.execute(
-            "SELECT last_claim_date FROM daily_claims WHERE guild_id=? AND user_id=?",
-            (guild_id, user_id),
-        )
-        row = await cur.fetchone()
-        last_claim = row[0] if row else None
-        if last_claim != today_str:
-            lines.append("💰 **Daily reward** is unclaimed — use `/economy daily` before reset.")
+        if economy_on:
+            cur = await db.execute(
+                "SELECT last_claim_date FROM daily_claims WHERE guild_id=? AND user_id=?",
+                (guild_id, user_id),
+            )
+            row = await cur.fetchone()
+            last_claim = row[0] if row else None
+            if last_claim != today_str:
+                lines.append("💰 **Daily reward** is unclaimed — use `/economy daily` before reset.")
 
-        if not quieter:
+        if not quieter and events_on:
             day_start = int(datetime.combine(today, datetime.min.time(), tzinfo=timezone.utc).timestamp())
             day_end = day_start + 86400
             cur = await db.execute(
@@ -144,14 +157,15 @@ async def _build_user_digest(guild_id: int, user_id: int, *, quieter: bool) -> s
                     f"📅 **{events_today}** clan event{'s' if events_today != 1 else ''} scheduled today."
                 )
 
-    if not quieter:
+    if not quieter and baro_on:
         baro_line = await _baro_soon_line()
         if baro_line:
             lines.append(baro_line)
 
-    inv_line = await _mature_investments_line(guild_id, user_id)
-    if inv_line:
-        lines.append(inv_line)
+    if invest_on:
+        inv_line = await _mature_investments_line(guild_id, user_id)
+        if inv_line:
+            lines.append(inv_line)
 
     if not lines:
         return None
@@ -193,6 +207,10 @@ def create_digest_loop(bot: discord.Client):
 
             sent_key = f"digest_dm_sent:{user_id}"
             if await get_guild_setting(guild_id, sent_key) == today_str:
+                continue
+
+            from core.quiet_hours import in_quiet_hours
+            if await in_quiet_hours(guild_id, user_id):
                 continue
 
             quieter = await get_quieter_mode(guild_id)

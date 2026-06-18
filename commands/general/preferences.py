@@ -58,6 +58,9 @@ def setup(bot, group=None):
         typo_helper="Reply with a slash-command suggestion when you mis-type one in chat",
         hide_leaderboards="Show as Hidden on coin, XP, voice, and achievement leaderboards",
         private_results="Make your personal results (e.g. /profile, /me) private to you by default",
+        quiet_hours="Suppress nudge DMs during these local hours, e.g. '22-7' (or 'off' to clear)",
+        digest_section="Pick a daily-digest section to turn on/off (use together with digest_state)",
+        digest_state="On/off for the chosen digest_section",
     )
     @app_commands.choices(timezone=[
         app_commands.Choice(name=label, value=tz) for tz, label in COMMON_TIMEZONES
@@ -109,6 +112,16 @@ def setup(bot, group=None):
         app_commands.Choice(name="On (private to me)", value="1"),
         app_commands.Choice(name="Off (default visibility)", value="0"),
     ])
+    @app_commands.choices(digest_section=[
+        app_commands.Choice(name="Economy (daily / streak)", value="economy"),
+        app_commands.Choice(name="Events", value="events"),
+        app_commands.Choice(name="Baro", value="baro"),
+        app_commands.Choice(name="Investments", value="investments"),
+    ])
+    @app_commands.choices(digest_state=[
+        app_commands.Choice(name="On", value="1"),
+        app_commands.Choice(name="Off", value="0"),
+    ])
     async def preferences(
         interaction: discord.Interaction,
         timezone: Optional[app_commands.Choice[str]] = None,
@@ -124,6 +137,9 @@ def setup(bot, group=None):
         typo_helper: Optional[app_commands.Choice[str]] = None,
         hide_leaderboards: Optional[app_commands.Choice[str]] = None,
         private_results: Optional[app_commands.Choice[str]] = None,
+        quiet_hours: Optional[str] = None,
+        digest_section: Optional[app_commands.Choice[str]] = None,
+        digest_state: Optional[app_commands.Choice[str]] = None,
     ):
         """Set timezone or quieter mode."""
         if not interaction.guild:
@@ -232,6 +248,37 @@ def setup(bot, group=None):
             state = "On (private)" if private_results.value == "1" else "Off (default)"
             updated.append(f"**Private results:** {state}")
 
+        if quiet_hours is not None:
+            from core.quiet_hours import parse_quiet_hours
+            raw = quiet_hours.strip().lower()
+            if raw in ("off", "-", "none", "clear", ""):
+                await set_guild_setting(interaction.guild.id, f"user_quiet_hours:{interaction.user.id}", "")
+                updated.append("**Quiet hours:** cleared")
+            else:
+                parsed = parse_quiet_hours(raw)
+                if not parsed:
+                    lines.append("⚠️ Quiet hours must look like `22-7` (start-end, 24h). Use `off` to clear.")
+                else:
+                    await set_guild_setting(
+                        interaction.guild.id,
+                        f"user_quiet_hours:{interaction.user.id}",
+                        f"{parsed[0]}-{parsed[1]}",
+                    )
+                    updated.append(
+                        f"**Quiet hours:** {parsed[0]:02d}:00–{parsed[1]:02d}:00 (your local time)"
+                    )
+
+        if digest_section and digest_state:
+            await set_guild_setting(
+                interaction.guild.id,
+                f"user_digest_feat:{interaction.user.id}:{digest_section.value}",
+                digest_state.value,
+            )
+            state = "On" if digest_state.value == "1" else "Off"
+            updated.append(f"**Digest · {digest_section.name}:** {state}")
+        elif digest_section or digest_state:
+            lines.append("⚠️ Set both `digest_section` and `digest_state` together to change a digest section.")
+
         if not lines and not updated:
             # Show current preferences
             current_tz = await get_user_timezone(interaction.guild.id, interaction.user.id)
@@ -259,6 +306,9 @@ def setup(bot, group=None):
             lb_hidden = lb_val == "1"
             pr_val = await get_guild_setting(interaction.guild.id, f"user_private_results:{interaction.user.id}")
             pr_on = pr_val == "1"
+            from core.quiet_hours import parse_quiet_hours
+            qh = parse_quiet_hours(await get_guild_setting(interaction.guild.id, f"user_quiet_hours:{interaction.user.id}"))
+            qh_text = f"{qh[0]:02d}:00–{qh[1]:02d}:00 (local)" if qh else "Off"
             lines.append(f"**Your timezone:** {current_tz or 'Not set (uses server default)'}")
             lines.append(f"**Trading platform:** {current_platform.upper() if current_platform else 'Not set (defaults to PC)'}")
             lines.append(f"**Daily streak reminder:** {'On 🔔' if dr_on else 'Off'}")
@@ -270,6 +320,7 @@ def setup(bot, group=None):
             lines.append(f"**Typo helper:** {'On 💡' if th_on else 'Off'}")
             lines.append(f"**Leaderboard privacy:** {'On 🕵️' if lb_hidden else 'Off (name shown)'}")
             lines.append(f"**Private results:** {'On 🔒' if pr_on else 'Off (default)'}")
+            lines.append(f"**Quiet hours:** {qh_text}")
             if isinstance(interaction.user, discord.Member) and is_mod(interaction.user):
                 lines.append(f"**Quieter mode:** {'On' if quieter_on else 'Off'}")
             embed = obsidian_embed(
