@@ -4,6 +4,9 @@ from discord import app_commands
 
 from core.utils import obsidian_embed, feature_off_embed, ECONOMY_ENABLED, is_mod
 
+# Above this amount, require an explicit confirmation (fat-finger protection).
+_CONFIRM_THRESHOLD = 100_000
+
 
 def setup(bot, group=None):
     """Register the manage_coins command."""
@@ -53,73 +56,94 @@ def setup(bot, group=None):
         
         action_value = action.value if isinstance(action.value, str) else action
         is_add = action_value == "add"
-        
+
         # Get current balance before modification
         current_balance = await get_user_balance(interaction.guild.id, user.id)
-        
-        if is_add:
-            # Add coins
-            await add_coins(
-                interaction.guild.id,
-                user.id,
-                amount,
-                "MOD_ADD",
-                f"Added by {interaction.user.display_name} ({interaction.user.id})",
-            )
-            
-            # Get new balance
-            new_balance = await get_user_balance(interaction.guild.id, user.id)
-            
-            fields = [
-                ("💰 Coins Added", f"**+{amount:,}** coins", True),
-                ("💵 Previous Balance", f"{current_balance:,} coins", True),
-                ("💵 New Balance", f"{new_balance:,} coins", True),
-            ]
-            
-            embed = obsidian_embed(
-                "✅ Coins Added",
-                f"Added **{amount:,}** coins to {user.mention}.",
-                color=discord.Color.green(),
-                fields=fields,
-                client=interaction.client,
-            )
-        else:
-            # Remove coins
-            success = await remove_coins(
-                interaction.guild.id,
-                user.id,
-                amount,
-                "MOD_REMOVE",
-                f"Removed by {interaction.user.display_name} ({interaction.user.id})",
-            )
-            
-            if not success:
-                return await interaction.response.send_message(
-                    embed=obsidian_embed(
-                        "❌ Insufficient Balance",
-                        f"{user.mention} only has **{current_balance:,}** coins.\n"
-                        f"Cannot remove **{amount:,}** coins.",
-                        color=discord.Color.red(),
-                        client=interaction.client,
-                    ),
-                    ephemeral=True
+
+        async def apply_and_report(src: discord.Interaction, *, followup: bool):
+            sender = src.followup.send if followup else src.response.send_message
+            if is_add:
+                await add_coins(
+                    interaction.guild.id,
+                    user.id,
+                    amount,
+                    "MOD_ADD",
+                    f"Added by {interaction.user.display_name} ({interaction.user.id})",
                 )
-            
-            # Get new balance
-            new_balance = await get_user_balance(interaction.guild.id, user.id)
-            
-            fields = [
-                ("💰 Coins Removed", f"**-{amount:,}** coins", True),
-                ("💵 Previous Balance", f"{current_balance:,} coins", True),
-                ("💵 New Balance", f"{new_balance:,} coins", True),
-            ]
-            
-            embed = obsidian_embed(
-                "✅ Coins Removed",
-                f"Removed **{amount:,}** coins from {user.mention}.",
-                color=discord.Color.orange(),
-                fields=fields,
+                new_balance = await get_user_balance(interaction.guild.id, user.id)
+                fields = [
+                    ("💰 Coins Added", f"**+{amount:,}** coins", True),
+                    ("💵 Previous Balance", f"{current_balance:,} coins", True),
+                    ("💵 New Balance", f"{new_balance:,} coins", True),
+                ]
+                embed = obsidian_embed(
+                    "✅ Coins Added",
+                    f"Added **{amount:,}** coins to {user.mention}.",
+                    color=discord.Color.green(),
+                    fields=fields,
+                    client=interaction.client,
+                )
+                await sender(embed=embed, ephemeral=False)
+            else:
+                success = await remove_coins(
+                    interaction.guild.id,
+                    user.id,
+                    amount,
+                    "MOD_REMOVE",
+                    f"Removed by {interaction.user.display_name} ({interaction.user.id})",
+                )
+                if not success:
+                    return await sender(
+                        embed=obsidian_embed(
+                            "❌ Insufficient Balance",
+                            f"{user.mention} only has **{current_balance:,}** coins.\n"
+                            f"Cannot remove **{amount:,}** coins.",
+                            color=discord.Color.red(),
+                            client=interaction.client,
+                        ),
+                        ephemeral=True,
+                    )
+                new_balance = await get_user_balance(interaction.guild.id, user.id)
+                fields = [
+                    ("💰 Coins Removed", f"**-{amount:,}** coins", True),
+                    ("💵 Previous Balance", f"{current_balance:,} coins", True),
+                    ("💵 New Balance", f"{new_balance:,} coins", True),
+                ]
+                embed = obsidian_embed(
+                    "✅ Coins Removed",
+                    f"Removed **{amount:,}** coins from {user.mention}.",
+                    color=discord.Color.orange(),
+                    fields=fields,
+                    client=interaction.client,
+                )
+                await sender(embed=embed, ephemeral=False)
+
+        # Large changes require explicit confirmation (fat-finger protection).
+        if amount >= _CONFIRM_THRESHOLD:
+            from views import ConfirmView
+            from core.embed_templates import confirm_embed
+
+            verb = "add" if is_add else "remove"
+            prep = "to" if is_add else "from"
+            confirm = confirm_embed(
+                "⚠️ Confirm Large Coin Change",
+                f"{verb.capitalize()} **{amount:,}** coins {prep} {user.mention}?\n"
+                f"Their current balance is **{current_balance:,}** coins.",
                 client=interaction.client,
             )
-        
-        await interaction.response.send_message(embed=embed, ephemeral=False)
+
+            async def on_confirm(btn_interaction: discord.Interaction, confirmed: bool):
+                if not confirmed:
+                    return await btn_interaction.followup.send("Cancelled.", ephemeral=True)
+                if btn_interaction.user.id != interaction.user.id:
+                    return await btn_interaction.followup.send(
+                        "Only the person who started this can confirm.", ephemeral=True
+                    )
+                await apply_and_report(btn_interaction, followup=True)
+
+            view = ConfirmView(on_confirm)
+            await interaction.response.send_message(embed=confirm, view=view, ephemeral=True)
+            view.message = await interaction.original_response()
+            return
+
+        await apply_and_report(interaction, followup=False)

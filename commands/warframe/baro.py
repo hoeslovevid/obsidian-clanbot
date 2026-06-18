@@ -348,7 +348,11 @@ def setup(bot, group=None):
     @command_decorator
     async def baro(interaction: discord.Interaction):
         """Display Baro Ki'Teer's current status and inventory."""
-        await interaction.response.defer(ephemeral=False)
+        baro_ephemeral = False
+        if interaction.guild:
+            from core.user_prefs import results_ephemeral
+            baro_ephemeral = await results_ephemeral(interaction.guild.id, interaction.user.id)
+        await interaction.response.defer(ephemeral=baro_ephemeral)
 
         guild_id = interaction.guild.id if interaction.guild else None
         is_active, baro_data = await get_baro_status()
@@ -440,7 +444,7 @@ def setup(bot, group=None):
             refresh_callback=on_refresh,
             client=interaction.client,
         )
-        message = await interaction.followup.send(embed=embed, view=view, ephemeral=False)
+        message = await interaction.followup.send(embed=embed, view=view, ephemeral=baro_ephemeral)
         await _persist_inventory_hash(guild_id, inventory)
 
         if is_active and interaction.guild and isinstance(interaction.channel, discord.TextChannel):

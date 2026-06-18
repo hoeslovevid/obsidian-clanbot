@@ -12,14 +12,22 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-18"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**`/economy daily`** — after claiming, a one-tap **Claim bounties** button grabs all completed bounties too",
-    "**`/economy cooldowns`** — now also shows daily bounty status and reset time",
-    "**Fix** — the bounties **Claim** button no longer skips the weekly LFG bounty",
-    "**Fix** — the daily streak reminder now DMs users who are actually at risk (claimed yesterday, not today) instead of those who already claimed",
+    "**Privacy** — your `private_results` preference now also applies to `/economy balance` (others' view) and `/warframe baro`",
+    "**Safety** — `/economy manage_coins` now asks for confirmation on large changes (≥100,000 coins)",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "1.99.3",
+        "date": "2026-06-18",
+        "changes": [
+            "**`/economy daily`** — after claiming, a one-tap **Claim bounties** button grabs all completed bounties too",
+            "**`/economy cooldowns`** — now also shows daily bounty status and reset time",
+            "**Fix** — the bounties **Claim** button no longer skips the weekly LFG bounty",
+            "**Fix** — the daily streak reminder now DMs users who are actually at risk (claimed yesterday, not today) instead of those who already claimed",
+        ],
+    },
     {
         "version": "1.99.2",
         "date": "2026-06-18",

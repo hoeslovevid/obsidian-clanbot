@@ -37,8 +37,13 @@ def setup(bot, group=None):
 
         target = user or interaction.user
         is_self = target.id == interaction.user.id
-        # Own balance → ephemeral DM attempt. Viewing someone else → public.
-        await interaction.response.defer(ephemeral=is_self)
+        # Own balance → ephemeral DM attempt. Viewing someone else → public,
+        # unless the viewer opted into private results.
+        others_ephemeral = False
+        if not is_self:
+            from core.user_prefs import results_ephemeral
+            others_ephemeral = await results_ephemeral(interaction.guild.id, interaction.user.id)
+        await interaction.response.defer(ephemeral=is_self or others_ephemeral)
 
         balance = 0
         total_earned = 0
@@ -191,7 +196,7 @@ def setup(bot, group=None):
         if is_self:
             await try_dm_then_ephemeral(interaction.user, embed, interaction, ephemeral_message="I couldn't DM you. Here's your balance:")
         else:
-            await interaction.followup.send(embed=embed)
+            await interaction.followup.send(embed=embed, ephemeral=others_ephemeral)
 
     group.command(name="balance", description="View your or another member's coin balance.")(balance_callback)
     group.command(name="bal", description="View your or another member's coin balance (alias).")(balance_callback)
