@@ -11,7 +11,8 @@ from core.embed_templates import confirm_embed, ticket_embed
 from core.embed_footers import footer_for
 from core.embed_links import add_link_row, ticket_confirmation_buttons
 from core.utils import obsidian_embed, success_embed, is_mod, format_timestamp_readable, EMBED_COLORS
-from database import DB_PATH, now_utc, get_guild_setting
+from core.reply_helpers import mods_only_embed
+from database import DB_PATH, now_utc, get_guild_setting, set_guild_setting
 from views import ConfirmView
 import aiosqlite
 
@@ -181,7 +182,9 @@ class TicketNoteModal(discord.ui.Modal, title="Add internal ticket note"):
 
     async def on_submit(self, interaction: discord.Interaction):
         if not interaction.guild or not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
-            return await interaction.response.send_message("Mods only.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=mods_only_embed(interaction.client), ephemeral=True
+            )
 
         await interaction.response.defer(ephemeral=True)
 
@@ -210,7 +213,9 @@ class TicketCloseModal(discord.ui.Modal, title="Close ticket"):
 
     async def on_submit(self, interaction: discord.Interaction):
         if not interaction.guild or not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
-            return await interaction.response.send_message("Mods only.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=mods_only_embed(interaction.client), ephemeral=True
+            )
 
         await interaction.response.defer(ephemeral=True)
         await close_ticket(
@@ -475,7 +480,9 @@ class TicketControlView(discord.ui.View):
 
     async def _post_quick_reply(self, interaction: discord.Interaction, key: str) -> None:
         if not interaction.guild or not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
-            return await interaction.response.send_message("Mods only.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=mods_only_embed(interaction.client), ephemeral=True
+            )
         body = self._QUICK_BODIES.get(key, "Staff update.")
         status = "awaiting_member" if key != "info" else "awaiting_member"
         await interaction.response.defer(ephemeral=True)
@@ -496,7 +503,9 @@ class TicketControlView(discord.ui.View):
 
     async def _claim(self, interaction: discord.Interaction):
         if not interaction.guild or not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
-            return await interaction.response.send_message("Mods only.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=mods_only_embed(interaction.client), ephemeral=True
+            )
 
         await interaction.response.defer(ephemeral=True)
 
@@ -526,12 +535,16 @@ class TicketControlView(discord.ui.View):
 
     async def _note(self, interaction: discord.Interaction):
         if not interaction.guild or not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
-            return await interaction.response.send_message("Mods only.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=mods_only_embed(interaction.client), ephemeral=True
+            )
         await interaction.response.send_modal(TicketNoteModal(self.ticket_db_id))
 
     async def _transcript(self, interaction: discord.Interaction):
         if not interaction.guild or not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
-            return await interaction.response.send_message("Mods only.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=mods_only_embed(interaction.client), ephemeral=True
+            )
 
         await interaction.response.defer(ephemeral=True)
 
@@ -561,7 +574,9 @@ class TicketControlView(discord.ui.View):
 
     async def _escalate(self, interaction: discord.Interaction):
         if not interaction.guild or not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
-            return await interaction.response.send_message("Mods only.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=mods_only_embed(interaction.client), ephemeral=True
+            )
 
         await interaction.response.defer(ephemeral=True)
 
@@ -612,7 +627,9 @@ class TicketControlView(discord.ui.View):
 
     async def _close(self, interaction: discord.Interaction):
         if not interaction.guild or not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
-            return await interaction.response.send_message("Mods only.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=mods_only_embed(interaction.client), ephemeral=True
+            )
         await interaction.response.send_modal(TicketCloseModal(self.ticket_db_id))
 
 
@@ -701,14 +718,14 @@ async def close_ticket(
             dm_embed = obsidian_embed(
                 "📝 Ticket feedback",
                 f"How was the help you received for **{ticket_row['subject']}**?\n"
+                "A transcript was saved to the staff log channel.\n"
                 "Tap a rating below (1 = poor, 5 = great).",
                 color=discord.Color.blurple(),
                 client=interaction.client,
             )
-            await user.send(
-                embed=dm_embed,
-                view=TicketSatisfactionView(ticket_db_id, owner_id=int(ticket_row["user_id"])),
-            )
+            from core.safe_send import safe_channel_send
+
+            await safe_channel_send(None, dm_user=user, embed=dm_embed, view=TicketSatisfactionView(ticket_db_id, owner_id=int(ticket_row["user_id"])))
     except Exception:
         pass
 
@@ -907,6 +924,22 @@ async def open_support_ticket(
                     )
                 except discord.Forbidden:
                     pass
+    except Exception:
+        pass
+
+    # DM open confirmation (best-effort)
+    try:
+        from core.safe_send import safe_channel_send
+
+        received = obsidian_embed(
+            "🎫 Ticket received",
+            f"Your ticket **`{ticket_id}`** is open in {channel.mention}.\n"
+            f"**Subject:** {subject}\n\n"
+            "Staff will reply in the ticket channel. You'll get a feedback request when it closes.",
+            category="community",
+            client=interaction.client,
+        )
+        await safe_channel_send(None, dm_user=interaction.user, embed=received)
     except Exception:
         pass
 

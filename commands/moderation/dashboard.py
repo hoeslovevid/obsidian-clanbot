@@ -510,8 +510,20 @@ def setup(bot, group=None):
 
         await interaction.response.defer(ephemeral=True)
         embed = await get_mod_dashboard_embed(interaction.guild, interaction.client)
-        view  = ModDashboardView(interaction.guild)
+        from core.mod_runbook import ModRunbookView
+        view = ModDashboardView(interaction.guild)
+        runbook = ModRunbookView(interaction.guild)
         await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+        await interaction.followup.send(
+            embed=obsidian_embed(
+                "📋 Staff runbook",
+                "Copy-paste announcement drafts for common situations.",
+                category="moderation",
+                client=interaction.client,
+            ),
+            view=runbook,
+            ephemeral=True,
+        )
 
     stats_decorator = (
         group.command(name="stats_dashboard", description="View server analytics: members, economy, activity.")

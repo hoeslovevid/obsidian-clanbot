@@ -12,17 +12,29 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-18"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Batch I** — first-run nudges on ticket/trade/LFG/event; `private_results` on `/cooldowns`; compact embeds on `/me`",
-    "**Batch J** — hub **My fissures** button; `/claim` Layout v2; clickable favorites in `/help`; onboarding steps 4–6",
-    "**Batch J** — right-click **Look up market price** on messages",
-    "**Batch K** — price-watch DMs respect quiet hours + **Stop watching** button; digest **Market** section",
-    "**Batch L** — LFG creator DM after 2h; trade listing 24h expiry warning; ticket **Reopen** within 24h",
-    "**Batch M** — `/admin errors_export`; KPI 7-day ticket trend; notification panel compact/private toggles",
-    "**Claim hub** — pets readiness line alongside daily/bounties/investment",
+    "**P1** — branded server-only / mods-only replies; unified WF unavailable copy via `wf_copy`",
+    "**P2** — `/about` privacy & data; `/status` WF history + maintenance line; ticket open/close DM polish; `/menu` what's-new since last visit",
+    "**P3** — audit log on warn + manage_coins; mod dashboard **Staff runbook** announcement drafts",
+    "**P4** — pruned **Add to Suggestions** message context menu (5-cap compliance)",
+    "**P5** — `MAINTENANCE_MODE` env gate (mods bypass); resilient ticket feedback DMs",
+    "**P6** — `/profile_export` JSON download; weekly mod KPI digest loop (`mod_kpi_channel_id`)",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "1.99.10",
+        "date": "2026-06-18",
+        "changes": [
+            "**Batch I** — first-run nudges on ticket/trade/LFG/event; `private_results` on `/cooldowns`; compact embeds on `/me`",
+            "**Batch J** — hub **My fissures** button; `/claim` Layout v2; clickable favorites in `/help`; onboarding steps 4–6",
+            "**Batch J** — right-click **Look up market price** on messages",
+            "**Batch K** — price-watch DMs respect quiet hours + **Stop watching** button; digest **Market** section",
+            "**Batch L** — LFG creator DM after 2h; trade listing 24h expiry warning; ticket **Reopen** within 24h",
+            "**Batch M** — `/admin errors_export`; KPI 7-day ticket trend; notification panel compact/private toggles",
+            "**Claim hub** — pets readiness line alongside daily/bounties/investment",
+        ],
+    },
     {
         "version": "1.99.9",
         "date": "2026-06-18",

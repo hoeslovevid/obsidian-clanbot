@@ -318,6 +318,13 @@ def _install_incident_mode_interaction_check():
             # If previous check fails, fail open
             pass
 
+        try:
+            from core.maintenance import maintenance_check
+            if not await maintenance_check(interaction):
+                return False
+        except Exception:
+            pass
+
         return await incident_mode_check(interaction)
 
     try:

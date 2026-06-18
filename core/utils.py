@@ -505,11 +505,11 @@ DM_SETTINGS_HINT = (
 
 def warframe_data_unavailable_embed(client=None) -> discord.Embed:
     """Friendly message when api.warframestat.us is down, slow, or flaky."""
+    from core.wf_copy import wf_unavailable_body
+
     return obsidian_embed(
         "Can't load live data right now",
-        "Warframe's public stats service is often slow or briefly offline—that's normal, not your fault. "
-        "Wait a minute and try again, or tap **Try again** / **Update data** if you see those buttons.\n\n"
-        "_If we're showing cached data, countdowns might be slightly off._",
+        wf_unavailable_body(),
         template="error",
         client=client,
     )

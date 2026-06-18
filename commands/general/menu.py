@@ -9,6 +9,9 @@ from core.command_history import get_recent_commands
 from core.command_shortcuts import find_tree_command
 from core.embed_templates import embed_template
 from core.utils import obsidian_embed, EMBED_COLORS
+from core.config import BOT_VERSION
+from core.changelog import get_latest_changelog_entry
+from database import get_guild_setting, set_guild_setting
 
 # (label, emoji, command path, hint for parameterized commands)
 MENU_ITEMS: list[tuple[str, str, list[str], str | None]] = [
@@ -200,8 +203,27 @@ def setup(bot, group=None):
                 + "\n\n"
             )
 
+        whats_new_blurb = ""
+        if interaction.guild:
+            try:
+                key = f"menu_last_version:{interaction.user.id}"
+                last_ver = await get_guild_setting(interaction.guild.id, key) or ""
+                if last_ver != BOT_VERSION:
+                    entry = get_latest_changelog_entry()
+                    bullets = entry.get("changes") or []
+                    if bullets:
+                        whats_new_blurb = (
+                            f"**What's new in v{BOT_VERSION}** — "
+                            + " · ".join(str(b)[:80] for b in bullets[:3])
+                            + f"\n_Full notes: `/whatsnew`_\n\n"
+                        )
+                    await set_guild_setting(interaction.guild.id, key, BOT_VERSION)
+            except Exception:
+                pass
+
         desc = (
-            fav_blurb
+            whats_new_blurb
+            + fav_blurb
             + recent_blurb
             + "**Quick start** — pick an action below, or type these shortcuts directly:\n\n"
             "👤 **Me** — `/daily` · `/profile` · `/wallet` · `/me` · `/preferences`\n"

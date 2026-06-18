@@ -219,7 +219,8 @@ def _hub_view(interaction: discord.Interaction, platform: str, guild_id: int) ->
 
     async def wish_cb(btn_interaction: discord.Interaction):
         if not btn_interaction.guild:
-            return await btn_interaction.response.send_message("Server only.", ephemeral=True)
+            from core.reply_helpers import reply_server_only
+            return await reply_server_only(btn_interaction)
         await btn_interaction.response.send_modal(BaroWishlistModal(btn_interaction.guild.id))
 
     wish.callback = wish_cb  # type: ignore
@@ -280,7 +281,8 @@ def _hub_view(interaction: discord.Interaction, platform: str, guild_id: int) ->
 
     async def fissures_cb(btn_interaction: discord.Interaction):
         if not btn_interaction.guild:
-            return await btn_interaction.response.send_message("Server only.", ephemeral=True)
+            from core.reply_helpers import reply_server_only
+            return await reply_server_only(btn_interaction)
         from core.user_prefs import default_fissure_tier
 
         tier = await default_fissure_tier(btn_interaction.guild.id, btn_interaction.user.id)

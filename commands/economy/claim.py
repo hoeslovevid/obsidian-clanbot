@@ -24,7 +24,8 @@ def setup(bot, group=None):
                 ephemeral=True,
             )
         if not interaction.guild:
-            return await interaction.response.send_message("Server only.", ephemeral=True)
+            from core.reply_helpers import reply_server_only
+            return await reply_server_only(interaction)
 
         await interaction.response.defer(ephemeral=True)
         from core.command_mentions import command_mention

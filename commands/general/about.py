@@ -69,6 +69,14 @@ def setup(bot, group=None):
         if BOT_WEBSITE:
             fields.append(("🌐 Website", f"[Visit]({BOT_WEBSITE})", True))
 
+        fields.append((
+            "🔒 Privacy & data",
+            "We store server stats (coins, XP, activity) and preferences you set via `/preferences`.\n"
+            "Mods can run `/admin data_retention` for cleanup policies.\n"
+            "Export your stats anytime with `/profile_export`.",
+            False,
+        ))
+
         embed = embed_template(
             "showcase",
             f"About {bot_name}",

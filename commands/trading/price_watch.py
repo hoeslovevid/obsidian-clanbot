@@ -17,7 +17,8 @@ def setup(bot, group=None):
     @app_commands.autocomplete(item=item_autocomplete)
     async def price_watch(interaction: discord.Interaction, item: str, max_price: app_commands.Range[int, 1, 999999]):
         if not interaction.guild:
-            return await interaction.response.send_message("Server only.", ephemeral=True)
+            from core.reply_helpers import reply_server_only
+            return await reply_server_only(interaction)
         from database import get_user_platform
 
         platform = await get_user_platform(interaction.guild.id, interaction.user.id) or "pc"
@@ -36,7 +37,8 @@ def setup(bot, group=None):
     @app_commands.autocomplete(item=item_autocomplete)
     async def price_unwatch(interaction: discord.Interaction, item: str):
         if not interaction.guild:
-            return await interaction.response.send_message("Server only.", ephemeral=True)
+            from core.reply_helpers import reply_server_only
+            return await reply_server_only(interaction)
         ok, msg = await remove_watch(interaction.guild.id, interaction.user.id, item)
         if ok:
             return await interaction.response.send_message(
@@ -51,7 +53,8 @@ def setup(bot, group=None):
     @bot.tree.command(name="price_watches", description="List your active market price watches.")
     async def price_watches(interaction: discord.Interaction):
         if not interaction.guild:
-            return await interaction.response.send_message("Server only.", ephemeral=True)
+            from core.reply_helpers import reply_server_only
+            return await reply_server_only(interaction)
         rows = await list_watches(interaction.guild.id, interaction.user.id)
         if not rows:
             return await interaction.response.send_message(

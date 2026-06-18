@@ -117,6 +117,20 @@ def setup(bot, group=None):
                     client=interaction.client,
                 )
                 await sender(embed=embed, ephemeral=False)
+            try:
+                from core.audit import log_audit
+                bot_ref = getattr(interaction.client, "bot", interaction.client)
+                await log_audit(
+                    interaction.guild.id,
+                    "manage_coins",
+                    interaction.user.id,
+                    target_id=user.id,
+                    target_type="user",
+                    details=f"{'+' if is_add else '-'}{amount:,}",
+                    bot=bot_ref,
+                )
+            except Exception:
+                pass
 
         # Large changes require explicit confirmation (fat-finger protection).
         if amount >= _CONFIRM_THRESHOLD:

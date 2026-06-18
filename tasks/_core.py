@@ -3226,6 +3226,9 @@ def setup_tasks(bot):
     from tasks.weekly_recap_loop import create_weekly_recap_loop
     weekly_recap_loop = create_weekly_recap_loop(bot)
 
+    from tasks.mod_kpi_digest_loop import create_mod_kpi_digest_loop
+    mod_kpi_digest_loop = create_mod_kpi_digest_loop(bot)
+
     @tasks.loop(minutes=1)
     async def music_auto_leave_loop():
         """Disconnect from voice when the channel is empty too long."""
@@ -3401,6 +3404,7 @@ def setup_tasks(bot):
         ('lfg_bump_loop', lfg_bump_loop),
         ('lfg_poster_nudge_loop', lfg_poster_nudge_loop),
         ('weekly_recap_loop', weekly_recap_loop),
+        ('mod_kpi_digest_loop', mod_kpi_digest_loop),
         ('music_auto_leave_loop', music_auto_leave_loop),
     ]
     

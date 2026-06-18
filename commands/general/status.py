@@ -35,6 +35,13 @@ def setup(bot, group=None):
         await interaction.response.defer(ephemeral=True)
         latency_ms = round((interaction.client.latency or 0) * 1000)
         api_line, degraded = await _warframe_api_hint()
+        try:
+            from core.status_history import record_wf_status, wf_status_history_line
+
+            await record_wf_status(degraded, detail=api_line[:120] if degraded else "")
+            history = await wf_status_history_line()
+        except Exception:
+            history = None
         guilds = len(getattr(interaction.client, "guilds", []) or [])
         uptime = "—"
         start = getattr(interaction.client, "start_time", None)
@@ -77,11 +84,19 @@ def setup(bot, group=None):
             except Exception:
                 setup_line = ""
 
+        from core.maintenance import maintenance_enabled, maintenance_message
+
+        maint_line = ""
+        if maintenance_enabled():
+            maint_line = f"\n🔧 **Maintenance:** {maintenance_message()}\n"
+
         body = (
             f"**Version:** `{BOT_VERSION}`\n"
             f"**Gateway:** {latency_ms} ms · **Uptime:** {uptime}\n"
-            f"**Servers:** {guilds}\n\n"
+            f"**Servers:** {guilds}\n"
+            f"{maint_line}\n"
             f"{api_line}\n"
+            + (f"{history}\n" if history else "")
             + (f"🧭 {setup_line}\n" if setup_line else "")
             + (f"{prefs_line}\n" if prefs_line else "")
             + f"\n{hint}"

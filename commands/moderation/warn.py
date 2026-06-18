@@ -100,6 +100,21 @@ async def execute_warn(interaction: discord.Interaction, user: discord.Member, r
         max_warnings = settings_row[0] if settings_row else 3
         action = settings_row[1] if settings_row else "mute"
 
+    try:
+        from core.audit import log_audit
+        bot_ref = getattr(interaction.client, "bot", interaction.client)
+        await log_audit(
+            interaction.guild.id,
+            "warn",
+            interaction.user.id,
+            target_id=user.id,
+            target_type="user",
+            details=(reason or "")[:200],
+            bot=bot_ref,
+        )
+    except Exception:
+        pass
+
     if warning_count >= max_warnings:
         if action == "mute":
             mute_role = discord.utils.get(interaction.guild.roles, name="Muted")

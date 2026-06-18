@@ -224,22 +224,7 @@ def setup(bot, group=None):
             )
         await interaction.response.send_modal(ReportMessageModal(message))
 
-    @bot.tree.context_menu(name="Add to Suggestions")
-    async def add_to_suggestions_context(interaction: discord.Interaction, message: discord.Message):
-        """Right-click message → Add to Suggestions (turns message content into a suggestion)."""
-        from core.modals import AddToSuggestionModal
-        if not interaction.guild:
-            return await interaction.response.send_message(
-                embed=error_embed("Invalid Context", "This can only be used in a server.", client=interaction.client),
-                ephemeral=True,
-            )
-        content = (message.content or "").strip()
-        if not content or len(content) < 3:
-            return await interaction.response.send_message(
-                embed=error_embed("No Content", "This message has no usable text. Try a message with more content.", action_hint="Use /community suggest to submit a suggestion manually.", client=interaction.client),
-                ephemeral=True,
-            )
-        await interaction.response.send_modal(AddToSuggestionModal(message))
+    # Add to Suggestions removed — use /community suggest (Discord 5 message context menu cap).
 
     @bot.tree.context_menu(name="Add as Event")
     async def add_as_event_context(interaction: discord.Interaction, message: discord.Message):
