@@ -224,40 +224,55 @@ def setup(bot, group=None):
             )
 
         await interaction.response.defer(ephemeral=True)
-        if not RECENT_ERRORS:
-            return await interaction.followup.send(
-                embed=obsidian_embed(
-                    "📋 Session errors",
-                    "No errors recorded this session.",
-                    client=interaction.client,
-                ),
-                ephemeral=True,
+        lines_session = []
+        if RECENT_ERRORS:
+            from collections import Counter
+
+            by_code: Counter[str] = Counter()
+            by_cmd: Counter[str] = Counter()
+            for entry in list(RECENT_ERRORS)[-15:]:
+                code = str(entry.get("code", "?"))
+                cmd = str(entry.get("command") or "?")
+                by_code[code] += 1
+                by_cmd[cmd] += 1
+                at = str(entry.get("at", ""))[:19]
+                exc_type = entry.get("exc_type", "?")
+                lines_session.append(f"• `{code}` · `/{cmd}` · {exc_type} · {at}")
+            top_codes = ", ".join(f"`{c}`×{n}" for c, n in by_code.most_common(5))
+            top_cmds = ", ".join(f"`/{c}`×{n}" for c, n in by_cmd.most_common(5))
+            session_block = (
+                f"**Session ({len(RECENT_ERRORS)} in memory)**\n"
+                f"Top codes: {top_codes or '—'}\n"
+                f"Top commands: {top_cmds or '—'}\n"
+                + ("\n".join(lines_session[-8:]) if lines_session else "")
             )
+        else:
+            session_block = "_No errors recorded this session._"
 
-        from collections import Counter
+        db_lines: list[str] = []
+        try:
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='bot_error_log'"
+                )
+                if await cur.fetchone():
+                    cur = await db.execute(
+                        "SELECT at, code, command, exc_type FROM bot_error_log "
+                        "ORDER BY id DESC LIMIT 10"
+                    )
+                    for at, code, cmd, exc_type in await cur.fetchall():
+                        db_lines.append(
+                            f"• `{code}` · `/{cmd or '?'}` · {exc_type} · {str(at)[:19]}"
+                        )
+        except Exception:
+            pass
 
-        by_code: Counter[str] = Counter()
-        by_cmd: Counter[str] = Counter()
-        lines = []
-        for entry in list(RECENT_ERRORS)[-15:]:
-            code = str(entry.get("code", "?"))
-            cmd = str(entry.get("command") or "?")
-            by_code[code] += 1
-            by_cmd[cmd] += 1
-            at = str(entry.get("at", ""))[:19]
-            exc_type = entry.get("exc_type", "?")
-            lines.append(f"• `{code}` · `/{cmd}` · {exc_type} · {at}")
-
-        top_codes = ", ".join(f"`{c}`×{n}" for c, n in by_code.most_common(5))
-        top_cmds = ", ".join(f"`/{c}`×{n}" for c, n in by_cmd.most_common(5))
         embed = obsidian_embed(
-            "📋 Session error digest",
-            f"**{len(RECENT_ERRORS)}** error(s) in memory (max 20).\n\n"
-            f"**Top codes:** {top_codes or '—'}\n"
-            f"**Top commands:** {top_cmds or '—'}",
+            "📋 Error digest",
+            session_block,
             color=discord.Color.orange(),
-            fields=[("Recent", "\n".join(lines[-10:]), False)],
-            footer="Also shown in /admin health · clears on bot restart",
+            fields=[("Persisted (last 10)", "\n".join(db_lines) or "—", False)] if db_lines else None,
+            footer="Session log clears on restart · DB keeps last 200",
             client=interaction.client,
         )
         await interaction.followup.send(embed=embed, ephemeral=True)

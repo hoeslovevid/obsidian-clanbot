@@ -91,6 +91,13 @@ def setup(bot, group=None):
         await interaction.response.defer(ephemeral=False)
 
         invasions_data = await fetch_invasions()
+        faction_filter = None
+        if interaction.guild:
+            from core.user_prefs import default_invasion_faction
+
+            faction_filter = await default_invasion_faction(
+                interaction.guild.id, interaction.user.id
+            )
 
         if invasions_data is None:
             async def on_retry(btn_interaction: discord.Interaction):
@@ -122,6 +129,23 @@ def setup(bot, group=None):
                     client=interaction.client,
                 ),
             )
+
+        if faction_filter:
+            fl = faction_filter.lower()
+            invasions_data = [
+                inv for inv in invasions_data
+                if fl in str((inv.get("attacker") or {}).get("faction", "")).lower()
+                or fl in str((inv.get("defender") or {}).get("faction", "")).lower()
+            ]
+            if not invasions_data:
+                return await interaction.followup.send(
+                    embed=obsidian_embed(
+                        "⚔️ Active Invasions",
+                        f"No invasions matching **{faction_filter}** right now.",
+                        category="warframe",
+                        client=interaction.client,
+                    ),
+                )
 
         async def on_refresh(btn_interaction: discord.Interaction):
             # Read-only public data — anyone may refresh.

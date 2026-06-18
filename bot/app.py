@@ -688,7 +688,18 @@ async def check_auto_mod(message: discord.Message) -> bool:
             # Apply additional punishment
             if action == "warn":
                 action_taken = "delete + warn"
-                # Could send a DM warning here
+                try:
+                    await message.author.send(
+                        embed=obsidian_embed(
+                            "⚠️ Auto-moderation warning",
+                            f"Your message in {_channel_mention_safe(message.channel)} was removed for **{violation_type}**.\n\n"
+                            "Please follow the server rules.",
+                            color=discord.Color.orange(),
+                            client=bot,
+                        )
+                    )
+                except Exception:
+                    pass
                 
             elif action == "timeout" and isinstance(message.author, discord.Member):
                 if duration:

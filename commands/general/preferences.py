@@ -60,6 +60,7 @@ def setup(bot, group=None):
         private_results="Make your personal results (e.g. /profile, /me) private to you by default",
         compact_embeds="Shorter embeds: tighter spacing, no timestamp",
         fissure_tier="Default void fissure tier filter for /fissures (or 'all' / 'off' to clear)",
+        invasion_faction="Default invasion faction filter for /warframe invasions",
         quiet_hours="Suppress nudge DMs during these local hours, e.g. '22-7' (or 'off' to clear)",
         digest_section="Pick a daily-digest section to turn on/off (use together with digest_state)",
         digest_state="On/off for the chosen digest_section",
@@ -127,11 +128,19 @@ def setup(bot, group=None):
         app_commands.Choice(name="Requiem", value="Requiem"),
         app_commands.Choice(name="(clear preset)", value="-"),
     ])
+    @app_commands.choices(invasion_faction=[
+        app_commands.Choice(name="All factions", value="all"),
+        app_commands.Choice(name="Grineer", value="Grineer"),
+        app_commands.Choice(name="Corpus", value="Corpus"),
+        app_commands.Choice(name="Infested", value="Infested"),
+        app_commands.Choice(name="(clear preset)", value="-"),
+    ])
     @app_commands.choices(digest_section=[
         app_commands.Choice(name="Economy (daily / streak)", value="economy"),
         app_commands.Choice(name="Events", value="events"),
         app_commands.Choice(name="Baro", value="baro"),
         app_commands.Choice(name="Investments", value="investments"),
+        app_commands.Choice(name="Pets", value="pets"),
     ])
     @app_commands.choices(digest_state=[
         app_commands.Choice(name="On", value="1"),
@@ -154,6 +163,7 @@ def setup(bot, group=None):
         private_results: Optional[app_commands.Choice[str]] = None,
         compact_embeds: Optional[app_commands.Choice[str]] = None,
         fissure_tier: Optional[app_commands.Choice[str]] = None,
+        invasion_faction: Optional[app_commands.Choice[str]] = None,
         quiet_hours: Optional[str] = None,
         digest_section: Optional[app_commands.Choice[str]] = None,
         digest_state: Optional[app_commands.Choice[str]] = None,
@@ -283,6 +293,15 @@ def setup(bot, group=None):
                 await set_guild_setting(interaction.guild.id, key, fissure_tier.value)
                 updated.append(f"**Fissure tier preset:** {fissure_tier.name}")
 
+        if invasion_faction:
+            key = f"user_invasion_faction:{interaction.user.id}"
+            if invasion_faction.value == "-":
+                await set_guild_setting(interaction.guild.id, key, "")
+                updated.append("**Invasion faction preset:** cleared")
+            else:
+                await set_guild_setting(interaction.guild.id, key, invasion_faction.value)
+                updated.append(f"**Invasion faction preset:** {invasion_faction.name}")
+
         if quiet_hours is not None:
             from core.quiet_hours import parse_quiet_hours
             raw = quiet_hours.strip().lower()
@@ -345,6 +364,8 @@ def setup(bot, group=None):
             ce_on = ce_val == "1"
             ft_val = await get_guild_setting(interaction.guild.id, f"user_fissure_tier:{interaction.user.id}")
             ft_text = ft_val if ft_val and ft_val != "all" else "All tiers"
+            inv_val = await get_guild_setting(interaction.guild.id, f"user_invasion_faction:{interaction.user.id}")
+            inv_text = inv_val if inv_val and inv_val != "all" else "All factions"
             from core.quiet_hours import parse_quiet_hours
             qh = parse_quiet_hours(await get_guild_setting(interaction.guild.id, f"user_quiet_hours:{interaction.user.id}"))
             qh_text = f"{qh[0]:02d}:00–{qh[1]:02d}:00 (local)" if qh else "Off"
@@ -361,6 +382,7 @@ def setup(bot, group=None):
             lines.append(f"**Private results:** {'On 🔒' if pr_on else 'Off (default)'}")
             lines.append(f"**Compact embeds:** {'On 📐' if ce_on else 'Off'}")
             lines.append(f"**Fissure tier preset:** {ft_text}")
+            lines.append(f"**Invasion faction preset:** {inv_text}")
             lines.append(f"**Quiet hours:** {qh_text}")
             if isinstance(interaction.user, discord.Member) and is_mod(interaction.user):
                 lines.append(f"**Quieter mode:** {'On' if quieter_on else 'Off'}")

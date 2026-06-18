@@ -110,17 +110,58 @@ def record_error(
     exc: BaseException,
     user_message: str,
 ) -> None:
-    RECENT_ERRORS.append(
-        {
-            "at": now_utc().isoformat(),
-            "code": error_code,
-            "command": command_name,
-            "guild_id": guild_id,
-            "exc_type": type(exc).__name__,
-            "exc_msg": str(exc)[:200],
-            "user_message": user_message,
-        }
-    )
+    entry = {
+        "at": now_utc().isoformat(),
+        "code": error_code,
+        "command": command_name,
+        "guild_id": guild_id,
+        "exc_type": type(exc).__name__,
+        "exc_msg": str(exc)[:200],
+        "user_message": user_message,
+    }
+    RECENT_ERRORS.append(entry)
+    try:
+        import asyncio
+        import aiosqlite
+        from database import DB_PATH
+
+        async def _persist():
+            async with aiosqlite.connect(DB_PATH) as db:
+                await db.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS bot_error_log (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        at TEXT NOT NULL,
+                        code TEXT,
+                        command TEXT,
+                        guild_id INTEGER,
+                        exc_type TEXT,
+                        exc_msg TEXT
+                    )
+                    """
+                )
+                await db.execute(
+                    "INSERT INTO bot_error_log (at, code, command, guild_id, exc_type, exc_msg) "
+                    "VALUES (?,?,?,?,?,?)",
+                    (
+                        entry["at"],
+                        entry["code"],
+                        entry.get("command"),
+                        entry.get("guild_id"),
+                        entry.get("exc_type"),
+                        entry.get("exc_msg"),
+                    ),
+                )
+                await db.execute(
+                    "DELETE FROM bot_error_log WHERE id NOT IN "
+                    "(SELECT id FROM bot_error_log ORDER BY id DESC LIMIT 200)"
+                )
+                await db.commit()
+
+        loop = asyncio.get_running_loop()
+        loop.create_task(_persist())
+    except Exception:
+        pass
 
 
 async def send_error_reply(

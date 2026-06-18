@@ -12,7 +12,9 @@ from core.utils import obsidian_embed, EMBED_COLORS
 
 # (label, emoji, command path, hint for parameterized commands)
 MENU_ITEMS: list[tuple[str, str, list[str], str | None]] = [
+    ("Claim hub", "💰", ["claim"], None),
     ("Claim daily coins", "🎁", ["daily"], None),
+    ("My cooldowns", "⏳", ["cooldowns"], None),
     ("My profile", "👤", ["profile"], None),
     ("Quick snapshot (me)", "📊", ["me"], None),
     ("My wallet", "💼", ["economy", "wallet"], None),
@@ -30,6 +32,8 @@ MENU_ITEMS: list[tuple[str, str, list[str], str | None]] = [
 
 AUTO_INVOKE_ALIASES: dict[str, list[list[str]]] = {
     "daily": [["daily"], ["economy", "daily"]],
+    "claim": [["claim"]],
+    "cooldowns": [["cooldowns"], ["economy", "cooldowns"]],
     "help": [["help"], ["general", "help"]],
     "baro": [["baro"], ["warframe", "baro"]],
     "profile": [["profile"], ["general", "profile"]],

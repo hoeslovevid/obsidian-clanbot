@@ -121,6 +121,18 @@ def setup(bot, group=None):
             )
             top_complaints = await cur.fetchall()
 
+            cur = await db.execute(
+                """
+                SELECT AVG(satisfaction_rating), COUNT(satisfaction_rating)
+                FROM tickets
+                WHERE guild_id=? AND satisfaction_rating IS NOT NULL
+                  AND datetime(closed_at) >= datetime('now', ?)
+                """,
+                (interaction.guild.id, f"-{d} days"),
+            )
+            sat_row = await cur.fetchone()
+            avg_sat, sat_count = (sat_row[0], sat_row[1]) if sat_row else (None, 0)
+
             # Events created
             cur = await db.execute(
                 """
@@ -156,9 +168,14 @@ def setup(bot, group=None):
                 out.append(f"<@{int(uid)}> — **{int(cnt)}**")
             return "\n".join(out) if out else "—"
 
+        sat_text = "—"
+        if sat_count and avg_sat is not None:
+            sat_text = f"**{float(avg_sat):.1f}/5** ({int(sat_count)} ratings)"
+
         fields = [
             ("🎫 Tickets", f"**Created:** {int(t_created or 0)}\n**Closed:** {int(t_closed or 0)}", True),
             ("⏱️ SLA", f"**Avg first response:** {fmt_minutes(avg_first)}\n**Avg close:** {fmt_minutes(avg_close)}", True),
+            ("⭐ Satisfaction", sat_text, True),
             ("🧑‍⚖️ Top closers", fmt_top(top_closers), True),
             ("🫡 Top claimers", fmt_top(top_claimers), True),
             ("🧾 Complaint actions", fmt_top(top_complaints), True),

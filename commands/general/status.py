@@ -53,7 +53,23 @@ def setup(bot, group=None):
 
         # Mods also see a one-line setup-health summary (links to /admin setup_status).
         setup_line = ""
+        prefs_line = ""
         from core.utils import is_mod
+        from database import get_guild_setting
+        from core.quiet_hours import parse_quiet_hours
+
+        qh = parse_quiet_hours(
+            await get_guild_setting(interaction.guild.id, f"user_quiet_hours:{interaction.user.id}")
+        )
+        ce = await get_guild_setting(interaction.guild.id, f"user_compact_embeds:{interaction.user.id}") == "1"
+        prefs_bits = []
+        if qh:
+            prefs_bits.append(f"quiet {qh[0]:02d}:00–{qh[1]:02d}:00")
+        if ce:
+            prefs_bits.append("compact embeds")
+        if prefs_bits:
+            prefs_line = f"⚙️ Your prefs: {', '.join(prefs_bits)} · `/preferences`"
+
         if isinstance(interaction.user, discord.Member) and is_mod(interaction.user):
             try:
                 from commands.general.setup_status import setup_health_line
@@ -67,6 +83,7 @@ def setup(bot, group=None):
             f"**Servers:** {guilds}\n\n"
             f"{api_line}\n"
             + (f"🧭 {setup_line}\n" if setup_line else "")
+            + (f"{prefs_line}\n" if prefs_line else "")
             + f"\n{hint}"
         )
         embed = embed_template(

@@ -47,6 +47,42 @@ async def run_startup(bot: discord.Client) -> None:
     except Exception as e:
         logger.warning(f"[ready] command-mention registry init failed: {e}")
 
+    try:
+        from core.wf_recovery import resume_persisted_watches
+
+        resumed = await resume_persisted_watches(bot)
+        if resumed:
+            print(f"[ready] Resumed {resumed} Warframe API recovery watch(es)")
+    except Exception as e:
+        logger.debug(f"[ready] WF recovery resume skipped: {e}")
+
+    try:
+        from core.command_tree_stats import collect_command_tree_stats
+        from core.config import GUILD_ID
+        from database import get_log_channel_id
+
+        stats = collect_command_tree_stats(bot)
+        if stats.headroom_warnings:
+            warn_text = "Command groups near Discord's 25-subcommand cap:\n" + "\n".join(
+                stats.headroom_warnings[:6]
+            )
+            print(f"[ready] HEADROOM WARNING:\n{warn_text}")
+            if GUILD_ID:
+                guild = bot.get_guild(int(GUILD_ID))
+                if guild:
+                    ch_id = await get_log_channel_id(guild.id, "bot_error")
+                    ch = guild.get_channel(ch_id) if ch_id else None
+                    if isinstance(ch, discord.TextChannel):
+                        await ch.send(
+                            embed=discord.Embed(
+                                title="⚠️ Command tree headroom",
+                                description=warn_text,
+                                color=discord.Color.orange(),
+                            )
+                        )
+    except Exception as e:
+        logger.debug(f"[ready] headroom alert skipped: {e}")
+
     guild_list = sorted(bot.guilds, key=lambda g: (g.name or "").lower())
     guild_count = len(guild_list)
     print(f"[ready] Servers ({guild_count}):")

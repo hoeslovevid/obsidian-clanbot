@@ -12,35 +12,36 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-18"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**`/claim`** — new hub shows daily, bounty, and investment readiness with clickable shortcuts",
-    "**Favorites** — pinned commands are now clickable mentions instead of plain text",
-    "**Setup** — `/admin setup_status` covers mod logs, ticket transcripts, and starboard",
-    "**Warframe** — `/trading trade_price` autocomplete uses the live market item list",
-    "**Baro** — wishlist matches DM you when Baro arrives with items you wanted",
-    "**Fissures** — save a default tier via `/general preferences fissure_tier`",
-    "**Moderation** — warn undo button, `/admin errors` session digest, automod false-positive reports",
-    "**Health** — `/admin health` shows command-group headroom warnings (≥23/25)",
-    "**`/whatsnew`** — uses shared EmbedPaginator with subscribe button",
-    "**Preferences** — `compact_embeds` for shorter embeds; events get a **+15m late** button",
-    "**Reliability** — more background notifications use safe_send with DM fallback",
-    "**Discovery** — first-run nudges are per-feature (daily vs baro) instead of one global flag",
+    "**Discovery** — `/menu` adds claim hub + cooldowns; `/recent` uses clickable mentions; `/search` uses live market items",
+    "**Shortcuts** — top-level `/cooldowns`; `/claim` in shortcuts; per-feature first-run nudges (ticket, trade, LFG, events)",
+    "**Warframe** — notify-when-back persists across restarts; invasion faction preset; Baro wishlist in channel embed",
+    "**Market** — `/price_watch`, `/price_unwatch`, `/price_watches` DM when price target is hit",
+    "**Events** — **Starting now** ping for GOING RSVPs; **Cancel event** button; **+15m late** (prior release)",
+    "**Economy** — `/claim` action buttons (bounties, collect investment); pets in `/cooldowns` + digest",
+    "**LFG** — auto-bump stale posts after 30 minutes with no replies",
+    "**Moderation** — automod warn DMs; ticket rating optional comment; KPI satisfaction avg; errors persist to DB",
+    "**Ops** — `/status` shows your prefs; startup headroom alert to bot-error log; streak reminder uses `/daily` mention",
+    "**/me** — shows XP remaining to next level",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
     {
-        "version": "1.99.7",
+        "version": "1.99.8",
         "date": "2026-06-18",
         "changes": [
-            "**Daily** — `/economy daily` now auto-claims completed bounties in the same result (no extra button tap)",
-            "**Errors** — repeated failures (3× in 10m) escalate with an **Open ticket** button and mod digest alert",
-            "**Reminders** — snooze buttons survive bot restarts via persistent views + DB-backed context",
-            "**Discovery** — first-run nudge on `/daily` and `/warframe baro` points new users to `/search` and `/onboarding`",
-            "**Safety** — `/roletools mass_remove` and `/admin data_retention cleanup` now require confirmation",
-            "**Privacy** — `private_results` preference applies to coin and XP leaderboards",
-            "**Admin** — `/admin setup_status` adds **Core setup** and **WF notify** quick-launch buttons",
-            "**`/whatsnew`** — First/Last page navigation alongside Older/Newer",
-            "**Warframe** — `/warframe duviri` gets the **Notify me when back** button when the API is down",
+            "**`/claim`** — new hub shows daily, bounty, and investment readiness with clickable shortcuts",
+            "**Favorites** — pinned commands are now clickable mentions instead of plain text",
+            "**Setup** — `/admin setup_status` covers mod logs, ticket transcripts, and starboard",
+            "**Warframe** — `/trading trade_price` autocomplete uses the live market item list",
+            "**Baro** — wishlist matches DM you when Baro arrives with items you wanted",
+            "**Fissures** — save a default tier via `/general preferences fissure_tier`",
+            "**Moderation** — warn undo button, `/admin errors` session digest, automod false-positive reports",
+            "**Health** — `/admin health` shows command-group headroom warnings (≥23/25)",
+            "**`/whatsnew`** — uses shared EmbedPaginator with subscribe button",
+            "**Preferences** — `compact_embeds` for shorter embeds; events get a **+15m late** button",
+            "**Reliability** — more background notifications use safe_send with DM fallback",
+            "**Discovery** — first-run nudges are per-feature (daily vs baro) instead of one global flag",
         ],
     },
     {

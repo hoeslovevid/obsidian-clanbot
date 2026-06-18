@@ -4,7 +4,7 @@ from __future__ import annotations
 import discord
 from datetime import datetime, timezone, timedelta
 
-from core.utils import obsidian_embed, feature_off_embed, ECONOMY_ENABLED, EMBED_COLORS, format_number
+from core.utils import obsidian_embed, feature_off_embed, ECONOMY_ENABLED, EMBED_COLORS, format_number, success_embed
 from core.db import open_db
 from database import now_utc
 
@@ -28,12 +28,15 @@ def setup(bot, group=None):
 
         await interaction.response.defer(ephemeral=True)
         from core.command_mentions import command_mention
-        from core.user_prefs import compact_embeds
+        from core.embed_prefs import embed_kwargs
 
         gid = interaction.guild.id
         uid = interaction.user.id
-        compact = await compact_embeds(gid, uid)
+        ek = await embed_kwargs(gid, uid)
         lines: list[str] = []
+        has_actions = False
+        bounty_ready = False
+        invest_ready = False
 
         today = datetime.now(timezone.utc).date().isoformat()
         async with open_db() as db:
@@ -45,6 +48,7 @@ def setup(bot, group=None):
         daily_ready = not row or row[0] != today
         if daily_ready:
             lines.append(f"🎁 **Daily** — ✅ ready · {command_mention('daily', fallback='`/daily`')}")
+            has_actions = True
         else:
             tomorrow = datetime.now(timezone.utc).replace(
                 hour=0, minute=0, second=0, microsecond=0
@@ -57,9 +61,10 @@ def setup(bot, group=None):
             claimable = await get_claimable_bounties(gid, uid)
             if claimable:
                 total = sum(b["reward"] for b in claimable)
+                bounty_ready = True
+                has_actions = True
                 lines.append(
-                    f"🎯 **Bounties** — {len(claimable)} ready ({format_number(total)} coins) · "
-                    f"{command_mention('economy bounties', fallback='`/economy bounties`')}"
+                    f"🎯 **Bounties** — {len(claimable)} ready ({format_number(total)} coins)"
                 )
             else:
                 midnight = datetime.now(timezone.utc).replace(
@@ -69,23 +74,24 @@ def setup(bot, group=None):
         except Exception:
             lines.append("🎯 **Bounties** — unavailable")
 
+        invest_id = None
         async with open_db() as db:
             cur = await db.execute(
-                "SELECT maturity_date FROM investments WHERE guild_id=? AND user_id=? AND collected=0 "
+                "SELECT id, maturity_date FROM investments WHERE guild_id=? AND user_id=? AND collected=0 "
                 "ORDER BY maturity_date ASC LIMIT 1",
                 (gid, uid),
             )
             row = await cur.fetchone()
-        if row and row[0]:
+        if row:
+            invest_id, mat_raw = row[0], row[1]
             try:
-                mat = datetime.fromisoformat(str(row[0]).replace("Z", "+00:00"))
+                mat = datetime.fromisoformat(str(mat_raw).replace("Z", "+00:00"))
                 if mat.tzinfo is None:
                     mat = mat.replace(tzinfo=timezone.utc)
                 if mat <= now_utc():
-                    lines.append(
-                        f"📈 **Investment** — ✅ matured · "
-                        f"{command_mention('economy invest_status', fallback='`/economy invest_status`')}"
-                    )
+                    invest_ready = True
+                    has_actions = True
+                    lines.append("📈 **Investment** — ✅ matured and ready to collect")
                 else:
                     lines.append(f"📈 **Investment** — matures <t:{int(mat.timestamp())}:R>")
             except Exception:
@@ -97,6 +103,84 @@ def setup(bot, group=None):
             color=EMBED_COLORS.get("economy", discord.Color.gold()),
             footer="Daily auto-claims bounties when you run `/daily`",
             client=interaction.client,
-            compact=compact,
+            **ek,
         )
+
+        if has_actions:
+
+            class _ClaimHubView(discord.ui.View):
+                def __init__(self):
+                    super().__init__(timeout=120)
+                    if bounty_ready:
+                        btn = discord.ui.Button(
+                            label="Claim bounties",
+                            emoji="🎯",
+                            style=discord.ButtonStyle.success,
+                        )
+                        btn.callback = self._claim_bounties
+                        self.add_item(btn)
+                    if invest_ready:
+                        btn = discord.ui.Button(
+                            label="Collect investment",
+                            emoji="📈",
+                            style=discord.ButtonStyle.primary,
+                        )
+                        btn.callback = self._collect_invest
+                        self.add_item(btn)
+                    if daily_ready:
+                        btn = discord.ui.Button(
+                            label="Run daily",
+                            emoji="🎁",
+                            style=discord.ButtonStyle.secondary,
+                        )
+                        btn.callback = self._run_daily
+                        self.add_item(btn)
+
+                async def _claim_bounties(self, btn_i: discord.Interaction):
+                    if btn_i.user.id != uid:
+                        return await btn_i.response.send_message("This panel is for the requester only.", ephemeral=True)
+                    await btn_i.response.defer(ephemeral=True)
+                    from commands.economy.bounties import claim_bounties
+
+                    total, count = await claim_bounties(gid, uid)
+                    if count:
+                        msg = f"Claimed **{format_number(total)}** coins from {count} bounties."
+                    else:
+                        msg = "No bounties were ready to claim."
+                    await btn_i.followup.send(
+                        embed=success_embed("Bounties", msg, client=btn_i.client),
+                        ephemeral=True,
+                    )
+
+                async def _collect_invest(self, btn_i: discord.Interaction):
+                    if btn_i.user.id != uid:
+                        return await btn_i.response.send_message("This panel is for the requester only.", ephemeral=True)
+                    await btn_i.response.defer(ephemeral=True)
+                    from commands.economy.invest import collect_matured_investment
+
+                    ok, msg, payout = await collect_matured_investment(gid, uid)
+                    if ok:
+                        await btn_i.followup.send(
+                            embed=success_embed(
+                                "Investment collected",
+                                f"{msg}\n**+{format_number(payout)}** coins",
+                                client=btn_i.client,
+                            ),
+                            ephemeral=True,
+                        )
+                    else:
+                        await btn_i.followup.send(msg, ephemeral=True)
+
+                async def _run_daily(self, btn_i: discord.Interaction):
+                    if btn_i.user.id != uid:
+                        return await btn_i.response.send_message("This panel is for the requester only.", ephemeral=True)
+                    daily_cmd = command_mention("daily", fallback="`/daily`")
+                    await btn_i.response.send_message(
+                        f"Run {daily_cmd} to claim your streak reward (bounties auto-claim there too).",
+                        ephemeral=True,
+                    )
+
+            await interaction.followup.send(embed=embed, view=_ClaimHubView(), ephemeral=True)
+            return
+
         await interaction.followup.send(embed=embed, ephemeral=True)

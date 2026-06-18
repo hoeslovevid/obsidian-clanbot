@@ -198,6 +198,11 @@ async def handle_component(bot: discord.Client, interaction: discord.Interaction
             await view.delay_event(interaction, minutes)
             return
 
+        if cid == "events:cancel":
+            view = RSVPView()
+            await view.cancel_event(interaction)
+            return
+
         # Voice: VC panel actions: vc:{vc_id}:{action}
         if cid.startswith("vc:"):
             parts = cid.split(":")

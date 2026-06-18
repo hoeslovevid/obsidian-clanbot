@@ -8,7 +8,7 @@ from core.utils import obsidian_embed, EMBED_COLORS
 
 
 def _matching_items(query: str, limit: int = 6) -> list[str]:
-    """Warframe item names from the trade_price popular list matching the query."""
+    """Warframe item names matching the query (sync fallback)."""
     try:
         from commands.trading.trade_price import POPULAR_ITEMS
     except Exception:
@@ -19,6 +19,22 @@ def _matching_items(query: str, limit: int = 6) -> list[str]:
     starts = [i for i in POPULAR_ITEMS if i.lower().startswith(q)]
     contains = [i for i in POPULAR_ITEMS if q in i.lower() and i not in starts]
     return (starts + contains)[:limit]
+
+
+async def _matching_items_async(query: str, limit: int = 6) -> list[str]:
+    """Warframe item names from live market list with popular fallback."""
+    q = (query or "").lower().strip()
+    if len(q) < 2:
+        return []
+    try:
+        from api.warframe_api import autocomplete_market_item_names
+
+        matches = await autocomplete_market_item_names(q, limit=limit)
+        if matches:
+            return matches
+    except Exception:
+        pass
+    return _matching_items(q, limit=limit)
 
 
 def _all_leaf_commands(client: discord.Client):
@@ -85,7 +101,11 @@ def setup(bot, group=None):
         ]
         scored.sort(key=lambda t: t[0], reverse=True)
         top = scored[:8]
-        items = _matching_items(q)
+        items = await _matching_items_async(q)
+        from database import get_user_platform
+        platform = "pc"
+        if interaction.guild:
+            platform = await get_user_platform(interaction.guild.id, interaction.user.id) or "pc"
 
         if not top and not items:
             return await interaction.followup.send(
@@ -112,9 +132,10 @@ def setup(bot, group=None):
 
         if items:
             tp = command_mention("trading trade_price", fallback="`/trading trade_price`")
+            pw = command_mention("price_watch", fallback="`/price_watch`")
             item_lines = " · ".join(f"`{name}`" for name in items)
             fields.append(
-                ("Warframe items", f"{item_lines}\n-# Look up prices with {tp}", False)
+                ("Warframe items", f"{item_lines}\n-# Prices: {tp} · Watch: {pw} ({platform.upper()})", False)
             )
 
         await interaction.followup.send(

@@ -17,6 +17,43 @@ def now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
+async def collect_matured_investment(guild_id: int, user_id: int) -> tuple[bool, str, int]:
+    """Collect the newest matured investment. Returns (ok, message, total_payout)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            """
+            SELECT id, amount, interest_rate, maturity_date
+            FROM investments
+            WHERE guild_id=? AND user_id=? AND collected=0
+            ORDER BY invested_at DESC
+            LIMIT 1
+            """,
+            (guild_id, user_id),
+        )
+        row = await cur.fetchone()
+    if not row:
+        return False, "You don't have an active investment to collect.", 0
+    investment_id, amount, interest_rate, maturity_date_str = row
+    maturity_date = datetime.fromisoformat(str(maturity_date_str).replace("Z", "+00:00"))
+    if maturity_date.tzinfo is None:
+        maturity_date = maturity_date.replace(tzinfo=timezone.utc)
+    if now_utc() < maturity_date:
+        return False, f"Your investment matures <t:{int(maturity_date.timestamp())}:R>.", 0
+    total_return = int(amount * (1 + interest_rate))
+    profit = total_return - int(amount)
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("UPDATE investments SET collected=1 WHERE id=?", (investment_id,))
+        await db.commit()
+    await add_coins(
+        guild_id,
+        user_id,
+        total_return,
+        "INVESTMENT_RETURN",
+        f"Investment return: {amount:,} + {profit:,} profit",
+    )
+    return True, f"Collected **{total_return:,}** coins (+{profit:,} profit).", total_return
+
+
 class EarlyWithdrawConfirmView(discord.ui.View):
     """Confirmation flow for early investment withdrawal."""
 
@@ -348,72 +385,23 @@ def setup(bot, group=None):
             )
         
         await interaction.response.defer(ephemeral=True)
-        
-        async with aiosqlite.connect(DB_PATH) as db:
-            cur = await db.execute("""
-                SELECT id, amount, interest_rate, maturity_date
-                FROM investments
-                WHERE guild_id=? AND user_id=? AND collected=0
-                ORDER BY invested_at DESC
-                LIMIT 1
-            """, (interaction.guild.id, interaction.user.id))
-            row = await cur.fetchone()
-        
-        if not row:
-            return await interaction.followup.send(
-                embed=obsidian_embed(
-                    "❌ No Investment Found",
-                    "You don't have an active investment to collect.",
-                    color=discord.Color.red(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
-            )
-        
-        investment_id, amount, interest_rate, maturity_date_str = row
-        maturity_date = datetime.fromisoformat(maturity_date_str.replace('Z', '+00:00'))
-        now = now_utc()
-        
-        if now < maturity_date:
-            time_remaining = maturity_date - now
-            return await interaction.followup.send(
-                embed=obsidian_embed(
-                    "⏳ Investment Not Matured",
-                    f"Your investment hasn't matured yet. It will be ready <t:{int(maturity_date.timestamp())}:R>.",
-                    color=discord.Color.orange(),
-                    client=interaction.client,
-                ),
-                ephemeral=True
-            )
-        
-        # Calculate returns
-        total_return = int(amount * (1 + interest_rate))
-        profit = total_return - amount
-        
-        # Mark as collected and add coins
-        async with aiosqlite.connect(DB_PATH) as db:
-            await db.execute("""
-                UPDATE investments SET collected=1 WHERE id=?
-            """, (investment_id,))
-            await db.commit()
-        
-        await add_coins(
-            interaction.guild.id,
-            interaction.user.id,
-            total_return,
-            "INVESTMENT_RETURN",
-            f"Investment return: {amount:,} + {profit:,} profit"
+
+        ok, msg, total_return = await collect_matured_investment(
+            interaction.guild.id, interaction.user.id
         )
-        
+        if not ok:
+            color = discord.Color.orange() if "matures" in msg else discord.Color.red()
+            title = "⏳ Investment Not Matured" if "matures" in msg else "❌ No Investment Found"
+            return await interaction.followup.send(
+                embed=obsidian_embed(title, msg, color=color, client=interaction.client),
+                ephemeral=True,
+            )
+
         embed = obsidian_embed(
             "✅ Investment Collected",
-            f"You collected **{total_return:,}** coins from your investment!\n\n"
-            f"**Original:** {amount:,} coins\n"
-            f"**Profit:** {profit:,} coins\n"
-            f"**Total:** {total_return:,} coins",
+            msg,
             color=discord.Color.green(),
             thumbnail=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
-            footer=f"+{profit:,} profit",
             client=interaction.client,
         )
         await interaction.followup.send(embed=embed, ephemeral=True)

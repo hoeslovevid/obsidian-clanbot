@@ -3,6 +3,16 @@ from __future__ import annotations
 
 from database import get_guild_setting, set_guild_setting
 
+_FEATURE_HINTS: dict[str, str] = {
+    "general": "Try {search} or {onboard} to get oriented.",
+    "daily": "Pin favorites with `/favorite_add` — try {claim} for a full claim overview.",
+    "baro": "Set a default fissure tier in `/general preferences` — use {search} to find more commands.",
+    "ticket": "Check case status anytime with `/case`.",
+    "trade": "Look up prices with `/trading trade_price` or set `/price_watch`.",
+    "lfg": "Browse open posts with `/lfg_list` when you're ready to squad up.",
+    "event": "RSVP buttons on the event post track who's going — creators can tap **+15m late** if needed.",
+}
+
 
 async def maybe_first_run_hint(
     guild_id: int,
@@ -20,4 +30,8 @@ async def maybe_first_run_hint(
 
     search = command_mention("search", fallback="`/search`")
     onboard = command_mention("onboarding", fallback="`/onboarding`")
-    return f"{body}\n-# 💡 New here? Try {search} or {onboard} to get oriented."
+    claim = command_mention("claim", fallback="`/claim`")
+    recent = command_mention("recent", fallback="`/recent`")
+    template = _FEATURE_HINTS.get(feature, _FEATURE_HINTS["general"])
+    hint = template.format(search=search, onboard=onboard, claim=claim, recent=recent)
+    return f"{body}\n-# 💡 New here? {hint}"

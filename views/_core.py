@@ -570,6 +570,7 @@ class RSVPView(discord.ui.View):
         self.add_item(discord.ui.Button(label="Maybe", style=discord.ButtonStyle.primary, emoji="❔", custom_id="events:rsvp:maybe"))
         self.add_item(discord.ui.Button(label="Can't", style=discord.ButtonStyle.danger, emoji="❌", custom_id="events:rsvp:no"))
         self.add_item(discord.ui.Button(label="+15m late", style=discord.ButtonStyle.secondary, emoji="⏱️", custom_id="events:delay:15"))
+        self.add_item(discord.ui.Button(label="Cancel event", style=discord.ButtonStyle.danger, emoji="🗑️", custom_id="events:cancel"))
 
     @staticmethod
     def format_rsvp_summary(counts: dict[str, int]) -> str:
@@ -692,6 +693,47 @@ class RSVPView(discord.ui.View):
         await interaction.response.send_message(
             f"Event pushed back **{minutes} minutes**.", ephemeral=True
         )
+
+    async def cancel_event(self, interaction: discord.Interaction):
+        if not interaction.guild:
+            return await interaction.response.send_message("Server only.", ephemeral=True)
+        msg_id = interaction.message.id
+        guild_id = interaction.guild.id
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT creator_id, title FROM events WHERE guild_id=? AND message_id=?",
+                (guild_id, msg_id),
+            )
+            row = await cur.fetchone()
+        if not row:
+            return await interaction.response.send_message("Event not found.", ephemeral=True)
+        creator_id, title = int(row[0]), row[1]
+        from core.utils import is_mod
+
+        if interaction.user.id != creator_id and not (
+            isinstance(interaction.user, discord.Member) and is_mod(interaction.user)
+        ):
+            return await interaction.response.send_message(
+                "Only the event creator or a moderator can cancel this event.",
+                ephemeral=True,
+            )
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute(
+                "UPDATE events SET ended=1 WHERE guild_id=? AND message_id=?",
+                (guild_id, msg_id),
+            )
+            await db.commit()
+        embed = interaction.message.embeds[0] if interaction.message.embeds else discord.Embed(title=title)
+        embed.title = f"❌ Cancelled — {title}"
+        embed.color = discord.Color.red()
+        embed.description = (
+            f"_Cancelled by {interaction.user.display_name}_\n\n"
+            + (embed.description or "")
+        )
+        for item in self.children:
+            item.disabled = True
+        await interaction.message.edit(embed=embed, view=self)
+        await interaction.response.send_message("Event cancelled.", ephemeral=True)
 
 
 class AutoModAppealView(discord.ui.View):

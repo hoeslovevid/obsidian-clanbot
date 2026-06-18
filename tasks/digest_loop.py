@@ -124,6 +124,7 @@ async def _build_user_digest(guild_id: int, user_id: int, *, quieter: bool) -> s
     events_on = await _section_on(guild_id, user_id, "events")
     baro_on = await _section_on(guild_id, user_id, "baro")
     invest_on = await _section_on(guild_id, user_id, "investments")
+    pets_on = await _section_on(guild_id, user_id, "pets")
 
     if economy_on:
         streak_line = await _streak_at_risk_line(guild_id, user_id, today_str)
@@ -166,6 +167,27 @@ async def _build_user_digest(guild_id: int, user_id: int, *, quieter: bool) -> s
         inv_line = await _mature_investments_line(guild_id, user_id)
         if inv_line:
             lines.append(inv_line)
+
+    if pets_on:
+        try:
+            from commands.economy.pets import _apply_decay, HUNGER_DECAY_PER_HOUR, HAPPINESS_DECAY_PER_HOUR
+
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute(
+                    "SELECT hunger, happiness, last_fed, last_played, created_at, name "
+                    "FROM pets WHERE guild_id=? AND user_id=?",
+                    (guild_id, user_id),
+                )
+                pet = await cur.fetchone()
+            if pet:
+                h = _apply_decay(pet[0] or 100, pet[2], pet[4], HUNGER_DECAY_PER_HOUR)
+                hp = _apply_decay(pet[1] or 100, pet[3], pet[4], HAPPINESS_DECAY_PER_HOUR)
+                if h < 50 or hp < 50:
+                    lines.append(
+                        f"🐾 **{pet[5] or 'Pet'}** needs care — `/economy pets`"
+                    )
+        except Exception:
+            pass
 
     if not lines:
         return None

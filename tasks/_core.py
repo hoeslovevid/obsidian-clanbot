@@ -185,6 +185,15 @@ async def check_and_notify_baro_arrival(bot):
             embed = build_baro_embed(data_to_use, True, bot)
             embed.title = "🛒 Baro Ki'Teer Has Arrived!"
             embed.color = discord.Color.gold()
+            try:
+                from core.wf_hub_extras import get_baro_wishlist_overlap
+
+                inv = data_to_use.get("inventory", []) or []
+                overlap = await get_baro_wishlist_overlap(guild.id, inv)
+                if overlap:
+                    embed.add_field(name="Clan wishlist", value=overlap, inline=False)
+            except Exception:
+                pass
 
             # Item 2: append per-user subscriber pings (or a configured opt-in
             # role mention if set, which is cheaper for big guilds).
@@ -321,7 +330,10 @@ def setup_tasks(bot):
                         mention = role.mention
 
                 if ch:
-                    await ch.send(
+                    from core.safe_send import safe_channel_send
+
+                    await safe_channel_send(
+                        ch,
                         content=mention if mention else None,
                         embed=obsidian_embed(
                             "⏳ Operation Reminder",
@@ -416,6 +428,49 @@ def setup_tasks(bot):
                             await db.commit()
             except Exception as e:
                 logger.debug(f"[music] event go-live soundtrack failed: {e}")
+
+            # "Starting now" — ping GOING RSVPs when event begins
+            try:
+                live_lo = now_ts - 90
+                live_hi = now_ts + 90
+                async with aiosqlite.connect(DB_PATH) as db:
+                    cur = await db.execute(
+                        "SELECT message_id, title, start_ts FROM events "
+                        "WHERE guild_id=? AND COALESCE(ended,0)=0 AND COALESCE(live_sent,0)=0 "
+                        "AND start_ts BETWEEN ? AND ?",
+                        (guild.id, live_lo, live_hi),
+                    )
+                    live_events = await cur.fetchall()
+                for msg_id, title, start_ts in live_events:
+                    async with aiosqlite.connect(DB_PATH) as db:
+                        cur = await db.execute(
+                            "SELECT user_id FROM event_rsvps WHERE guild_id=? AND message_id=? AND response='GOING'",
+                            (guild.id, int(msg_id)),
+                        )
+                        going = await cur.fetchall()
+                    for (uid,) in going:
+                        try:
+                            member = guild.get_member(int(uid))
+                            if member and not member.bot:
+                                await member.send(
+                                    embed=obsidian_embed(
+                                        "🟢 Event starting now",
+                                        f"**{title}** is live in **{guild.name}**!\n"
+                                        f"<t:{int(start_ts)}:R>",
+                                        color=discord.Color.green(),
+                                        client=bot,
+                                    )
+                                )
+                        except (discord.Forbidden, discord.HTTPException):
+                            pass
+                    async with aiosqlite.connect(DB_PATH) as db:
+                        await db.execute(
+                            "UPDATE events SET live_sent=1 WHERE guild_id=? AND message_id=?",
+                            (guild.id, int(msg_id)),
+                        )
+                        await db.commit()
+            except Exception as e:
+                logger.debug(f"[events] live ping failed: {e}")
 
     @event_reminder_loop.before_loop
     async def before_event_reminder_loop():
@@ -1622,12 +1677,15 @@ def setup_tasks(bot):
                             continue
 
                     from commands.economy.daily import _streak_emblem
+                    from core.command_mentions import command_mention
+
                     streak_fire = _streak_emblem(streak_days)
                     reset_ts = int(next_midnight.timestamp())
+                    daily_cmd = command_mention("daily", fallback="`/daily`")
                     embed = obsidian_embed(
                         "⏰ Daily Streak Reminder",
                         f"Your **{streak_days}-day streak** resets <t:{reset_ts}:R>!\n\n"
-                        f"{streak_fire}\n\nUse `/economy daily` (or `/daily`) to keep it going.",
+                        f"{streak_fire}\n\nRun {daily_cmd} to keep it going.",
                         color=discord.Color.orange(),
                         footer="Turn this off with /general preferences daily_reminder:Off",
                         client=bot,
@@ -3145,6 +3203,67 @@ def setup_tasks(bot):
     async def before_music_auto_leave_loop():
         await bot.wait_until_ready()
 
+    @tasks.loop(minutes=30)
+    async def price_watch_loop():
+        try:
+            if not bot.is_ready():
+                return
+            from core.price_watchlist import check_price_watches
+
+            await check_price_watches(bot)
+        except Exception as e:
+            logger.error(f"[price_watch] loop error: {e}", exc_info=True)
+
+    @price_watch_loop.before_loop
+    async def before_price_watch_loop():
+        await bot.wait_until_ready()
+
+    @tasks.loop(minutes=15)
+    async def lfg_bump_loop():
+        """Bump stale LFG posts with no replies after 30+ minutes."""
+        try:
+            if not bot.is_ready():
+                return
+            from database import get_guild_setting, set_guild_setting
+
+            cutoff = (now_utc() - timedelta(minutes=30)).isoformat()
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute(
+                    """
+                    SELECT id, guild_id, channel_id, message_id
+                    FROM lfg_posts
+                    WHERE status='OPEN' AND datetime(created_at) <= datetime(?)
+                    """,
+                    (cutoff,),
+                )
+                rows = await cur.fetchall()
+            for lfg_id, guild_id, channel_id, message_id in rows:
+                try:
+                    if await get_guild_setting(int(guild_id), f"lfg_bumped:{lfg_id}"):
+                        continue
+                    guild = bot.get_guild(int(guild_id))
+                    if not guild:
+                        continue
+                    ch = guild.get_channel(int(channel_id))
+                    if not isinstance(ch, discord.TextChannel):
+                        continue
+                    msg = await ch.fetch_message(int(message_id))
+                    if msg.thread and getattr(msg.thread, "message_count", 0) > 1:
+                        continue
+                    await ch.send(
+                        f"👋 Still looking for squad — {msg.jump_url}",
+                        delete_after=3600,
+                    )
+                    await set_guild_setting(int(guild_id), f"lfg_bumped:{lfg_id}", "1")
+                except Exception as exc:
+                    logger.debug("[lfg_bump] %s: %s", lfg_id, exc)
+        except Exception as e:
+            logger.error(f"[lfg_bump] loop error: {e}", exc_info=True)
+
+    @lfg_bump_loop.before_loop
+    async def before_lfg_bump_loop():
+        await bot.wait_until_ready()
+
     # Start all tasks with error handling
     tasks_to_start = [
         ('temp_vc_cleanup', temp_vc_cleanup),
@@ -3181,6 +3300,8 @@ def setup_tasks(bot):
         ('forum_check_loop', forum_check_loop),
         ('youtube_check_loop', youtube_check_loop),
         ('digest_dm_loop', digest_dm_loop),
+        ('price_watch_loop', price_watch_loop),
+        ('lfg_bump_loop', lfg_bump_loop),
         ('weekly_recap_loop', weekly_recap_loop),
         ('music_auto_leave_loop', music_auto_leave_loop),
     ]

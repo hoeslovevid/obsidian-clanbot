@@ -221,6 +221,40 @@ class TicketCloseModal(discord.ui.Modal, title="Close ticket"):
         )
 
 
+class _TicketFeedbackModal(discord.ui.Modal, title="Ticket feedback"):
+    def __init__(self, ticket_db_id: int):
+        super().__init__(timeout=300)
+        self.ticket_db_id = ticket_db_id
+        self.feedback = discord.ui.TextInput(
+            label="What could we improve?",
+            style=discord.TextStyle.paragraph,
+            required=False,
+            max_length=500,
+        )
+        self.add_item(self.feedback)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        text = (self.feedback.value or "").strip()
+        if text:
+            async with aiosqlite.connect(DB_PATH) as db:
+                await db.execute(
+                    "UPDATE tickets SET satisfaction_feedback=? WHERE id=?",
+                    (text[:500], self.ticket_db_id),
+                )
+                await db.commit()
+        await interaction.response.send_message("Thanks for the feedback!", ephemeral=True)
+
+
+class _TicketFeedbackPrompt(discord.ui.View):
+    def __init__(self, ticket_db_id: int):
+        super().__init__(timeout=3600)
+        self.ticket_db_id = ticket_db_id
+
+    @discord.ui.button(label="Add a comment (optional)", style=discord.ButtonStyle.secondary)
+    async def comment_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(_TicketFeedbackModal(self.ticket_db_id))
+
+
 class TicketSatisfactionView(discord.ui.View):
     def __init__(self, ticket_db_id: int):
         super().__init__(timeout=60 * 60 * 24 * 3)  # 3 days
@@ -256,8 +290,12 @@ class TicketSatisfactionView(discord.ui.View):
             item.disabled = True  # type: ignore
         try:
             await interaction.response.edit_message(
-                embed=obsidian_embed("✅ Thanks!", f"Saved rating: **{rating}/5**.", color=discord.Color.green()),
-                view=self,
+                embed=obsidian_embed(
+                    "✅ Thanks!",
+                    f"Saved rating: **{rating}/5**.\n-# Optional: add a short comment below.",
+                    color=discord.Color.green(),
+                ),
+                view=_TicketFeedbackPrompt(ticket_db_id),
             )
         except Exception:
             # fallback

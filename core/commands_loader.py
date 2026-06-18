@@ -121,6 +121,7 @@ def load_all_commands(bot):
         "commands.trading.trade_search",
         "commands.trading.trade_list",
         "commands.trading.trade_setup",
+        "commands.trading.price_watch",
         "commands.moderation.purge",
         "commands.moderation.reaction_roles",
         "commands.moderation.automod_setup",
@@ -397,6 +398,7 @@ def load_all_commands(bot):
         "commands.general.whatsnew",
         "commands.general.status",
         "commands.economy.claim",
+        "commands.trading.price_watch",
     }
 
     loaded_count = 0

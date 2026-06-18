@@ -120,7 +120,8 @@ async def _run_me(interaction: discord.Interaction):
     xp_field = (
         f"**Level {cur_level}**\n"
         f"{format_number(cur_xp)} / {format_number(xp_next)}\n"
-        f"{render_bar(pct)}"
+        f"{render_bar(pct)}\n"
+        f"-# {format_number(max(0, xp_next - cur_xp))} XP to level {cur_level + 1}"
     )
 
     # --- Field 2: Streak / Next daily ---

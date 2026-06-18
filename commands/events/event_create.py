@@ -26,6 +26,8 @@ async def _ensure_event_columns() -> None:
             await db.execute("ALTER TABLE events ADD COLUMN soundtrack_query TEXT")
         if "soundtrack_started" not in cols:
             await db.execute("ALTER TABLE events ADD COLUMN soundtrack_started INTEGER NOT NULL DEFAULT 0")
+        if "live_sent" not in cols:
+            await db.execute("ALTER TABLE events ADD COLUMN live_sent INTEGER NOT NULL DEFAULT 0")
         await db.commit()
     _EVENT_COLUMNS_READY = True
 

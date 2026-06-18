@@ -41,3 +41,16 @@ async def default_fissure_tier(guild_id: int, user_id: int) -> str | None:
     if not val or str(val).lower() in ("all", "-", "off"):
         return None
     return str(val)
+
+
+async def default_invasion_faction(guild_id: int, user_id: int) -> str | None:
+    """Saved invasion faction filter (Grineer, Corpus, Infested) or None."""
+    try:
+        from database import get_guild_setting
+
+        val = await get_guild_setting(guild_id, f"user_invasion_faction:{user_id}")
+    except Exception:
+        return None
+    if not val or str(val).lower() in ("all", "-", "off"):
+        return None
+    return str(val)

@@ -18,6 +18,7 @@ SHORTCUTS: list[tuple[list[str], str, str]] = [
     (["warframe", "baro"], "baro", "Baro Ki'Teer — inventory, arrival time, void trader"),
     (["warframe", "fissures"], "fissures", "Void fissure missions — Lith, Meso, Neo, Axi, Requiem"),
     (["general", "poll"], "poll", "Create a server poll — members vote with reactions"),
+    (["claim"], "claim", "See what's ready to claim — daily, bounties, investments"),
 ]
 
 

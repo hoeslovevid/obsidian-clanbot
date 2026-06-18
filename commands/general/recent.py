@@ -49,11 +49,13 @@ async def _recent_embed(interaction: discord.Interaction) -> discord.Embed:
         )
 
     lines: list[str] = []
+    from core.command_mentions import command_mention
+
     for cmd_path, at in recent:
-        slash = f"`/{cmd_path}`"
+        mention = command_mention(cmd_path, fallback=f"`/{cmd_path}`")
         when = _format_when(at)
         hint = _hint_for_command(cmd_path)
-        block = f"{slash} · {when}"
+        block = f"{mention} · {when}"
         if hint:
             block += f"\n-# {hint}"
         lines.append(block)
