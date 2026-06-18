@@ -50,16 +50,29 @@ def setup(bot, group=None):
             if degraded
             else "_If something looks wrong, try again in a minute or ask staff._"
         )
+
+        # Mods also see a one-line setup-health summary (links to /admin setup_status).
+        setup_line = ""
+        from core.utils import is_mod
+        if isinstance(interaction.user, discord.Member) and is_mod(interaction.user):
+            try:
+                from commands.general.setup_status import setup_health_line
+                setup_line = await setup_health_line(interaction.guild)
+            except Exception:
+                setup_line = ""
+
+        body = (
+            f"**Version:** `{BOT_VERSION}`\n"
+            f"**Gateway:** {latency_ms} ms · **Uptime:** {uptime}\n"
+            f"**Servers:** {guilds}\n\n"
+            f"{api_line}\n"
+            + (f"🧭 {setup_line}\n" if setup_line else "")
+            + f"\n{hint}"
+        )
         embed = embed_template(
             "showcase",
             status_title,
-            (
-                f"**Version:** `{BOT_VERSION}`\n"
-                f"**Gateway:** {latency_ms} ms · **Uptime:** {uptime}\n"
-                f"**Servers:** {guilds}\n\n"
-                f"{api_line}\n\n"
-                f"{hint}"
-            ),
+            body,
             category="warning" if degraded else "general",
             footer=footer_for("status", version=BOT_VERSION),
             client=interaction.client,
@@ -70,13 +83,6 @@ def setup(bot, group=None):
 
         if help_layout_v2_enabled():
             try:
-                body = (
-                    f"**Version:** `{BOT_VERSION}`\n"
-                    f"**Gateway:** {latency_ms} ms · **Uptime:** {uptime}\n"
-                    f"**Servers:** {guilds}\n\n"
-                    f"{api_line}\n\n"
-                    f"{hint}"
-                )
                 layout = StatusLayout(
                     title=status_title.replace("✅ ", "").replace("⚠️ ", ""),
                     body=body,

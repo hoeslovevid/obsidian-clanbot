@@ -12,12 +12,20 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-18"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Quiet hours** — set `/general preferences quiet_hours:22-7` to silence bot nudge DMs (daily reminder, digest) during your chosen local hours",
-    "**Daily digest** — turn individual sections on/off with `/general preferences digest_section:… digest_state:…` (Economy, Events, Baro, Investments)",
+    "**`/admin setup_status`** — now has a **🔄 Refresh** button to re-check after you configure a feature",
+    "**`/status`** — moderators now see a one-line setup-health summary (configured vs missing features)",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "1.99.5",
+        "date": "2026-06-18",
+        "changes": [
+            "**Quiet hours** — set `/general preferences quiet_hours:22-7` to silence bot nudge DMs (daily reminder, digest) during your chosen local hours",
+            "**Daily digest** — turn individual sections on/off with `/general preferences digest_section:… digest_state:…` (Economy, Events, Baro, Investments)",
+        ],
+    },
     {
         "version": "1.99.4",
         "date": "2026-06-18",
