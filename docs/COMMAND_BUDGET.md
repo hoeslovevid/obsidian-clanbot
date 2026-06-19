@@ -26,7 +26,13 @@ Discord limits each **slash command group** to **25 subcommands** and roughly **
 
 ## Implementation references
 
-- Loader: `core/commands_loader.py` — warns when any group exceeds 25 or has **> 23** subcommands (headroom).
+Run before deploy or in CI:
+
+```bash
+python tools/check_command_tree.py
+```
+
+Exits non-zero if any group exceeds Discord's 25-subcommand cap.
 - Stats: `core/command_tree_stats.py` — `collect_command_tree_stats(bot)`.
 - Discovery filters: `core/command_search.py` — feature toggles and mod-only groups for `/search` and `/help`.
 

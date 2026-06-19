@@ -24,6 +24,9 @@ CURRENT_RELEASE_CHANGES: list[str] = [
     "**2.0 Batch 5** — `handlers/automod.py` + `handlers/vc_panel.py` extracted from `app.py`",
     "**2.0 Batch 6** — `tasks/event_loops.py` for event reminders; questline steps + `/me` progress chips",
     "**2.0 Batch 7** — `/admin console` shows version + sync scope; onboarding tracks hub/search/achievements",
+    "**2.0 Batch 8** — `tasks/economy_loops.py` voice rewards + `tasks/giveaway_loops.py` ending-soon DMs",
+    "**2.0 Batch 9** — `handlers/member_events.py` join/leave welcome, raid, milestones",
+    "**2.0 Batch 10** — `tools/check_command_tree.py` pre-deploy Discord limit gate",
     "**Fix** — help category buttons use global tree (regression from guild-scoped lookup)",
 ]
 
