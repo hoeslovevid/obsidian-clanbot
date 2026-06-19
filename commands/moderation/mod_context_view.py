@@ -210,6 +210,20 @@ class _KickConfirmModal(discord.ui.Modal, title="Confirm Kick"):
                 embed=error_embed("Kick failed", "I can't kick that member (role hierarchy).", client=interaction.client),
                 ephemeral=True,
             )
+        try:
+            from core.audit import log_audit
+            bot_ref = getattr(interaction.client, "bot", interaction.client)
+            await log_audit(
+                interaction.guild.id,
+                "kick",
+                actor.id,
+                target_id=self.target.id,
+                target_type="user",
+                details=reason[:200],
+                bot=bot_ref,
+            )
+        except Exception:
+            pass
         await interaction.response.send_message(
             embed=success_embed("User kicked", f"{self.target.mention} kicked.\nReason: _{reason}_", client=interaction.client),
             ephemeral=True,
@@ -252,6 +266,20 @@ class _BanConfirmModal(discord.ui.Modal, title="Confirm Ban"):
                 embed=error_embed("Ban failed", "I can't ban that member (role hierarchy).", client=interaction.client),
                 ephemeral=True,
             )
+        try:
+            from core.audit import log_audit
+            bot_ref = getattr(interaction.client, "bot", interaction.client)
+            await log_audit(
+                interaction.guild.id,
+                "ban",
+                actor.id,
+                target_id=self.target.id,
+                target_type="user",
+                details=f"{reason[:180]} (del {days}d)",
+                bot=bot_ref,
+            )
+        except Exception:
+            pass
         await interaction.response.send_message(
             embed=success_embed(
                 "User banned",
@@ -277,8 +305,8 @@ class ModContextView(discord.ui.View):
             )
             return False
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
-            await interaction.response.send_message("Mods only.", ephemeral=True)
-            return False
+            from core.reply_helpers import deny_mods_only
+            return await deny_mods_only(interaction)
         return True
 
     @discord.ui.button(label="DM this user", emoji="📩", style=discord.ButtonStyle.primary)

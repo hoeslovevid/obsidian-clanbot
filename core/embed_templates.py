@@ -63,7 +63,7 @@ def embed_template(
         if platform and platform in PLATFORM_EMOJI:
             title = f"{PLATFORM_EMOJI[platform]} {title}"
     elif template == "profile":
-        cat = kwargs.pop("profile_category", "general") or "general"
+        cat = category or kwargs.pop("profile_category", None) or "general"
     elif template == "warning":
         cat = category or "warning"
         thumbnail = thumbnail or category_thumbnail("warning")

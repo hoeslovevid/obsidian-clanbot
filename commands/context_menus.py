@@ -157,7 +157,12 @@ def setup(bot, group=None):
         item = item.replace("WTS", "").replace("WTB", "").strip()[:120]
         if not item:
             return await interaction.response.send_message(
-                "Couldn't find an item name in that message.",
+                embed=error_embed(
+                    "No item found",
+                    "Couldn't find an item name in that message.",
+                    action_hint="Try a trade message like `WTS Vitrica 80p` or use `/trade_price`.",
+                    client=interaction.client,
+                ),
                 ephemeral=True,
             )
         await interaction.response.defer(ephemeral=True)
@@ -168,19 +173,31 @@ def setup(bot, group=None):
         found = await search_warframe_market_item(item, platform)
         if not found:
             return await interaction.followup.send(
-                f"No market listing found for **{item}** on {platform.upper()}.",
+                embed=error_embed(
+                    "Not on market",
+                    f"No listing for **{item}** on {platform.upper()}.",
+                    client=interaction.client,
+                ),
                 ephemeral=True,
             )
         price_data = await get_warframe_market_price(found.get("url_name", ""), platform)
         lowest = price_data.get("lowest_sell") if price_data else None
         highest = price_data.get("highest_buy") if price_data else None
-        lines = [f"**{found.get('item_name', item)}** ({platform.upper()})"]
+        fields = []
         if lowest is not None:
-            lines.append(f"Lowest sell: **{lowest}p**")
+            fields.append(("Lowest sell", f"**{lowest}p**", True))
         if highest is not None:
-            lines.append(f"Highest buy: **{highest}p**")
-        lines.append("\nUse `/price_watch` to get a DM when price drops.")
-        await interaction.followup.send("\n".join(lines), ephemeral=True)
+            fields.append(("Highest buy", f"**{highest}p**", True))
+        embed = embed_template(
+            "showcase",
+            f"💎 {found.get('item_name', item)}",
+            f"Warframe Market · **{platform.upper()}**",
+            category="trading",
+            fields=fields or None,
+            footer="Use /price_watch for price-drop DMs",
+            client=interaction.client,
+        )
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
     @bot.tree.context_menu(name="Create LFG")
     async def create_lfg_context(interaction: discord.Interaction, message: discord.Message):

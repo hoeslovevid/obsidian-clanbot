@@ -11,6 +11,10 @@ _FEATURE_HINTS: dict[str, str] = {
     "trade": "Look up prices with `/trading trade_price` or set `/price_watch`.",
     "lfg": "Browse open posts with `/lfg_list` when you're ready to squad up.",
     "event": "RSVP buttons on the event post track who's going — creators can tap **+15m late** if needed.",
+    "price_watch": "List watches with `/price_watches` — DMs respect your quiet hours.",
+    "preferences": "Set timezone and quiet hours so digests and reminders land at the right time.",
+    "wfnotify": "One setup covers Baro, fissures, alerts, and more — try {search} for other WF commands.",
+    "achievements": "Unlock badges over time — your profile shows equipped ones.",
 }
 
 

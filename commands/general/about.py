@@ -73,7 +73,7 @@ def setup(bot, group=None):
             "🔒 Privacy & data",
             "We store server stats (coins, XP, activity) and preferences you set via `/preferences`.\n"
             "Mods can run `/admin data_retention` for cleanup policies.\n"
-            "Export your stats anytime with `/profile_export`.",
+            "Export your stats with `/profile_export` · report issues with `/feedback`.",
             False,
         ))
 

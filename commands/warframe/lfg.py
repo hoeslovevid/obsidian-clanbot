@@ -304,7 +304,8 @@ class LFGView(discord.ui.View):
     async def start_radio(self, interaction: discord.Interaction):
         """Queue the LFG radio playlist in the requester's VC."""
         if not interaction.guild or not isinstance(interaction.user, discord.Member):
-            return await interaction.response.send_message("Server only.", ephemeral=True)
+            from core.reply_helpers import deny_server_only
+            return await deny_server_only(interaction)
         if not interaction.user.voice or not interaction.user.voice.channel:
             return await interaction.response.send_message(
                 "Join a voice channel first, then tap **Start squad radio**.",

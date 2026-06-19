@@ -142,9 +142,9 @@ async def check_price_watches(bot) -> None:
                 color=discord.Color.gold(),
             )
             view = PriceWatchUnwatchView(int(guild_id), int(user_id), item_name)
-            try:
-                await user.send(embed=embed, view=view)
-            except discord.Forbidden:
+            from core.safe_send import safe_dm
+            sent = await safe_dm(user, embed=embed, view=view)
+            if not sent:
                 continue
             async with aiosqlite.connect(DB_PATH) as db:
                 await db.execute(

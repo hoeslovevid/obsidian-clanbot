@@ -270,7 +270,8 @@ def create_digest_loop(bot: discord.Client):
                 brand=True,
             )
             try:
-                await user.send(embed=embed)
+                from core.safe_send import safe_dm
+                await safe_dm(user, embed=embed)
                 await set_guild_setting(guild_id, sent_key, today_str)
             except Exception as e:
                 logger.debug("[digest] DM failed for %s in %s: %s", user_id, guild_id, e)

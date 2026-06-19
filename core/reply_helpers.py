@@ -42,3 +42,20 @@ async def reply_not_found(interaction: discord.Interaction, what: str) -> None:
         embed=error_embed("Not found", what, client=interaction.client),
         ephemeral=True,
     )
+
+
+async def deny_server_only(interaction: discord.Interaction, *, ephemeral: bool = True) -> None:
+    """Branded server-only reply (works after defer)."""
+    embed = server_only_embed(interaction.client)
+    if interaction.response.is_done():
+        await interaction.followup.send(embed=embed, ephemeral=ephemeral)
+    else:
+        await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
+
+
+async def deny_mods_only(interaction: discord.Interaction, *, ephemeral: bool = True) -> None:
+    embed = mods_only_embed(interaction.client)
+    if interaction.response.is_done():
+        await interaction.followup.send(embed=embed, ephemeral=ephemeral)
+    else:
+        await interaction.response.send_message(embed=embed, ephemeral=ephemeral)

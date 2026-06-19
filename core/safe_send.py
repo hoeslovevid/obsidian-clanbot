@@ -47,3 +47,10 @@ async def safe_channel_send(
             logger.debug("[safe_send] DM fallback failed for %s: %s", dm_user, exc)
 
     return None
+
+
+async def safe_dm(user: Optional[discord.abc.User], **send_kwargs: Any) -> Optional[discord.Message]:
+    """DM ``user``; never raises."""
+    if user is None:
+        return None
+    return await safe_channel_send(None, dm_user=user, **send_kwargs)

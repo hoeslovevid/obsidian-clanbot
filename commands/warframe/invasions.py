@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from datetime import datetime, timezone
 
-from core.utils import obsidian_embed, warframe_data_unavailable_embed, BUTTON_ONLY_RUNNER_MSG, render_bar
+from core.utils import obsidian_embed, warframe_data_unavailable_embed, BUTTON_ONLY_RUNNER_MSG, render_bar, error_embed
 from api.warframe_api import fetch_invasions
 from views import RetryView, RefreshView
 from core.cache_utils import invalidate
@@ -71,12 +71,14 @@ def _build_invasions_embed(invasions_data, client):
     if len(invasions_data) > 5:
         desc += f"\n_Showing 5 of {len(invasions_data)} invasions_"
 
+    from core.wf_copy import merge_wf_footer
+
     return obsidian_embed(
         "⚔️ Active Invasions",
         f"> {desc}",
         category="warframe",
         fields=fields,
-        footer="warframestat.us · Refreshes every 60s",
+        footer=merge_wf_footer("warframestat.us · Refreshes every 60s", "warframe:invasions"),
         client=client,
     )
 
@@ -153,7 +155,11 @@ def setup(bot, group=None):
             new_data = await fetch_invasions()
             if new_data is None:
                 return await btn_interaction.followup.send(
-                    "Couldn't refresh invasions yet — stats API is still busy.",
+                    embed=error_embed(
+                        "Couldn't refresh",
+                        "The stats API is still busy — try again in a minute.",
+                        client=btn_interaction.client,
+                    ),
                     ephemeral=True,
                 )
             emb = _build_invasions_embed(new_data, interaction.client)

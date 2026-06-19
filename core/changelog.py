@@ -12,16 +12,28 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-18"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**P1** — branded server-only / mods-only replies; unified WF unavailable copy via `wf_copy`",
-    "**P2** — `/about` privacy & data; `/status` WF history + maintenance line; ticket open/close DM polish; `/menu` what's-new since last visit",
-    "**P3** — audit log on warn + manage_coins; mod dashboard **Staff runbook** announcement drafts",
-    "**P4** — pruned **Add to Suggestions** message context menu (5-cap compliance)",
-    "**P5** — `MAINTENANCE_MODE` env gate (mods bypass); resilient ticket feedback DMs",
-    "**P6** — `/profile_export` JSON download; weekly mod KPI digest loop (`mod_kpi_channel_id`)",
+    "**Q1** — `reply_helpers` rollout (views, LFG, events); WF `merge_wf_footer` on invasions; market context menu embed",
+    "**Q2** — `/feedback` + `/admin feedback_setup`; error embed **Send feedback** button; `/about` privacy line",
+    "**Q3** — `/menu` getting-started path; first-run nudges for price_watch/preferences/wfnotify/achievements",
+    "**Q4** — audit on kick/ban/incident/mass roles; `/admin mod_kpi_setup`; dashboard maintenance/incident alerts",
+    "**Q5** — `safe_dm` on digest + price-watch DMs; Presence intent for ticket auto-assign",
+    "**Q6** — profile template `category` fix; branded market lookup embed; Layout v2 remains default",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "1.99.11",
+        "date": "2026-06-18",
+        "changes": [
+            "**P1** — branded server-only / mods-only replies; unified WF unavailable copy via `wf_copy`",
+            "**P2** — `/about` privacy & data; `/status` WF history + maintenance line; ticket open/close DM polish; `/menu` what's-new since last visit",
+            "**P3** — audit log on warn + manage_coins; mod dashboard **Staff runbook** announcement drafts",
+            "**P4** — pruned **Add to Suggestions** message context menu (5-cap compliance)",
+            "**P5** — `MAINTENANCE_MODE` env gate (mods bypass); resilient ticket feedback DMs",
+            "**P6** — `/profile_export` JSON download; weekly mod KPI digest loop (`mod_kpi_channel_id`)",
+        ],
+    },
     {
         "version": "1.99.10",
         "date": "2026-06-18",

@@ -70,6 +70,7 @@ INTENTS = discord.Intents.default()
 INTENTS.message_content = True
 INTENTS.guilds = True
 INTENTS.members = True
+INTENTS.presences = True
 INTENTS.voice_states = True
 
 # Import utilities and modules (avoid heavy: tasks, version_tracking, warframe_api)
@@ -2160,13 +2161,15 @@ async def main():
         print("Required intents:")
         print("  - Server Members Intent (PRIVILEGED)")
         print("  - Message Content Intent (PRIVILEGED)")
+        print("  - Presence Intent (PRIVILEGED, recommended)")
         print("\nTo enable:")
         print("1. Go to: https://discord.com/developers/applications/")
         print("2. Select your application")
         print("3. Go to the 'Bot' section")
         print("4. Enable 'SERVER MEMBERS INTENT' under Privileged Gateway Intents")
         print("5. Enable 'MESSAGE CONTENT INTENT' under Privileged Gateway Intents")
-        print("6. Save changes and restart the bot\n")
+        print("6. Enable 'PRESENCE INTENT' (ticket auto-assign + online stats)")
+        print("7. Save changes and restart the bot\n")
         print("="*60 + "\n")
         raise
     except KeyboardInterrupt:

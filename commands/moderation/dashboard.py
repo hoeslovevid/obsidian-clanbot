@@ -110,6 +110,14 @@ async def _build_mod_dashboard_embed(
     incident_on = await get_incident_mode(guild.id)
     incident_summary = "🚨 **ACTIVE**" if incident_on else "✅ Off"
 
+    from core.maintenance import maintenance_enabled, maintenance_message
+
+    ops_alerts = ""
+    if maintenance_enabled():
+        ops_alerts += f"\n🔧 **Maintenance:** {maintenance_message()}"
+    if incident_on:
+        ops_alerts += "\n📋 Use **Staff runbook** on `/admin dashboard` for announcement drafts."
+
     sla_note = ""
     if awaiting_first_response:
         sla_note = f"\n**Tickets awaiting staff reply:** {awaiting_first_response}"
@@ -122,6 +130,7 @@ async def _build_mod_dashboard_embed(
             f"**Warns today:** {warns_today}\n"
             f"**Incident mode:** {incident_summary}\n"
             f"**Automod:** {automod_summary}"
+            + ops_alerts
             + sla_note
             + goal_line,
             False,

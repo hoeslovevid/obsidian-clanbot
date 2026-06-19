@@ -232,6 +232,12 @@ def setup(bot, group=None):
             "🔍 **Find anything** — `/search` · `/help` · `/favorites` · `/recent`\n"
         )
 
+        if interaction.guild and not favorites and not recent:
+            desc += (
+                "\n**Getting started** — try this path:\n"
+                "1. `/daily` — claim coins · 2. `/profile` — your stats · 3. `/baro` or `/lfg`\n\n"
+            )
+
         if interaction.guild and not favorites:
             desc += "\n_Pin commands with **`/favorite_add`** — they appear at the top of this menu._"
 

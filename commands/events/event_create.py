@@ -334,7 +334,8 @@ def setup(bot, group=None):
     async def events_list(interaction: discord.Interaction, filter_mode: app_commands.Choice[str] = None):
         """List upcoming events."""
         if not interaction.guild:
-            return await interaction.response.send_message("Server only.", ephemeral=True)
+            from core.reply_helpers import deny_server_only
+            return await deny_server_only(interaction)
         mode = (filter_mode and filter_mode.value) or "all"
         await interaction.response.defer(ephemeral=True)
 
@@ -428,9 +429,11 @@ def setup(bot, group=None):
     ):
         """Add a recurring event template."""
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
-            return await interaction.response.send_message("Mods only.", ephemeral=True)
+            from core.reply_helpers import deny_mods_only
+            return await deny_mods_only(interaction)
         if not interaction.guild:
-            return await interaction.response.send_message("Server only.", ephemeral=True)
+            from core.reply_helpers import deny_server_only
+            return await deny_server_only(interaction)
         if hour_utc < 0 or hour_utc > 23:
             hour_utc = 18
 
@@ -464,7 +467,8 @@ def setup(bot, group=None):
     async def recurring_list(interaction: discord.Interaction):
         """List recurring event templates."""
         if not interaction.guild:
-            return await interaction.response.send_message("Server only.", ephemeral=True)
+            from core.reply_helpers import deny_server_only
+            return await deny_server_only(interaction)
 
         await interaction.response.defer(ephemeral=True)
 

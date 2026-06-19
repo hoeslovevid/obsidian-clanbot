@@ -4,6 +4,7 @@ from __future__ import annotations
 import discord
 from discord import app_commands
 
+from core.embed_templates import embed_template
 from core.price_watchlist import add_watch, list_watches, remove_watch
 from core.utils import obsidian_embed, success_embed, error_embed, EMBED_COLORS
 from commands.trading.trade_price import item_autocomplete
@@ -24,8 +25,13 @@ def setup(bot, group=None):
         platform = await get_user_platform(interaction.guild.id, interaction.user.id) or "pc"
         ok, msg = await add_watch(interaction.guild.id, interaction.user.id, item, int(max_price), platform)
         if ok:
+            body = msg
+            from core.first_run_nudge import maybe_first_run_hint
+            body = await maybe_first_run_hint(
+                interaction.guild.id, interaction.user.id, body, feature="price_watch"
+            )
             return await interaction.response.send_message(
-                embed=success_embed("Price watch set", msg, client=interaction.client),
+                embed=success_embed("Price watch set", body, client=interaction.client),
                 ephemeral=True,
             )
         return await interaction.response.send_message(
@@ -58,10 +64,13 @@ def setup(bot, group=None):
         rows = await list_watches(interaction.guild.id, interaction.user.id)
         if not rows:
             return await interaction.response.send_message(
-                embed=obsidian_embed(
+                embed=embed_template(
+                    "showcase",
                     "💎 Price watches",
-                    "You're not watching any items.\n\nUse `/price_watch` with an item and max platinum.",
-                    color=EMBED_COLORS.get("economy", discord.Color.gold()),
+                    "You're not watching any items yet.\n\n"
+                    "Use **`/price_watch`** with an item and max platinum — "
+                    "I'll DM you when sellers hit your target.",
+                    category="trading",
                     client=interaction.client,
                 ),
                 ephemeral=True,

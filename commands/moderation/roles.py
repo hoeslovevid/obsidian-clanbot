@@ -240,6 +240,20 @@ def setup(bot, group=None):
             ),
             ephemeral=True,
         )
+        try:
+            from core.audit import log_audit
+            bot_ref = getattr(interaction.client, "bot", interaction.client)
+            await log_audit(
+                interaction.guild.id,
+                "mass_add_role",
+                interaction.user.id,
+                target_id=role.id,
+                target_type="role",
+                details=f"+{success} members",
+                bot=bot_ref,
+            )
+        except Exception:
+            pass
 
     mass_remove_decorator = (
         group.command(name="mass_remove", description="Remove a role from all members who have it.")
@@ -329,6 +343,20 @@ def setup(bot, group=None):
                 ),
                 ephemeral=True,
             )
+            try:
+                from core.audit import log_audit
+                bot_ref = getattr(btn_interaction.client, "bot", btn_interaction.client)
+                await log_audit(
+                    interaction.guild.id,
+                    "mass_remove_role",
+                    interaction.user.id,
+                    target_id=role.id,
+                    target_type="role",
+                    details=f"-{success} members",
+                    bot=bot_ref,
+                )
+            except Exception:
+                pass
 
         view = ConfirmView(on_confirm)
         await interaction.followup.send(embed=confirm, view=view, ephemeral=True)

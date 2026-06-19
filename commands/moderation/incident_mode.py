@@ -204,6 +204,18 @@ def setup(bot, group=None):
             await set_guild_setting(interaction.guild.id, "incident_mode_until_ts", "0")
             await set_guild_setting(interaction.guild.id, "incident_mode_message", "")
             await sync_incident_banner(interaction.guild, interaction.client, enabled=False)
+            try:
+                from core.audit import log_audit
+                bot_ref = getattr(interaction.client, "bot", interaction.client)
+                await log_audit(
+                    interaction.guild.id,
+                    "incident_disable",
+                    interaction.user.id,
+                    details="Incident mode disabled",
+                    bot=bot_ref,
+                )
+            except Exception:
+                pass
             return await interaction.followup.send(
                 embed=obsidian_embed(
                     "✅ Incident Mode Disabled",
@@ -233,6 +245,18 @@ def setup(bot, group=None):
             message=message or "",
             until_ts=until,
         )
+        try:
+            from core.audit import log_audit
+            bot_ref = getattr(interaction.client, "bot", interaction.client)
+            await log_audit(
+                interaction.guild.id,
+                "incident_enable",
+                interaction.user.id,
+                details=f"{minutes}m — {(message or 'default')[:120]}",
+                bot=bot_ref,
+            )
+        except Exception:
+            pass
 
         return await interaction.followup.send(
             embed=obsidian_embed(

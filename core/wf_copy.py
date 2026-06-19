@@ -16,3 +16,15 @@ def wf_unavailable_body() -> str:
         "The Warframe stats API is unreachable right now.\n\n"
         "Tap **Notify me when back** and I'll DM you once data is live again."
     )
+
+
+def merge_wf_footer(base: str, cache_key: str | None = None, *, stale_after: float = 120.0) -> str:
+    """Append standard degraded/cache suffix to a Warframe embed footer."""
+    if not cache_key:
+        return base
+    from core.cache_utils import freshness_note
+
+    suffix = freshness_note(cache_key, stale_after=stale_after)
+    if not suffix:
+        return base
+    return (base or "").rstrip() + suffix

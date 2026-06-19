@@ -645,7 +645,8 @@ class RSVPView(discord.ui.View):
 
     async def delay_event(self, interaction: discord.Interaction, minutes: int = 15):
         if not interaction.guild:
-            return await interaction.response.send_message("Server only.", ephemeral=True)
+            from core.reply_helpers import deny_server_only
+            return await deny_server_only(interaction)
         msg_id = interaction.message.id
         guild_id = interaction.guild.id
         async with aiosqlite.connect(DB_PATH) as db:
@@ -696,7 +697,8 @@ class RSVPView(discord.ui.View):
 
     async def cancel_event(self, interaction: discord.Interaction):
         if not interaction.guild:
-            return await interaction.response.send_message("Server only.", ephemeral=True)
+            from core.reply_helpers import deny_server_only
+            return await deny_server_only(interaction)
         msg_id = interaction.message.id
         guild_id = interaction.guild.id
         async with aiosqlite.connect(DB_PATH) as db:
@@ -1226,7 +1228,8 @@ class ApplicationManageView(discord.ui.View):
     def _make_stage_cb(self, stage: str, label: str):
         async def _cb(interaction: discord.Interaction):
             if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
-                return await interaction.response.send_message("Mods only.", ephemeral=True)
+                from core.reply_helpers import deny_mods_only
+                return await deny_mods_only(interaction)
             await interaction.response.defer(ephemeral=True)
             status_map = {
                 "interview": "INTERVIEW",
