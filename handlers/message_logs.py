@@ -132,3 +132,79 @@ async def handle_message_edit(bot: discord.Client, before: discord.Message, afte
                 logger.error(f"[logging] Error logging message edit: {e}")
 
 
+async def handle_member_ban(bot: discord.Client, guild: discord.Guild, user: discord.User) -> None:
+    """Log member bans."""
+    async with open_db() as db:
+        cur = await db.execute(
+            """
+            SELECT channel_id FROM log_channels
+            WHERE guild_id=? AND log_type='member_ban' AND enabled=1
+            """,
+            (guild.id,),
+        )
+        row = await cur.fetchone()
+
+    if row:
+        log_channel = guild.get_channel(row[0])
+        if isinstance(log_channel, discord.TextChannel):
+            try:
+                reason = "No reason provided"
+                async for entry in guild.audit_logs(limit=1, action=discord.AuditLogAction.ban):
+                    if entry.target and entry.target.id == user.id:
+                        reason = entry.reason or "No reason provided"
+                        break
+
+                embed = obsidian_embed(
+                    "🔨 Member Banned",
+                    f"**User:** {user.mention} ({user})\n"
+                    f"**User ID:** {user.id}\n"
+                    f"**Reason:** {reason}",
+                    color=discord.Color.red(),
+                    client=bot,
+                )
+                await log_channel.send(embed=embed)
+            except Exception as e:
+                logger.error(f"[logging] Error logging member ban: {e}")
+
+
+async def handle_member_update(bot: discord.Client, before: discord.Member, after: discord.Member) -> None:
+    """Log role changes."""
+    if before.roles == after.roles:
+        return
+
+    added_roles = [r for r in after.roles if r not in before.roles]
+    removed_roles = [r for r in before.roles if r not in after.roles]
+
+    if not added_roles and not removed_roles:
+        return
+
+    async with open_db() as db:
+        cur = await db.execute(
+            """
+            SELECT channel_id FROM log_channels
+            WHERE guild_id=? AND log_type='role_change' AND enabled=1
+            """,
+            (after.guild.id,),
+        )
+        row = await cur.fetchone()
+
+    if row:
+        log_channel = after.guild.get_channel(row[0])
+        if isinstance(log_channel, discord.TextChannel):
+            try:
+                desc = f"**User:** {after.mention} ({after})\n"
+                if added_roles:
+                    desc += f"**Added Roles:** {', '.join([r.mention for r in added_roles if r != after.guild.default_role])}\n"
+                if removed_roles:
+                    desc += f"**Removed Roles:** {', '.join([r.mention for r in removed_roles if r != after.guild.default_role])}\n"
+
+                embed = obsidian_embed(
+                    "🎭 Role Updated",
+                    desc,
+                    color=discord.Color.blue(),
+                    client=bot,
+                )
+                await log_channel.send(embed=embed)
+            except Exception as e:
+                logger.error(f"[logging] Error logging role change: {e}")
+

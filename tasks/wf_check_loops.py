@@ -420,3 +420,135 @@ async def run_alert_notifications(bot: discord.Client) -> None:
 
         except Exception as e:
             logger.error("Error in alert notifications for guild %s: %s", guild.id, e, exc_info=True)
+
+async def run_archon_notifications(
+    bot: discord.Client,
+    warn_broken_channel: WarnBrokenChannel,
+) -> None:
+    """Check for new Archon Hunts and send notifications."""
+    # Verify bot is ready
+    if not bot.is_ready():
+        return
+    archon_data = await fetch_archon_hunt_data()
+
+    if not archon_data:
+        return
+
+    boss = archon_data.get("boss", "Unknown")
+    expiry = archon_data.get("expiry", "")
+
+    if not boss or not expiry:
+        return
+
+    # Map archon names to shard types
+    archon_shards = {
+        "Amar": "Crimson Archon Shard",
+        "Nira": "Amber Archon Shard",
+        "Boreal": "Azure Archon Shard"
+    }
+
+    shard_type = archon_shards.get(boss, "Unknown Shard")
+    faction = archon_data.get("faction", "Unknown")
+    missions = archon_data.get("missions", [])
+
+    # Parse expiry time
+    try:
+        expiry_time = dateparser.parse(expiry, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
+        if not expiry_time:
+            return
+    except Exception:
+        return
+
+    # Send notifications to all guilds that have it enabled
+    for guild in bot.guilds:
+        try:
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute(
+                    "SELECT channel_id, enabled FROM archon_notification_settings WHERE guild_id=?",
+                    (guild.id,)
+                )
+                setting = await cur.fetchone()
+        
+            if not setting or not setting[1]:  # Not enabled or not set
+                continue
+        except Exception as e:
+            logger.error(f"Error checking archon notification settings for guild {guild.id}: {e}")
+            continue
+    
+        channel_id = setting[0]
+        if not channel_id:
+            continue
+    
+        ch = guild.get_channel(channel_id)
+        if not isinstance(ch, discord.TextChannel):
+            await warn_broken_channel(guild, channel_id, "Archon Hunt")
+            continue
+    
+        # Check if we've already notified this guild for this hunt
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute("""
+                SELECT 1 FROM archon_notifications_sent
+                WHERE guild_id=? AND archon_boss=? AND expiry_time=?
+            """, (guild.id, boss, expiry))
+            already_notified = await cur.fetchone()
+    
+        if already_notified:
+            continue
+    
+        # Build notification embed
+        time_remaining = expiry_time - datetime.now(timezone.utc)
+        total_seconds = int(time_remaining.total_seconds())
+        days = total_seconds // 86400
+        hours = (total_seconds % 86400) // 3600
+        minutes = (total_seconds % 3600) // 60
+    
+        if days > 0:
+            time_str = f"{days}d {hours}h {minutes}m"
+        elif hours > 0:
+            time_str = f"{hours}h {minutes}m"
+        else:
+            time_str = f"{minutes}m"
+    
+        desc = f"**Archon:** {boss}\n"
+        desc += f"**Reward:** {shard_type}\n"
+        desc += f"**Faction:** {faction}\n"
+        desc += f"**Time Remaining:** {time_str}\n"
+        desc += f"**Expires:** <t:{int(expiry_time.timestamp())}:R>\n\n"
+    
+        # Add mission information
+        if missions:
+            desc += "**Missions:**\n"
+            for i, mission in enumerate(missions, 1):
+                node = mission.get("node", "Unknown")
+                mission_type = mission.get("type", "Unknown")
+                desc += f"{i}. {node} - {mission_type}\n"
+    
+        # Determine color based on archon
+        color_map = {
+            "Amar": discord.Color.red(),
+            "Nira": discord.Color.gold(),
+            "Boreal": discord.Color.blue()
+        }
+        color = color_map.get(boss, discord.Color.purple())
+    
+        embed = obsidian_embed(
+            "⚔️ New Archon Hunt Available!",
+            desc,
+            color=color,
+            client=bot,
+        )
+    
+        try:
+            await ch.send(embed=embed)
+        
+            # Record notification
+            async with aiosqlite.connect(DB_PATH) as db:
+                await db.execute("""
+                    INSERT INTO archon_notifications_sent (guild_id, archon_boss, expiry_time, notified_at)
+                    VALUES (?, ?, ?, ?)
+                """, (guild.id, boss, expiry, datetime.now(timezone.utc).isoformat()))
+                await db.commit()
+        except Exception as e:
+            logger.error(f"Error sending archon hunt notification to {guild.id}: {e}")
+            continue
+

@@ -10,7 +10,7 @@ import discord  # type: ignore
 from core.channels import ensure_core_channels, resolve_channel_id
 from core.safe_send import safe_dm
 from core.utils import obsidian_embed
-from database import DB_PATH, get_quieter_mode, now_utc
+from database import DB_PATH, get_guild_setting, get_quieter_mode, now_utc
 
 logger = logging.getLogger(__name__)
 
@@ -377,4 +377,118 @@ async def run_event_end_cycle(bot: discord.Client) -> None:
             except Exception as e:
                 logger.error(f"[events] Error ending event {message_id} in {guild.id}: {e}", exc_info=True)
                 continue
+
+async def run_event_rsvp_reminder_cycle(bot: discord.Client) -> None:
+    """DM GOING users when their event is 30-35 minutes away."""
+    now = now_utc()
+    window_start = int((now + timedelta(minutes=30)).timestamp())
+    window_end = int((now + timedelta(minutes=35)).timestamp())
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS event_dm_reminders_sent (
+                event_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                sent_at TEXT NOT NULL,
+                PRIMARY KEY (event_id, user_id)
+            )
+            """
+        )
+        await db.commit()
+
+    from core.utils import feature_enabled  # Item 85 — kill switch
+    for guild in bot.guilds:
+        guild_toggle = await get_guild_setting(guild.id, "event_rsvp_dm_reminders_enabled")
+        if guild_toggle == "0":
+            continue
+        if not await feature_enabled(guild.id, "notifications"):
+            continue
+        if not await feature_enabled(guild.id, "events"):
+            continue
+
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                """
+                SELECT message_id, title, start_ts
+                FROM events
+                WHERE guild_id=? AND ended=0 AND start_ts BETWEEN ? AND ?
+                """,
+                (guild.id, window_start, window_end),
+            )
+            upcoming = await cur.fetchall()
+
+        events_id = await resolve_channel_id(guild, "events_channel_id", EVENTS_CHANNEL_ID, EVENTS_CHANNEL_NAME)
+        events_channel = guild.get_channel(events_id) if events_id else None
+
+        for message_id, title, start_ts in upcoming:
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute(
+                    "SELECT user_id FROM event_rsvps WHERE guild_id=? AND message_id=? AND response='GOING'",
+                    (guild.id, int(message_id)),
+                )
+                going_users = [int(r[0]) for r in await cur.fetchall()]
+
+            if not going_users:
+                continue
+
+            jump_url = None
+            if isinstance(events_channel, discord.TextChannel):
+                jump_url = f"https://discord.com/channels/{guild.id}/{events_channel.id}/{int(message_id)}"
+
+            for user_id in going_users:
+                async with aiosqlite.connect(DB_PATH) as db:
+                    cur = await db.execute(
+                        "SELECT 1 FROM event_dm_reminders_sent WHERE event_id=? AND user_id=?",
+                        (int(message_id), user_id),
+                    )
+                    if await cur.fetchone():
+                        continue
+
+                opt = await get_guild_setting(guild.id, f"user_event_dm:{user_id}")
+                if opt == "0":
+                    continue
+
+                member = guild.get_member(user_id)
+                if not member or member.bot:
+                    continue
+
+                embed = obsidian_embed(
+                    "⏰ Event Reminder",
+                    f"**{title}** in **{guild.name}** starts <t:{int(start_ts)}:R> (<t:{int(start_ts)}:F>).",
+                    color=discord.Color.orange(),
+                    client=bot,
+                    footer="You can opt out via /general preferences.",
+                )
+                if events_channel:
+                    embed.add_field(
+                        name="Location",
+                        value=f"<#{events_channel.id}>",
+                        inline=False,
+                    )
+
+                view = None
+                if jump_url:
+                    view = discord.ui.View(timeout=None)
+                    view.add_item(discord.ui.Button(label="View Event", style=discord.ButtonStyle.link, url=jump_url))
+
+                try:
+                    if view is not None:
+                        await safe_dm(member,embed=embed, view=view)
+                    else:
+                        await safe_dm(member,embed=embed)
+                    async with aiosqlite.connect(DB_PATH) as db:
+                        await db.execute(
+                            "INSERT OR IGNORE INTO event_dm_reminders_sent (event_id, user_id, sent_at) VALUES (?, ?, ?)",
+                            (int(message_id), user_id, now.isoformat()),
+                        )
+                        await db.commit()
+                except (discord.Forbidden, discord.HTTPException):
+                    # Still mark as sent so we don't keep retrying every 5 min
+                    async with aiosqlite.connect(DB_PATH) as db:
+                        await db.execute(
+                            "INSERT OR IGNORE INTO event_dm_reminders_sent (event_id, user_id, sent_at) VALUES (?, ?, ?)",
+                            (int(message_id), user_id, now.isoformat()),
+                        )
+                        await db.commit()
 

@@ -192,119 +192,11 @@ def setup_tasks(bot):
         can't DM the same user twice for the same event.
         """
         try:
-            now = now_utc()
-            window_start = int((now + timedelta(minutes=30)).timestamp())
-            window_end = int((now + timedelta(minutes=35)).timestamp())
+            from tasks.event_loops import run_event_rsvp_reminder_cycle
 
-            async with aiosqlite.connect(DB_PATH) as db:
-                await db.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS event_dm_reminders_sent (
-                        event_id INTEGER NOT NULL,
-                        user_id INTEGER NOT NULL,
-                        sent_at TEXT NOT NULL,
-                        PRIMARY KEY (event_id, user_id)
-                    )
-                    """
-                )
-                await db.commit()
-
-            from core.utils import feature_enabled  # Item 85 — kill switch
-            for guild in bot.guilds:
-                guild_toggle = await get_guild_setting(guild.id, "event_rsvp_dm_reminders_enabled")
-                if guild_toggle == "0":
-                    continue
-                if not await feature_enabled(guild.id, "notifications"):
-                    continue
-                if not await feature_enabled(guild.id, "events"):
-                    continue
-
-                async with aiosqlite.connect(DB_PATH) as db:
-                    cur = await db.execute(
-                        """
-                        SELECT message_id, title, start_ts
-                        FROM events
-                        WHERE guild_id=? AND ended=0 AND start_ts BETWEEN ? AND ?
-                        """,
-                        (guild.id, window_start, window_end),
-                    )
-                    upcoming = await cur.fetchall()
-
-                events_id = await resolve_channel_id(guild, "events_channel_id", EVENTS_CHANNEL_ID, EVENTS_CHANNEL_NAME)
-                events_channel = guild.get_channel(events_id) if events_id else None
-
-                for message_id, title, start_ts in upcoming:
-                    async with aiosqlite.connect(DB_PATH) as db:
-                        cur = await db.execute(
-                            "SELECT user_id FROM event_rsvps WHERE guild_id=? AND message_id=? AND response='GOING'",
-                            (guild.id, int(message_id)),
-                        )
-                        going_users = [int(r[0]) for r in await cur.fetchall()]
-
-                    if not going_users:
-                        continue
-
-                    jump_url = None
-                    if isinstance(events_channel, discord.TextChannel):
-                        jump_url = f"https://discord.com/channels/{guild.id}/{events_channel.id}/{int(message_id)}"
-
-                    for user_id in going_users:
-                        async with aiosqlite.connect(DB_PATH) as db:
-                            cur = await db.execute(
-                                "SELECT 1 FROM event_dm_reminders_sent WHERE event_id=? AND user_id=?",
-                                (int(message_id), user_id),
-                            )
-                            if await cur.fetchone():
-                                continue
-
-                        opt = await get_guild_setting(guild.id, f"user_event_dm:{user_id}")
-                        if opt == "0":
-                            continue
-
-                        member = guild.get_member(user_id)
-                        if not member or member.bot:
-                            continue
-
-                        embed = obsidian_embed(
-                            "⏰ Event Reminder",
-                            f"**{title}** in **{guild.name}** starts <t:{int(start_ts)}:R> (<t:{int(start_ts)}:F>).",
-                            color=discord.Color.orange(),
-                            client=bot,
-                            footer="You can opt out via /general preferences.",
-                        )
-                        if events_channel:
-                            embed.add_field(
-                                name="Location",
-                                value=f"<#{events_channel.id}>",
-                                inline=False,
-                            )
-
-                        view = None
-                        if jump_url:
-                            view = discord.ui.View(timeout=None)
-                            view.add_item(discord.ui.Button(label="View Event", style=discord.ButtonStyle.link, url=jump_url))
-
-                        try:
-                            if view is not None:
-                                await safe_dm(member,embed=embed, view=view)
-                            else:
-                                await safe_dm(member,embed=embed)
-                            async with aiosqlite.connect(DB_PATH) as db:
-                                await db.execute(
-                                    "INSERT OR IGNORE INTO event_dm_reminders_sent (event_id, user_id, sent_at) VALUES (?, ?, ?)",
-                                    (int(message_id), user_id, now.isoformat()),
-                                )
-                                await db.commit()
-                        except (discord.Forbidden, discord.HTTPException):
-                            # Still mark as sent so we don't keep retrying every 5 min
-                            async with aiosqlite.connect(DB_PATH) as db:
-                                await db.execute(
-                                    "INSERT OR IGNORE INTO event_dm_reminders_sent (event_id, user_id, sent_at) VALUES (?, ?, ?)",
-                                    (int(message_id), user_id, now.isoformat()),
-                                )
-                                await db.commit()
+            await run_event_rsvp_reminder_cycle(bot)
         except Exception as e:
-            logger.error(f"[events] Error in event_rsvp_reminder_loop: {e}", exc_info=True)
+            logger.error(f"Error in event_rsvp_reminder_loop: {e}", exc_info=True)
 
     @event_rsvp_reminder_loop.before_loop
     async def before_event_rsvp_reminder_loop():
@@ -1234,131 +1126,9 @@ def setup_tasks(bot):
     async def archon_check_loop():
         """Check for new Archon Hunts and send notifications."""
         try:
-            # Verify bot is ready
-            if not bot.is_ready():
-                return
-            archon_data = await fetch_archon_hunt_data()
-            
-            if not archon_data:
-                return
-            
-            boss = archon_data.get("boss", "Unknown")
-            expiry = archon_data.get("expiry", "")
-            
-            if not boss or not expiry:
-                return
-            
-            # Map archon names to shard types
-            archon_shards = {
-                "Amar": "Crimson Archon Shard",
-                "Nira": "Amber Archon Shard",
-                "Boreal": "Azure Archon Shard"
-            }
-            
-            shard_type = archon_shards.get(boss, "Unknown Shard")
-            faction = archon_data.get("faction", "Unknown")
-            missions = archon_data.get("missions", [])
-            
-            # Parse expiry time
-            try:
-                expiry_time = dateparser.parse(expiry, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
-                if not expiry_time:
-                    return
-            except Exception:
-                return
-            
-            # Send notifications to all guilds that have it enabled
-            for guild in bot.guilds:
-                try:
-                    async with aiosqlite.connect(DB_PATH) as db:
-                        cur = await db.execute(
-                            "SELECT channel_id, enabled FROM archon_notification_settings WHERE guild_id=?",
-                            (guild.id,)
-                        )
-                        setting = await cur.fetchone()
-                    
-                    if not setting or not setting[1]:  # Not enabled or not set
-                        continue
-                except Exception as e:
-                    logger.error(f"Error checking archon notification settings for guild {guild.id}: {e}")
-                    continue
-                
-                channel_id = setting[0]
-                if not channel_id:
-                    continue
-                
-                ch = guild.get_channel(channel_id)
-                if not isinstance(ch, discord.TextChannel):
-                    await _warn_broken_channel(guild, channel_id, "Archon Hunt")
-                    continue
-                
-                # Check if we've already notified this guild for this hunt
-                async with aiosqlite.connect(DB_PATH) as db:
-                    cur = await db.execute("""
-                        SELECT 1 FROM archon_notifications_sent
-                        WHERE guild_id=? AND archon_boss=? AND expiry_time=?
-                    """, (guild.id, boss, expiry))
-                    already_notified = await cur.fetchone()
-                
-                if already_notified:
-                    continue
-                
-                # Build notification embed
-                time_remaining = expiry_time - datetime.now(timezone.utc)
-                total_seconds = int(time_remaining.total_seconds())
-                days = total_seconds // 86400
-                hours = (total_seconds % 86400) // 3600
-                minutes = (total_seconds % 3600) // 60
-                
-                if days > 0:
-                    time_str = f"{days}d {hours}h {minutes}m"
-                elif hours > 0:
-                    time_str = f"{hours}h {minutes}m"
-                else:
-                    time_str = f"{minutes}m"
-                
-                desc = f"**Archon:** {boss}\n"
-                desc += f"**Reward:** {shard_type}\n"
-                desc += f"**Faction:** {faction}\n"
-                desc += f"**Time Remaining:** {time_str}\n"
-                desc += f"**Expires:** <t:{int(expiry_time.timestamp())}:R>\n\n"
-                
-                # Add mission information
-                if missions:
-                    desc += "**Missions:**\n"
-                    for i, mission in enumerate(missions, 1):
-                        node = mission.get("node", "Unknown")
-                        mission_type = mission.get("type", "Unknown")
-                        desc += f"{i}. {node} - {mission_type}\n"
-                
-                # Determine color based on archon
-                color_map = {
-                    "Amar": discord.Color.red(),
-                    "Nira": discord.Color.gold(),
-                    "Boreal": discord.Color.blue()
-                }
-                color = color_map.get(boss, discord.Color.purple())
-                
-                embed = obsidian_embed(
-                    "⚔️ New Archon Hunt Available!",
-                    desc,
-                    color=color,
-                    client=bot,
-                )
-                
-                try:
-                    await ch.send(embed=embed)
-                    
-                    # Record notification
-                    async with aiosqlite.connect(DB_PATH) as db:
-                        await db.execute("""
-                            INSERT INTO archon_notifications_sent (guild_id, archon_boss, expiry_time, notified_at)
-                            VALUES (?, ?, ?, ?)
-                        """, (guild.id, boss, expiry, datetime.now(timezone.utc).isoformat()))
-                        await db.commit()
-                except Exception as e:
-                    logger.error(f"Error sending archon hunt notification to {guild.id}: {e}")
-                    continue
+            from tasks.wf_check_loops import run_archon_notifications
+
+            await run_archon_notifications(bot, _warn_broken_channel)
         except Exception as e:
             logger.error(f"Error in archon_check_loop: {e}", exc_info=True)
 
@@ -1561,88 +1331,11 @@ def setup_tasks(bot):
     async def reminder_check_loop():
         """Check for due reminders and send them."""
         try:
-            if not bot.is_ready():
-                return
-            
-            async with aiosqlite.connect(DB_PATH) as db:
-                cur = await db.execute("""
-                    SELECT id, guild_id, user_id, channel_id, reminder_text, remind_at, recurrence_rule
-                    FROM reminders
-                    WHERE sent = 0 AND datetime(remind_at) <= datetime('now')
-                """)
-                due_reminders = await cur.fetchall()
-            
-            for reminder_id, guild_id, user_id, channel_id, reminder_text, remind_at, recurrence_rule in due_reminders:
-                try:
-                    guild = bot.get_guild(guild_id)
-                    if not guild:
-                        continue
-                    
-                    user = guild.get_member(user_id)
-                    if not user:
-                        continue
-                    
-                    channel = guild.get_channel(channel_id) if channel_id else None
-                    prefer_dm = (await get_guild_setting(guild_id, "reminders_prefer_dm") or "").lower() in ("1", "true", "yes")
-                    if await get_quieter_mode(guild_id):
-                        prefer_dm = True  # Quieter mode: prefer DM to avoid channel pings
-                    from commands.general.reminder import ReminderSnoozeView, store_snooze_context
+            from tasks.community_loops import run_reminder_check_cycle
 
-                    sent = False
-                    sent_message = None
-                    if prefer_dm or not channel or not isinstance(channel, discord.TextChannel):
-                        try:
-                            embed = obsidian_embed(
-                                "⏰ Reminder",
-                                f"**{reminder_text}**\n\n*From {guild.name}*",
-                                color=discord.Color.blue(),
-                                client=bot,
-                            )
-                            sent_message = await safe_dm(user,embed=embed, view=ReminderSnoozeView())
-                            sent = True
-                        except Exception:
-                            pass  # User has DMs disabled
-                    if not sent and channel and isinstance(channel, discord.TextChannel):
-                        embed = obsidian_embed(
-                            "⏰ Reminder",
-                            f"{user.mention}\n**{reminder_text}**",
-                            color=discord.Color.blue(),
-                            client=bot,
-                        )
-                        from core.safe_send import safe_channel_send
-
-                        sent_message = await safe_channel_send(
-                            channel,
-                            dm_user=user,
-                            embed=embed,
-                            view=ReminderSnoozeView(),
-                        )
-
-                    if sent_message is not None:
-                        await store_snooze_context(
-                            sent_message.id, guild_id, user_id, channel_id, reminder_text
-                        )
-                    
-                    # Mark as sent and optionally re-insert recurring reminder
-                    async with aiosqlite.connect(DB_PATH) as db:
-                        await db.execute("""
-                            UPDATE reminders SET sent = 1 WHERE id = ?
-                        """, (reminder_id,))
-                        if recurrence_rule:
-                            try:
-                                from commands.general.reminder import _next_recurrence
-                                remind_dt = datetime.fromisoformat(remind_at.replace("Z", "+00:00")) if isinstance(remind_at, str) else remind_at
-                                next_at = _next_recurrence(remind_dt, recurrence_rule)
-                                if next_at:
-                                    await db.execute("""
-                                        INSERT INTO reminders (guild_id, user_id, channel_id, reminder_text, remind_at, created_at, sent, recurrence_rule)
-                                        VALUES (?, ?, ?, ?, ?, ?, 0, ?)
-                                    """, (guild_id, user_id, channel_id, reminder_text, next_at.isoformat(), now_utc().isoformat(), recurrence_rule))
-                            except Exception as re:
-                                logger.debug(f"Recurring reminder re-insert: {re}")
-                        await db.commit()
-                except Exception as e:
-                    logger.error(f"Error sending reminder {reminder_id}: {e}", exc_info=True)
+            await run_reminder_check_cycle(bot)
+        except Exception as e:
+            logger.error(f"Error in reminder_check_loop: {e}", exc_info=True)
         
         except Exception as e:
             logger.error(f"Error in reminder_check_loop: {e}", exc_info=True)
@@ -1655,25 +1348,9 @@ def setup_tasks(bot):
     async def poll_close_loop():
         """Close expired polls and post final results embeds (QoL #20)."""
         try:
-            if not bot.is_ready():
-                return
-            from core.poll_utils import close_expired_poll
-            async with aiosqlite.connect(DB_PATH) as db:
-                cur = await db.execute("""
-                    SELECT id, guild_id, channel_id, message_id, question, options, creator_id
-                    FROM polls
-                    WHERE COALESCE(closed, 0) = 0
-                      AND ends_at IS NOT NULL
-                      AND TRIM(ends_at) != ''
-                      AND datetime(ends_at) <= datetime('now')
-                    LIMIT 25
-                """)
-                rows = await cur.fetchall()
-            for row in rows:
-                try:
-                    await close_expired_poll(bot, row)
-                except Exception as exc:
-                    logger.debug("[poll] auto-close failed: %s", exc)
+            from tasks.community_loops import run_poll_close_cycle
+
+            await run_poll_close_cycle(bot)
         except Exception as e:
             logger.error(f"Error in poll_close_loop: {e}", exc_info=True)
 
@@ -1685,29 +1362,11 @@ def setup_tasks(bot):
     async def scheduled_messages_loop():
         """Send scheduled messages when due."""
         try:
-            if not bot.is_ready():
-                return
-            async with aiosqlite.connect(DB_PATH) as db:
-                cur = await db.execute("""
-                    SELECT id, guild_id, channel_id, message_content
-                    FROM scheduled_messages
-                    WHERE sent = 0 AND datetime(send_at) <= datetime('now')
-                """)
-                due = await cur.fetchall()
-            for row_id, guild_id, channel_id, msg_content in due:
-                try:
-                    guild = bot.get_guild(guild_id)
-                    if not guild:
-                        continue
-                    channel = guild.get_channel(channel_id)
-                    if not isinstance(channel, discord.TextChannel):
-                        continue
-                    await channel.send(msg_content)
-                    async with aiosqlite.connect(DB_PATH) as db:
-                        await db.execute("UPDATE scheduled_messages SET sent = 1 WHERE id = ?", (row_id,))
-                        await db.commit()
-                except Exception as e:
-                    logger.error(f"[schedule] Error sending scheduled message {row_id}: {e}", exc_info=True)
+            from tasks.community_loops import run_scheduled_messages_cycle
+
+            await run_scheduled_messages_cycle(bot)
+        except Exception as e:
+            logger.error(f"Error in scheduled_messages_loop: {e}", exc_info=True)
         except Exception as e:
             logger.error(f"[schedule] Error in scheduled_messages_loop: {e}", exc_info=True)
 
@@ -1719,101 +1378,11 @@ def setup_tasks(bot):
     async def twitch_check_loop():
         """Check for Twitch streamers going live."""
         try:
-            if not bot.is_ready():
-                return
-            
-            # Get Twitch access token
-            import os
-            from commands.general.twitch import get_twitch_access_token, check_twitch_stream
-            
-            access_token = await get_twitch_access_token()
-            if not access_token:
-                return  # Twitch API not configured
-            
-            # Check all guilds with Twitch enabled
-            for guild in bot.guilds:
-                try:
-                    async with aiosqlite.connect(DB_PATH) as db:
-                        # Check if ping_role_id column exists
-                        try:
-                            cur = await db.execute("PRAGMA table_info(twitch_settings)")
-                            columns = await cur.fetchall()
-                            column_names = [col[1] for col in columns]
-                            has_ping_role = "ping_role_id" in column_names
-                        except Exception:
-                            has_ping_role = False
-                        
-                        if has_ping_role:
-                            cur = await db.execute("""
-                                SELECT channel_id, enabled, ping_role_id FROM twitch_settings WHERE guild_id=?
-                            """, (guild.id,))
-                        else:
-                            cur = await db.execute("""
-                                SELECT channel_id, enabled FROM twitch_settings WHERE guild_id=?
-                            """, (guild.id,))
-                        settings_row = await cur.fetchone()
-                        
-                        if not settings_row or not settings_row[1]:
-                            continue
-                        
-                        channel_id = settings_row[0]
-                        ping_role_id = settings_row[2] if has_ping_role and len(settings_row) > 2 else None
-                        channel = guild.get_channel(channel_id)
-                        if not isinstance(channel, discord.TextChannel):
-                            continue
-                        
-                        ping_role = guild.get_role(ping_role_id) if ping_role_id else None
-                        
-                        # Get streamers for this guild
-                        cur = await db.execute("""
-                            SELECT streamer_name, last_live_status FROM twitch_streamers
-                            WHERE guild_id=?
-                        """, (guild.id,))
-                        streamers = await cur.fetchall()
-                        
-                        for streamer_name, last_status in streamers:
-                            stream_data = await check_twitch_stream(streamer_name, access_token)
-                            is_live = stream_data is not None
-                            
-                            # Only notify if going from offline to live
-                            if is_live and not last_status:
-                                # Streamer just went live
-                                title = stream_data.get("title", "No title")
-                                game = stream_data.get("game_name", "Unknown game")
-                                viewer_count = stream_data.get("viewer_count", 0)
-                                
-                                embed = obsidian_embed(
-                                    f"🔴 {streamer_name} is now live!",
-                                    f"**Title:** {title}\n**Game:** {game}\n**Viewers:** {viewer_count}\n\n"
-                                    f"https://twitch.tv/{streamer_name}",
-                                    color=discord.Color.purple(),
-                                    client=bot,
-                                )
-                                
-                                try:
-                                    # Ping role if configured
-                                    message_content = ping_role.mention if ping_role else None
-                                    await channel.send(content=message_content, embed=embed)
-                                    
-                                    # Update status
-                                    await db.execute("""
-                                        UPDATE twitch_streamers SET last_live_status=1, last_notified_at=?
-                                        WHERE guild_id=? AND streamer_name=?
-                                    """, (now_utc().isoformat(), guild.id, streamer_name))
-                                    await db.commit()
-                                except Exception as e:
-                                    logger.error(f"Error sending Twitch notification: {e}")
-                            
-                            elif not is_live and last_status:
-                                # Streamer went offline
-                                await db.execute("""
-                                    UPDATE twitch_streamers SET last_live_status=0
-                                    WHERE guild_id=? AND streamer_name=?
-                                """, (guild.id, streamer_name))
-                                await db.commit()
-                
-                except Exception as e:
-                    logger.error(f"Error in twitch_check_loop for guild {guild.id}: {e}", exc_info=True)
+            from tasks.integration_loops import run_twitch_live_cycle
+
+            await run_twitch_live_cycle(bot)
+        except Exception as e:
+            logger.error(f"Error in twitch_check_loop: {e}", exc_info=True)
         
         except Exception as e:
             logger.error(f"Error in twitch_check_loop: {e}", exc_info=True)
@@ -1826,126 +1395,11 @@ def setup_tasks(bot):
     async def stale_ticket_reminder_loop():
         """Remind staff about idle tickets; auto-close if still idle after warning."""
         try:
-            from core.utils import get_mod_role
-            for guild in bot.guilds:
-                try:
-                    stale_days = 3
-                    days_setting = await get_guild_setting(guild.id, "stale_ticket_days")
-                    if days_setting and days_setting.isdigit():
-                        stale_days = int(days_setting)
-                    cutoff = now_utc() - timedelta(days=stale_days)
-                    cutoff_iso = cutoff.isoformat()
-                    # Auto-close configured? (default True unless disabled)
-                    autoclose_setting = await get_guild_setting(guild.id, "ticket_autoclose")
-                    autoclose_enabled = autoclose_setting != "0"
+            from tasks.ticket_loops import run_stale_ticket_reminder_cycle
 
-                    async with aiosqlite.connect(DB_PATH) as db:
-                        # --- Step 1: warn tickets not yet warned ---
-                        cur = await db.execute("""
-                            SELECT id, channel_id, ticket_id, subject, last_activity_at
-                            FROM tickets
-                            WHERE guild_id=? AND status='open'
-                              AND (stale_reminder_sent IS NULL OR stale_reminder_sent=0)
-                              AND (last_activity_at IS NULL OR last_activity_at < ?)
-                        """, (guild.id, cutoff_iso))
-                        warn_rows = await cur.fetchall()
-
-                        # --- Step 2: auto-close tickets already warned + still idle ---
-                        # "24h after warning sent" ≈ the loop runs daily; if warned AND still past cutoff, close
-                        autoclose_cutoff = (now_utc() - timedelta(days=stale_days + 1)).isoformat()
-                        cur2 = await db.execute("""
-                            SELECT id, channel_id, ticket_id, user_id, subject
-                            FROM tickets
-                            WHERE guild_id=? AND status='open' AND stale_reminder_sent=1
-                              AND (last_activity_at IS NULL OR last_activity_at < ?)
-                        """, (guild.id, autoclose_cutoff))
-                        close_rows = await cur2.fetchall()
-
-                    # Send warnings
-                    for tid, ch_id, ticket_id, subject, last_at in warn_rows:
-                        channel = guild.get_channel(int(ch_id))
-                        if not isinstance(channel, discord.TextChannel):
-                            continue
-                        mod_role = get_mod_role(guild)
-                        mention = ""
-                        if not await get_quieter_mode(guild.id) and mod_role:
-                            mention = mod_role.mention
-                        autoclose_note = f"\n\n⚠️ This ticket will be **auto-closed in ~24 hours** if there is no activity." if autoclose_enabled else ""
-                        try:
-                            await channel.send(
-                                content=mention or None,
-                                embed=obsidian_embed(
-                                    "⏰ Ticket Inactive",
-                                    f"This ticket has had no activity for **{stale_days}+ days**.\n"
-                                    f"**Last activity:** {last_at[:19] if last_at else '—'}\n\n"
-                                    f"Staff: please respond or close this ticket.{autoclose_note}",
-                                    color=discord.Color.orange(),
-                                    client=bot,
-                                ),
-                            )
-                            async with aiosqlite.connect(DB_PATH) as db:
-                                await db.execute(
-                                    "UPDATE tickets SET stale_reminder_sent=1 WHERE id=?",
-                                    (tid,),
-                                )
-                                await db.commit()
-                        except Exception as e:
-                            logger.warning(f"[stale_ticket] Could not send reminder for ticket {ticket_id}: {e}")
-
-                    # Auto-close stale warned tickets
-                    if autoclose_enabled:
-                        for tid, ch_id, ticket_id, user_id, subject in close_rows:
-                            channel = guild.get_channel(int(ch_id))
-                            if not isinstance(channel, discord.TextChannel):
-                                continue
-                            try:
-                                now_iso = now_utc().isoformat()
-                                # Generate transcript first
-                                from commands.tickets.ticket import _build_transcript, _send_transcript_to_log, _get_ticket_row_by_id
-                                ticket_row = await _get_ticket_row_by_id(tid)
-                                transcript_bytes = await _build_transcript(channel)
-                                file_name = f"ticket-{ticket_id}.txt"
-                                log_ch_id, log_msg_id = None, None
-                                if ticket_row:
-                                    log_ch_id, log_msg_id = await _send_transcript_to_log(guild, ticket_row, transcript_bytes, file_name)
-
-                                async with aiosqlite.connect(DB_PATH) as db:
-                                    await db.execute(
-                                        "UPDATE tickets SET status='closed', closed_at=?, closed_by=?, transcript_channel_id=?, transcript_message_id=? WHERE id=?",
-                                        (now_iso, bot.user.id if bot.user else 0, log_ch_id, log_msg_id, tid),
-                                    )
-                                    await db.commit()
-
-                                await channel.send(embed=obsidian_embed(
-                                    "🔒 Ticket Auto-Closed",
-                                    f"This ticket (`{ticket_id}`) was automatically closed due to inactivity "
-                                    f"(**{stale_days + 1}+ days** with no messages).\n\n"
-                                    "A transcript has been saved. This channel will be deleted in 30 seconds.",
-                                    color=discord.Color.dark_grey(), client=bot,
-                                ))
-
-                                # DM the ticket owner
-                                try:
-                                    owner = guild.get_member(int(user_id)) or await bot.fetch_user(int(user_id))
-                                    if owner:
-                                        await owner.send(embed=obsidian_embed(
-                                            "🔒 Your Ticket Was Closed",
-                                            f"Your ticket **{ticket_id}** in **{guild.name}** was automatically closed "
-                                            f"after {stale_days + 1} days of inactivity.\n\n"
-                                            "If you still need help, open a new ticket with `/community ticket`.",
-                                            color=discord.Color.dark_grey(), client=bot,
-                                        ))
-                                except Exception:
-                                    pass
-
-                                import asyncio as _asyncio
-                                await _asyncio.sleep(30)
-                                await channel.delete(reason="Auto-closed: ticket idle too long")
-                                logger.info(f"[stale_ticket] Auto-closed idle ticket {ticket_id} in guild {guild.id}")
-                            except Exception as e:
-                                logger.warning(f"[stale_ticket] Could not auto-close ticket {ticket_id}: {e}")
-                except Exception as e:
-                    logger.error(f"[stale_ticket] Error for guild {guild.id}: {e}", exc_info=True)
+            await run_stale_ticket_reminder_cycle(bot)
+        except Exception as e:
+            logger.error(f"Error in stale_ticket_reminder_loop: {e}", exc_info=True)
         except Exception as e:
             logger.error(f"[stale_ticket] Error in stale_ticket_reminder_loop: {e}", exc_info=True)
 
@@ -1999,76 +1453,11 @@ def setup_tasks(bot):
     async def youtube_check_loop():
         """Check Warframe YouTube channel RSS for new videos."""
         try:
-            if not bot.is_ready():
-                return
-            import aiohttp
-            import xml.etree.ElementTree as ET
-            url = f"https://www.youtube.com/feeds/videos.xml?channel_id=UCZ8h7R8l2LoXzbc-GufOyKw"
-            async with aiohttp.ClientSession() as session:
-                try:
-                    async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as r:
-                        if r.status != 200:
-                            return
-                        text = await r.text()
-                except Exception:
-                    return
-            root = ET.fromstring(text)
-            ns = {"yt": "http://www.youtube.com/xml/schemas/2015", "media": "http://search.yahoo.com/mrss/"}
-            entries = root.findall(".//{http://www.w3.org/2005/Atom}entry")
-            seen = set()
-            async with aiosqlite.connect(DB_PATH) as db:
-                cur = await db.execute("SELECT item_id FROM integration_seen WHERE source='youtube'")
-                for row in await cur.fetchall():
-                    seen.add(row[0])
-            for entry in entries[:3]:
-                vid_id = None
-                title = None
-                link = None
-                vid_el = entry.find("{http://www.youtube.com/xml/schemas/2015}videoId")
-                if vid_el is not None and vid_el.text:
-                    vid_id = vid_el.text.strip()
-                tit_el = entry.find("{http://www.w3.org/2005/Atom}title")
-                if tit_el is not None and tit_el.text:
-                    title = tit_el.text.strip()
-                for link_el in entry.findall("{http://www.w3.org/2005/Atom}link"):
-                    if link_el.get("rel") == "alternate":
-                        link = link_el.get("href", "")
-                        break
-                if not vid_id and link:
-                    if "v=" in link:
-                        vid_id = link.split("v=")[-1].split("&")[0]
-                if not link and vid_id:
-                    link = f"https://www.youtube.com/watch?v={vid_id}"
-                if not vid_id:
-                    vid_id = link or title or ""
-                if not vid_id or vid_id in seen:
-                    continue
-                async with aiosqlite.connect(DB_PATH) as db:
-                    await db.execute(
-                        "INSERT OR IGNORE INTO integration_seen (source, item_id, created_at) VALUES ('youtube', ?, ?)",
-                        (vid_id[:500], now_utc().isoformat()),
-                    )
-                    await db.commit()
-                for guild in bot.guilds:
-                    ch_id = await get_guild_setting(guild.id, "youtube_notify_channel_id")
-                    if not ch_id:
-                        continue
-                    ch = guild.get_channel(int(ch_id))
-                    if not isinstance(ch, discord.TextChannel):
-                        continue
-                    try:
-                        await ch.send(
-                            embed=obsidian_embed(
-                                "New Warframe Video",
-                                f"**{title or 'New upload'}**\n\n{link or ''}",
-                                color=discord.Color.red(),
-                                client=bot,
-                            ),
-                        )
-                    except Exception as e:
-                        logger.warning(f"[youtube] Error notifying guild {guild.id}: {e}")
+            from tasks.wf_feed_loops import run_youtube_feed_cycle
+
+            await run_youtube_feed_cycle(bot)
         except Exception as e:
-            logger.error(f"[youtube] Error in youtube_check_loop: {e}", exc_info=True)
+            logger.error(f"Error in youtube_check_loop: {e}", exc_info=True)
 
     @youtube_check_loop.before_loop
     async def before_youtube_check_loop():

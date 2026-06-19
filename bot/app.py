@@ -172,14 +172,12 @@ from core.commands_loader import load_all_commands
 load_all_commands(bot)
 
 # --------------------- Global app command checks ---------------------
-# Slash command start times (interaction uses __slots__; cannot set arbitrary attrs).
-_cmd_start_times: dict[int, float] = {}
+# Slash command start times live in handlers/command_tracking.py
+from handlers.command_tracking import mark_command_start
 
 # Incident mode: block non-critical commands for non-mods.
 async def incident_mode_check(interaction: discord.Interaction) -> bool:
-    iid = getattr(interaction, "id", None)
-    if iid is not None:
-        _cmd_start_times[int(iid)] = time.perf_counter()
+    mark_command_start(interaction)
     try:
         if not interaction.guild:
             return True
@@ -926,36 +924,16 @@ async def on_message_edit(before: discord.Message, after: discord.Message):
 
 @bot.event
 async def on_member_ban(guild: discord.Guild, user: discord.User):
-    """Log member bans."""
-    async with open_db() as db:
-        cur = await db.execute("""
-            SELECT channel_id FROM log_channels
-            WHERE guild_id=? AND log_type='member_ban' AND enabled=1
-        """, (guild.id,))
-        row = await cur.fetchone()
-    
-    if row:
-        log_channel = guild.get_channel(row[0])
-        if isinstance(log_channel, discord.TextChannel):
-            try:
-                # Try to get audit log entry for reason
-                reason = "No reason provided"
-                async for entry in guild.audit_logs(limit=1, action=discord.AuditLogAction.ban):
-                    if entry.target and entry.target.id == user.id:
-                        reason = entry.reason or "No reason provided"
-                        break
-                
-                embed = obsidian_embed(
-                    "🔨 Member Banned",
-                    f"**User:** {user.mention} ({user})\n"
-                    f"**User ID:** {user.id}\n"
-                    f"**Reason:** {reason}",
-                    color=discord.Color.red(),
-                    client=bot,
-                )
-                await log_channel.send(embed=embed)
-            except Exception as e:
-                logger.error(f"[logging] Error logging member ban: {e}")
+    from handlers.message_logs import handle_member_ban
+
+    await handle_member_ban(bot, guild, user)
+
+
+@bot.event
+async def on_app_command_completion(interaction: discord.Interaction, command):
+    from handlers.command_tracking import handle_app_command_completion
+
+    await handle_app_command_completion(bot, interaction, command)
 
 
 def _find_similar_commands(typed: str, all_commands: list[str], max_suggestions: int = 3) -> list[str]:
@@ -975,48 +953,6 @@ def _find_similar_commands(typed: str, all_commands: list[str], max_suggestions:
     return suggestions[:max_suggestions]
 
 
-@bot.event
-async def on_app_command_completion(interaction: discord.Interaction, command):
-    """Record per-user slash command usage for /tools my_stats. Best-effort, never raises."""
-    try:
-        iid = getattr(interaction, "id", None)
-        started = _cmd_start_times.pop(int(iid), None) if iid is not None else None
-        if started is not None:
-            elapsed_ms = (time.perf_counter() - started) * 1000
-            if elapsed_ms >= 3000:
-                qn = (
-                    command.qualified_name
-                    if hasattr(command, "qualified_name")
-                    else getattr(command, "name", "?")
-                )
-                logger.warning(
-                    "[slow_cmd] /%s took %.0f ms (guild=%s user=%s)",
-                    qn,
-                    elapsed_ms,
-                    getattr(interaction.guild, "id", None),
-                    getattr(interaction.user, "id", None),
-                )
-    except Exception:
-        pass
-    try:
-        if interaction.guild is None or interaction.user is None:
-            return
-        full_name = command.qualified_name if hasattr(command, "qualified_name") else getattr(command, "name", None)
-        if not full_name:
-            return
-        from database import record_command_usage
-        await record_command_usage(
-            interaction.guild.id,
-            interaction.user.id,
-            str(full_name),
-            now_utc().weekday(),
-        )
-        from core.command_hints import maybe_send_first_use_hint
-        await maybe_send_first_use_hint(interaction, str(full_name))
-    except Exception as _err:
-        logger.debug(f"[my_stats] failed to record usage: {_err}")
-
-
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
     """Handle application command errors with user-friendly messages."""
@@ -1032,43 +968,9 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
 
 @bot.event
 async def on_member_update(before: discord.Member, after: discord.Member):
-    """Log role changes."""
-    if before.roles == after.roles:
-        return
-    
-    # Check what changed
-    added_roles = [r for r in after.roles if r not in before.roles]
-    removed_roles = [r for r in before.roles if r not in after.roles]
-    
-    if not added_roles and not removed_roles:
-        return
-    
-    async with open_db() as db:
-        cur = await db.execute("""
-            SELECT channel_id FROM log_channels
-            WHERE guild_id=? AND log_type='role_change' AND enabled=1
-        """, (after.guild.id,))
-        row = await cur.fetchone()
-    
-    if row:
-        log_channel = after.guild.get_channel(row[0])
-        if isinstance(log_channel, discord.TextChannel):
-            try:
-                desc = f"**User:** {after.mention} ({after})\n"
-                if added_roles:
-                    desc += f"**Added Roles:** {', '.join([r.mention for r in added_roles if r != after.guild.default_role])}\n"
-                if removed_roles:
-                    desc += f"**Removed Roles:** {', '.join([r.mention for r in removed_roles if r != after.guild.default_role])}\n"
-                
-                embed = obsidian_embed(
-                    "🎭 Role Updated",
-                    desc,
-                    color=discord.Color.blue(),
-                    client=bot,
-                )
-                await log_channel.send(embed=embed)
-            except Exception as e:
-                logger.error(f"[logging] Error logging role change: {e}")
+    from handlers.message_logs import handle_member_update
+
+    await handle_member_update(bot, before, after)
 
 
 async def main():
