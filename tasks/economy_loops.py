@@ -3,26 +3,30 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 import aiosqlite  # type: ignore
 import discord  # type: ignore
 
+from core.safe_send import safe_dm
 from core.utils import (
     COINS_PER_MINUTE_VOICE,
     ECONOMY_ENABLED,
     MIN_VOICE_MINUTES_FOR_REWARD,
     XP_ENABLED,
     XP_PER_MINUTE_VOICE,
+    obsidian_embed,
 )
 from database import (
     DB_PATH,
     add_coins,
     add_xp,
     check_voice_lifetime_achievements,
+    get_guild_setting,
     get_user_xp,
     increment_activity_voice_minutes,
     now_utc,
+    set_guild_setting,
 )
 
 logger = logging.getLogger(__name__)
@@ -187,3 +191,61 @@ async def run_voice_reward_cycle(bot: discord.Client) -> None:
                 except Exception as e:
                     logger.error(f"[economy] Error processing voice reward for {user_id} in {guild.id}: {e}")
                     continue
+
+async def run_pet_decay_reminder_cycle(bot: discord.Client) -> None:
+    """DM users when their pet's hunger or happiness is low."""
+    if not bot.is_ready() or not ECONOMY_ENABLED:
+        return
+    from commands.economy.pets import _apply_decay, HUNGER_DECAY_PER_HOUR, HAPPINESS_DECAY_PER_HOUR
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("""
+            SELECT guild_id, user_id, pet_name, hunger, happiness, last_fed_at, last_played_at, created_at
+            FROM pets
+        """)
+        pets = await cur.fetchall()
+
+    now = now_utc()
+    for guild_id, user_id, pet_name, hunger, happiness, last_fed, last_played, created_at in pets:
+        try:
+            h = _apply_decay(hunger, last_fed, created_at, HUNGER_DECAY_PER_HOUR)
+            hap = _apply_decay(happiness, last_played, created_at, HAPPINESS_DECAY_PER_HOUR)
+            if h >= 50 and hap >= 50:
+                continue
+
+            # Check last reminder (max 1 per 12 hours)
+            last_key = f"pet_decay_reminder_{user_id}"
+            last_reminder = await get_guild_setting(guild_id, last_key)
+            if last_reminder:
+                try:
+                    last_dt = datetime.fromisoformat(last_reminder.replace("Z", "+00:00"))
+                    if (now - last_dt.replace(tzinfo=timezone.utc)).total_seconds() < 12 * 3600:
+                        continue
+                except Exception:
+                    pass
+
+            guild = bot.get_guild(guild_id)
+            if not guild:
+                continue
+            user = guild.get_member(user_id)
+            if not user:
+                try:
+                    user = await bot.fetch_user(user_id)
+                except Exception:
+                    continue
+
+            issues = []
+            if h < 50:
+                issues.append(f"hunger ({h}/100)")
+            if hap < 50:
+                issues.append(f"happiness ({hap}/100)")
+
+            msg = f"Your pet **{pet_name}** needs attention! Low: {', '.join(issues)}.\n\nUse `/economy pet_feed` and `/economy pet_play` to care for your pet."
+            try:
+                await safe_dm(user,embed=obsidian_embed("🐾 Pet Needs Care", msg, color=discord.Color.orange(), client=bot))
+                await set_guild_setting(guild_id, last_key, now.isoformat())
+            except discord.Forbidden:
+                pass
+        except Exception as e:
+            logger.debug(f"Pet decay reminder for user {user_id}: {e}")
+

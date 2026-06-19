@@ -614,65 +614,9 @@ def setup_tasks(bot):
     async def lfg_expire_loop():
         """Auto-expire LFG posts that have passed their expiry time."""
         try:
-            async with aiosqlite.connect(DB_PATH) as db:
-                now = datetime.now(timezone.utc).isoformat()
-                
-                # Find expired posts
-                cur = await db.execute("""
-                    SELECT id, guild_id, channel_id, message_id, thread_id
-                    FROM lfg_posts
-                    WHERE status='OPEN' AND expires_at < ?
-                """, (now,))
-                
-                expired = await cur.fetchall()
-                
-                for lfg_id, guild_id, channel_id, message_id, thread_id in expired:
-                    try:
-                        guild = bot.get_guild(guild_id)
-                        if not guild:
-                            continue
-                        
-                        channel = guild.get_channel(channel_id)
-                        if not channel:
-                            continue
-                        
-                        try:
-                            message = await channel.fetch_message(message_id)
-                            
-                            # Update embed
-                            embed = message.embeds[0] if message.embeds else None
-                            if embed:
-                                embed.color = discord.Color.grey()
-                                embed.set_footer(text="⏰ Expired")
-                                
-                                # Disable buttons
-                                view = discord.ui.View()
-                                for item in message.components[0].children if message.components else []:
-                                    if hasattr(item, 'disabled'):
-                                        item.disabled = True
-                                        view.add_item(item)
-                                
-                                await message.edit(embed=embed, view=view)
-                        except discord.NotFound:
-                            pass
-                        
-                        # Mark as expired in database
-                        await db.execute(
-                            "UPDATE lfg_posts SET status='EXPIRED' WHERE id=?",
-                            (lfg_id,)
-                        )
-                        await db.commit()
+            from tasks.lfg_loops import run_lfg_expire_cycle
 
-                        try:
-                            from core.lfg_extras import post_lfg_thread_summary
-                            await post_lfg_thread_summary(
-                                bot, guild_id, lfg_id, thread_id, reason="expired",
-                            )
-                        except Exception:
-                            pass
-                    except Exception as e:
-                        logger.error(f"Error expiring LFG post {lfg_id}: {e}", exc_info=True)
-                        continue
+            await run_lfg_expire_cycle(bot)
         except Exception as e:
             logger.error(f"Error in lfg_expire_loop: {e}", exc_info=True)
 
@@ -684,55 +628,9 @@ def setup_tasks(bot):
     async def lfg_scheduled_reminder_loop():
         """DM creators ~15 minutes before scheduled LFG start time."""
         try:
-            import dateparser
-            from core.embed_templates import embed_template
-            from core.embed_footers import footer_for
-            async with aiosqlite.connect(DB_PATH) as db:
-                cur = await db.execute("""
-                    SELECT id, guild_id, creator_id, mission_type, scheduled_at
-                    FROM lfg_posts
-                    WHERE status='OPEN' AND scheduled_at IS NOT NULL AND scheduled_at != ''
-                      AND COALESCE(reminder_sent, 0) = 0
-                """)
-                rows = await cur.fetchall()
-            now = now_utc()
-            for lfg_id, guild_id, creator_id, mission, sched_raw in rows:
-                try:
-                    sched_dt = dateparser.parse(
-                        sched_raw,
-                        settings={"TIMEZONE": "UTC", "RETURN_AS_TIMEZONE_AWARE": True},
-                    )
-                    if not sched_dt:
-                        continue
-                    if sched_dt.tzinfo is None:
-                        sched_dt = sched_dt.replace(tzinfo=timezone.utc)
-                    delta = (sched_dt - now).total_seconds()
-                    if not (0 < delta <= 15 * 60):
-                        continue
-                    guild = bot.get_guild(guild_id)
-                    if not guild:
-                        continue
-                    member = guild.get_member(creator_id)
-                    if member:
-                        await safe_dm(member,
-                            embed=embed_template(
-                                "showcase",
-                                "⏰ LFG starting soon",
-                                f"Your **{mission}** squad is scheduled for <t:{int(sched_dt.timestamp())}:R>.\n"
-                                f"Head to your LFG post to rally your squad.",
-                                category="community",
-                                footer=footer_for("community_lfg"),
-                                client=bot,
-                            ),
-                        )
-                    async with aiosqlite.connect(DB_PATH) as db:
-                        await db.execute(
-                            "UPDATE lfg_posts SET reminder_sent=1 WHERE id=?",
-                            (lfg_id,),
-                        )
-                        await db.commit()
-                except Exception as e:
-                    logger.debug("[lfg_reminder] %s: %s", lfg_id, e)
+            from tasks.lfg_loops import run_lfg_scheduled_reminder_cycle
+
+            await run_lfg_scheduled_reminder_cycle(bot)
         except Exception as e:
             logger.error(f"Error in lfg_scheduled_reminder_loop: {e}", exc_info=True)
 
@@ -744,91 +642,9 @@ def setup_tasks(bot):
     async def trading_expire_loop():
         """Expire stale trading posts and DM owners to renew."""
         try:
-            from core.utils import obsidian_embed
-            from database import get_guild_setting, set_guild_setting
-            now_dt = datetime.now(timezone.utc)
-            now = now_dt.isoformat()
-            soon = (now_dt + timedelta(hours=24)).isoformat()
-            async with aiosqlite.connect(DB_PATH) as db:
-                cur = await db.execute(
-                    """
-                    SELECT id, guild_id, user_id, item_name, listing_type
-                    FROM trading_posts
-                    WHERE status='ACTIVE' AND expires_at IS NOT NULL
-                      AND expires_at > ? AND expires_at <= ?
-                    """,
-                    (now, soon),
-                )
-                expiring_soon = await cur.fetchall()
-                for listing_id, guild_id, user_id, item_name, listing_type in expiring_soon:
-                    if await get_guild_setting(guild_id, f"trade_expiry_warned:{listing_id}"):
-                        continue
-                    guild = bot.get_guild(int(guild_id))
-                    member = guild.get_member(int(user_id)) if guild else None
-                    if member:
-                        try:
-                            from core.quiet_hours import in_quiet_hours
-                            if not await in_quiet_hours(guild_id, user_id):
-                                await safe_dm(member,
-                                    embed=obsidian_embed(
-                                        "⏰ Listing expires soon",
-                                        f"Your **{listing_type}** for **{item_name}** expires within 24 hours.\n\n"
-                                        "Repost with `/trading trade` when it expires.",
-                                        color=discord.Color.orange(),
-                                        client=bot,
-                                    )
-                                )
-                        except (discord.Forbidden, discord.HTTPException):
-                            pass
-                    await set_guild_setting(guild_id, f"trade_expiry_warned:{listing_id}", "1")
+            from tasks.trading_loops import run_trading_expire_cycle
 
-                cur = await db.execute("""
-                    SELECT id, guild_id, user_id, item_name, listing_type, message_id, channel_id
-                    FROM trading_posts
-                    WHERE status='ACTIVE' AND expires_at IS NOT NULL AND expires_at < ?
-                """, (now,))
-                expired = await cur.fetchall()
-
-                for listing_id, guild_id, user_id, item_name, listing_type, message_id, channel_id in expired:
-                    try:
-                        guild = bot.get_guild(guild_id)
-                        if guild and message_id and channel_id:
-                            channel = guild.get_channel(int(channel_id))
-                            if isinstance(channel, discord.TextChannel):
-                                try:
-                                    msg = await channel.fetch_message(int(message_id))
-                                    if msg.embeds:
-                                        embed = msg.embeds[0]
-                                        embed.color = discord.Color.greyple()
-                                        embed.set_footer(text="⏰ Listing expired — repost with /trading trade")
-                                        await msg.edit(embed=embed, view=None)
-                                except discord.NotFound:
-                                    pass
-                                except discord.HTTPException:
-                                    pass
-
-                        member = guild.get_member(int(user_id)) if guild else None
-                        if member:
-                            try:
-                                dm = obsidian_embed(
-                                    "⏰ Trading Listing Expired",
-                                    f"Your **{listing_type}** listing for **{item_name}** expired after 14 days.\n\n"
-                                    f"Run **`/trading trade`** in **{guild.name if guild else 'the server'}** "
-                                    f"to post a fresh listing.",
-                                    color=discord.Color.orange(),
-                                    client=bot,
-                                )
-                                await safe_dm(member,embed=dm)
-                            except (discord.Forbidden, discord.HTTPException):
-                                pass
-
-                        await db.execute(
-                            "UPDATE trading_posts SET status='EXPIRED', updated_at=? WHERE id=?",
-                            (now, listing_id),
-                        )
-                        await db.commit()
-                    except Exception as e:
-                        logger.error(f"Error expiring trading post {listing_id}: {e}", exc_info=True)
+            await run_trading_expire_cycle(bot)
         except Exception as e:
             logger.error(f"Error in trading_expire_loop: {e}", exc_info=True)
 
@@ -840,61 +656,9 @@ def setup_tasks(bot):
     async def pet_decay_reminder_loop():
         """DM users when their pet's hunger or happiness is low."""
         try:
-            if not bot.is_ready() or not ECONOMY_ENABLED:
-                return
-            from commands.economy.pets import _apply_decay, HUNGER_DECAY_PER_HOUR, HAPPINESS_DECAY_PER_HOUR
+            from tasks.economy_loops import run_pet_decay_reminder_cycle
 
-            async with aiosqlite.connect(DB_PATH) as db:
-                cur = await db.execute("""
-                    SELECT guild_id, user_id, pet_name, hunger, happiness, last_fed_at, last_played_at, created_at
-                    FROM pets
-                """)
-                pets = await cur.fetchall()
-
-            now = now_utc()
-            for guild_id, user_id, pet_name, hunger, happiness, last_fed, last_played, created_at in pets:
-                try:
-                    h = _apply_decay(hunger, last_fed, created_at, HUNGER_DECAY_PER_HOUR)
-                    hap = _apply_decay(happiness, last_played, created_at, HAPPINESS_DECAY_PER_HOUR)
-                    if h >= 50 and hap >= 50:
-                        continue
-
-                    # Check last reminder (max 1 per 12 hours)
-                    last_key = f"pet_decay_reminder_{user_id}"
-                    last_reminder = await get_guild_setting(guild_id, last_key)
-                    if last_reminder:
-                        try:
-                            last_dt = datetime.fromisoformat(last_reminder.replace("Z", "+00:00"))
-                            if (now - last_dt.replace(tzinfo=timezone.utc)).total_seconds() < 12 * 3600:
-                                continue
-                        except Exception:
-                            pass
-
-                    guild = bot.get_guild(guild_id)
-                    if not guild:
-                        continue
-                    user = guild.get_member(user_id)
-                    if not user:
-                        try:
-                            user = await bot.fetch_user(user_id)
-                        except Exception:
-                            continue
-
-                    issues = []
-                    if h < 50:
-                        issues.append(f"hunger ({h}/100)")
-                    if hap < 50:
-                        issues.append(f"happiness ({hap}/100)")
-
-                    msg = f"Your pet **{pet_name}** needs attention! Low: {', '.join(issues)}.\n\nUse `/economy pet_feed` and `/economy pet_play` to care for your pet."
-                    try:
-                        await safe_dm(user,embed=obsidian_embed("🐾 Pet Needs Care", msg, color=discord.Color.orange(), client=bot))
-                        await set_guild_setting(guild_id, last_key, now.isoformat())
-                    except discord.Forbidden:
-                        pass
-                except Exception as e:
-                    logger.debug(f"Pet decay reminder for user {user_id}: {e}")
-
+            await run_pet_decay_reminder_cycle(bot)
         except Exception as e:
             logger.error(f"Error in pet_decay_reminder_loop: {e}", exc_info=True)
 
@@ -1507,43 +1271,9 @@ def setup_tasks(bot):
     async def lfg_bump_loop():
         """Bump stale LFG posts with no replies after 30+ minutes."""
         try:
-            if not bot.is_ready():
-                return
-            from database import get_guild_setting, set_guild_setting
+            from tasks.lfg_loops import run_lfg_bump_cycle
 
-            cutoff = (now_utc() - timedelta(minutes=30)).isoformat()
-            async with aiosqlite.connect(DB_PATH) as db:
-                cur = await db.execute(
-                    """
-                    SELECT id, guild_id, channel_id, message_id
-                    FROM lfg_posts
-                    WHERE status='OPEN' AND datetime(created_at) <= datetime(?)
-                    """,
-                    (cutoff,),
-                )
-                rows = await cur.fetchall()
-            for lfg_id, guild_id, channel_id, message_id in rows:
-                try:
-                    if await get_guild_setting(int(guild_id), f"lfg_bumped:{lfg_id}"):
-                        continue
-                    guild = bot.get_guild(int(guild_id))
-                    if not guild:
-                        continue
-                    ch = guild.get_channel(int(channel_id))
-                    if not isinstance(ch, discord.TextChannel):
-                        continue
-                    msg = await ch.fetch_message(int(message_id))
-                    if msg.thread and getattr(msg.thread, "message_count", 0) > 1:
-                        continue
-                    from core.safe_send import safe_channel_send
-                    await safe_channel_send(
-                        ch,
-                        content=f"👋 Still looking for squad — {msg.jump_url}",
-                        delete_after=3600,
-                    )
-                    await set_guild_setting(int(guild_id), f"lfg_bumped:{lfg_id}", "1")
-                except Exception as exc:
-                    logger.debug("[lfg_bump] %s: %s", lfg_id, exc)
+            await run_lfg_bump_cycle(bot)
         except Exception as e:
             logger.error(f"[lfg_bump] loop error: {e}", exc_info=True)
 
@@ -1555,51 +1285,9 @@ def setup_tasks(bot):
     async def lfg_poster_nudge_loop():
         """DM LFG creators after ~2h with no thread replies."""
         try:
-            if not bot.is_ready():
-                return
-            from database import get_guild_setting, set_guild_setting
+            from tasks.lfg_loops import run_lfg_poster_nudge_cycle
 
-            cutoff = (now_utc() - timedelta(hours=2)).isoformat()
-            async with aiosqlite.connect(DB_PATH) as db:
-                cur = await db.execute(
-                    """
-                    SELECT id, guild_id, creator_id, message_id, channel_id, mission_type
-                    FROM lfg_posts
-                    WHERE status='OPEN' AND datetime(created_at) <= datetime(?)
-                    """,
-                    (cutoff,),
-                )
-                rows = await cur.fetchall()
-            for lfg_id, guild_id, creator_id, message_id, channel_id, mission in rows:
-                try:
-                    if await get_guild_setting(int(guild_id), f"lfg_creator_nudged:{lfg_id}"):
-                        continue
-                    guild = bot.get_guild(int(guild_id))
-                    if not guild:
-                        continue
-                    ch = guild.get_channel(int(channel_id))
-                    if not isinstance(ch, discord.TextChannel):
-                        continue
-                    msg = await ch.fetch_message(int(message_id))
-                    if msg.thread and getattr(msg.thread, "message_count", 0) > 1:
-                        continue
-                    user = guild.get_member(int(creator_id)) or bot.get_user(int(creator_id))
-                    if not user:
-                        continue
-                    from core.quiet_hours import in_quiet_hours
-                    if await in_quiet_hours(int(guild_id), int(creator_id)):
-                        continue
-                    await safe_dm(user,
-                        embed=obsidian_embed(
-                            "👋 Still looking for squad?",
-                            f"Your **{mission}** LFG has had no replies for 2+ hours.\n\n"
-                            f"[Jump to post]({msg.jump_url}) — bump in chat or mark filled when done.",
-                            client=bot,
-                        )
-                    )
-                    await set_guild_setting(int(guild_id), f"lfg_creator_nudged:{lfg_id}", "1")
-                except Exception as exc:
-                    logger.debug("[lfg_nudge] %s: %s", lfg_id, exc)
+            await run_lfg_poster_nudge_cycle(bot)
         except Exception as e:
             logger.error(f"[lfg_nudge] loop error: {e}", exc_info=True)
 
