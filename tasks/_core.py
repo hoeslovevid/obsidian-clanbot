@@ -158,81 +158,11 @@ def setup_tasks(bot):
     async def recurring_event_loop():
         """Create events from recurring templates when scheduled time matches."""
         try:
-            from core.channels import ensure_core_channels
-            from views import RSVPView
-            now = now_utc()
-            current_week = now.strftime("%Y-W%V")
-            current_weekday = now.weekday()
-            current_hour = now.hour
+            from tasks.event_loops import run_recurring_event_cycle
 
-            for guild in bot.guilds:
-                try:
-                    await ensure_core_channels(guild)
-                    events_id = await resolve_channel_id(guild, "events_channel_id", EVENTS_CHANNEL_ID, EVENTS_CHANNEL_NAME)
-                    ch = guild.get_channel(events_id) if events_id else None
-                    if not isinstance(ch, discord.TextChannel):
-                        continue
-
-                    async with aiosqlite.connect(DB_PATH) as db:
-                        cur = await db.execute("""
-                            SELECT id, title, description, day_of_week, hour_utc, duration_hours, role_id, created_by, last_created_week
-                            FROM recurring_event_templates
-                            WHERE guild_id=? AND is_active=1
-                        """, (guild.id,))
-                        templates = await cur.fetchall()
-
-                    for tid, title, desc, dow, hour, dur, role_id, creator_id, last_week in templates:
-                        if dow != current_weekday or hour != current_hour:
-                            continue
-                        if last_week == current_week:
-                            continue
-
-                        ts = int(now.replace(minute=0, second=0, microsecond=0).timestamp())
-                        end_ts = ts + (dur * 3600)
-                        mention = ""
-                        if not await get_quieter_mode(guild.id) and int(role_id or 0):
-                            role = guild.get_role(int(role_id))
-                            if role:
-                                mention = role.mention
-
-                        embed = obsidian_embed(
-                            f"🜂 Ops Order • {title}",
-                            f"**When:** <t:{ts}:F>  _( <t:{ts}:R> )_\n\n"
-                            f"**Ends:** <t:{end_ts}:t>  _( <t:{end_ts}:R> )_\n\n"
-                            f"**Briefing:**\n{desc or '—'}",
-                            color=discord.Color.dark_grey(),
-                            client=bot,
-                        )
-                        rsvp_empty = RSVPView.format_rsvp_summary({"GOING": 0, "MAYBE": 0, "NO": 0})
-                        embed.add_field(name="RSVP", value=rsvp_empty, inline=False)
-                        embed.set_footer(text=rsvp_empty)
-
-                        try:
-                            msg = await ch.send(content=mention or None, embed=embed, view=RSVPView())
-                            thread_id = 0
-                            try:
-                                from commands.events.event_create import _maybe_create_event_thread
-                                tid_val = await _maybe_create_event_thread(msg, ch, title, datetime.fromtimestamp(ts, tz=timezone.utc))
-                                thread_id = tid_val or 0
-                            except Exception:
-                                thread_id = 0
-
-                            async with aiosqlite.connect(DB_PATH) as db:
-                                await db.execute("""
-                                    INSERT INTO events(guild_id,message_id,creator_id,title,start_ts,end_ts,description,role_id,created_at,reminder_sent,ended,recap_posted,recap_message_id,thread_id)
-                                    VALUES(?,?,?,?,?,?,?,?,?,0,0,0,0,?)
-                                """, (guild.id, msg.id, creator_id, title, ts, end_ts, desc or "", role_id or 0, now.isoformat(), thread_id))
-                                await db.execute(
-                                    "UPDATE recurring_event_templates SET last_created_week=? WHERE id=?",
-                                    (current_week, tid),
-                                )
-                                await db.commit()
-                        except Exception as e:
-                            logger.error(f"[recurring_event] Error creating event for guild {guild.id} template {tid}: {e}")
-                except Exception as e:
-                    logger.error(f"[recurring_event] Error for guild {guild.id}: {e}", exc_info=True)
+            await run_recurring_event_cycle(bot)
         except Exception as e:
-            logger.error(f"[recurring_event] Error in recurring_event_loop: {e}", exc_info=True)
+            logger.error(f"Error in recurring_event_loop: {e}", exc_info=True)
 
     @recurring_event_loop.before_loop
     async def before_recurring_event_loop():
@@ -242,116 +172,11 @@ def setup_tasks(bot):
     async def event_end_loop():
         """Post end-of-event recaps and mark events ended."""
         try:
-            now_ts = int(now_utc().timestamp())
-            for guild in bot.guilds:
-                events_id = await resolve_channel_id(guild, "events_channel_id", EVENTS_CHANNEL_ID, EVENTS_CHANNEL_NAME)
-                ch = guild.get_channel(events_id) if events_id else None
-                if not isinstance(ch, discord.TextChannel):
-                    continue
+            from tasks.event_loops import run_event_end_cycle
 
-                async with aiosqlite.connect(DB_PATH) as db:
-                    cur = await db.execute(
-                        """
-                        SELECT message_id, title, start_ts, end_ts, role_id, thread_id
-                        FROM events
-                        WHERE guild_id=? AND ended=0 AND end_ts IS NOT NULL AND end_ts <= ?
-                        """,
-                        (guild.id, now_ts),
-                    )
-                    events_to_end = await cur.fetchall()
-
-                for message_id, title, start_ts, end_ts, role_id, thread_id in events_to_end:
-                    recap_message_id = 0
-                    try:
-                        # Fetch RSVP counts
-                        async with aiosqlite.connect(DB_PATH) as db:
-                            cur = await db.execute(
-                                "SELECT response, COUNT(*) FROM event_rsvps WHERE guild_id=? AND message_id=? GROUP BY response",
-                                (guild.id, int(message_id)),
-                            )
-                            rows = await cur.fetchall()
-                            counts = {"GOING": 0, "MAYBE": 0, "NO": 0}
-                            for r, c in rows:
-                                counts[str(r)] = int(c)
-
-                            # Get GOING users (limit)
-                            cur = await db.execute(
-                                "SELECT user_id FROM event_rsvps WHERE guild_id=? AND message_id=? AND response='GOING'",
-                                (guild.id, int(message_id)),
-                            )
-                            going_users = [int(x[0]) for x in await cur.fetchall()]
-
-                        mention = ""
-                        if not await get_quieter_mode(guild.id) and int(role_id or 0):
-                            role = guild.get_role(int(role_id))
-                            if role:
-                                mention = role.mention
-
-                        going_list = ", ".join(f"<@{uid}>" for uid in going_users[:25]) if going_users else "—"
-                        if len(going_users) > 25:
-                            going_list += f" (+{len(going_users) - 25} more)"
-
-                        recap_embed = obsidian_embed(
-                            "✅ Ops Debrief • Event Ended",
-                            f"**{title}**\n"
-                            f"**Started:** <t:{int(start_ts)}:F>\n"
-                            f"**Ended:** <t:{int(end_ts)}:F>\n\n"
-                            f"✅ Going: **{counts['GOING']}**  |  ❔ Maybe: **{counts['MAYBE']}**  |  ❌ Can't: **{counts['NO']}**\n\n"
-                            f"**Attendees (Going):**\n{going_list}",
-                            color=discord.Color.green(),
-                            client=bot,
-                        )
-
-                        # Prefer posting in thread
-                        posted = False
-                        if thread_id:
-                            thread = guild.get_thread(int(thread_id))
-                            if thread:
-                                try:
-                                    msg = await thread.send(content=mention if mention else None, embed=recap_embed)
-                                    recap_message_id = msg.id
-                                    posted = True
-                                except Exception:
-                                    posted = False
-
-                        if not posted:
-                            msg = await ch.send(content=mention if mention else None, embed=recap_embed)
-                            recap_message_id = msg.id
-
-                        # Try to edit original event post to show ended (and remove view)
-                        try:
-                            original = await ch.fetch_message(int(message_id))
-                            if original and original.embeds:
-                                embed = original.embeds[0]
-                                embed.color = discord.Color.light_grey()
-                                embed.set_footer(text="✅ Event Ended")
-                                await original.edit(embed=embed, view=None)
-                        except Exception:
-                            pass
-
-                        # Item 65 — archive the discussion thread with an [ENDED] prefix
-                        if thread_id:
-                            try:
-                                thread = guild.get_thread(int(thread_id)) or await bot.fetch_channel(int(thread_id))
-                                if isinstance(thread, discord.Thread):
-                                    new_name = thread.name if thread.name.startswith("[ENDED]") else f"[ENDED] {thread.name}"
-                                    new_name = new_name[:100]
-                                    await thread.edit(name=new_name, archived=True, locked=False)
-                            except Exception as _e:
-                                logger.debug(f"[events] could not archive thread {thread_id}: {_e}")
-
-                        # Mark ended in DB
-                        async with aiosqlite.connect(DB_PATH) as db:
-                            await db.execute(
-                                "UPDATE events SET ended=1, recap_posted=1, recap_message_id=? WHERE guild_id=? AND message_id=?",
-                                (int(recap_message_id or 0), guild.id, int(message_id)),
-                            )
-                            await db.commit()
-                    except Exception as e:
-                        logger.error(f"[events] Error ending event {message_id} in {guild.id}: {e}", exc_info=True)
-                        continue
+            await run_event_end_cycle(bot)
         except Exception as e:
-            logger.error(f"[events] Error in event_end_loop: {e}", exc_info=True)
+            logger.error(f"Error in event_end_loop: {e}", exc_info=True)
 
     @event_end_loop.before_loop
     async def before_event_end_loop():
@@ -1722,118 +1547,9 @@ def setup_tasks(bot):
     async def devstream_check_loop():
         """Check for upcoming devstreams and send notifications. Also auto-detect and set devstream dates."""
         try:
-            if not bot.is_ready():
-                return
-            
-            # Check all guilds that have devstream notifications enabled
-            for guild in bot.guilds:
-                try:
-                    # Check if devstream notifications are enabled (using guild_settings table).
-                    # Canonical key is devstream_notify_channel_id; fall back to
-                    # the legacy devstream_channel_id for guilds whose migration
-                    # hasn't run yet.
-                    from database import get_guild_setting, set_guild_setting
-                    channel_id_str = await get_guild_setting(guild.id, "devstream_notify_channel_id")
-                    if not channel_id_str:
-                        channel_id_str = await get_guild_setting(guild.id, "devstream_channel_id")
-                    next_devstream_date_str = await get_guild_setting(guild.id, "next_devstream_date")
-                    
-                    if not channel_id_str or not channel_id_str.isdigit():
-                        continue  # Not configured or disabled
-                    
-                    channel_id = int(channel_id_str)
-                    channel = guild.get_channel(channel_id)
-                    if not isinstance(channel, discord.TextChannel):
-                        continue
-                    
-                    # Auto-detect next devstream date if not set or if current date is in the past
-                    now = now_utc()
-                    devstream_date = None
-                    
-                    if next_devstream_date_str:
-                        try:
-                            devstream_date = dateparser.parse(next_devstream_date_str, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
-                            if devstream_date and devstream_date < now:
-                                # Devstream date is in the past, calculate next one
-                                devstream_date = None
-                        except Exception:
-                            devstream_date = None
-                    
-                    # If no valid devstream date, auto-calculate the next one
-                    if not devstream_date:
-                        from api.warframe_api import calculate_next_devstream_date
-                        devstream_date = await calculate_next_devstream_date()
-                        
-                        if devstream_date:
-                            # Store the auto-detected date
-                            await set_guild_setting(guild.id, "next_devstream_date", devstream_date.isoformat())
-                            next_devstream_date_str = devstream_date.isoformat()
-                            logger.info(f"[devstream] Auto-detected next devstream for guild {guild.id}: {devstream_date.isoformat()}")
-                        else:
-                            # Couldn't calculate, skip this guild
-                            continue
-                    
-                    time_until = (devstream_date - now).total_seconds()
-                    
-                    # Check if devstream is within 24 hours and we haven't sent a 24h notification
-                    if timedelta(hours=23) < timedelta(seconds=time_until) <= timedelta(hours=25):
-                        async with aiosqlite.connect(DB_PATH) as db:
-                            # Check if 24h notification was sent
-                            cur = await db.execute("""
-                                SELECT 1 FROM devstream_notifications_sent 
-                                WHERE guild_id=? AND devstream_date=? AND notification_type='24h'
-                            """, (guild.id, next_devstream_date_str))
-                            if not await cur.fetchone():
-                                # Send 24h notification
-                                embed = obsidian_embed(
-                                    "📺 Devstream Reminder",
-                                    f"**Warframe Devstream** starts in **24 hours**!\n\n"
-                                    f"**Date:** <t:{int(devstream_date.timestamp())}:F>",
-                                    color=discord.Color.blue(),
-                                    client=bot,
-                                )
-                                try:
-                                    await channel.send(embed=embed)
-                                    await db.execute("""
-                                        INSERT INTO devstream_notifications_sent 
-                                        (guild_id, devstream_date, notification_type, notified_at)
-                                        VALUES (?, ?, '24h', ?)
-                                    """, (guild.id, next_devstream_date_str, now.isoformat()))
-                                    await db.commit()
-                                except Exception as e:
-                                    logger.error(f"Error sending devstream 24h notification to guild {guild.id}: {e}")
-                    
-                    # Check if devstream is within 1 hour and we haven't sent a 1h notification
-                    elif timedelta(minutes=55) < timedelta(seconds=time_until) <= timedelta(hours=1, minutes=5):
-                        async with aiosqlite.connect(DB_PATH) as db:
-                            # Check if 1h notification was sent
-                            cur = await db.execute("""
-                                SELECT 1 FROM devstream_notifications_sent 
-                                WHERE guild_id=? AND devstream_date=? AND notification_type='1h'
-                            """, (guild.id, next_devstream_date_str))
-                            if not await cur.fetchone():
-                                # Send 1h notification
-                                embed = obsidian_embed(
-                                    "📺 Devstream Starting Soon!",
-                                    f"**Warframe Devstream** starts in **1 hour**!\n\n"
-                                    f"**Date:** <t:{int(devstream_date.timestamp())}:F>",
-                                    color=discord.Color.green(),
-                                    client=bot,
-                                )
-                                try:
-                                    await channel.send(embed=embed)
-                                    await db.execute("""
-                                        INSERT INTO devstream_notifications_sent 
-                                        (guild_id, devstream_date, notification_type, notified_at)
-                                        VALUES (?, ?, '1h', ?)
-                                    """, (guild.id, next_devstream_date_str, now.isoformat()))
-                                    await db.commit()
-                                except Exception as e:
-                                    logger.error(f"Error sending devstream 1h notification to guild {guild.id}: {e}")
-                
-                except Exception as e:
-                    logger.error(f"Error in devstream_check_loop for guild {guild.id}: {e}", exc_info=True)
-        
+            from tasks.wf_feed_loops import run_devstream_notify_cycle
+
+            await run_devstream_notify_cycle(bot)
         except Exception as e:
             logger.error(f"Error in devstream_check_loop: {e}", exc_info=True)
     
@@ -2241,55 +1957,11 @@ def setup_tasks(bot):
     async def ticket_sla_breach_loop():
         """Ping mod channel when open tickets lack first response past SLA."""
         try:
-            from core.utils import get_mod_role
-            from database import get_log_channel_id
+            from tasks.ticket_loops import run_ticket_sla_breach_cycle
 
-            for guild in bot.guilds:
-                try:
-                    sla_raw = await get_guild_setting(guild.id, "ticket_sla_hours")
-                    sla_h = int(sla_raw) if sla_raw and str(sla_raw).isdigit() else 4
-                    cutoff = (now_utc() - timedelta(hours=sla_h)).isoformat()
-                    async with aiosqlite.connect(DB_PATH) as db:
-                        cur = await db.execute(
-                            """
-                            SELECT ticket_id, subject, channel_id FROM tickets
-                            WHERE guild_id=? AND status='open'
-                              AND (first_response_at IS NULL OR first_response_at='')
-                              AND created_at < ?
-                            LIMIT 5
-                            """,
-                            (guild.id, cutoff),
-                        )
-                        rows = await cur.fetchall()
-                    if not rows:
-                        continue
-                    ch_id = await get_log_channel_id(guild.id, "tickets") or await get_guild_setting(guild.id, "ticket_log_channel_id")
-                    ch = guild.get_channel(int(ch_id)) if ch_id and str(ch_id).isdigit() else None
-                    if not isinstance(ch, discord.TextChannel):
-                        continue
-                    mod_role = await get_mod_role(guild)
-                    mention = mod_role.mention if mod_role else ""
-                    for ticket_id, subject, tch in rows:
-                        warn_key = f"ticket_sla_warn:{ticket_id}"
-                        if await get_guild_setting(guild.id, warn_key):
-                            continue
-                        from core.safe_send import safe_channel_send
-
-                        await safe_channel_send(
-                            ch,
-                            content=mention,
-                            embed=obsidian_embed(
-                                "⏱️ Ticket SLA breach",
-                                f"**{ticket_id}** — {subject[:80]}\nNo first response in **{sla_h}h**.",
-                                color=discord.Color.orange(),
-                                client=bot,
-                            ),
-                        )
-                        await set_guild_setting(guild.id, warn_key, "1")
-                except Exception:
-                    continue
+            await run_ticket_sla_breach_cycle(bot)
         except Exception as e:
-            logger.error(f"[ticket_sla] loop error: {e}", exc_info=True)
+            logger.error(f"Error in ticket_sla_breach_loop: {e}", exc_info=True)
 
     @ticket_sla_breach_loop.before_loop
     async def before_ticket_sla_breach_loop():
@@ -2313,73 +1985,11 @@ def setup_tasks(bot):
     async def forum_check_loop():
         """Check Warframe forums RSS for new posts."""
         try:
-            if not bot.is_ready():
-                return
-            import aiohttp
-            import xml.etree.ElementTree as ET
-            url = "https://forums.warframe.com/latest.rss"
-            async with aiohttp.ClientSession() as session:
-                try:
-                    async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as r:
-                        if r.status != 200:
-                            return
-                        text = await r.text()
-                except Exception:
-                    return
-            root = ET.fromstring(text)
-            items = root.findall(".//item")
-            if not items:
-                items = root.findall(".//{http://www.w3.org/2005/Atom}entry")
-            seen = set()
-            async with aiosqlite.connect(DB_PATH) as db:
-                cur = await db.execute("SELECT item_id FROM integration_seen WHERE source='forum'")
-                for row in await cur.fetchall():
-                    seen.add(row[0])
-            for item in items[:5]:
-                link = None
-                title = None
-                guid = None
-                for child in item:
-                    tag = child.tag.split("}")[-1] if "}" in child.tag else child.tag
-                    if tag == "link":
-                        link = child.text or child.get("href", "")
-                    elif tag == "title":
-                        title = (child.text or "").strip()
-                    elif tag in ("id", "guid"):
-                        guid = (child.text or "").strip()
-                for link_el in item.findall(".//{http://www.w3.org/2005/Atom}link"):
-                    if not link:
-                        link = link_el.get("href", "")
-                if not guid:
-                    guid = link or (title or "")[:200] or ""
-                if not guid or guid in seen:
-                    continue
-                async with aiosqlite.connect(DB_PATH) as db:
-                    await db.execute(
-                        "INSERT OR IGNORE INTO integration_seen (source, item_id, created_at) VALUES ('forum', ?, ?)",
-                        (guid[:500], now_utc().isoformat()),
-                    )
-                    await db.commit()
-                for guild in bot.guilds:
-                    ch_id = await get_guild_setting(guild.id, "forum_notify_channel_id")
-                    if not ch_id:
-                        continue
-                    ch = guild.get_channel(int(ch_id))
-                    if not isinstance(ch, discord.TextChannel):
-                        continue
-                    try:
-                        await ch.send(
-                            embed=obsidian_embed(
-                                "New Forum Post",
-                                f"**{title or 'New post'}**\n\n{link or ''}",
-                                color=discord.Color.blue(),
-                                client=bot,
-                            ),
-                        )
-                    except Exception as e:
-                        logger.warning(f"[forum] Error notifying guild {guild.id}: {e}")
+            from tasks.wf_feed_loops import run_forum_feed_cycle
+
+            await run_forum_feed_cycle(bot)
         except Exception as e:
-            logger.error(f"[forum] Error in forum_check_loop: {e}", exc_info=True)
+            logger.error(f"Error in forum_check_loop: {e}", exc_info=True)
 
     @forum_check_loop.before_loop
     async def before_forum_check_loop():

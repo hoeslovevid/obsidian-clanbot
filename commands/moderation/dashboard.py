@@ -7,7 +7,7 @@ from datetime import datetime, timezone, date
 from core.embed_templates import embed_template
 from core.embed_footers import footer_for
 from core.utils import obsidian_embed, is_mod, format_timestamp_readable
-from database import DB_PATH, get_auto_mod_settings
+from database import DB_PATH, get_auto_mod_settings, get_guild_setting
 from commands.moderation.incident_mode import get_incident_mode
 import aiosqlite
 
@@ -139,6 +139,12 @@ async def _build_mod_dashboard_embed(
     sla_note = ""
     if awaiting_first_response:
         sla_note = f"\n**Tickets awaiting staff reply:** {awaiting_first_response}"
+    try:
+        sla_raw = await get_guild_setting(guild.id, "ticket_sla_hours")
+        sla_h = int(sla_raw) if sla_raw and str(sla_raw).isdigit() else 4
+        sla_note += f"\n**Ticket SLA target:** {sla_h}h first response"
+    except Exception:
+        pass
 
     fields = [
         (
@@ -202,6 +208,15 @@ async def _build_mod_dashboard_embed(
         fields.append(("⚠️ Recent Warnings", "\n".join(lines), False))
     else:
         fields.append(("⚠️ Recent Warnings", "No recent warnings.", False))
+
+    try:
+        from core.command_prune import format_guild_usage_embed_body
+
+        usage_body = await format_guild_usage_embed_body(client, guild.id)
+        if usage_body:
+            fields.append(("📊 Command KPI", usage_body[:1024], False))
+    except Exception:
+        pass
 
     refreshed = format_timestamp_readable(datetime.now(timezone.utc))
     embed = embed_template(
@@ -552,6 +567,53 @@ def setup(bot, group=None):
             view=runbook,
             ephemeral=True,
         )
+
+    usage_decorator = (
+        group.command(
+            name="usage_report",
+            description="Command heatmap + prune candidates for this server (mods only).",
+        )
+        if group
+        else bot.tree.command(
+            name="usage_report",
+            description="Command heatmap + prune candidates for this server (mods only).",
+        )
+    )
+
+    @usage_decorator
+    async def usage_report(interaction: discord.Interaction):
+        if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
+            return await interaction.response.send_message(
+                "Sorry, but you are not an Administrator in this server.",
+                ephemeral=True,
+            )
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                "This command can only be used in a server.", ephemeral=True
+            )
+        await interaction.response.defer(ephemeral=True)
+        from core.command_prune import format_guild_usage_embed_body, guild_usage_summary
+        from core.command_usage_report import format_prune_hint
+
+        top, unused = await guild_usage_summary(interaction.client, interaction.guild.id, unused_limit=25)
+        body = await format_guild_usage_embed_body(interaction.client, interaction.guild.id)
+        hint = format_prune_hint(unused, min_count=5)
+        desc = body
+        if hint and hint not in desc:
+            desc = f"{desc}\n\n{hint}" if desc else hint
+        embed = obsidian_embed(
+            "📊 Command usage report",
+            desc or "_No usage data yet._",
+            category="moderation",
+            client=interaction.client,
+        )
+        if top:
+            embed.add_field(
+                name="Registered vs used",
+                value=f"**Top tracked:** {len(top)} · **Zero-use sample:** {len(unused)}",
+                inline=False,
+            )
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
     stats_decorator = (
         group.command(name="stats_dashboard", description="View server analytics: members, economy, activity.")

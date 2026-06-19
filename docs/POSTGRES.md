@@ -2,7 +2,7 @@
 
 Obsidian Clan Bot currently uses **SQLite** (`data/obsidian_clanbot.db`) with `aiosqlite`. A future **v2.1** release may add optional PostgreSQL for hosts that need concurrent writes at scale (78+ guilds, heavy economy traffic).
 
-This document is a **planning guide** — Postgres support is not enabled in `2.0.0-alpha`.
+This document is a **planning guide** — Postgres runtime support lands in **v2.1**. **v2.0.0-beta** adds `DB_BACKEND` / `DATABASE_URL` env vars and `core/db.py` guards only (SQLite remains default).
 
 ## When to consider Postgres
 

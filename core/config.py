@@ -53,15 +53,18 @@ TIMEZONE = os.getenv("TIMEZONE", "America/New_York")
 
 # --- Database ---
 DB_PATH = os.getenv("DB_PATH", str(PROJECT_ROOT / "data" / "obsidian_clanbot.db"))
+# sqlite (default) | postgres (2.1 preview — requires DATABASE_URL + asyncpg)
+DB_BACKEND = os.getenv("DB_BACKEND", "sqlite").strip().lower()
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip() or None
 
 # --- Version ---
 # Single source of truth for /about, /whatsnew, /status, release announce, and slash-command sync.
 # Set BOT_VERSION on Railway to match each production release; keep this code default in sync.
 # On release: bump BOT_VERSION here (and on Railway), then update CURRENT_RELEASE_* in core/changelog.py.
-BOT_VERSION = os.getenv("BOT_VERSION", "2.0.0-alpha")
+BOT_VERSION = os.getenv("BOT_VERSION", "2.0.0-beta")
 BOT_CHANGELOG = os.getenv(
     "BOT_CHANGELOG",
-    "v2.0.0-alpha — multi-guild global sync, Layout v2 hubs, command tree fixes, onboarding questline.",
+    "v2.0.0-beta — handler/loop extractions, mod ops dashboard KPI, Postgres scaffold, command prune report.",
 )
 
 # Presence rotation: default | menu | degraded | event

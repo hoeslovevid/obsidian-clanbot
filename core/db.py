@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Awaitable, Callable, Optional, TypeVar
 
 import aiosqlite  # type: ignore
 
-from core.config import DB_PATH
+from core.config import DB_BACKEND, DB_PATH, DATABASE_URL
 
 if TYPE_CHECKING:
     from bot.app import ClanBot
@@ -32,9 +32,26 @@ def is_db_locked_error(exc: BaseException) -> bool:
     return isinstance(exc, sqlite3.OperationalError) and "locked" in str(exc).lower()
 
 
+def db_backend() -> str:
+    """Active database backend: ``sqlite`` (default) or ``postgres`` (2.1 preview)."""
+    return DB_BACKEND if DB_BACKEND in ("sqlite", "postgres") else "sqlite"
+
+
+def postgres_configured() -> bool:
+    return bool(DATABASE_URL) and db_backend() == "postgres"
+
+
 @asynccontextmanager
 async def open_db(path: str = DB_PATH, *, busy_timeout_ms: int = DEFAULT_BUSY_TIMEOUT_MS):
-    """Open SQLite with WAL + busy_timeout so concurrent handlers wait instead of failing."""
+    """Open DB connection. SQLite today; Postgres uses DATABASE_URL when DB_BACKEND=postgres."""
+    if db_backend() == "postgres":
+        if not DATABASE_URL:
+            raise RuntimeError(
+                "DB_BACKEND=postgres requires DATABASE_URL. See docs/POSTGRES.md."
+            )
+        raise NotImplementedError(
+            "Postgres backend is planned for v2.1 — set DB_BACKEND=sqlite until migration ships."
+        )
     async with aiosqlite.connect(path) as db:
         await configure_sqlite(db, busy_timeout_ms=busy_timeout_ms)
         yield db

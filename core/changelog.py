@@ -12,26 +12,28 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-18"
 CURRENT_RELEASE_CHANGES: list[str] = [
+    "**2.0-beta** — `handlers/reactions.py` + `handlers/message_logs.py`; slimmer `app.py`",
+    "**2.0-beta** — `tasks/event_loops.py` recurring + event-end; `ticket_loops.py` SLA; `wf_feed_loops.py` devstream/forum",
+    "**2.0-beta** — `/admin dashboard` Command KPI field + SLA target; `/admin usage_report` prune candidates",
+    "**2.0-beta** — `core/db.py` `DB_BACKEND` + `DATABASE_URL` scaffold (Postgres 2.1 preview)",
     "**2.0 Platform** — global command sync for multi-guild (78+ servers); `COMMAND_SYNC_GUILD_ONLY` for dev",
     "**2.0 UX** — Layout v2 Warframe hub, help quick-path buttons, `/me` action row, console refresh",
-    "**2.0 Discovery** — shared `core/command_tree.py` fixes menu/help command lookup everywhere",
-    "**2.0 Onboarding** — questline steps: claim daily, view profile, browse help (`/onboarding resume`)",
-    "**2.0 WF layer** — `core/wf_resolve.py` unifies platform, cache footers, unavailable UX on fissures/cycles/invasions",
-    "**2.0 Ops** — `/admin health` shows guild count, sync scope, command usage heatmap; Baro notify extracted to `tasks/wf_notify.py`",
-    "**2.0 Batch 3** — `wf_resolve` on sortie/alerts/daily_ops; WF notify loops in `tasks/wf_check_loops.py`; message economy in `handlers/message_economy.py`",
-    "**2.0 Docs** — `docs/POSTGRES.md` migration guide; prune hints on `/admin health` when many commands are never used",
-    "**2.0 Batch 4** — `wf_resolve` complete on baro/status/hub/world_state; platform-aware `/warframe status` fissures",
-    "**2.0 Batch 5** — `handlers/automod.py` + `handlers/vc_panel.py` extracted from `app.py`",
-    "**2.0 Batch 6** — `tasks/event_loops.py` for event reminders; questline steps + `/me` progress chips",
-    "**2.0 Batch 7** — `/admin console` shows version + sync scope; onboarding tracks hub/search/achievements",
-    "**2.0 Batch 8** — `tasks/economy_loops.py` voice rewards + `tasks/giveaway_loops.py` ending-soon DMs",
-    "**2.0 Batch 9** — `handlers/member_events.py` join/leave welcome, raid, milestones",
-    "**2.0 Batch 10** — `tools/check_command_tree.py` pre-deploy Discord limit gate",
+    "**2.0 WF layer** — `core/wf_resolve.py` unified platform, cache footers, notify loops extracted",
+    "**2.0 Ops** — `/admin health` guild count + heatmap; `tools/check_command_tree.py` CI gate",
     "**Fix** — help category buttons use global tree (regression from guild-scoped lookup)",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "2.0.0-alpha",
+        "date": "2026-06-18",
+        "changes": [
+            "**2.0-alpha** — multi-guild global sync, Layout v2 hubs, WF resolve layer, batches 1–10",
+            "**2.0-alpha** — handlers: automod, vc_panel, member_events, message_economy",
+            "**2.0-alpha** — tasks: wf_notify, wf_check, event/economy/giveaway loops",
+        ],
+    },
     {
         "version": "1.99.14",
         "date": "2026-06-18",
