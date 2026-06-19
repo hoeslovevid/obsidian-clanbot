@@ -10,7 +10,7 @@ import dateparser
 import discord
 from discord import app_commands
 
-from api.warframe_api import get_baro_status, wf_staleness_for_path
+from api.warframe_api import wf_staleness_for_path
 from core.embed_templates import embed_template
 from core.warframe_platform import warframe_footer_platform_note
 from core.utils import (
@@ -75,10 +75,21 @@ def _format_inventory_block(
     *,
     page: int = 0,
     mark_new: bool = False,
+    pending: bool = False,
 ) -> tuple[str, int, int]:
     """Return (inventory_text, page_count, total_items)."""
     if not inventory:
-        return "Inventory not available yet.", 1, 0
+        if pending:
+            msg = (
+                "Stock hasn't loaded from the API yet — tap **Update data** or try again in a minute.\n"
+                "_Inventory can take a few minutes to appear right after Baro arrives._"
+            )
+        else:
+            msg = (
+                "No inventory in the current API response.\n"
+                "Tap **Update data** — if Baro is active, stock should appear shortly."
+            )
+        return msg, 1, 0
 
     total = len(inventory)
     page_count = max(1, (total + BARO_INVENTORY_PAGE_SIZE - 1) // BARO_INVENTORY_PAGE_SIZE)
@@ -138,7 +149,10 @@ def build_baro_embed(
 
         show_new = bool(mark_new)
         inventory_list, _, total_items = _format_inventory_block(
-            inventory, page=page, mark_new=show_new,
+            inventory,
+            page=page,
+            mark_new=show_new,
+            pending=bool(baro_data.get("_inventory_pending")) and not inventory,
         )
 
         fields = [
@@ -326,6 +340,24 @@ async def _resolve_mark_new(guild_id: Optional[int], inventory: list) -> bool:
     return bool(old and old != current)
 
 
+async def _resolve_baro_status(*, fresh: bool = False):
+    """Load Baro status; retry fresh fetch when active but inventory is empty."""
+    from api.warframe_api import _baro_is_active, fetch_baro_data_fresh, get_baro_status
+
+    if fresh:
+        data = await fetch_baro_data_fresh(retries=2, retry_delay=10.0)
+        if not data:
+            return False, None
+        return _baro_is_active(data), data
+
+    is_active, baro_data = await get_baro_status()
+    if is_active and baro_data and not (baro_data.get("inventory") or []):
+        fresh_data = await fetch_baro_data_fresh(retries=2, retry_delay=10.0)
+        if fresh_data:
+            return _baro_is_active(fresh_data), fresh_data
+    return is_active, baro_data
+
+
 async def _persist_inventory_hash(guild_id: Optional[int], inventory: list) -> None:
     if guild_id and inventory:
         await set_baro_inventory_hash(guild_id, _inventory_hash(inventory))
@@ -355,7 +387,7 @@ def setup(bot, group=None):
         await interaction.response.defer(ephemeral=baro_ephemeral)
 
         guild_id = interaction.guild.id if interaction.guild else None
-        is_active, baro_data = await get_baro_status()
+        is_active, baro_data = await _resolve_baro_status()
         if baro_data and not is_active:
             async with aiosqlite.connect(DB_PATH) as db:
                 cur = await db.execute(
@@ -370,7 +402,7 @@ def setup(bot, group=None):
                 if btn_interaction.user.id != interaction.user.id:
                     return await btn_interaction.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
                 await btn_interaction.response.defer()
-                new_active, new_data = await get_baro_status()
+                new_active, new_data = await _resolve_baro_status(fresh=True)
                 if not new_data:
                     return await btn_interaction.followup.send(
                         "Still can't reach the stats server. Try **Try again** again in a minute.",
@@ -409,10 +441,8 @@ def setup(bot, group=None):
 
         async def on_refresh(btn_interaction: discord.Interaction):
             # Read-only public data — anyone may refresh.
-            from core.cache_utils import invalidate
-
-            invalidate("warframe:baro")
-            new_active, new_data = await get_baro_status()
+            await btn_interaction.response.defer()
+            new_active, new_data = await _resolve_baro_status(fresh=True)
             if not new_data:
                 await btn_interaction.followup.send(
                     "Couldn't refresh Baro yet — stats server is still struggling. Try again soon.",

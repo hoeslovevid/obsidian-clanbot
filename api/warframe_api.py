@@ -623,21 +623,105 @@ def _ws_to_sortie(ws: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     return {"expiry": expiry or "", "variants": variants}
 
 
+def _baro_visit_window(data: Dict[str, Any]) -> tuple[bool, bool]:
+    """Return (in_visit_window, has_inventory) for a voidTrader-shaped dict."""
+    activation = data.get("activation", "")
+    expiry = data.get("expiry", "")
+    inventory = data.get("inventory") or []
+    if not activation or not expiry:
+        return False, bool(inventory)
+    try:
+        activation_time = dateparser.parse(
+            activation, settings={"TIMEZONE": "UTC", "RETURN_AS_TIMEZONE_AWARE": True},
+        )
+        expiry_time = dateparser.parse(
+            expiry, settings={"TIMEZONE": "UTC", "RETURN_AS_TIMEZONE_AWARE": True},
+        )
+        if not activation_time or not expiry_time:
+            return False, bool(inventory)
+        now = datetime.now(timezone.utc)
+        in_window = (
+            activation_time <= now < expiry_time
+            and activation_time < expiry_time
+        )
+        return in_window, bool(inventory)
+    except Exception:
+        return False, bool(inventory)
+
+
+def _merge_baro_sources(
+    stat: Optional[Dict[str, Any]],
+    ws_baro: Optional[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    """Prefer warframestat; backfill inventory and location from official world state."""
+    if stat is None and ws_baro is None:
+        return None
+    merged: Dict[str, Any] = dict(stat) if stat is not None else dict(ws_baro or {})
+    ws_inv = (ws_baro or {}).get("inventory") or []
+    stat_inv = merged.get("inventory") or []
+    if not stat_inv and ws_inv:
+        merged["inventory"] = ws_inv
+        merged["_inventory_source"] = "world_state"
+    elif stat_inv:
+        merged["_inventory_source"] = "warframestat"
+    if ws_baro:
+        loc = merged.get("location")
+        if not loc or loc == "Unknown":
+            merged["location"] = ws_baro.get("location") or loc or "Unknown"
+        for key in ("activation", "expiry", "character"):
+            if not merged.get(key) and ws_baro.get(key):
+                merged[key] = ws_baro[key]
+    return merged
+
+
+async def _fetch_baro_combined() -> Optional[Dict[str, Any]]:
+    """Fetch Baro from warframestat and merge world-state Manifest when stock is missing."""
+    stat: Optional[Dict[str, Any]] = None
+    try:
+        stat = await _wf_stat_get(_wf_stat_url("pc/voidTrader"), _api_proxy())
+    except Exception as e:
+        logger.error("Error fetching Baro data: %s: %s", type(e).__name__, e, exc_info=True)
+    ws = await _fetch_official_world_state()
+    ws_baro = _ws_to_baro(ws) if ws else None
+    return _merge_baro_sources(stat, ws_baro)
+
+
 async def fetch_baro_data() -> Optional[Dict[str, Any]]:
     """Fetch Baro Ki'Teer data. Falls back to content.warframe.com world state."""
     from core.cache_utils import get_cached
 
     async def _fetch():
-        try:
-            result = await _wf_stat_get(_wf_stat_url("pc/voidTrader"), _api_proxy())
-            if result is not None:
-                return result
-        except Exception as e:
-            logger.error("Error fetching Baro data: %s: %s", type(e).__name__, e, exc_info=True)
-        ws = await _fetch_official_world_state()
-        return _ws_to_baro(ws) if ws else None
+        return await _fetch_baro_combined()
 
     return await get_cached("warframe:baro", 60, _fetch, stale_seconds=_warframe_cache_stale_seconds())
+
+
+async def fetch_baro_data_fresh(
+    *,
+    retries: int = 2,
+    retry_delay: float = 15.0,
+) -> Optional[Dict[str, Any]]:
+    """Bypass cache and retry when Baro is in-window but inventory is still empty."""
+    from core.cache_utils import invalidate, put_cached
+
+    invalidate("warframe:baro")
+    data: Optional[Dict[str, Any]] = None
+    for attempt in range(retries + 1):
+        data = await _fetch_baro_combined()
+        if not data:
+            break
+        in_window, has_inv = _baro_visit_window(data)
+        if not in_window or has_inv:
+            break
+        if attempt < retries:
+            logger.debug(
+                "Baro in visit window but inventory empty — retry %s/%s in %ss",
+                attempt + 1, retries, retry_delay,
+            )
+            await asyncio.sleep(retry_delay)
+    if data is not None:
+        await put_cached("warframe:baro", data, 60)
+    return data
 
 
 async def fetch_cycle_data(cycle_type: str) -> Optional[Dict[str, Any]]:
@@ -685,43 +769,35 @@ async def get_all_cycles() -> Dict[str, Optional[Dict[str, Any]]]:
     return await get_cached("warframe:cycles", 60, _fetch)
 
 
-async def get_baro_status() -> Tuple[bool, Optional[Dict[str, Any]]]:
+def _baro_is_active(data: Dict[str, Any]) -> bool:
+    """True when Baro is at a relay (visit window open with stock or explicit API flag)."""
+    in_window, has_inventory = _baro_visit_window(data)
+    explicit = data.get("active")
+    if explicit is not None:
+        return bool(explicit)
+    if in_window and has_inventory:
+        return True
+    # Visit window open but stock not loaded yet — show active UI with loading copy.
+    if in_window:
+        data["_inventory_pending"] = True
+        return True
+    return False
+
+
+async def get_baro_status(*, fresh: bool = False) -> Tuple[bool, Optional[Dict[str, Any]]]:
     """
     Get current Baro Ki'Teer status.
     Returns (is_active, baro_data)
+
+    Pass ``fresh=True`` to bypass cache (used by refresh buttons and arrival notifications).
     """
-    data = await fetch_baro_data()
+    if fresh:
+        data = await fetch_baro_data_fresh()
+    else:
+        data = await fetch_baro_data()
     if not data:
         return (False, None)
-    
-    # Check if Baro is active
-    activation = data.get("activation", "")
-    expiry = data.get("expiry", "")
-    
-    # If we don't have both activation and expiry, Baro is not active
-    if not activation or not expiry:
-        return (False, data)
-    
-    try:
-        # Parse ISO format timestamps
-        activation_time = dateparser.parse(activation, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
-        expiry_time = dateparser.parse(expiry, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
-        
-        if not activation_time or not expiry_time:
-            return (False, data)
-        
-        now = datetime.now(timezone.utc)
-        
-        # Baro is active only if:
-        # 1. Current time is after activation
-        # 2. Current time is before expiry
-        # 3. Activation is before expiry (to avoid weird API responses)
-        is_active = activation_time <= now < expiry_time and activation_time < expiry_time
-        
-        return (is_active, data)
-    except Exception as e:
-        logger.error(f"Error parsing Baro timestamps: {e}")
-        return (False, data)
+    return (_baro_is_active(data), data)
 
 
 async def fetch_fissures(platform: str = "pc") -> Optional[List[Dict[str, Any]]]:

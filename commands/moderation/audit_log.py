@@ -239,22 +239,6 @@ def setup(bot, group=None):
             ephemeral=True,
         )
 
-    # Back-compat: /admin audit maps to view
-    legacy = (
-        group.command(name="audit", description="Browse recent moderator audit log entries.")
-        if group
-        else bot.tree.command(name="audit", description="Browse recent moderator audit log entries.")
-    )
-
-    @legacy
-    @app_commands.describe(page="Page number (1-based)", action="Filter by action substring")
-    async def audit_cmd(
-        interaction: discord.Interaction,
-        page: app_commands.Range[int, 1, 100] = 1,
-        action: Optional[str] = None,
-    ):
-        await audit_view(interaction, page=page, action=action)
-
     if isinstance(target, app_commands.Group):
         target.add_command(audit_group)
     else:

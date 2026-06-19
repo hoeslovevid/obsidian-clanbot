@@ -96,9 +96,11 @@ async def check_ended_giveaways(bot):
 
 async def check_and_notify_baro_arrival(bot):
     """Check if Baro has arrived and send notifications if needed."""
+    from api.warframe_api import fetch_baro_data_fresh
+
     is_active, baro_data = await get_baro_status()
-    
-    if not baro_data:
+
+    if not baro_data or not is_active:
         return
     
     activation = baro_data.get("activation", "")
@@ -151,7 +153,26 @@ async def check_and_notify_baro_arrival(bot):
             )
             visit = await cur.fetchone()
             visit_id = visit[0] if visit else None
-        
+
+        # Fresh inventory before notifying (stock can lag activation by minutes).
+        import json as _json
+
+        fresh_baro_data = await fetch_baro_data_fresh(retries=3, retry_delay=20.0)
+        data_to_use = fresh_baro_data if fresh_baro_data else baro_data
+        if not (data_to_use.get("inventory") or []):
+            logger.debug("Baro active but inventory still empty — skipping arrival notify this cycle")
+            return
+        if visit_id and data_to_use.get("inventory"):
+            await db.execute(
+                "UPDATE baro_visits SET inventory_json=?, location=? WHERE id=?",
+                (
+                    _json.dumps(data_to_use["inventory"]),
+                    data_to_use.get("location", "Unknown"),
+                    visit_id,
+                ),
+            )
+            await db.commit()
+
         # Send notifications to all guilds that have it enabled
         for guild in bot.guilds:
             try:
@@ -176,11 +197,7 @@ async def check_and_notify_baro_arrival(bot):
             if not isinstance(ch, discord.TextChannel):
                 await _warn_broken_channel(guild, channel_id, "Baro Ki'Teer")
                 continue
-            
-            # Re-fetch Baro data to get freshest inventory (API may have delayed population at arrival)
-            _, fresh_baro_data = await get_baro_status()
-            data_to_use = fresh_baro_data if fresh_baro_data else baro_data
-            
+
             # Use shared embed builder for consistent inventory display
             build_baro_embed = get_baro_embed_builder()
             embed = build_baro_embed(data_to_use, True, bot)

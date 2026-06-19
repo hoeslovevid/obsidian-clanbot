@@ -102,6 +102,11 @@ def freshness_note(key: str, *, stale_after: float = 120) -> str:
     return f" • data ~{mins}m old" if mins >= 1 else " • data updating"
 
 
+def cache_footer_suffix(key: str, *, stale_after: float = 120) -> str:
+    """Alias for :func:`freshness_note` (used by Warframe embed helpers)."""
+    return freshness_note(key, stale_after=stale_after)
+
+
 def cache_stats() -> str:
     """Short summary for /admin health."""
     return f"{len(_cache)} API entries"
@@ -114,6 +119,11 @@ def warframe_health_line() -> tuple[str, bool]:
         return warframe_api_health()
     except Exception:
         return "Warframe API: **operational** (health probe unavailable)", False
+
+
+async def put_cached(key: str, val: Any, ttl_seconds: float) -> None:
+    """Store a value in the cache (e.g. after a forced fresh fetch)."""
+    await _store(key, val, ttl_seconds)
 
 
 def invalidate(key_prefix: str = "") -> int:
