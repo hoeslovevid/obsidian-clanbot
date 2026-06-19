@@ -16,12 +16,41 @@ CONSOLE_HUB_HINTS: dict[str, tuple[str, str]] = {
 
 async def respond_console_hub_hint(interaction: discord.Interaction, action: str) -> bool:
     """Reply with an ephemeral slash-command hint. Returns False if action is unknown."""
+    # #region agent log
+    from core.debug_agent_log import agent_log
+
+    agent_log(
+        "console_hub.py:respond",
+        "console hint requested",
+        data={"action": action, "response_is_done": interaction.response.is_done()},
+        hypothesis_id="H1-H3",
+    )
+    # #endregion
     hint = CONSOLE_HUB_HINTS.get(action)
     if not hint:
         return False
     command, detail = hint
-    await interaction.response.send_message(
-        f"Run **`{command}`** — {detail}",
-        ephemeral=True,
-    )
+    try:
+        await interaction.response.send_message(
+            f"Run **`{command}`** — {detail}",
+            ephemeral=True,
+        )
+        # #region agent log
+        agent_log(
+            "console_hub.py:respond",
+            "hint sent",
+            data={"action": action},
+            hypothesis_id="H3",
+        )
+        # #endregion
+    except Exception as exc:
+        # #region agent log
+        agent_log(
+            "console_hub.py:respond",
+            "hint send failed",
+            data={"action": action, "error": type(exc).__name__, "msg": str(exc)[:200]},
+            hypothesis_id="H3",
+        )
+        # #endregion
+        raise
     return True

@@ -29,7 +29,34 @@ async def handle_component(bot: discord.Client, interaction: discord.Interaction
     from core.channels import delete_temp_vc_and_panel
     try:
         cid = interaction.data.get("custom_id") if interaction.data else None
+        # #region agent log
+        from core.debug_agent_log import agent_log
+
+        agent_log(
+            "component_handler.py:entry",
+            "component interaction",
+            data={
+                "custom_id": cid,
+                "response_is_done": interaction.response.is_done(),
+                "component_type": (interaction.data or {}).get("component_type"),
+            },
+            hypothesis_id="H1-H3",
+        )
+        # #endregion
         if not cid:
+            return
+
+        # discord.py dispatches bot.add_view() callbacks before on_interaction.
+        # Skip duplicate handling (InteractionResponded / "interaction failed").
+        if interaction.response.is_done():
+            # #region agent log
+            agent_log(
+                "component_handler.py:skip",
+                "skipped — view already handled interaction",
+                data={"custom_id": cid},
+                hypothesis_id="H1",
+            )
+            # #endregion
             return
 
         if cid.startswith("obsidian_console:"):

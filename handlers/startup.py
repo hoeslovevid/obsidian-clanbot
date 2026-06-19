@@ -140,8 +140,28 @@ async def run_startup(bot: discord.Client) -> None:
 
             bot.add_view(ConsoleHubView())
             bot.add_view(ConsoleHubLayout(body=""))
+            # #region agent log
+            from core.debug_agent_log import agent_log
+
+            agent_log(
+                "startup.py:register_persistent_views",
+                "console hub views registered",
+                data={"classic": True, "layout_v2": True},
+                hypothesis_id="H4",
+            )
+            # #endregion
         except Exception as e:
             logger.debug(f"[ready] Console hub view registration skipped: {e}")
+            # #region agent log
+            from core.debug_agent_log import agent_log
+
+            agent_log(
+                "startup.py:register_persistent_views",
+                "console hub registration failed",
+                data={"error": type(e).__name__, "msg": str(e)[:200]},
+                hypothesis_id="H4",
+            )
+            # #endregion
 
         try:
             from commands.warframe.world_state import WorldStateBoardView
