@@ -21,6 +21,9 @@ SHORTCUTS: list[tuple[list[str], str, str]] = [
 ]
 
 
+from core.command_tree import find_tree_command as _find_tree_command
+
+
 def find_tree_command(
     bot: discord.Client,
     path: Iterable[str],
@@ -28,21 +31,7 @@ def find_tree_command(
     guild: discord.Guild | None = None,
 ) -> app_commands.Command | app_commands.Group | None:
     """Resolve a command path like ['warframe', 'baro'] on the app command tree."""
-    parts = list(path)
-    if not parts:
-        return None
-    source = bot.tree.get_commands(guild=guild) if guild else bot.tree.get_commands(guild=None)
-    current = None
-    for i, name in enumerate(parts):
-        if i == 0:
-            current = next((c for c in source if c.name == name), None)
-        elif current and isinstance(current, app_commands.Group):
-            current = next((c for c in current.commands if c.name == name), None)
-        else:
-            return None
-        if current is None:
-            return None
-    return current
+    return _find_tree_command(bot, path, guild=guild)
 
 
 def register_command_shortcut(

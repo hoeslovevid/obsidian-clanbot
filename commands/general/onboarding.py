@@ -34,7 +34,15 @@ logger = logging.getLogger(__name__)
 # Item 81 — onboarding step ledger
 # ---------------------------------------------------------------------------
 ONBOARDING_STEP_NAMES: tuple[str, ...] = (
-    "set_timezone", "set_platform", "open_menu", "open_claim", "wf_notify", "price_watch",
+    "set_timezone",
+    "set_platform",
+    "open_menu",
+    "open_claim",
+    "wf_notify",
+    "price_watch",
+    "claim_daily",
+    "view_profile",
+    "browse_help",
 )
 
 
@@ -84,6 +92,11 @@ async def _record_onboarding_step(guild_id: int, user_id: int, step_name: str) -
             await db.commit()
     except Exception as e:
         logger.debug(f"[onboarding] could not record step {step_name}: {e}")
+
+
+async def record_onboarding_step(guild_id: int, user_id: int, step_name: str) -> None:
+    """Public API — record questline progress from commands across the bot."""
+    await _record_onboarding_step(guild_id, user_id, step_name)
 
 
 # ---------------------------------------------------------------------------

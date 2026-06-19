@@ -7,12 +7,19 @@ import discord
 import dateparser
 
 from core.embed_footers import footer_for
-from core.utils import obsidian_embed, EMBED_COLORS, warframe_data_unavailable_embed, BUTTON_ONLY_RUNNER_MSG
-from core.warframe_platform import resolve_warframe_platform
+from core.utils import obsidian_embed, EMBED_COLORS, warframe_data_unavailable_embed
+from core.wf_resolve import (
+    wf_daily_ops_cache_keys,
+    wf_fetch_failed,
+    wf_invalidate_daily_ops,
+    wf_platform_for,
+    wf_retry_denied,
+    wf_retry_guard,
+)
 from core.wf_copy import merge_wf_footer
 from api.warframe_api import fetch_steel_path, fetch_arbitration, fetch_nightwave
 from views import RetryView, RefreshView
-from core.cache_utils import invalidate, freshness_note
+from core.cache_utils import freshness_note
 
 
 def _fmt_expiry(expiry_str: str) -> str:
@@ -26,20 +33,17 @@ def _fmt_expiry(expiry_str: str) -> str:
 
 
 async def _fetch_daily_ops(guild_id: int | None, user_id: int) -> tuple:
-    plat = "pc"
-    if guild_id:
-        plat = await resolve_warframe_platform(guild_id, user_id)
-    return await asyncio.gather(
+    plat = await wf_platform_for(guild_id, user_id)
+    results = await asyncio.gather(
         fetch_steel_path(plat),
         fetch_arbitration(plat),
         fetch_nightwave(plat),
-    ), plat
+    )
+    return results, plat
 
 
-def _invalidate_daily_ops(plat: str) -> None:
-    invalidate(f"warframe:steelPath:{plat}")
-    invalidate(f"warframe:arbitration:{plat}")
-    invalidate(f"warframe:nightwave:{plat}")
+def _all_daily_ops_failed(sp, arb, nw) -> bool:
+    return wf_fetch_failed(sp) and wf_fetch_failed(arb) and wf_fetch_failed(nw)
 
 
 def setup(bot, group=None):
@@ -50,12 +54,17 @@ def setup(bot, group=None):
         await interaction.response.defer()
         gid = interaction.guild.id if interaction.guild else None
         (sp, arb, nw), plat = await _fetch_daily_ops(gid, interaction.user.id)
-        if sp is None and arb is None and nw is None:
+        if _all_daily_ops_failed(sp, arb, nw):
             async def on_retry(btn_i: discord.Interaction):
-                if btn_i.user.id != interaction.user.id:
-                    return await btn_i.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
+                if not wf_retry_guard(btn_i, interaction.user.id):
+                    return await wf_retry_denied(btn_i)
                 await btn_i.response.defer()
                 (sp2, arb2, nw2), plat2 = await _fetch_daily_ops(gid, interaction.user.id)
+                if _all_daily_ops_failed(sp2, arb2, nw2):
+                    return await btn_i.followup.send(
+                        "Still can't load daily ops. Try **Try again** again in a bit.",
+                        ephemeral=True,
+                    )
                 emb = _build_embed(sp2, arb2, nw2, interaction.client, platform=plat2)
                 await btn_i.message.edit(embed=emb, view=None)
             from core.wf_recovery import attach_notify_when_back
@@ -66,7 +75,7 @@ def setup(bot, group=None):
         embed = _build_embed(sp, arb, nw, interaction.client, platform=plat)
 
         async def on_refresh(btn_i: discord.Interaction):
-            _invalidate_daily_ops(plat)
+            await wf_invalidate_daily_ops(plat)
             (sp2, arb2, nw2), plat2 = await _fetch_daily_ops(gid, interaction.user.id)
             emb = _build_embed(sp2, arb2, nw2, interaction.client, platform=plat2)
             await btn_i.message.edit(embed=emb, view=RefreshView(on_refresh, timeout=300))
@@ -112,11 +121,8 @@ def _build_embed(sp, arb, nw, client, *, platform: str = "pc"):
     if not fields:
         return obsidian_embed("📋 Daily Ops", "No data available.", color=EMBED_COLORS["warframe"], client=client)
 
-    age_note = (
-        freshness_note(f"warframe:steelPath:{platform}")
-        or freshness_note(f"warframe:arbitration:{platform}")
-        or freshness_note(f"warframe:nightwave:{platform}")
-    )
+    sp_key, arb_key, nw_key = wf_daily_ops_cache_keys(platform)
+    age_note = freshness_note(sp_key) or freshness_note(arb_key) or freshness_note(nw_key)
     footer = merge_wf_footer(
         f"{footer_for('warframe_hub')} · /warframe sortie, /warframe fissures{age_note}",
         "warframe:daily_ops",

@@ -7,6 +7,7 @@ import discord  # type: ignore
 from discord import app_commands, ui  # type: ignore
 
 from core.config import BOT_WEBSITE
+from core.command_tree import find_tree_group
 from core.layout_v2 import ACCENT_DEFAULT, footer_display, make_container, v2_enabled
 from core.presence import website_host
 
@@ -86,7 +87,9 @@ def _group_options(bot, is_mod: bool) -> list[discord.SelectOption]:
         "music": ("Music", "Play music in voice channels", "🎵"),
     }
     options: list[discord.SelectOption] = []
-    for cmd in bot.tree.get_commands(guild=None):
+    from core.command_tree import tree_root_commands
+
+    for cmd in tree_root_commands(bot):
         if not isinstance(cmd, app_commands.Group):
             continue
         if cmd.name not in group_definitions:
@@ -98,6 +101,14 @@ def _group_options(bot, is_mod: bool) -> list[discord.SelectOption]:
             discord.SelectOption(label=label, description=desc[:100], emoji=emoji, value=cmd.name)
         )
     return options
+
+
+_QUICK_PATHS: tuple[tuple[str, str], ...] = (
+    ("👋 New here", "general"),
+    ("🎮 Warframe", "warframe"),
+    ("💰 Economy", "economy"),
+    ("🛡️ Staff", "admin"),
+)
 
 
 async def build_category_text(
@@ -163,6 +174,15 @@ class HelpBrowseLayout(ui.LayoutView):
         row.add_item(HelpCategorySelect(bot, parent=self, is_mod=is_mod))
         self.add_item(row)
 
+        if not group:
+            quick = ui.ActionRow()
+            for label, key in _QUICK_PATHS:
+                if key == "admin" and not is_mod:
+                    continue
+                quick.add_item(HelpQuickPathButton(label, key, parent=self))
+            if quick.children:
+                self.add_item(quick)
+
         if group:
             nav = ui.ActionRow()
             nav.add_item(HelpPageButton("◀ Prev", -1, self))
@@ -200,13 +220,39 @@ class HelpCategorySelect(ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         name = self.values[0]
-        group = None
-        for cmd in self._bot.tree.get_commands(guild=None):
-            if isinstance(cmd, app_commands.Group) and cmd.name == name:
-                group = cmd
-                break
+        group = find_tree_group(self._bot, name, guild=interaction.guild)
         if not group:
             return await interaction.response.send_message("Group not found.", ephemeral=True)
+        if interaction.guild:
+            try:
+                from commands.general.onboarding import record_onboarding_step
+
+                await record_onboarding_step(interaction.guild.id, interaction.user.id, "browse_help")
+            except Exception:
+                pass
+        await self._parent.rebuild(interaction, group=group, page=0)
+
+
+class HelpQuickPathButton(ui.Button):
+    def __init__(self, label: str, group_key: str, *, parent: HelpBrowseLayout):
+        super().__init__(label=label, style=discord.ButtonStyle.primary)
+        self._group_key = group_key
+        self._parent = parent
+
+    async def callback(self, interaction: discord.Interaction):
+        group = find_tree_group(self._parent.bot, self._group_key, guild=interaction.guild)
+        if not group:
+            from core.reply_helpers import reply_error
+            return await reply_error(
+                interaction, "Not available", f"Group `{self._group_key}` isn't registered."
+            )
+        if interaction.guild:
+            try:
+                from commands.general.onboarding import record_onboarding_step
+
+                await record_onboarding_step(interaction.guild.id, interaction.user.id, "browse_help")
+            except Exception:
+                pass
         await self._parent.rebuild(interaction, group=group, page=0)
 
 

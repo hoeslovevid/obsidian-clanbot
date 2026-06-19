@@ -453,6 +453,13 @@ def setup(bot, group=None):
             return await interaction.followup.send("User not found in this server.", ephemeral=True)
         
         profile_data = await get_user_profile_data(interaction.guild.id, target_user.id)
+        if is_self:
+            try:
+                from commands.general.onboarding import record_onboarding_step
+
+                await record_onboarding_step(interaction.guild.id, interaction.user.id, "view_profile")
+            except Exception:
+                pass
         current_level = profile_data["level"]
         voice_hours = profile_data["voice_minutes"] // 60
         voice_mins = profile_data["voice_minutes"] % 60

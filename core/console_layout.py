@@ -1,8 +1,6 @@
 """Components V2 admin console hub layout."""
 from __future__ import annotations
 
-from typing import Awaitable, Callable
-
 import discord  # type: ignore
 from discord import ui  # type: ignore
 
@@ -20,11 +18,12 @@ class ConsoleHubLayout(ui.LayoutView):
         for label, emoji, cmd, hint in (
             ("Menu", "📋", "/menu", "categorized command picker"),
             ("Daily", "🎁", "/daily", "claim your daily coin streak"),
-            ("Status", "✅", "/status", "bot version and API health"),
+            ("WF Hub", "🎮", "/warframe hub", "Baro, fissures, notify setup"),
         ):
             row1.add_item(_ConsoleHintButton(label, emoji, cmd, hint))
         row2 = ui.ActionRow()
         for label, emoji, cmd, hint in (
+            ("Status", "✅", "/status", "bot version and API health"),
             ("Ticket", "🎫", "/ticket", "open a support ticket"),
             ("Help", "❓", "/help", "searchable command reference"),
         ):
@@ -35,7 +34,8 @@ class ConsoleHubLayout(ui.LayoutView):
 
 class _ConsoleHintButton(ui.Button):
     def __init__(self, label: str, emoji: str, command: str, detail: str):
-        super().__init__(label=label, style=discord.ButtonStyle.primary if label == "Menu" else discord.ButtonStyle.secondary, emoji=emoji, custom_id=f"obsidian_console:{label.lower()}")
+        style = discord.ButtonStyle.primary if label in ("Menu", "WF Hub") else discord.ButtonStyle.secondary
+        super().__init__(label=label, style=style, emoji=emoji, custom_id=f"obsidian_console:{label.lower().replace(' ', '_')}")
         self._command = command
         self._detail = detail
 

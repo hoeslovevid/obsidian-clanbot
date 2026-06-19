@@ -29,8 +29,12 @@ if not TOKEN:
         "Please set DISCORD_TOKEN in your environment variables or Railway dashboard."
     )
 
-# --- Optional (faster command sync when set; otherwise global sync) ---
+# --- Optional (dev fast-sync to one guild; production multi-guild uses global sync) ---
 GUILD_ID = int(os.getenv("GUILD_ID", "0") or "0")
+# When true AND GUILD_ID is set, sync only to that guild (local dev). Default false for 78+ guilds.
+COMMAND_SYNC_GUILD_ONLY = os.getenv("COMMAND_SYNC_GUILD_ONLY", "false").lower() in (
+    "1", "true", "yes", "y", "on",
+)
 
 # --- Moderation ---
 # Optional: role name(s) for temp VC staff access (comma-separated in MOD_ROLE_NAMES)
@@ -54,10 +58,10 @@ DB_PATH = os.getenv("DB_PATH", str(PROJECT_ROOT / "data" / "obsidian_clanbot.db"
 # Single source of truth for /about, /whatsnew, /status, release announce, and slash-command sync.
 # Set BOT_VERSION on Railway to match each production release; keep this code default in sync.
 # On release: bump BOT_VERSION here (and on Railway), then update CURRENT_RELEASE_* in core/changelog.py.
-BOT_VERSION = os.getenv("BOT_VERSION", "1.99.14")
+BOT_VERSION = os.getenv("BOT_VERSION", "2.0.0-alpha")
 BOT_CHANGELOG = os.getenv(
     "BOT_CHANGELOG",
-    "v1.99.12 — QoL batches Q1–Q6: branded replies, /feedback, audit expansion, safe DMs; see /whatsnew.",
+    "v2.0.0-alpha — multi-guild global sync, Layout v2 hubs, command tree fixes, onboarding questline.",
 )
 
 # Presence rotation: default | menu | degraded | event

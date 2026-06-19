@@ -4,9 +4,15 @@ from discord import app_commands
 from datetime import datetime, timezone
 
 from core.utils import obsidian_embed, warframe_data_unavailable_embed, BUTTON_ONLY_RUNNER_MSG, render_bar, error_embed
+from core.wf_resolve import (
+    wf_fetch_failed,
+    wf_footer,
+    wf_invalidate,
+    wf_retry_denied,
+    wf_retry_guard,
+)
 from api.warframe_api import fetch_invasions
 from views import RetryView, RefreshView
-from core.cache_utils import invalidate
 import dateparser
 
 
@@ -71,14 +77,14 @@ def _build_invasions_embed(invasions_data, client):
     if len(invasions_data) > 5:
         desc += f"\n_Showing 5 of {len(invasions_data)} invasions_"
 
-    from core.wf_copy import merge_wf_footer
+    from core.wf_resolve import wf_footer
 
     return obsidian_embed(
         "⚔️ Active Invasions",
         f"> {desc}",
         category="warframe",
         fields=fields,
-        footer=merge_wf_footer("warframestat.us · Refreshes every 60s", "warframe:invasions"),
+        footer=wf_footer("warframestat.us · Refreshes every 60s", "warframe:invasions"),
         client=client,
     )
 
@@ -101,13 +107,13 @@ def setup(bot, group=None):
                 interaction.guild.id, interaction.user.id
             )
 
-        if invasions_data is None:
+        if wf_fetch_failed(invasions_data):
             async def on_retry(btn_interaction: discord.Interaction):
-                if btn_interaction.user.id != interaction.user.id:
-                    return await btn_interaction.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
+                if not wf_retry_guard(btn_interaction, interaction.user.id):
+                    return await wf_retry_denied(btn_interaction)
                 await btn_interaction.response.defer()
                 new_data = await fetch_invasions()
-                if new_data is None:
+                if wf_fetch_failed(new_data):
                     return await btn_interaction.followup.send(
                         "Invasions still won't load. Try **Try again** again in a minute.",
                         ephemeral=True,
@@ -150,10 +156,9 @@ def setup(bot, group=None):
                 )
 
         async def on_refresh(btn_interaction: discord.Interaction):
-            # Read-only public data — anyone may refresh.
-            invalidate("warframe:invasions")
+            await wf_invalidate("warframe:invasions")
             new_data = await fetch_invasions()
-            if new_data is None:
+            if wf_fetch_failed(new_data):
                 return await btn_interaction.followup.send(
                     embed=error_embed(
                         "Couldn't refresh",

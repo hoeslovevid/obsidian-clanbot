@@ -9,6 +9,7 @@ Domain grouping (future: split _core.py further into sub-modules):
   warframe   baro_check_loop, baro_live_update_loop, cycle_check_loop,
              invasion_check_loop, archon_check_loop, warframe_achievement_roles_loop,
              alert_check_loop, devstream_check_loop, lfg_expire_loop
+             (Baro arrival notify: tasks/wf_notify.py)
   economy    giveaway_check_loop, voice_reward_loop, daily_streak_reminder_loop,
              pet_decay_reminder_loop
   xp         (XP tasks are embedded inside voice_reward_loop)

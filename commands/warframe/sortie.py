@@ -4,10 +4,18 @@ from discord import app_commands
 from datetime import datetime, timezone
 import dateparser
 
-from core.utils import obsidian_embed, EMBED_COLORS, warframe_data_unavailable_embed, BUTTON_ONLY_RUNNER_MSG
+from core.utils import obsidian_embed, EMBED_COLORS, warframe_data_unavailable_embed
+from core.wf_resolve import (
+    wf_fetch_failed,
+    wf_footer,
+    wf_invalidate,
+    wf_retry_denied,
+    wf_retry_guard,
+)
 from api.warframe_api import fetch_sortie
 from views import RetryView, RefreshView
-from core.cache_utils import invalidate
+
+SORTIE_CACHE_KEY = "warframe:sortie"
 
 
 def setup(bot, group=None):
@@ -17,13 +25,13 @@ def setup(bot, group=None):
     async def sortie(interaction: discord.Interaction):
         await interaction.response.defer()
         data = await fetch_sortie()
-        if data is None:
+        if wf_fetch_failed(data):
             async def on_retry(btn_i: discord.Interaction):
-                if btn_i.user.id != interaction.user.id:
-                    return await btn_i.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
+                if not wf_retry_guard(btn_i, interaction.user.id):
+                    return await wf_retry_denied(btn_i)
                 await btn_i.response.defer()
                 nd = await fetch_sortie()
-                if nd is None:
+                if wf_fetch_failed(nd):
                     return await btn_i.followup.send("Still unable to fetch.", ephemeral=True)
                 emb = _build_embed(nd, interaction.client)
                 await btn_i.message.edit(embed=emb, view=None)
@@ -35,10 +43,9 @@ def setup(bot, group=None):
         embed = _build_embed(data, interaction.client)
 
         async def on_refresh(btn_i: discord.Interaction):
-            # Read-only public data — anyone may refresh.
-            invalidate("warframe:sortie")
+            await wf_invalidate(SORTIE_CACHE_KEY)
             nd = await fetch_sortie()
-            if nd is None:
+            if wf_fetch_failed(nd):
                 return await btn_i.followup.send(
                     "Couldn't refresh the sortie yet — try **Update data** again soon.",
                     ephemeral=True,
@@ -79,6 +86,6 @@ def _build_embed(data, client):
         "Today's Sortie",
         desc,
         color=EMBED_COLORS["warframe"],
-        footer="See also: /warframe fissures, /warframe daily_ops",
+        footer=wf_footer("See also: /warframe fissures, /warframe daily_ops", SORTIE_CACHE_KEY),
         client=client,
     )

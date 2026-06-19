@@ -39,7 +39,7 @@ class MenuHomeLayout(ui.LayoutView):
                 "",
                 "Tap **Open picker** for favorites and quick actions.",
                 "",
-                footer_display("help"),
+                footer_display("menu"),
             ]
         )
 
@@ -79,7 +79,7 @@ class MenuPickerLayout(ui.LayoutView):
             "",
             "Pick an action below — favorites and recents appear first.",
             "",
-            footer_display("help"),
+            footer_display("menu"),
         ]
         self.add_item(make_container(lines, accent=ACCENT_DEFAULT))
         row = ui.ActionRow()

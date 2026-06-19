@@ -157,6 +157,13 @@ class BaroWishlistModal(discord.ui.Modal, title="Baro wishlist item"):
         await interaction.response.send_message(msg, ephemeral=True)
 
 
+async def _wishlist_modal_cb(btn_interaction: discord.Interaction) -> None:
+    if not btn_interaction.guild:
+        from core.reply_helpers import reply_server_only
+        return await reply_server_only(btn_interaction)
+    await btn_interaction.response.send_modal(BaroWishlistModal(btn_interaction.guild.id))
+
+
 def _hub_view(interaction: discord.Interaction, platform: str, guild_id: int) -> discord.ui.View:
     async def on_refresh(btn_interaction: discord.Interaction):
         # Read-only public data — anyone may refresh.
@@ -200,6 +207,8 @@ def _hub_view(interaction: discord.Interaction, platform: str, guild_id: int) ->
                     intro=new_emb.description or "",
                     fields=fields,
                     on_refresh=on_refresh,
+                    guild_id=guild_id,
+                    on_wishlist=_wishlist_modal_cb,
                 )
                 await btn_interaction.message.edit(view=layout)
                 return
@@ -413,6 +422,8 @@ def setup(bot, group=None):
                     intro=embed.description or "",
                     fields=fields,
                     on_refresh=refresh_cb,
+                    guild_id=guild_id,
+                    on_wishlist=_wishlist_modal_cb,
                 )
                 await interaction.edit_original_response(view=layout)
                 return

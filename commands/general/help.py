@@ -6,6 +6,7 @@ from discord import app_commands  # type: ignore
 from typing import Optional, cast
 
 from core.command_search import MOD_ONLY_GROUPS, collect_command_entries, filter_entries_for_guild, search_commands
+from core.command_tree import find_tree_group, tree_root_commands
 from core.embed_templates import help_breadcrumb
 from core.utils import obsidian_embed, is_mod, ECONOMY_ENABLED, COINS_PER_MESSAGE, COINS_DAILY_REWARD, MESSAGE_COOLDOWN_SECONDS, COINS_PER_MINUTE_VOICE, EMBED_COLORS
 from core.config import BOT_WEBSITE
@@ -26,25 +27,6 @@ def _collect_group_commands(group: app_commands.Group, prefix: list[str]) -> lis
         elif isinstance(cmd, app_commands.Group):
             result.extend(_collect_group_commands(cmd, path))
     return result
-
-
-def _tree_root_commands(bot, guild: Optional[discord.Guild] = None) -> list:
-    """Top-level commands from the local tree (global first, then guild-only)."""
-    roots = list(bot.tree.get_commands(guild=None))
-    if guild:
-        seen = {c.name for c in roots}
-        for cmd in bot.tree.get_commands(guild=guild):
-            if cmd.name not in seen:
-                roots.append(cmd)
-                seen.add(cmd.name)
-    return roots
-
-
-def _find_tree_group(bot, name: str, guild: Optional[discord.Guild] = None) -> Optional[app_commands.Group]:
-    for cmd in _tree_root_commands(bot, guild):
-        if isinstance(cmd, app_commands.Group) and cmd.name == name:
-            return cmd
-    return None
 
 
 class PageButton(discord.ui.Button):
@@ -124,7 +106,7 @@ class HelpPathButton(discord.ui.Button):
         self.parent_view = parent_view
 
     async def callback(self, interaction: discord.Interaction):
-        group = _find_tree_group(
+        group = find_tree_group(
             self.parent_view.bot, self.group_key, guild=interaction.guild
         )
         if not group:
@@ -265,21 +247,7 @@ class HelpSelect(discord.ui.Select):
         """Handle group selection."""
         selected_group = self.values[0]
         
-        # Get the group from bot's command tree
-        # Use guild=None to get all commands (works for both global and guild-specific)
-        group = None
-        for cmd in self.bot.tree.get_commands(guild=None):
-            if isinstance(cmd, app_commands.Group) and cmd.name == selected_group:
-                group = cmd
-                break
-        
-        if not group:
-            # Fallback: try with the interaction's guild if it exists
-            if interaction.guild:
-                for cmd in self.bot.tree.get_commands(guild=interaction.guild):
-                    if isinstance(cmd, app_commands.Group) and cmd.name == selected_group:
-                        group = cmd
-                        break
+        group = find_tree_group(self.bot, selected_group, guild=interaction.guild)
         
         if not group:
             return await interaction.response.send_message(
@@ -437,7 +405,7 @@ def setup(bot, group=None):
                 else:
                     out.append(p)
             return out
-        all_paths = _paths(_tree_root_commands(bot, interaction.guild))
+        all_paths = _paths(tree_root_commands(bot, interaction.guild))
         current_lower = (current or "").lower()
         matches = [p for p in all_paths if not current_lower or current_lower in p.lower()][:25]
         return [app_commands.Choice(name=m, value=m) for m in matches]
@@ -458,7 +426,7 @@ def setup(bot, group=None):
             
             # Find the command (supports 1–3 levels: economy, economy balance, economy pets shop)
             found_command = None
-            for cmd in _tree_root_commands(bot, interaction.guild):
+            for cmd in tree_root_commands(bot, interaction.guild):
                 if cmd.name != parts[0]:
                     continue
                 if len(parts) == 1:

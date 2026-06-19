@@ -5,6 +5,13 @@ from datetime import datetime, timezone
 
 from core.cycles_live import build_cycle_fields as _build_cycle_fields
 from core.utils import obsidian_embed, EMBED_COLORS, warframe_data_unavailable_embed, BUTTON_ONLY_RUNNER_MSG
+from core.wf_resolve import (
+    wf_cycles_split,
+    wf_footer_with_freshness,
+    wf_invalidate,
+    wf_retry_denied,
+    wf_retry_guard,
+)
 from api.warframe_api import get_all_cycles
 from views import RetryView, RefreshView
 
@@ -19,20 +26,18 @@ def setup(bot, group=None):
         await interaction.response.defer(ephemeral=False)
 
         cycles_data = await get_all_cycles()
-        success = {k: v for k, v in (cycles_data or {}).items() if v is not None}
-        failed = [k for k in ('cetus', 'vallis', 'cambion') if k not in success]
+        success, failed = wf_cycles_split(cycles_data)
 
         if not success:
             embed = warframe_data_unavailable_embed(interaction.client)
 
             async def on_retry(btn_interaction: discord.Interaction):
-                if btn_interaction.user.id != interaction.user.id:
-                    return await btn_interaction.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
+                if not wf_retry_guard(btn_interaction, interaction.user.id):
+                    return await wf_retry_denied(btn_interaction)
                 await btn_interaction.response.defer()
-                from core.cache_utils import invalidate
-                invalidate("warframe:cycles")
+                await wf_invalidate("warframe:cycles")
                 new_data = await get_all_cycles()
-                new_success = {k: v for k, v in (new_data or {}).items() if v is not None}
+                new_success, _ = wf_cycles_split(new_data)
                 if not new_success:
                     await btn_interaction.followup.send(
                         "Still no cycle data. The stats service may need another minute.",
@@ -55,25 +60,25 @@ def setup(bot, group=None):
         if not fields:
             desc = "No cycle data available."
         else:
-            desc = None
+            desc = desc or None
 
-        from core.cache_utils import freshness_note
         embed = obsidian_embed(
             "🌍 Open World Cycles",
             desc or "",
             color=EMBED_COLORS["warframe"],
             fields=fields if fields else None,
             thumbnail=interaction.guild.icon.url if interaction.guild and interaction.guild.icon else None,
-            footer=f"See also: /warframe baro, /warframe alerts • **Update data** refreshes{freshness_note('warframe:cycles')}",
+            footer=wf_footer_with_freshness(
+                "See also: /warframe baro, /warframe alerts • **Update data** refreshes",
+                "warframe:cycles",
+            ),
             client=interaction.client,
         )
 
         async def on_refresh(btn_interaction: discord.Interaction):
-            # Read-only public data — anyone may refresh.
-            from core.cache_utils import invalidate
-            invalidate("warframe:cycles")
+            await wf_invalidate("warframe:cycles")
             new_data = await get_all_cycles()
-            new_success = {k: v for k, v in (new_data or {}).items() if v is not None}
+            new_success, new_failed = wf_cycles_split(new_data)
             if not new_success:
                 await btn_interaction.followup.send(
                     "Couldn't refresh cycles yet — try again in a moment.",
@@ -81,10 +86,19 @@ def setup(bot, group=None):
                 )
                 return
             new_fields = _build_cycle_fields(new_success)
-            new_failed = [k for k in ("cetus", "vallis", "cambion") if k not in new_success]
-            new_desc = "Partial data: " + ", ".join(new_failed) + " unavailable." if new_failed else ""
-            ts = int(datetime.now(timezone.utc).timestamp())
-            new_emb = obsidian_embed("🌍 Open World Cycles", new_desc or "", color=EMBED_COLORS["warframe"], fields=new_fields, footer=f"See also: /warframe baro, /warframe alerts • **Update data** refreshes", client=interaction.client)
+            partial = [k for k in ("cetus", "vallis", "cambion") if k not in new_success]
+            new_desc = "Partial data: " + ", ".join(partial) + " unavailable." if partial else ""
+            new_emb = obsidian_embed(
+                "🌍 Open World Cycles",
+                new_desc or "",
+                color=EMBED_COLORS["warframe"],
+                fields=new_fields,
+                footer=wf_footer_with_freshness(
+                    "See also: /warframe baro, /warframe alerts • **Update data** refreshes",
+                    "warframe:cycles",
+                ),
+                client=interaction.client,
+            )
             view = RefreshView(on_refresh)
             await btn_interaction.message.edit(embed=new_emb, view=view)
 

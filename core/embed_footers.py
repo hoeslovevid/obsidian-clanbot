@@ -7,6 +7,8 @@ from typing import Optional
 FOOTERS: dict[str, str] = {
     "default": "Use /help for the full command list",
     "help": "Use /search to find commands · /menu for quick picks",
+    "menu": "Favorites & recents at the top · /search finds anything",
+    "claim": "Daily auto-claims bounties · /cooldowns for timers",
     "economy_daily": "Streak bonuses at 7d · 14d · 30d · /economy wallet for overview",
     "economy_wallet": "Tap Refresh to update · /economy transactions for history",
     "economy_leaderboard": "/economy daily to climb · /profile for your stats",
@@ -28,7 +30,7 @@ FOOTERS: dict[str, str] = {
     "warframe_hub": "/warframe hub to refresh · /wfnotify configure for alerts",
     "moderation_purge": "Mod only · transcript saved when archive is on",
     "moderation_warn": "/warn list to review · templates speed up common reasons",
-    "console_hub": "Pinned hub · /menu · /daily · /warframe status · /ticket",
+    "console_hub": "Pinned hub · /menu · /warframe hub · /daily · /ticket",
     "status": "v{version} · /whatsnew for release notes · /help if something looks off",
     "onboarding": "Finish any step anytime with /onboarding resume",
     "mention": "/help · /menu · /daily · /warframe status",

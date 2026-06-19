@@ -6,7 +6,7 @@ from typing import Awaitable, Callable, Optional
 import discord  # type: ignore
 from discord import ui  # type: ignore
 
-from core.layout_v2 import ACCENT_ECONOMY, make_container
+from core.layout_v2 import ACCENT_ECONOMY, footer_display, make_container
 
 
 class ClaimLayout(ui.LayoutView):
@@ -19,7 +19,7 @@ class ClaimLayout(ui.LayoutView):
         on_daily: Optional[Callable[[discord.Interaction], Awaitable[None]]] = None,
     ):
         super().__init__(timeout=120)
-        lines = ["## 💰 Claim Hub", "", body.strip(), "", "-# Daily auto-claims bounties when you run `/daily`"]
+        lines = ["## 💰 Claim Hub", "", body.strip(), "", footer_display("claim")]
         self.add_item(make_container(lines, accent=ACCENT_ECONOMY, banner=False))
         if on_bounties or on_invest or on_daily:
             row = ui.ActionRow()

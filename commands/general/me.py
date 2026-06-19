@@ -192,17 +192,14 @@ async def _run_me(interaction: discord.Interaction):
             True,
         ))
 
+    onboarding_chip = ""
     try:
         from commands.general.onboarding import get_user_onboarding_progress, ONBOARDING_STEP_NAMES
 
         done, _steps = await get_user_onboarding_progress(interaction.guild.id, interaction.user.id)
         total = len(ONBOARDING_STEP_NAMES)
         if done < total:
-            fields.append((
-                "🎓 Onboarding",
-                f"**{done}/{total}** steps complete\n-# `/start` · check your onboarding DM",
-                True,
-            ))
+            onboarding_chip = f"🎓 Onboarding **{done}/{total}** — `/onboarding resume`"
     except Exception:
         pass
 
@@ -249,6 +246,7 @@ async def _run_me(interaction: discord.Interaction):
                 intro=f"A quick snapshot of your account in **{interaction.guild.name}**.",
                 fields=fields,
                 footer=footer,
+                chips=onboarding_chip,
             )
             await interaction.followup.send(view=layout, ephemeral=True)
             return

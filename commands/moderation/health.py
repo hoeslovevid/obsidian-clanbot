@@ -8,7 +8,8 @@ from typing import Any, Optional
 import aiosqlite
 import discord
 
-from core.config import BOT_VERSION, GUILD_ID
+from core.config import BOT_VERSION, COMMAND_SYNC_GUILD_ONLY, GUILD_ID
+from core.command_sync import should_use_guild_sync, sync_scope_description
 from core.command_tree_stats import collect_command_tree_stats, format_command_tree_field
 from core.error_handling import RECENT_ERRORS
 from core.utils import obsidian_embed, is_mod
@@ -36,7 +37,9 @@ async def build_health_embed(
 
     latency_ms = round(bot.latency * 1000) if bot.latency >= 0 else None
     cmd_stats = getattr(bot, "_command_tree_stats", None) or collect_command_tree_stats(bot)
-    sync_guild_id = getattr(bot, "_command_sync_guild_id", GUILD_ID or None)
+    sync_guild_id = getattr(bot, "_command_sync_guild_id", None)
+    if sync_guild_id is None and should_use_guild_sync():
+        sync_guild_id = GUILD_ID or None
 
     tasks_info: dict[str, Any] = getattr(bot, "_background_tasks", {}) or {}
     running = sum(1 for t in tasks_info.values() if getattr(t, "is_running", lambda: False)())
@@ -93,6 +96,11 @@ async def build_health_embed(
     embed.add_field(
         name="Members",
         value=str(guild.member_count or len(guild.members)),
+        inline=True,
+    )
+    embed.add_field(
+        name="Guilds (bot)",
+        value=str(len(bot.guilds)),
         inline=True,
     )
     embed.add_field(
@@ -166,8 +174,27 @@ async def build_health_embed(
         inline=True,
     )
 
-    if GUILD_ID and guild.id != GUILD_ID:
-        embed.set_footer(text=f"Note: GUILD_ID env is {GUILD_ID} (this guild is {guild.id})")
+    try:
+        from core.command_usage_report import (
+            format_usage_field,
+            guild_top_commands,
+            never_used_commands,
+        )
+
+        top = await guild_top_commands(guild.id, limit=8)
+        unused = await never_used_commands(bot, guild.id, limit=6)
+        embed.add_field(
+            name="Command usage",
+            value=format_usage_field(top, unused=unused),
+            inline=False,
+        )
+    except Exception:
+        pass
+
+    if GUILD_ID and guild.id != GUILD_ID and COMMAND_SYNC_GUILD_ONLY:
+        embed.set_footer(text=f"Note: COMMAND_SYNC_GUILD_ONLY targets guild {GUILD_ID}")
+    elif not should_use_guild_sync():
+        embed.set_footer(text=f"Command sync: {sync_scope_description(sync_guild_id)} · {len(bot.guilds)} guilds")
 
     return embed
 

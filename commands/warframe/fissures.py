@@ -5,9 +5,16 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from core.utils import obsidian_embed, EMBED_COLORS, format_number, warframe_data_unavailable_embed, BUTTON_ONLY_RUNNER_MSG
+from core.wf_resolve import (
+    wf_fetch_failed,
+    wf_footer,
+    wf_invalidate,
+    wf_platform,
+    wf_retry_denied,
+    wf_retry_guard,
+)
 from api.warframe_api import fetch_fissures
 from views import RetryView, RefreshView
-from core.cache_utils import invalidate
 
 FISSURE_TIER_CHOICES = [
     app_commands.Choice(name="All tiers", value="all"),
@@ -53,41 +60,42 @@ def setup(bot, group=None):
         else:
             tier_filter = tier.value if tier else "all"
         await interaction.response.defer()
-        data = await fetch_fissures()
-        if data is None:
+        platform = await wf_platform(interaction)
+        cache_key = f"warframe:fissures:{platform}"
+        data = await fetch_fissures(platform)
+        if wf_fetch_failed(data):
             async def on_retry(btn_i: discord.Interaction):
-                if btn_i.user.id != interaction.user.id:
-                    return await btn_i.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
+                if not wf_retry_guard(btn_i, interaction.user.id):
+                    return await wf_retry_denied(btn_i)
                 await btn_i.response.defer()
-                nd = await fetch_fissures()
-                if nd is None:
+                nd = await fetch_fissures(platform)
+                if wf_fetch_failed(nd):
                     return await btn_i.followup.send(
                         "Still can't load fissures. Try **Try again** again in a bit.",
                         ephemeral=True,
                     )
-                emb = _build_embed(nd, interaction.client, tier_filter=tier_filter)
+                emb = _build_embed(nd, interaction.client, tier_filter=tier_filter, cache_key=cache_key)
                 await btn_i.message.edit(embed=emb, view=None)
             from core.wf_recovery import attach_notify_when_back
             return await interaction.followup.send(
                 embed=warframe_data_unavailable_embed(interaction.client),
-                view=attach_notify_when_back(RetryView(on_retry)),
+                view=attach_notify_when_back(RetryView(on_retry), lambda: fetch_fissures(platform)),
             )
         if not data:
             return await interaction.followup.send(
                 embed=obsidian_embed("⚡ Void Fissures", "No active fissures.", color=EMBED_COLORS["warframe"], client=interaction.client),
             )
-        embed = _build_embed(data, interaction.client, tier_filter=tier_filter)
+        embed = _build_embed(data, interaction.client, tier_filter=tier_filter, cache_key=cache_key)
 
         async def on_refresh(btn_i: discord.Interaction):
-            # Read-only public data — anyone may refresh.
-            invalidate("warframe:fissures")
-            nd = await fetch_fissures()
-            if nd is None:
+            await wf_invalidate(cache_key)
+            nd = await fetch_fissures(platform)
+            if wf_fetch_failed(nd):
                 return await btn_i.followup.send(
                     "Couldn't refresh fissures yet — stats API is still having issues.",
                     ephemeral=True,
                 )
-            emb = _build_embed(nd, interaction.client, tier_filter=tier_filter)
+            emb = _build_embed(nd, interaction.client, tier_filter=tier_filter, cache_key=cache_key)
             await btn_i.message.edit(embed=emb, view=RefreshView(on_refresh, timeout=300))
 
         await interaction.followup.send(embed=embed, view=RefreshView(on_refresh, timeout=300))
@@ -99,7 +107,7 @@ def _filter_by_tier(fissures_list: list, tier_filter: str) -> list:
     return [f for f in fissures_list if (f.get("tier") or "").lower() == tier_filter.lower()]
 
 
-def _build_embed(fissures_list, client, *, tier_filter: str = "all"):
+def _build_embed(fissures_list, client, *, tier_filter: str = "all", cache_key: str = "warframe:fissures:pc"):
     fissures_list = _filter_by_tier(fissures_list, tier_filter)
     if tier_filter and tier_filter != "all" and not fissures_list:
         return obsidian_embed(
@@ -153,10 +161,11 @@ def _build_embed(fissures_list, client, *, tier_filter: str = "all"):
     note = " • ⚠️ Approx. locations (API unavailable)" if is_fallback else ""
     if tier_filter and tier_filter != "all":
         note = f" • Filter: {tier_filter}{note}"
+    base_footer = f"See also: /warframe sortie, /warframe baro{note}"
     return obsidian_embed(
         "⚡ Void Fissures",
         desc,
         color=EMBED_COLORS["warframe"],
-        footer=f"See also: /warframe sortie, /warframe baro{note}",
+        footer=wf_footer(base_footer, cache_key),
         client=client,
     )

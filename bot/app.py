@@ -117,59 +117,18 @@ class ClanBot(commands.Bot):
             from core.command_tree_stats import collect_command_tree_stats
 
             self._command_tree_stats = collect_command_tree_stats(self)
-            print(f"[sync] Skipping command sync — BOT_VERSION {BOT_VERSION} unchanged")
+            from core.command_sync import should_use_guild_sync
+
+            scope = f"guild {GUILD_ID}" if should_use_guild_sync() else "global"
+            print(f"[sync] Skipping command sync — BOT_VERSION {BOT_VERSION} unchanged ({scope})")
             return
 
-        # Sync commands: to a single guild for speed if GUILD_ID set, else global.
-        # Note: Commands are already loaded via load_all_commands() before bot creation
+        from core.command_sync import sync_app_commands
+
         try:
-            if GUILD_ID:
-                guild = discord.Object(id=GUILD_ID)
-                # Don't use copy_global_to to avoid duplicates - just sync guild commands directly
-                await self.tree.sync(guild=guild)
-                self._last_command_sync = now_utc()
-                self._command_sync_guild_id = GUILD_ID
-                from core.command_tree_stats import collect_command_tree_stats
-
-                self._command_tree_stats = collect_command_tree_stats(self)
-                # List all registered commands for verification
-                commands_list = [cmd.name for cmd in self.tree.get_commands(guild=None)]
-                print(f"[sync] Synced {len(commands_list)} top-level commands/groups to guild {GUILD_ID}")
-                print(f"[sync] Top-level: {', '.join(commands_list)}")
-                
-                # Verify groups and their subcommands
-                total_subcommands = 0
-                for cmd in self.tree.get_commands(guild=None):
-                    if isinstance(cmd, app_commands.Group):
-                        subcommands = [subcmd.name for subcmd in cmd.commands]
-                        total_subcommands += len(subcommands)
-                        if len(subcommands) > 0:
-                            print(f"[sync] Group '{cmd.name}' has {len(subcommands)} subcommands: {', '.join(sorted(subcommands[:10]))}{'...' if len(subcommands) > 10 else ''}")
-                        else:
-                            print(f"[sync] WARNING: Group '{cmd.name}' has NO subcommands!")
-                print(f"[sync] Total subcommands synced: {total_subcommands}")
-            else:
-                await self.tree.sync()
-                self._last_command_sync = now_utc()
-                self._command_sync_guild_id = None
-                from core.command_tree_stats import collect_command_tree_stats
-
-                self._command_tree_stats = collect_command_tree_stats(self)
-                commands_list = [cmd.name for cmd in self.tree.get_commands(guild=None)]
-                print(f"[sync] Synced {len(commands_list)} top-level commands/groups globally (may take a while to appear)")
-                print(f"[sync] Top-level: {', '.join(commands_list)}")
-                
-                # Verify groups and their subcommands
-                total_subcommands = 0
-                for cmd in self.tree.get_commands(guild=None):
-                    if isinstance(cmd, app_commands.Group):
-                        subcommands = [subcmd.name for subcmd in cmd.commands]
-                        total_subcommands += len(subcommands)
-                        if len(subcommands) > 0:
-                            print(f"[sync] Group '{cmd.name}' has {len(subcommands)} subcommands: {', '.join(sorted(subcommands[:10]))}{'...' if len(subcommands) > 10 else ''}")
-                        else:
-                            print(f"[sync] WARNING: Group '{cmd.name}' has NO subcommands!")
-                print(f"[sync] Total subcommands synced: {total_subcommands}")
+            sync_guild_id, self._command_tree_stats = await sync_app_commands(self)
+            self._last_command_sync = now_utc()
+            self._command_sync_guild_id = sync_guild_id
             try:
                 sync_marker.parent.mkdir(parents=True, exist_ok=True)
                 sync_marker.write_text(BOT_VERSION, encoding="utf-8")
@@ -922,7 +881,9 @@ async def on_message(message: discord.Message):
         return
 
     try:
-        await _award_message_economy(message)
+        from handlers.message_economy import award_message_economy
+
+        await award_message_economy(message)
     except Exception as econ_err:
         if is_db_locked_error(econ_err):
             logger.warning(
@@ -1242,20 +1203,18 @@ async def on_interaction(interaction: discord.Interaction):
 # --------------------- Install / startup hooks ---------------------
 @bot.event
 async def on_guild_join(guild: discord.Guild):
-    # Fired when the bot is installed into a server
-    try:
-        await ensure_core_channels(guild)
-        await ensure_join_to_create_channel(guild)
-        print(f"[install] Ensured join-to-create in {guild.name}")
-    except Exception as e:
-        print(f"[install] Setup failed in {guild.name}: {e}")
+    from handlers.guild_events import handle_guild_join
+
+    await handle_guild_join(bot, guild)
     activity = _update_status_presence()
     await bot.change_presence(activity=activity, status=discord.Status.online)
 
 
 @bot.event
 async def on_guild_remove(guild: discord.Guild):
-    """Update status when bot leaves a guild."""
+    from handlers.guild_events import handle_guild_remove
+
+    await handle_guild_remove(bot, guild)
     activity = _update_status_presence()
     await bot.change_presence(activity=activity, status=discord.Status.online)
 
@@ -1275,186 +1234,6 @@ async def on_ready():
 
 # Cache for achievement definitions (avoid repeated initialization)
 _achievement_definitions_initialized = False
-
-# In-memory message economy cooldown — skip DB when still on cooldown
-_MESSAGE_COOLDOWN_CACHE: Dict[Tuple[int, int], datetime] = {}
-
-
-async def _award_message_economy(message: discord.Message) -> None:
-    """Award passive coins/XP for a qualifying message (cooldown-gated)."""
-    if not message.guild:
-        return
-
-    if _message_cooldown_active(message.guild.id, message.author.id):
-        return
-
-    async with open_db() as db:
-        cur = await db.execute(
-            "SELECT last_message_at FROM message_cooldowns WHERE guild_id=? AND user_id=?",
-            (message.guild.id, message.author.id),
-        )
-        row = await cur.fetchone()
-
-        if row:
-            last_message_at = datetime.fromisoformat(row[0])
-            time_since = (now_utc() - last_message_at).total_seconds()
-            if time_since < MESSAGE_COOLDOWN_SECONDS:
-                _message_cooldown_touch(message.guild.id, message.author.id)
-                return
-
-        now_iso = now_utc().isoformat()
-        await db.execute(
-            """
-            INSERT INTO message_cooldowns (guild_id, user_id, last_message_at)
-            VALUES (?, ?, ?)
-            ON CONFLICT(guild_id, user_id) DO UPDATE SET last_message_at=?
-            """,
-            (message.guild.id, message.author.id, now_iso, now_iso),
-        )
-        await db.commit()
-
-    _message_cooldown_touch(message.guild.id, message.author.id)
-
-    from core.utils import get_active_multiplier
-
-    coins_mult = await get_active_multiplier(message.guild.id, "coins")
-    await add_coins(
-        message.guild.id,
-        message.author.id,
-        max(1, int(round(COINS_PER_MESSAGE * coins_mult))),
-        "MESSAGE",
-        f"Message in #{_channel_name_safe(message.channel)}",
-    )
-
-    from core.utils import XP_ENABLED, XP_PER_MESSAGE
-
-    if not XP_ENABLED:
-        return
-
-    xp_mult = await get_active_multiplier(message.guild.id, "xp")
-    leveled_up = await add_xp(
-        message.guild.id,
-        message.author.id,
-        max(1, int(round(XP_PER_MESSAGE * xp_mult))),
-        "MESSAGE",
-    )
-    if leveled_up and isinstance(message.author, discord.Member):
-        xp, level, total_xp = await get_user_xp(message.guild.id, message.author.id)
-        logger.info(
-            "User %s leveled up to level %s in guild %s",
-            message.author.id,
-            level,
-            message.guild.id,
-        )
-        from core.utils import send_levelup_announcement
-
-        await send_levelup_announcement(message.guild, message.author, level, xp, total_xp)
-
-        from database import get_all_level_roles_up_to
-
-        level_roles = await get_all_level_roles_up_to(message.guild.id, level)
-        if level_roles:
-            roles_to_add = []
-            for lr in level_roles:
-                role = message.guild.get_role(lr["role_id"])
-                if role and role not in message.author.roles:
-                    roles_to_add.append(role)
-            if roles_to_add:
-                try:
-                    await message.author.add_roles(
-                        *roles_to_add, reason=f"Leveled up to level {level}"
-                    )
-                    logger.info(
-                        "Assigned level roles to %s: %s",
-                        message.author.id,
-                        [r.id for r in roles_to_add],
-                    )
-                except Exception as e:
-                    logger.error("Error assigning level roles: %s", e)
-
-    xp, level, total_xp = await get_user_xp(message.guild.id, message.author.id)
-    from database import check_and_record_milestone, check_and_unlock_achievement
-
-    global _achievement_definitions_initialized
-    if not _achievement_definitions_initialized:
-        from database import (
-            initialize_achievement_definitions,
-            initialize_badge_definitions,
-            initialize_title_definitions,
-        )
-
-        await initialize_achievement_definitions()
-        await initialize_badge_definitions()
-        await initialize_title_definitions()
-        _achievement_definitions_initialized = True
-
-    async with open_db() as db:
-        cur = await db.execute(
-            """
-            SELECT messages_sent FROM activity_stats
-            WHERE guild_id=? AND user_id=?
-            """,
-            (message.guild.id, message.author.id),
-        )
-        row = await cur.fetchone()
-        message_count = row[0] if row else 0
-        await db.execute(
-            """
-            INSERT INTO activity_stats (guild_id, user_id, messages_sent, last_activity_date)
-            VALUES (?, ?, 1, ?)
-            ON CONFLICT(guild_id, user_id) DO UPDATE SET
-                messages_sent = messages_sent + 1,
-                last_activity_date = excluded.last_activity_date
-            """,
-            (message.guild.id, message.author.id, now_utc().isoformat()),
-        )
-        await db.commit()
-
-    new_message_count = message_count + 1
-
-    for milestone_level in (10, 25, 50, 100):
-        if level >= milestone_level:
-            milestone_achieved = await check_and_record_milestone(
-                message.guild.id, message.author.id, "level", milestone_level
-            )
-            if milestone_achieved:
-                await check_and_unlock_achievement(
-                    message.guild.id,
-                    message.author.id,
-                    f"level_{milestone_level}",
-                    bot,
-                )
-
-    achievement_map = {
-        1: "first_message",
-        100: "hundred_messages",
-        1000: "thousand_messages",
-        10000: "ten_thousand_messages",
-    }
-    for milestone_count in (1, 100, 1000, 10000):
-        if new_message_count >= milestone_count:
-            milestone_achieved = await check_and_record_milestone(
-                message.guild.id, message.author.id, "message_count", milestone_count
-            )
-            if milestone_achieved and milestone_count in achievement_map:
-                await check_and_unlock_achievement(
-                    message.guild.id,
-                    message.author.id,
-                    achievement_map[milestone_count],
-                    bot,
-                )
-
-
-def _message_cooldown_active(guild_id: int, user_id: int) -> bool:
-    """True if user is still within MESSAGE_COOLDOWN_SECONDS (memory only)."""
-    last = _MESSAGE_COOLDOWN_CACHE.get((guild_id, user_id))
-    if last is None:
-        return False
-    return (now_utc() - last).total_seconds() < MESSAGE_COOLDOWN_SECONDS
-
-
-def _message_cooldown_touch(guild_id: int, user_id: int) -> None:
-    _MESSAGE_COOLDOWN_CACHE[(guild_id, user_id)] = now_utc()
 
 @bot.event
 async def on_member_join(member: discord.Member):

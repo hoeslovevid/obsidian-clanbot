@@ -341,6 +341,12 @@ async def _run_daily(interaction: discord.Interaction, force_reset: bool = False
             freeze_val,
         ))
         await db.commit()
+        try:
+            from commands.general.onboarding import record_onboarding_step
+
+            await record_onboarding_step(interaction.guild.id, interaction.user.id, "claim_daily")
+        except Exception:
+            pass
         if new_streak >= 10:
             try:
                 from database import check_and_unlock_achievement

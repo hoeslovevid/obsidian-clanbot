@@ -18,6 +18,12 @@ from core.channels import resolve_channel_id, delete_temp_vc_and_panel
 from api.warframe_api import get_baro_status, get_all_cycles, fetch_invasions, fetch_archon_hunt_data, fetch_events_data, fetch_alerts, fetch_duviri_circuit
 from core.utils import obsidian_embed, ECONOMY_ENABLED, COINS_PER_MINUTE_VOICE, MIN_VOICE_MINUTES_FOR_REWARD, XP_ENABLED, XP_PER_MINUTE_VOICE
 from core.safe_send import safe_dm
+from tasks.wf_notify import (
+    check_and_notify_baro_arrival,
+    clear_baro_live_embed_cache,
+    get_baro_embed_builder,
+    get_baro_live_embed_cache,
+)
 
 # ---------------------------------------------------------------------------
 # Notify channel health-check helper
@@ -25,8 +31,6 @@ from core.safe_send import safe_dm
 # Tracks (guild_id, channel_id) pairs already warned this session to avoid
 # spamming the guild owner every loop iteration.
 _warned_broken_channels: set[tuple[int, int]] = set()
-# Last embed fingerprint per live Baro message — skip redundant PATCH edits
-_baro_live_embed_cache: dict[tuple[int, int, int], str] = {}
 
 CYCLE_LIVE_UPDATE_MINUTES = max(3, min(15, int(os.getenv("CYCLE_LIVE_UPDATE_MINUTES", "5"))))
 
@@ -51,12 +55,6 @@ async def _warn_broken_channel(
     except Exception:
         pass  # DMs disabled or bot can't reach owner
 
-
-# Import Baro embed builder (lazy import to avoid circular dependency)
-def get_baro_embed_builder():
-    """Lazy import to avoid circular dependency."""
-    from commands.warframe.baro import build_baro_embed
-    return build_baro_embed
 
 logger = logging.getLogger(__name__)
 
@@ -92,164 +90,6 @@ async def check_ended_giveaways(bot):
                 logger.info(f"[giveaway] Ended giveaway {giveaway_id}, selected {len(winners)} winner(s)")
         except Exception as e:
             logger.error(f"[giveaway] Error ending giveaway {giveaway_id}: {e}", exc_info=True)
-
-
-async def check_and_notify_baro_arrival(bot):
-    """Check if Baro has arrived and send notifications if needed."""
-    from api.warframe_api import fetch_baro_data_fresh
-
-    is_active, baro_data = await get_baro_status()
-
-    if not baro_data or not is_active:
-        return
-    
-    activation = baro_data.get("activation", "")
-    if not activation:
-        return
-    
-    # Check if we've already notified for this visit
-    async with aiosqlite.connect(DB_PATH) as db:
-        cur = await db.execute(
-            "SELECT id FROM baro_visits WHERE arrival_time=? AND notified=1",
-            (activation,)
-        )
-        existing = await cur.fetchone()
-        
-        if existing:
-            return  # Already notified
-        
-        # Check if this visit exists
-        cur = await db.execute(
-            "SELECT id, notified FROM baro_visits WHERE arrival_time=?",
-            (activation,)
-        )
-        visit = await cur.fetchone()
-        
-        visit_id = None
-        if visit:
-            visit_id, notified = visit
-            if notified:
-                return  # Already notified, exit
-        else:
-            # Create new visit record
-            import json
-            inventory_json = json.dumps(baro_data.get("inventory", []))
-            await db.execute("""
-                INSERT INTO baro_visits (arrival_time, departure_time, location, inventory_json, notified, created_at)
-                VALUES (?, ?, ?, ?, 0, ?)
-            """, (
-                activation,
-                baro_data.get("expiry", ""),
-                baro_data.get("location", "Unknown"),
-                inventory_json,
-                now_utc().isoformat(),
-            ))
-            await db.commit()
-            
-            # Get the visit ID
-            cur = await db.execute(
-                "SELECT id FROM baro_visits WHERE arrival_time=?",
-                (activation,)
-            )
-            visit = await cur.fetchone()
-            visit_id = visit[0] if visit else None
-
-        # Fresh inventory before notifying (stock can lag activation by minutes).
-        import json as _json
-
-        fresh_baro_data = await fetch_baro_data_fresh(retries=3, retry_delay=20.0)
-        data_to_use = fresh_baro_data if fresh_baro_data else baro_data
-        if not (data_to_use.get("inventory") or []):
-            logger.debug("Baro active but inventory still empty — skipping arrival notify this cycle")
-            return
-        if visit_id and data_to_use.get("inventory"):
-            await db.execute(
-                "UPDATE baro_visits SET inventory_json=?, location=? WHERE id=?",
-                (
-                    _json.dumps(data_to_use["inventory"]),
-                    data_to_use.get("location", "Unknown"),
-                    visit_id,
-                ),
-            )
-            await db.commit()
-
-        # Send notifications to all guilds that have it enabled
-        for guild in bot.guilds:
-            try:
-                async with aiosqlite.connect(DB_PATH) as db:
-                    cur = await db.execute(
-                        "SELECT channel_id, enabled FROM baro_notification_settings WHERE guild_id=?",
-                        (guild.id,)
-                    )
-                    setting = await cur.fetchone()
-                
-                if not setting or not setting[1]:  # Not enabled or not set
-                    continue
-            except Exception as e:
-                logger.error(f"Error checking baro notification settings for guild {guild.id}: {e}")
-                continue
-            
-            channel_id = setting[0]
-            if not channel_id:
-                continue
-            
-            ch = guild.get_channel(channel_id)
-            if not isinstance(ch, discord.TextChannel):
-                await _warn_broken_channel(guild, channel_id, "Baro Ki'Teer")
-                continue
-
-            # Use shared embed builder for consistent inventory display
-            build_baro_embed = get_baro_embed_builder()
-            embed = build_baro_embed(data_to_use, True, bot)
-            embed.title = "🛒 Baro Ki'Teer Has Arrived!"
-            embed.color = discord.Color.gold()
-            try:
-                from core.wf_hub_extras import get_baro_wishlist_overlap
-
-                inv = data_to_use.get("inventory", []) or []
-                overlap = await get_baro_wishlist_overlap(guild.id, inv)
-                if overlap:
-                    embed.add_field(name="Clan wishlist", value=overlap, inline=False)
-            except Exception:
-                pass
-
-            # Item 2: append per-user subscriber pings (or a configured opt-in
-            # role mention if set, which is cheaper for big guilds).
-            try:
-                from core.utils import build_wf_subscriber_ping
-                sub_ping = await build_wf_subscriber_ping(guild, "baro")
-            except Exception:
-                sub_ping = None
-
-            try:
-                from core.safe_send import safe_channel_send
-
-                await safe_channel_send(ch, content=sub_ping, embed=embed)
-                
-                # Wishlist DMs for members in this guild
-                try:
-                    from core.wf_hub_extras import dm_baro_wishlist_matches
-
-                    inv = data_to_use.get("inventory", []) or []
-                    await dm_baro_wishlist_matches(
-                        bot,
-                        guild.id,
-                        inv,
-                        location=data_to_use.get("location", ""),
-                    )
-                except Exception as wish_exc:
-                    logger.debug(f"Baro wishlist DMs skipped for {guild.id}: {wish_exc}")
-                
-                # Mark as notified
-                if visit_id:
-                    async with aiosqlite.connect(DB_PATH) as db:
-                        await db.execute(
-                            "UPDATE baro_visits SET notified=1 WHERE id=?",
-                            (visit_id,)
-                        )
-                        await db.commit()
-            except Exception as e:
-                logger.error(f"Error sending Baro notification to {guild.id}: {e}")
 
 
 def setup_tasks(bot):
@@ -1089,7 +929,7 @@ def setup_tasks(bot):
     async def baro_check_loop():
         """Check for Baro Ki'Teer arrivals and send notifications."""
         try:
-            await check_and_notify_baro_arrival(bot)
+            await check_and_notify_baro_arrival(bot, warned_channels=_warned_broken_channels)
         except Exception as e:
             logger.error(f"Error in baro_check_loop: {e}", exc_info=True)
 
@@ -1106,7 +946,7 @@ def setup_tasks(bot):
             
             if not is_active or not baro_data:
                 # Baro is not active, clean up all live messages
-                _baro_live_embed_cache.clear()
+                clear_baro_live_embed_cache()
                 async with aiosqlite.connect(DB_PATH) as db:
                     await db.execute("DELETE FROM baro_live_messages")
                     await db.commit()
@@ -1179,13 +1019,14 @@ def setup_tasks(bot):
                     # Skip edit when content unchanged (reduces PATCH spam / 429s)
                     desc_key = (updated_embed.description or "") + (updated_embed.title or "")
                     cache_key = (guild_id, channel_id, message_id)
-                    if _baro_live_embed_cache.get(cache_key) == desc_key:
+                    baro_cache = get_baro_live_embed_cache()
+                    if baro_cache.get(cache_key) == desc_key:
                         continue
 
                     from core.safe_message_edit import safe_message_edit
 
                     await safe_message_edit(message, embed=updated_embed)
-                    _baro_live_embed_cache[cache_key] = desc_key
+                    baro_cache[cache_key] = desc_key
                     
                 except discord.Forbidden:
                     # Missing permissions, remove from database
@@ -1869,168 +1710,9 @@ def setup_tasks(bot):
             # Verify bot is ready
             if not bot.is_ready():
                 return
-            cycles_data = await get_all_cycles()
-            
-            if not cycles_data:
-                return
-            
-            # Check each cycle type
-            for cycle_type, data in cycles_data.items():
-                if not data:
-                    continue
-                
-                expiry = data.get('expiry', '')
-                if not expiry:
-                    continue
-                
-                try:
-                    expiry_time = dateparser.parse(expiry, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
-                    if not expiry_time:
-                        continue
-                    
-                    now = datetime.now(timezone.utc)
-                    time_until_change = expiry_time - now
-                    
-                    # Only notify if cycle is about to change (within 2 minutes)
-                    if 0 <= time_until_change.total_seconds() <= 120:
-                        # Check if we've already notified for this cycle change
-                        cycle_state = None
-                        cycle_display = None
-                        
-                        if cycle_type == 'cetus':
-                            is_day = data.get('isDay', False)
-                            cycle_state = 'day' if is_day else 'night'
-                            cycle_display = "☀️ Day" if is_day else "🌙 Night"
-                        elif cycle_type == 'vallis':
-                            is_warm = data.get('isWarm', False)
-                            cycle_state = 'warm' if is_warm else 'cold'
-                            cycle_display = "🔥 Warm" if is_warm else "❄️ Cold"
-                        elif cycle_type == 'cambion':
-                            state = data.get('state', '').lower()
-                            cycle_state = state
-                            cycle_display = "🔴 Fass" if state == 'fass' else "🟢 Vome" if state == 'vome' else state.title()
-                        
-                        if not cycle_state:
-                            continue
-                        
-                        # Map cycle types to database columns and display names
-                        column_map = {
-                            'cetus': ('cetus_enabled', 'Cetus (Plains of Eidolon)'),
-                            'vallis': ('fortuna_enabled', 'Fortuna (Orb Vallis)'),
-                            'cambion': ('deimos_enabled', 'Deimos (Cambion Drift)'),
-                        }
-                        
-                        column, display_name = column_map.get(cycle_type, (None, None))
-                        if not column:
-                            continue
-                        
-                        # Send notifications to all guilds that have it enabled
-                        for guild in bot.guilds:
-                            try:
-                                from core.cycles_live import guild_skips_cycle_pings
+            from tasks.wf_check_loops import run_cycle_change_notifications
 
-                                if await guild_skips_cycle_pings(guild.id):
-                                    continue
-
-                                async with aiosqlite.connect(DB_PATH) as db:
-                                    cur = await db.execute(
-                                        f"SELECT channel_id, {column}, ping_role_id FROM cycle_notification_settings WHERE guild_id=?",
-                                        (guild.id,)
-                                    )
-                                    setting = await cur.fetchone()
-                                
-                                if not setting or not setting[1]:  # Not enabled
-                                    continue
-                            except Exception as e:
-                                logger.error(f"Error checking cycle notification settings for guild {guild.id}: {e}")
-                                continue
-                            
-                            channel_id = setting[0]
-                            ping_role_id = setting[2] if len(setting) > 2 and setting[2] else None
-                            if not channel_id:
-                                continue
-                            
-                            ch = guild.get_channel(channel_id)
-                            if not isinstance(ch, discord.TextChannel):
-                                await _warn_broken_channel(guild, channel_id, "Cycle")
-                                continue
-                            
-                            ping_content = None
-                            if ping_role_id:
-                                role = guild.get_role(int(ping_role_id))
-                                if role:
-                                    ping_content = role.mention
-
-                            # Item 2: append per-user subscriber pings on top
-                            # of any guild-configured role ping.
-                            try:
-                                from core.utils import (
-                                    get_wf_subscribers,
-                                    format_wf_subscriber_mentions,
-                                )
-                                _subs = await get_wf_subscribers(guild.id, "cycles")
-                                _sub_text = format_wf_subscriber_mentions(guild, _subs)
-                                if _sub_text:
-                                    ping_content = (
-                                        f"{ping_content} {_sub_text}" if ping_content else _sub_text
-                                    )
-                            except Exception:
-                                pass
-                            
-                            # Check if we've already notified for this cycle change
-                            async with aiosqlite.connect(DB_PATH) as db:
-                                cur = await db.execute("""
-                                    SELECT 1 FROM cycle_notifications_sent
-                                    WHERE guild_id=? AND cycle_type=? AND cycle_state=? AND notified_at > datetime('now', '-5 minutes')
-                                """, (guild.id, cycle_type, cycle_state))
-                                already_notified = await cur.fetchone()
-                            
-                            if already_notified:
-                                continue
-                            
-                            # Calculate when the new cycle will end
-                            # Cycles alternate, so we need to calculate the next expiry
-                            # Cetus: Day/Night cycles are ~150 minutes each
-                            # Fortuna: Warm/Cold cycles are ~26 minutes each  
-                            # Deimos: Fass/Vome cycles are ~100 minutes each
-                            cycle_durations = {
-                                'cetus': 150 * 60,  # 150 minutes in seconds
-                                'vallis': 26 * 60,  # 26 minutes in seconds
-                                'cambion': 100 * 60,  # 100 minutes in seconds
-                            }
-                            
-                            duration_seconds = cycle_durations.get(cycle_type, 0)
-                            next_expiry_time = expiry_time + timedelta(seconds=duration_seconds)
-                            
-                            # Send notification
-                            desc = f"**{display_name}** cycle is changing!\n\n"
-                            desc += f"**New State:** {cycle_display}\n"
-                            desc += f"**Changes At:** <t:{int(expiry_time.timestamp())}:F>\n"
-                            desc += f"**Ends At:** <t:{int(next_expiry_time.timestamp())}:F> _(<t:{int(next_expiry_time.timestamp())}:R>)_"
-                            
-                            embed = obsidian_embed(
-                                f"🌍 Cycle Change: {display_name}",
-                                desc,
-                                color=discord.Color.blue(),
-                                client=bot,
-                            )
-                            
-                            try:
-                                await ch.send(content=ping_content, embed=embed)
-                                
-                                # Record notification
-                                async with aiosqlite.connect(DB_PATH) as db:
-                                    await db.execute("""
-                                        INSERT INTO cycle_notifications_sent (guild_id, cycle_type, cycle_state, notified_at)
-                                        VALUES (?, ?, ?, ?)
-                                    """, (guild.id, cycle_type, cycle_state, datetime.now(timezone.utc).isoformat()))
-                                    await db.commit()
-                            except Exception as e:
-                                logger.error(f"Error sending cycle notification to {guild.id}: {e}")
-                                continue
-                except Exception as e:
-                    logger.error(f"Error processing {cycle_type} cycle: {e}")
-                    continue
+            await run_cycle_change_notifications(bot, _warn_broken_channel)
         except Exception as e:
             logger.error(f"Error in cycle_check_loop: {e}", exc_info=True)
 
@@ -2045,134 +1727,9 @@ def setup_tasks(bot):
             # Verify bot is ready
             if not bot.is_ready():
                 return
-            invasions_data = await fetch_invasions()
-            
-            if not invasions_data:
-                return
-            
-            # Get all notification settings
-            for guild in bot.guilds:
-                try:
-                    async with aiosqlite.connect(DB_PATH) as db:
-                        cur = await db.execute("""
-                            SELECT reward_lower, reward_display, channel_id
-                            FROM invasion_notification_settings
-                            WHERE guild_id=? AND enabled=1
-                        """, (guild.id,))
-                        settings = await cur.fetchall()
-                    
-                    if not settings:
-                        continue
-                except Exception as e:
-                    logger.error(f"Error checking invasion notification settings for guild {guild.id}: {e}")
-                    continue
-                
-                # Check each invasion for matching rewards
-                for inv in invasions_data:
-                    invasion_id = inv.get("id", "")
-                    if not invasion_id:
-                        continue
-                    
-                    # Get rewards from both sides (API: attacker.reward, defender.reward)
-                    att_obj = inv.get("attacker") or {}
-                    def_obj = inv.get("defender") or {}
-                    attacker_reward = att_obj.get("reward") or {}
-                    defender_reward = def_obj.get("reward") or {}
-                    
-                    rewards_found = []
-                    
-                    # Check attacker rewards (API: countedItems[].type or .key)
-                    for item in (attacker_reward.get("countedItems") or []):
-                        item_type = (item.get("type") or item.get("key") or "").lower()
-                        if item_type:
-                            rewards_found.append(item_type)
-                    
-                    # Check defender rewards
-                    for item in (defender_reward.get("countedItems") or []):
-                        item_type = (item.get("type") or item.get("key") or "").lower()
-                        if item_type:
-                            rewards_found.append(item_type)
-                    
-                    # Check if any configured reward matches
-                    for reward_lower, reward_display, channel_id in settings:
-                        if reward_lower in rewards_found and channel_id:
-                            # Check if we've already notified for this invasion
-                            async with aiosqlite.connect(DB_PATH) as db:
-                                cur = await db.execute("""
-                                    SELECT 1 FROM invasion_notifications_sent
-                                    WHERE guild_id=? AND invasion_id=? AND reward_lower=?
-                                """, (guild.id, invasion_id, reward_lower))
-                                already_notified = await cur.fetchone()
-                            
-                            if already_notified:
-                                continue
-                            
-                            # Get channel
-                            ch = guild.get_channel(channel_id)
-                            if not isinstance(ch, discord.TextChannel):
-                                await _warn_broken_channel(guild, channel_id, "Invasion")
-                                continue
-                            
-                            # Build notification (API: attacker.faction, defender.faction; no eta, use activation)
-                            node = inv.get("node") or inv.get("nodeKey", "Unknown Location")
-                            attacker = att_obj.get("faction") or att_obj.get("factionKey", "Unknown")
-                            defender = def_obj.get("faction") or def_obj.get("factionKey", "Unknown")
-                            completion = inv.get("completion", 0)
-                            count = inv.get("count", 0)
-                            required_runs = inv.get("requiredRuns", 0)
-                            
-                            time_str = "—"
-                            activation = inv.get("activation")
-                            if activation:
-                                try:
-                                    act_time = dateparser.parse(activation, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
-                                    if act_time:
-                                        act_utc = act_time.replace(tzinfo=timezone.utc) if act_time.tzinfo is None else act_time
-                                        elapsed = datetime.now(timezone.utc) - act_utc
-                                        total_sec = max(0, int(elapsed.total_seconds()))
-                                        time_str = f"{total_sec // 3600}h {(total_sec % 3600) // 60}m active"
-                                except Exception:
-                                    pass
-                            if time_str == "—" and required_runs:
-                                time_str = f"Runs: {count:,}/{required_runs:,}"
-                            
-                            # Get full reward list (API: type or key)
-                            reward_list = []
-                            for item in (attacker_reward.get("countedItems") or []):
-                                item_type = item.get("type") or item.get("key", "")
-                                if item_type and item_type.lower() == reward_lower:
-                                    reward_list.append(f"**{attacker}:** {item_type}")
-                            for item in (defender_reward.get("countedItems") or []):
-                                item_type = item.get("type") or item.get("key", "")
-                                if item_type and item_type.lower() == reward_lower:
-                                    reward_list.append(f"**{defender}:** {item_type}")
-                            
-                            desc = f"**Location:** {node}\n"
-                            desc += f"**Factions:** {attacker} vs {defender}\n"
-                            desc += f"**Progress:** {completion:.1f}%\n"
-                            desc += f"**Time:** {time_str}\n\n"
-                            desc += "**Reward Found:**\n" + "\n".join(reward_list)
-                            
-                            embed = obsidian_embed(
-                                f"⚔️ Invasion Alert: {reward_display}",
-                                desc,
-                                color=discord.Color.orange(),
-                                client=bot,
-                            )
-                            
-                            try:
-                                await ch.send(embed=embed)
-                                
-                                # Record notification
-                                async with aiosqlite.connect(DB_PATH) as db:
-                                    await db.execute("""
-                                        INSERT INTO invasion_notifications_sent (guild_id, invasion_id, reward_lower, notified_at)
-                                        VALUES (?, ?, ?, ?)
-                                    """, (guild.id, invasion_id, reward_lower, datetime.now(timezone.utc).isoformat()))
-                                    await db.commit()
-                            except Exception as e:
-                                logger.error(f"Error sending invasion notification to {guild.id}: {e}")
-                                continue
+            from tasks.wf_check_loops import run_invasion_notifications
+
+            await run_invasion_notifications(bot, _warn_broken_channel)
         except Exception as e:
             logger.error(f"Error in invasion_check_loop: {e}", exc_info=True)
 
@@ -2481,82 +2038,9 @@ def setup_tasks(bot):
         try:
             if not bot.is_ready():
                 return
-            
-            alerts = await fetch_alerts()
-            if not alerts:
-                return
-            
-            # Send notifications to all guilds that have it enabled
-            for guild in bot.guilds:
-                try:
-                    # Check if alerts are enabled (using guild_settings table).
-                    # Canonical key is alerts_notify_channel_id; fall back to
-                    # the legacy alerts_channel_id for guilds whose migration
-                    # hasn't run yet.
-                    from database import get_guild_setting
-                    channel_id_str = await get_guild_setting(guild.id, "alerts_notify_channel_id")
-                    if not channel_id_str:
-                        channel_id_str = await get_guild_setting(guild.id, "alerts_channel_id")
-                    
-                    if not channel_id_str or not channel_id_str.isdigit():
-                        continue  # Not configured or disabled
-                    
-                    channel_id = int(channel_id_str)
-                    channel = guild.get_channel(channel_id)
-                    if not isinstance(channel, discord.TextChannel):
-                        continue
-                    
-                    # Check each alert to see if we've already notified about it
-                    for alert in alerts:
-                        alert_id = alert.get("id")
-                        if not alert_id:
-                            continue
-                        
-                        async with aiosqlite.connect(DB_PATH) as db:
-                            # Check if we've already notified about this alert
-                            cur = await db.execute("""
-                                SELECT 1 FROM alert_notifications_sent 
-                                WHERE guild_id=? AND alert_id=?
-                            """, (guild.id, str(alert_id)))
-                            if await cur.fetchone():
-                                continue  # Already notified
-                            
-                            # Send notification
-                            mission_type = alert.get("mission", {}).get("type", "Unknown")
-                            mission_node = alert.get("mission", {}).get("node", "Unknown")
-                            expiry = alert.get("expiry", "")
-                            rewards = alert.get("mission", {}).get("reward", {})
-                            reward_items = rewards.get("items", [])
-                            
-                            desc = f"**Type:** {mission_type}\n"
-                            desc += f"**Node:** {mission_node}\n"
-                            desc += f"**Expires:** {expiry}\n"
-                            if reward_items:
-                                desc += f"**Rewards:** {', '.join(reward_items)}"
-                            
-                            embed = obsidian_embed(
-                                "🚨 New Warframe Alert",
-                                desc,
-                                color=discord.Color.gold(),
-                                client=bot,
-                            )
-                            
-                            try:
-                                from core.safe_send import safe_channel_send
+            from tasks.wf_check_loops import run_alert_notifications
 
-                                await safe_channel_send(channel, embed=embed)
-                                # Mark as notified
-                                await db.execute("""
-                                    INSERT INTO alert_notifications_sent (guild_id, alert_id, notified_at)
-                                    VALUES (?, ?, ?)
-                                """, (guild.id, str(alert_id), now_utc().isoformat()))
-                                await db.commit()
-                            except Exception as e:
-                                logger.error(f"Error sending alert notification to guild {guild.id}: {e}")
-                
-                except Exception as e:
-                    logger.error(f"Error in alert_check_loop for guild {guild.id}: {e}", exc_info=True)
-        
+            await run_alert_notifications(bot)
         except Exception as e:
             logger.error(f"Error in alert_check_loop: {e}", exc_info=True)
     
