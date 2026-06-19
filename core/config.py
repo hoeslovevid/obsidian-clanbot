@@ -64,7 +64,7 @@ DATABASE_URL = os.getenv("DATABASE_URL", "").strip() or None
 BOT_VERSION = os.getenv("BOT_VERSION", "2.0.1")
 BOT_CHANGELOG = os.getenv(
     "BOT_CHANGELOG",
-    "v2.0.1 — ClanBot → bot/client.py; task registry → tasks/registry.py; discord events module.",
+    "v2.0.1 — full v2.0 refactor changelog (batches 1–16): modular handlers/loops, slim app.py, multi-guild platform.",
 )
 
 # Presence rotation: default | menu | degraded | event
