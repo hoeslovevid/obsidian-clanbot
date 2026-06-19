@@ -327,104 +327,9 @@ def setup_tasks(bot):
     async def baro_live_update_loop():
         """Update live Baro messages with current time remaining."""
         try:
-            is_active, baro_data = await get_baro_status()
-            
-            if not is_active or not baro_data:
-                # Baro is not active, clean up all live messages
-                clear_baro_live_embed_cache()
-                async with aiosqlite.connect(DB_PATH) as db:
-                    await db.execute("DELETE FROM baro_live_messages")
-                    await db.commit()
-                return
-            
-            # Get all live messages
-            async with aiosqlite.connect(DB_PATH) as db:
-                cur = await db.execute("""
-                    SELECT guild_id, channel_id, message_id, expiry_time
-                    FROM baro_live_messages
-                """)
-                messages = await cur.fetchall()
-            
-            # Update each message
-            for guild_id, channel_id, message_id, expiry_time_str in messages:
-                try:
-                    guild = bot.get_guild(guild_id)
-                    if not guild:
-                        # Guild not found, remove from database
-                        async with aiosqlite.connect(DB_PATH) as db:
-                            await db.execute(
-                                "DELETE FROM baro_live_messages WHERE guild_id=? AND channel_id=? AND message_id=?",
-                                (guild_id, channel_id, message_id)
-                            )
-                            await db.commit()
-                        continue
-                    
-                    channel = guild.get_channel(channel_id)
-                    if not isinstance(channel, discord.TextChannel):
-                        # Channel not found or wrong type, remove from database
-                        async with aiosqlite.connect(DB_PATH) as db:
-                            await db.execute(
-                                "DELETE FROM baro_live_messages WHERE guild_id=? AND channel_id=? AND message_id=?",
-                                (guild_id, channel_id, message_id)
-                            )
-                            await db.commit()
-                        continue
-                    
-                    try:
-                        message = await channel.fetch_message(message_id)
-                    except discord.NotFound:
-                        # Message deleted, remove from database
-                        async with aiosqlite.connect(DB_PATH) as db:
-                            await db.execute(
-                                "DELETE FROM baro_live_messages WHERE guild_id=? AND channel_id=? AND message_id=?",
-                                (guild_id, channel_id, message_id)
-                            )
-                            await db.commit()
-                        continue
-                    
-                    # Check if Baro has expired
-                    try:
-                        expiry_time = datetime.fromisoformat(expiry_time_str.replace('Z', '+00:00'))
-                        if expiry_time <= datetime.now(timezone.utc):
-                            # Baro has expired, remove from database
-                            async with aiosqlite.connect(DB_PATH) as db:
-                                await db.execute(
-                                    "DELETE FROM baro_live_messages WHERE guild_id=? AND channel_id=? AND message_id=?",
-                                    (guild_id, channel_id, message_id)
-                                )
-                                await db.commit()
-                            continue
-                    except Exception:
-                        pass
-                    
-                    # Rebuild embed with updated time
-                    build_baro_embed = get_baro_embed_builder()
-                    updated_embed = build_baro_embed(baro_data, True, bot)
+            from tasks.wf_live_loops import run_baro_live_update_cycle
 
-                    # Skip edit when content unchanged (reduces PATCH spam / 429s)
-                    desc_key = (updated_embed.description or "") + (updated_embed.title or "")
-                    cache_key = (guild_id, channel_id, message_id)
-                    baro_cache = get_baro_live_embed_cache()
-                    if baro_cache.get(cache_key) == desc_key:
-                        continue
-
-                    from core.safe_message_edit import safe_message_edit
-
-                    await safe_message_edit(message, embed=updated_embed)
-                    baro_cache[cache_key] = desc_key
-                    
-                except discord.Forbidden:
-                    # Missing permissions, remove from database
-                    async with aiosqlite.connect(DB_PATH) as db:
-                        await db.execute(
-                            "DELETE FROM baro_live_messages WHERE guild_id=? AND channel_id=? AND message_id=?",
-                            (guild_id, channel_id, message_id)
-                        )
-                        await db.commit()
-                except Exception as e:
-                    logger.error(f"Error updating Baro live message {message_id} in {guild_id}: {e}")
-                    continue
-                    
+            await run_baro_live_update_cycle(bot)
         except Exception as e:
             logger.error(f"Error in baro_live_update_loop: {e}", exc_info=True)
 
@@ -436,78 +341,9 @@ def setup_tasks(bot):
     async def cycle_live_update_loop():
         """Update pinned live cycle panels in place."""
         try:
-            if not bot.is_ready():
-                return
+            from tasks.wf_live_loops import run_cycle_live_update_cycle
 
-            from core.cycles_live import (
-                build_cycles_live_embed,
-                cycles_embed_fingerprint,
-                delete_cycle_live_message,
-                get_cycle_live_embed_cache,
-            )
-            from core.safe_message_edit import safe_message_edit
-
-            cycles_data = await get_all_cycles()
-            if not cycles_data or not any(cycles_data.values()):
-                return
-
-            async with aiosqlite.connect(DB_PATH) as db:
-                cur = await db.execute("""
-                    SELECT guild_id, channel_id, message_id
-                    FROM cycle_live_messages
-                """)
-                messages = await cur.fetchall()
-
-            cache = get_cycle_live_embed_cache()
-
-            for guild_id, channel_id, message_id in messages:
-                try:
-                    guild = bot.get_guild(guild_id)
-                    if not guild:
-                        await delete_cycle_live_message(guild_id, channel_id, message_id)
-                        continue
-
-                    channel = guild.get_channel(channel_id)
-                    if not isinstance(channel, discord.TextChannel):
-                        await delete_cycle_live_message(guild_id, channel_id, message_id)
-                        continue
-
-                    try:
-                        message = await channel.fetch_message(message_id)
-                    except discord.NotFound:
-                        await delete_cycle_live_message(guild_id, channel_id, message_id)
-                        continue
-
-                    updated_embed = build_cycles_live_embed(bot, cycles_data)
-                    fp = cycles_embed_fingerprint(updated_embed)
-                    cache_key = (guild_id, channel_id, message_id)
-                    if cache.get(cache_key) == fp:
-                        continue
-
-                    await safe_message_edit(message, embed=updated_embed)
-                    cache[cache_key] = fp
-
-                    async with aiosqlite.connect(DB_PATH) as db:
-                        await db.execute(
-                            """
-                            UPDATE cycle_live_messages SET updated_at=?
-                            WHERE guild_id=? AND channel_id=? AND message_id=?
-                            """,
-                            (now_utc().isoformat(), guild_id, channel_id, message_id),
-                        )
-                        await db.commit()
-
-                except discord.Forbidden:
-                    await delete_cycle_live_message(guild_id, channel_id, message_id)
-                except Exception as e:
-                    logger.error(
-                        "Error updating cycle live message %s in %s: %s",
-                        message_id,
-                        guild_id,
-                        e,
-                    )
-                    continue
-
+            await run_cycle_live_update_cycle(bot)
         except Exception as e:
             logger.error(f"Error in cycle_live_update_loop: {e}", exc_info=True)
 
@@ -521,11 +357,9 @@ def setup_tasks(bot):
     async def warframe_cache_warm_loop():
         """Keep baro/fissures/alerts cache warm so hot Warframe slash commands respond quickly."""
         try:
-            if not bot.is_ready():
-                return
-            from api.warframe_api import warm_hot_warframe_endpoints
+            from tasks.wf_live_loops import run_warframe_cache_warm_cycle
 
-            await warm_hot_warframe_endpoints()
+            await run_warframe_cache_warm_cycle(bot)
         except Exception as e:
             logger.debug("[wf-warm] cache warm failed: %s", e)
 
@@ -670,77 +504,9 @@ def setup_tasks(bot):
     async def daily_streak_reminder_loop():
         """DM opted-in users ~1 hour before their daily streak resets (23h after last claim)."""
         try:
-            if not bot.is_ready():
-                return
+            from tasks.economy_loops import run_daily_streak_reminder_cycle
 
-            now = now_utc()
-            # Find users whose last_claim_date is today (UTC) so their reset is at next midnight
-            # We want to remind them when there is between 60 and 90 minutes left until midnight UTC
-            next_midnight = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
-            minutes_until_midnight = (next_midnight - now).total_seconds() / 60
-
-            if not (60 <= minutes_until_midnight <= 90):
-                return  # Only fire in the 60-90 min window before midnight UTC
-
-            today_str = now.date().isoformat()
-            # At-risk users claimed YESTERDAY but not yet today: their streak resets
-            # at tonight's midnight UTC unless they claim again today. (Users who
-            # already claimed today are safe and must NOT be pinged.)
-            yesterday_str = (now.date() - timedelta(days=1)).isoformat()
-            async with aiosqlite.connect(DB_PATH) as db:
-                cur = await db.execute("""
-                    SELECT guild_id, user_id, streak_days
-                    FROM daily_claims
-                    WHERE last_claim_date = ? AND streak_days >= 1
-                """, (yesterday_str,))
-                claimants = await cur.fetchall()
-
-            for guild_id, user_id, streak_days in claimants:
-                try:
-                    # Check opt-in
-                    opted_in = await get_guild_setting(guild_id, f"user_daily_reminder:{user_id}")
-                    if opted_in != "1":
-                        continue
-
-                    # Throttle: max one reminder per day
-                    last_sent = await get_guild_setting(guild_id, f"daily_reminder_sent:{user_id}")
-                    if last_sent == today_str:
-                        continue
-
-                    # Respect user quiet hours (bot-initiated nudge)
-                    from core.quiet_hours import in_quiet_hours
-                    if await in_quiet_hours(guild_id, user_id):
-                        continue
-
-                    user = bot.get_user(user_id)
-                    if not user:
-                        try:
-                            user = await bot.fetch_user(user_id)
-                        except Exception:
-                            continue
-
-                    from commands.economy.daily import _streak_emblem
-                    from core.command_mentions import command_mention
-
-                    streak_fire = _streak_emblem(streak_days)
-                    reset_ts = int(next_midnight.timestamp())
-                    daily_cmd = command_mention("daily", fallback="`/daily`")
-                    embed = obsidian_embed(
-                        "⏰ Daily Streak Reminder",
-                        f"Your **{streak_days}-day streak** resets <t:{reset_ts}:R>!\n\n"
-                        f"{streak_fire}\n\nRun {daily_cmd} to keep it going.",
-                        color=discord.Color.orange(),
-                        footer="Turn this off with /general preferences daily_reminder:Off",
-                        client=bot,
-                    )
-                    try:
-                        await safe_dm(user,embed=embed)
-                        await set_guild_setting(guild_id, f"daily_reminder_sent:{user_id}", today_str)
-                    except discord.Forbidden:
-                        pass
-                except Exception as e:
-                    logger.debug(f"daily_streak_reminder for {user_id}: {e}")
-
+            await run_daily_streak_reminder_cycle(bot)
         except Exception as e:
             logger.error(f"Error in daily_streak_reminder_loop: {e}", exc_info=True)
 
@@ -757,94 +523,9 @@ def setup_tasks(bot):
         migration on the existing ``investments`` table.
         """
         try:
-            if not bot.is_ready():
-                return
+            from tasks.economy_loops import run_investment_maturity_dm_cycle
 
-            async with aiosqlite.connect(DB_PATH) as db:
-                await db.execute(
-                    "CREATE TABLE IF NOT EXISTS investment_dm_sent (investment_id INTEGER PRIMARY KEY, sent_at TEXT)"
-                )
-                await db.commit()
-
-                cur = await db.execute(
-                    """
-                    SELECT i.id, i.guild_id, i.user_id, i.amount, i.interest_rate, i.maturity_date
-                    FROM investments i
-                    LEFT JOIN investment_dm_sent s ON s.investment_id = i.id
-                    WHERE i.collected = 0
-                      AND s.investment_id IS NULL
-                      AND datetime(i.maturity_date) <= datetime('now')
-                    LIMIT 200
-                    """
-                )
-                rows = await cur.fetchall()
-
-            for inv_id, guild_id, user_id, amount, rate, maturity_iso in rows:
-                try:
-                    opted_in = await get_guild_setting(guild_id, f"user_investment_dm:{user_id}")
-                    if opted_in != "1":
-                        # Still record so we don't keep scanning forever — but
-                        # only when the user is not opted in. We use a separate
-                        # marker row by inserting with sent_at=None? Simpler:
-                        # just skip; the row remains, but it's a cheap query.
-                        continue
-
-                    from core.quiet_hours import in_quiet_hours
-                    if await in_quiet_hours(guild_id, user_id):
-                        continue
-
-                    user = bot.get_user(user_id)
-                    if not user:
-                        try:
-                            user = await bot.fetch_user(user_id)
-                        except Exception:
-                            continue
-
-                    payout = int((amount or 0) * (1 + (rate or 0.0)))
-                    profit = payout - (amount or 0)
-                    try:
-                        mat_dt = dateparser.parse(
-                            maturity_iso, settings={"TIMEZONE": "UTC", "RETURN_AS_TIMEZONE_AWARE": True}
-                        )
-                    except Exception:
-                        mat_dt = None
-                    when = (
-                        f"<t:{int(mat_dt.timestamp())}:R>" if mat_dt else "just now"
-                    )
-
-                    embed = obsidian_embed(
-                        "📈 Investment Matured!",
-                        f"Your investment matured {when}.\n\n"
-                        f"Use **`/economy invest_collect`** to claim your payout.",
-                        category="economy",
-                        fields=[
-                            ("💰 Principal", f"{(amount or 0):,} coins", True),
-                            ("💎 Payout", f"{payout:,} coins", True),
-                            ("✨ Profit", f"+{profit:,} coins", True),
-                        ],
-                        footer="Turn this off with /general preferences investment_dm:Off",
-                        client=bot,
-                    )
-
-                    try:
-                        await safe_dm(user,embed=embed)
-                    except discord.Forbidden:
-                        # Mark sent anyway — user can re-open DMs and check
-                        # via /economy invest_status; we don't want to retry
-                        # forever and rate-limit ourselves.
-                        pass
-                    except Exception as e:
-                        logger.debug(f"investment_maturity_dm: failed to DM {user_id}: {e}")
-                        continue
-
-                    async with aiosqlite.connect(DB_PATH) as db:
-                        await db.execute(
-                            "INSERT OR IGNORE INTO investment_dm_sent (investment_id, sent_at) VALUES (?, ?)",
-                            (inv_id, now_utc().isoformat()),
-                        )
-                        await db.commit()
-                except Exception as e:
-                    logger.debug(f"investment_maturity_dm for {user_id}: {e}")
+            await run_investment_maturity_dm_cycle(bot)
         except Exception as e:
             logger.error(f"Error in investment_maturity_dm_loop: {e}", exc_info=True)
 
@@ -921,67 +602,9 @@ def setup_tasks(bot):
     async def member_count_update_loop():
         """Update member count channel names with accurate counts."""
         try:
-            async with aiosqlite.connect(DB_PATH) as db:
-                cur = await db.execute(
-                    "SELECT guild_id, channel_id FROM member_count_channels"
-                )
-                channels = await cur.fetchall()
-            
-            for guild_id, channel_id in channels:
-                guild = bot.get_guild(guild_id)
-                if not guild:
-                    continue
-                
-                # Update member count channel
-                try:
-                    channel = guild.get_channel(channel_id)
-                    if not channel:
-                        # Channel was deleted, remove from database
-                        async with aiosqlite.connect(DB_PATH) as db:
-                            await db.execute(
-                                "DELETE FROM member_count_channels WHERE guild_id=? AND channel_id=?",
-                                (guild_id, channel_id)
-                            )
-                            await db.commit()
-                        continue
-                    
-                    # Get accurate member count
-                    # guild.member_count is usually accurate, but we can verify by counting
-                    member_count = guild.member_count
-                    
-                    # Count bots and humans from cached members
-                    # Note: For very large servers, not all members may be cached
-                    # But guild.member_count should be accurate regardless
-                    bot_count = sum(1 for member in guild.members if member.bot)
-                    
-                    # If we have all members cached, use the cached count
-                    # Otherwise, estimate based on cached ratio
-                    if len(guild.members) == member_count:
-                        # All members cached, accurate count
-                        human_count = member_count - bot_count
-                    else:
-                        # Not all members cached, estimate based on ratio
-                        if len(guild.members) > 0:
-                            bot_ratio = bot_count / len(guild.members)
-                            human_count = int(member_count * (1 - bot_ratio))
-                        else:
-                            # Fallback: assume 5% bots (typical Discord server)
-                            human_count = int(member_count * 0.95)
-                            bot_count = member_count - human_count
-                    
-                    # Format channel name using the same refined format
-                    from commands.general.member_count import format_member_count_name
-                    name = format_member_count_name(member_count, bot_count, human_count)
-                    
-                    # Only update if name changed (to avoid rate limits)
-                    if channel.name != name:
-                        await channel.edit(name=name, reason="Member count update")
-                        logger.debug(f"Updated member count channel {channel_id} in guild {guild_id}: {name}")
-                except discord.Forbidden:
-                    logger.warning(f"No permission to update member count channel {channel_id} in guild {guild_id}")
-                except Exception as e:
-                    logger.error(f"Error updating member count channel {channel_id} in {guild.id}: {e}", exc_info=True)
-                
+            from tasks.guild_stats_loops import run_member_count_update_cycle
+
+            await run_member_count_update_cycle(bot)
         except Exception as e:
             logger.error(f"Error in member_count_update_loop: {e}", exc_info=True)
 
@@ -995,65 +618,9 @@ def setup_tasks(bot):
         from database import get_server_stats_channel
         
         try:
-            async with aiosqlite.connect(DB_PATH) as db:
-                cur = await db.execute("""
-                    SELECT guild_id FROM server_stats_channels WHERE enabled = 1
-                """)
-                guilds = await cur.fetchall()
-            
-            for (guild_id,) in guilds:
-                guild = bot.get_guild(guild_id)
-                if not guild:
-                    continue
-                
-                settings = await get_server_stats_channel(guild_id)
-                if not settings or not settings["enabled"]:
-                    continue
-                
-                channel = guild.get_channel(settings["channel_id"])
-                if not channel:
-                    # Channel was deleted, disable stats
-                    from database import remove_server_stats_channel
-                    await remove_server_stats_channel(guild_id)
-                    continue
-                
-                try:
-                    stats_type = settings["stats_type"]
-                    new_name = None
-                    
-                    if stats_type == "members":
-                        member_count = guild.member_count
-                        bot_count = sum(1 for m in guild.members if m.bot)
-                        human_count = member_count - bot_count
-                        new_name = f"👥 {member_count:,} Members • 🤖 {bot_count:,} Bots • 👤 {human_count:,} Humans"
-                    
-                    elif stats_type == "boosts":
-                        boost_count = guild.premium_subscription_count or 0
-                        boost_level = guild.premium_tier
-                        new_name = f"🚀 {boost_count} Boosts • Level {boost_level}"
-                    
-                    elif stats_type == "channels":
-                        text_channels = len([c for c in guild.channels if isinstance(c, discord.TextChannel)])
-                        voice_channels = len([c for c in guild.channels if isinstance(c, discord.VoiceChannel)])
-                        total_channels = len(guild.channels)
-                        new_name = f"💬 {text_channels} Text • 🔊 {voice_channels} Voice • 📊 {total_channels} Total"
-                    
-                    elif stats_type == "roles":
-                        role_count = len(guild.roles)
-                        new_name = f"🎭 {role_count} Roles"
-                    
-                    if new_name and channel.name != new_name:
-                        # Discord channel name limit is 100 characters
-                        if len(new_name) > 100:
-                            new_name = new_name[:97] + "..."
-                        await channel.edit(name=new_name)
-                        logger.info(f"Updated server stats for guild {guild_id}: {new_name}")
-                
-                except discord.Forbidden:
-                    logger.warning(f"No permission to edit stats channel in guild {guild_id}")
-                except Exception as e:
-                    logger.error(f"Error updating server stats for guild {guild_id}: {e}", exc_info=True)
-        
+            from tasks.guild_stats_loops import run_server_stats_update_cycle
+
+            await run_server_stats_update_cycle(bot)
         except Exception as e:
             logger.error(f"Error in server_stats_update_loop: {e}", exc_info=True)
     
@@ -1098,9 +665,6 @@ def setup_tasks(bot):
             from tasks.community_loops import run_reminder_check_cycle
 
             await run_reminder_check_cycle(bot)
-        except Exception as e:
-            logger.error(f"Error in reminder_check_loop: {e}", exc_info=True)
-        
         except Exception as e:
             logger.error(f"Error in reminder_check_loop: {e}", exc_info=True)
     

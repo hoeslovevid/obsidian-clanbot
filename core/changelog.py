@@ -12,6 +12,7 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-18"
 CURRENT_RELEASE_CHANGES: list[str] = [
+    "**2.0-beta batch 14** — `handlers/voice_events.py`; `wf_live_loops` (Baro/cycle panels + cache warm); `guild_stats_loops`; daily/investment DMs in `economy_loops`",
     "**2.0-beta batch 13** — `handlers/message_events.py` (full on_message pipeline); `lfg_loops` + `trading_loops`; pet decay in `economy_loops`",
     "**2.0-beta batch 12** — `community_loops` (reminders/polls/schedule), `integration_loops` (Twitch), stale tickets + YouTube feeds, archon + RSVP DMs",
     "**2.0-beta batch 12** — `handlers/command_tracking.py`, member ban/role logs in `message_logs.py`",

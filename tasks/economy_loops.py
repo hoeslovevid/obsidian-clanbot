@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import aiosqlite  # type: ignore
+import dateparser  # type: ignore
 import discord  # type: ignore
 
 from core.safe_send import safe_dm
@@ -248,4 +249,169 @@ async def run_pet_decay_reminder_cycle(bot: discord.Client) -> None:
                 pass
         except Exception as e:
             logger.debug(f"Pet decay reminder for user {user_id}: {e}")
+
+async def run_daily_streak_reminder_cycle(bot: discord.Client) -> None:
+    """DM opted-in users ~1 hour before their daily streak resets."""
+    if not bot.is_ready():
+        return
+
+    now = now_utc()
+    # Find users whose last_claim_date is today (UTC) so their reset is at next midnight
+    # We want to remind them when there is between 60 and 90 minutes left until midnight UTC
+    next_midnight = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    minutes_until_midnight = (next_midnight - now).total_seconds() / 60
+
+    if not (60 <= minutes_until_midnight <= 90):
+        return  # Only fire in the 60-90 min window before midnight UTC
+
+    today_str = now.date().isoformat()
+    # At-risk users claimed YESTERDAY but not yet today: their streak resets
+    # at tonight's midnight UTC unless they claim again today. (Users who
+    # already claimed today are safe and must NOT be pinged.)
+    yesterday_str = (now.date() - timedelta(days=1)).isoformat()
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("""
+            SELECT guild_id, user_id, streak_days
+            FROM daily_claims
+            WHERE last_claim_date = ? AND streak_days >= 1
+        """, (yesterday_str,))
+        claimants = await cur.fetchall()
+
+    for guild_id, user_id, streak_days in claimants:
+        try:
+            # Check opt-in
+            opted_in = await get_guild_setting(guild_id, f"user_daily_reminder:{user_id}")
+            if opted_in != "1":
+                continue
+
+            # Throttle: max one reminder per day
+            last_sent = await get_guild_setting(guild_id, f"daily_reminder_sent:{user_id}")
+            if last_sent == today_str:
+                continue
+
+            # Respect user quiet hours (bot-initiated nudge)
+            from core.quiet_hours import in_quiet_hours
+            if await in_quiet_hours(guild_id, user_id):
+                continue
+
+            user = bot.get_user(user_id)
+            if not user:
+                try:
+                    user = await bot.fetch_user(user_id)
+                except Exception:
+                    continue
+
+            from commands.economy.daily import _streak_emblem
+            from core.command_mentions import command_mention
+
+            streak_fire = _streak_emblem(streak_days)
+            reset_ts = int(next_midnight.timestamp())
+            daily_cmd = command_mention("daily", fallback="`/daily`")
+            embed = obsidian_embed(
+                "⏰ Daily Streak Reminder",
+                f"Your **{streak_days}-day streak** resets <t:{reset_ts}:R>!\n\n"
+                f"{streak_fire}\n\nRun {daily_cmd} to keep it going.",
+                color=discord.Color.orange(),
+                footer="Turn this off with /general preferences daily_reminder:Off",
+                client=bot,
+            )
+            try:
+                await safe_dm(user,embed=embed)
+                await set_guild_setting(guild_id, f"daily_reminder_sent:{user_id}", today_str)
+            except discord.Forbidden:
+                pass
+        except Exception as e:
+            logger.debug(f"daily_streak_reminder for {user_id}: {e}")
+
+
+async def run_investment_maturity_dm_cycle(bot: discord.Client) -> None:
+    """DM opted-in users when their investment has matured."""
+    if not bot.is_ready():
+        return
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "CREATE TABLE IF NOT EXISTS investment_dm_sent (investment_id INTEGER PRIMARY KEY, sent_at TEXT)"
+        )
+        await db.commit()
+
+        cur = await db.execute(
+            """
+            SELECT i.id, i.guild_id, i.user_id, i.amount, i.interest_rate, i.maturity_date
+            FROM investments i
+            LEFT JOIN investment_dm_sent s ON s.investment_id = i.id
+            WHERE i.collected = 0
+              AND s.investment_id IS NULL
+              AND datetime(i.maturity_date) <= datetime('now')
+            LIMIT 200
+            """
+        )
+        rows = await cur.fetchall()
+
+    for inv_id, guild_id, user_id, amount, rate, maturity_iso in rows:
+        try:
+            opted_in = await get_guild_setting(guild_id, f"user_investment_dm:{user_id}")
+            if opted_in != "1":
+                # Still record so we don't keep scanning forever — but
+                # only when the user is not opted in. We use a separate
+                # marker row by inserting with sent_at=None? Simpler:
+                # just skip; the row remains, but it's a cheap query.
+                continue
+
+            from core.quiet_hours import in_quiet_hours
+            if await in_quiet_hours(guild_id, user_id):
+                continue
+
+            user = bot.get_user(user_id)
+            if not user:
+                try:
+                    user = await bot.fetch_user(user_id)
+                except Exception:
+                    continue
+
+            payout = int((amount or 0) * (1 + (rate or 0.0)))
+            profit = payout - (amount or 0)
+            try:
+                mat_dt = dateparser.parse(
+                    maturity_iso, settings={"TIMEZONE": "UTC", "RETURN_AS_TIMEZONE_AWARE": True}
+                )
+            except Exception:
+                mat_dt = None
+            when = (
+                f"<t:{int(mat_dt.timestamp())}:R>" if mat_dt else "just now"
+            )
+
+            embed = obsidian_embed(
+                "📈 Investment Matured!",
+                f"Your investment matured {when}.\n\n"
+                f"Use **`/economy invest_collect`** to claim your payout.",
+                category="economy",
+                fields=[
+                    ("💰 Principal", f"{(amount or 0):,} coins", True),
+                    ("💎 Payout", f"{payout:,} coins", True),
+                    ("✨ Profit", f"+{profit:,} coins", True),
+                ],
+                footer="Turn this off with /general preferences investment_dm:Off",
+                client=bot,
+            )
+
+            try:
+                await safe_dm(user,embed=embed)
+            except discord.Forbidden:
+                # Mark sent anyway — user can re-open DMs and check
+                # via /economy invest_status; we don't want to retry
+                # forever and rate-limit ourselves.
+                pass
+            except Exception as e:
+                logger.debug(f"investment_maturity_dm: failed to DM {user_id}: {e}")
+                continue
+
+            async with aiosqlite.connect(DB_PATH) as db:
+                await db.execute(
+                    "INSERT OR IGNORE INTO investment_dm_sent (investment_id, sent_at) VALUES (?, ?)",
+                    (inv_id, now_utc().isoformat()),
+                )
+                await db.commit()
+        except Exception as e:
+            logger.debug(f"investment_maturity_dm for {user_id}: {e}")
 
