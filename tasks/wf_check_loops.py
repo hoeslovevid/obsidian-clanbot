@@ -9,7 +9,7 @@ import aiosqlite  # type: ignore
 import dateparser  # type: ignore
 import discord  # type: ignore
 
-from api.warframe_api import fetch_alerts, fetch_invasions, get_all_cycles
+from api.warframe_api import fetch_alerts, fetch_archon_hunt_data, fetch_invasions, get_all_cycles
 from core.utils import obsidian_embed
 from database import DB_PATH, get_guild_setting, now_utc
 

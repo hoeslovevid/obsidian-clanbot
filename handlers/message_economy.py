@@ -33,7 +33,7 @@ def message_cooldown_touch(guild_id: int, user_id: int) -> None:
     _MESSAGE_COOLDOWN_CACHE[(guild_id, user_id)] = now_utc()
 
 
-async def award_message_economy(message: discord.Message) -> None:
+async def award_message_economy(bot: discord.Client, message: discord.Message) -> None:
     """Award passive coins/XP for a qualifying message (cooldown-gated)."""
     if not message.guild:
         return
@@ -164,7 +164,6 @@ async def award_message_economy(message: discord.Message) -> None:
         await db.commit()
 
     new_message_count = message_count + 1
-    client = message.client
 
     for milestone_level in (10, 25, 50, 100):
         if level >= milestone_level:
@@ -176,7 +175,7 @@ async def award_message_economy(message: discord.Message) -> None:
                     message.guild.id,
                     message.author.id,
                     f"level_{milestone_level}",
-                    client,
+                    bot,
                 )
 
     achievement_map = {
@@ -195,5 +194,5 @@ async def award_message_economy(message: discord.Message) -> None:
                     message.guild.id,
                     message.author.id,
                     achievement_map[milestone_count],
-                    client,
+                    bot,
                 )

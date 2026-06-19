@@ -20,7 +20,7 @@ def channel_mention_safe(channel: Any) -> str:
     return f"#unknown-channel"
 
 
-async def check_auto_mod(message: discord.Message) -> bool:
+async def check_auto_mod(bot: discord.Client, message: discord.Message) -> bool:
     """Check message for auto-moderation violations. Returns True if message was handled."""
     from database import (
         get_auto_mod_settings,
@@ -41,7 +41,6 @@ async def check_auto_mod(message: discord.Message) -> bool:
     if not settings or not settings["enabled"]:
         return False
 
-    client = message.client
     violation_type = None
     action_taken = "none"
 
@@ -130,7 +129,7 @@ async def check_auto_mod(message: discord.Message) -> bool:
                         f"Your message in {channel_mention_safe(message.channel)} was removed for **{violation_type}**.\n\n"
                         "Please follow the server rules.",
                         color=discord.Color.orange(),
-                        client=client,
+                        client=bot,
                     ),
                 )
             except Exception:
@@ -168,7 +167,7 @@ async def check_auto_mod(message: discord.Message) -> bool:
                 target_id=message.author.id,
                 target_type="user",
                 details=action_taken[:200],
-                bot=client,
+                bot=bot,
             )
         except Exception:
             pass
@@ -193,7 +192,7 @@ async def check_auto_mod(message: discord.Message) -> bool:
                     f"for **{violation_type}**.\n\n"
                     "If this was a mistake, tap **Report false positive** below.",
                     color=discord.Color.orange(),
-                    client=client,
+                    client=bot,
                 ),
                 view=appeal,
             )
@@ -210,7 +209,7 @@ async def check_auto_mod(message: discord.Message) -> bool:
                     f"**Action:** {action_taken}\n"
                     f"**Message:** {message.content[:200]}",
                     color=discord.Color.red(),
-                    client=client,
+                    client=bot,
                 )
                 try:
                     await log_channel.send(embed=embed)

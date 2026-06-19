@@ -94,7 +94,7 @@ async def handle_on_message(bot: discord.Client, message: discord.Message) -> No
     except Exception:
         pass
 
-    violation_handled = await check_auto_mod(message)
+    violation_handled = await check_auto_mod(bot, message)
     if violation_handled:
         return
 
@@ -120,7 +120,7 @@ async def handle_on_message(bot: discord.Client, message: discord.Message) -> No
         return
 
     try:
-        await award_message_economy(message)
+        await award_message_economy(bot, message)
     except Exception as econ_err:
         if is_db_locked_error(econ_err):
             logger.warning(
