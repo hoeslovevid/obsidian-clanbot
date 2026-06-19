@@ -121,16 +121,6 @@ async def handle_on_message(bot: discord.Client, message: discord.Message) -> No
 
     try:
         await award_message_economy(bot, message)
-        # #region agent log
-        from core.debug_agent_log import agent_log
-
-        agent_log(
-            "message_events.py:economy",
-            "award_message_economy ok",
-            data={"guild_id": message.guild.id, "user_id": message.author.id},
-            hypothesis_id="H5",
-        )
-        # #endregion
     except Exception as econ_err:
         if is_db_locked_error(econ_err):
             logger.warning(
@@ -140,21 +130,6 @@ async def handle_on_message(bot: discord.Client, message: discord.Message) -> No
             )
             return
         logger.error("Message economy error: %s", econ_err, exc_info=True)
-        # #region agent log
-        from core.debug_agent_log import agent_log
-
-        agent_log(
-            "message_events.py:economy",
-            "award_message_economy failed",
-            data={
-                "guild_id": message.guild.id,
-                "user_id": message.author.id,
-                "error": type(econ_err).__name__,
-                "msg": str(econ_err)[:200],
-            },
-            hypothesis_id="H5",
-        )
-        # #endregion
         return
 
     if isinstance(message.author, discord.Member):

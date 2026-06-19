@@ -12,7 +12,7 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-18"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Fix** — console/world-state pinned buttons use stateless custom_ids only (no view callbacks); stops 40060 duplicate acknowledge",
+    "**Fix** — pinned console/world-state: stateless buttons + component_handler-only routing (no add_view double-dispatch)",
     "**v2.0 platform** — modular refactor for 78+ guilds: global slash sync, version-gated restarts, slim `bot/app.py` (~130 lines)",
     "**Batch 16** — `bot/client.py` (ClanBot + sync); `tasks/registry.py` (all loop definitions); `handlers/discord_events.py` (gateway events)",
     "**Batch 15 · 2.0.0** — `bot/runner.py` startup; `handlers/interaction_router.py` + `incident_checks.py`; `vc_loops`, `moderation_loops`, `wf_roles_loops`, `misc_loops`",
