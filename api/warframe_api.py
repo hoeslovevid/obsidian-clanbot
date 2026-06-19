@@ -755,7 +755,7 @@ async def fetch_sortie() -> Optional[Dict[str, Any]]:
             logger.error("Error fetching sortie: %s: %s", type(e).__name__, e, exc_info=True)
         ws = await _fetch_official_world_state()
         return _ws_to_sortie(ws) if ws else None
-    return await get_cached("warframe:sortie", 60, _fetch)
+    return await get_cached("warframe:sortie", 60, _fetch, stale_seconds=_warframe_cache_stale_seconds())
 
 
 async def fetch_steel_path(platform: str = "pc") -> Optional[Dict[str, Any]]:
@@ -768,7 +768,7 @@ async def fetch_steel_path(platform: str = "pc") -> Optional[Dict[str, Any]]:
         except Exception as e:
             logger.error("Error fetching steel path: %s: %s", type(e).__name__, e, exc_info=True)
             return None
-    return await get_cached(f"warframe:steelPath:{plat}", 60, _fetch)
+    return await get_cached(f"warframe:steelPath:{plat}", 60, _fetch, stale_seconds=_warframe_cache_stale_seconds())
 
 
 async def fetch_arbitration(platform: str = "pc") -> Optional[Dict[str, Any]]:
@@ -781,7 +781,7 @@ async def fetch_arbitration(platform: str = "pc") -> Optional[Dict[str, Any]]:
         except Exception as e:
             logger.error("Error fetching arbitration: %s: %s", type(e).__name__, e, exc_info=True)
             return None
-    return await get_cached(f"warframe:arbitration:{plat}", 60, _fetch)
+    return await get_cached(f"warframe:arbitration:{plat}", 60, _fetch, stale_seconds=_warframe_cache_stale_seconds())
 
 
 async def fetch_nightwave(platform: str = "pc") -> Optional[Dict[str, Any]]:
@@ -794,7 +794,7 @@ async def fetch_nightwave(platform: str = "pc") -> Optional[Dict[str, Any]]:
         except Exception as e:
             logger.error("Error fetching nightwave: %s: %s", type(e).__name__, e, exc_info=True)
             return None
-    return await get_cached(f"warframe:nightwave:{plat}", 300, _fetch)
+    return await get_cached(f"warframe:nightwave:{plat}", 300, _fetch, stale_seconds=_warframe_cache_stale_seconds())
 
 
 async def fetch_invasions() -> Optional[list]:
@@ -1059,8 +1059,17 @@ async def fetch_alerts() -> Optional[List[Dict[str, Any]]]:
 
 
 async def warm_hot_warframe_endpoints() -> None:
-    """Prefetch baro, fissures, and alerts so member slash commands hit warm cache."""
-    await asyncio.gather(fetch_baro_data(), fetch_fissures(), fetch_alerts(), return_exceptions=True)
+    """Prefetch hot endpoints so member slash commands hit warm cache."""
+    await asyncio.gather(
+        fetch_baro_data(),
+        fetch_fissures(),
+        fetch_alerts(),
+        fetch_steel_path(),
+        fetch_arbitration(),
+        fetch_nightwave(),
+        fetch_sortie(),
+        return_exceptions=True,
+    )
 
 
 # Warframe Steam App ID (for playtime lookup)
