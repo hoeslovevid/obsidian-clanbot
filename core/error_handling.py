@@ -223,14 +223,15 @@ async def send_error_reply(
             view.add_item(_OpenTicketButton(error_code))
 
         class _FeedbackButton(discord.ui.Button):
-            def __init__(self):
+            def __init__(self, code: str):
                 super().__init__(label="Send feedback", emoji="💬", style=discord.ButtonStyle.secondary)
+                self._code = code
 
             async def callback(self, btn_interaction: discord.Interaction):
                 from commands.general.feedback import FeedbackModal
-                await btn_interaction.response.send_modal(FeedbackModal())
+                await btn_interaction.response.send_modal(FeedbackModal(error_code=self._code))
 
-        view.add_item(_FeedbackButton())
+        view.add_item(_FeedbackButton(error_code))
 
         add_link_row(view, help_link_buttons())
     try:

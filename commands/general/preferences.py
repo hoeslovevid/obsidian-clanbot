@@ -392,6 +392,7 @@ def setup(bot, group=None):
                 "\n".join(lines) or "Set timezone or quieter mode using the options above.",
                 color=EMBED_COLORS["general"],
                 client=interaction.client,
+                guild_id=interaction.guild.id,
             )
             from core.help_layout import help_layout_v2_enabled
             from core.preferences_layout import PreferencesLayout
@@ -413,8 +414,13 @@ def setup(bot, group=None):
             )
 
         if updated:
+            body = "\n".join(updated)
+            from core.first_run_nudge import maybe_first_run_hint
+            body = await maybe_first_run_hint(
+                interaction.guild.id, interaction.user.id, body, feature="preferences"
+            )
             return await interaction.followup.send(
-                embed=success_embed("Preferences Updated", "\n".join(updated), client=interaction.client),
+                embed=success_embed("Preferences Updated", body, client=interaction.client),
                 ephemeral=True
             )
 

@@ -152,7 +152,8 @@ async def execute_warn(interaction: discord.Interaction, user: discord.Member, r
             color=discord.Color.orange(),
             client=interaction.client,
         )
-        await user.send(embed=dm_embed)
+        from core.safe_send import safe_dm
+        await safe_dm(user, embed=dm_embed)
     except Exception:
         pass
 

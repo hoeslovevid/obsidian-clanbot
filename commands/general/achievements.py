@@ -240,9 +240,13 @@ def setup(bot, group=None):
             desc += "\n"
         
         total_ach = len(rows)
+        from core.first_run_nudge import maybe_first_run_hint
+        desc = await maybe_first_run_hint(
+            interaction.guild.id, interaction.user.id, desc[:4000], feature="achievements"
+        )
         embed = obsidian_embed(
             "🏆 Available Achievements",
-            desc[:4000],
+            desc,
             color=discord.Color.blue(),
             thumbnail=interaction.guild.icon.url if interaction.guild.icon else None,
             footer=f"{total_ach} achievement(s) available • ✅ = unlocked, 🔒 = locked",

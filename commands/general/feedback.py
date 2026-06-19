@@ -5,18 +5,29 @@ import discord
 from discord import app_commands
 
 from core.embed_templates import embed_template
-from core.utils import success_embed
-from database import get_guild_setting, set_guild_setting, now_utc
+from core.utils import error_embed, success_embed
+from database import get_guild_setting, now_utc
 
 
 class FeedbackModal(discord.ui.Modal, title="Send feedback"):
-    message = discord.ui.TextInput(
-        label="Your message",
-        style=discord.TextStyle.paragraph,
-        placeholder="Bug report, idea, or praise — include steps to reproduce if it's a bug.",
-        required=True,
-        max_length=1500,
-    )
+    def __init__(self, *, error_code: str | None = None):
+        super().__init__()
+        self._error_code = error_code
+        default_msg = ""
+        if error_code:
+            default_msg = (
+                f"Error code: {error_code}\n\n"
+                "(Describe what you were doing when this happened.)"
+            )
+        self.message = discord.ui.TextInput(
+            label="Your message",
+            style=discord.TextStyle.paragraph,
+            placeholder="Bug report, idea, or praise — include steps to reproduce if it's a bug.",
+            required=True,
+            max_length=1500,
+            default=default_msg or None,
+        )
+        self.add_item(self.message)
 
     async def on_submit(self, interaction: discord.Interaction):
         if not interaction.guild:
@@ -25,8 +36,9 @@ class FeedbackModal(discord.ui.Modal, title="Send feedback"):
                 ephemeral=True,
             )
         text = (self.message.value or "").strip()
+        if self._error_code and self._error_code not in text:
+            text = f"Error code: {self._error_code}\n\n{text}"
         ch_raw = await get_guild_setting(interaction.guild.id, "feedback_channel_id")
-        bot_ref = getattr(interaction.client, "bot", interaction.client)
         staff_embed = embed_template(
             "showcase",
             "💬 Member feedback",

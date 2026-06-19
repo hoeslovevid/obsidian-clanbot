@@ -306,16 +306,17 @@ async def send_onboarding_dm(member: discord.Member, bot) -> bool:
                     on_menu=_menu,
                     on_done=_done,
                 )
-                await member.send(view=layout)
-                return True
+                from core.safe_send import safe_dm
+                sent = await safe_dm(member, view=layout)
+                if sent:
+                    return True
             except Exception:
                 pass
         embed = _build_dm_embed(member, bot)
         view = OnboardingView(member, guild_id=member.guild.id)
-        await member.send(embed=embed, view=view)
-        return True
-    except discord.Forbidden:
-        return False
+        from core.safe_send import safe_dm
+        sent = await safe_dm(member, embed=embed, view=view)
+        return bool(sent)
     except Exception as e:
         logger.debug(f"[onboarding] DM failed for {member.id}: {e}")
         return False

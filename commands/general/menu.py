@@ -106,21 +106,24 @@ class QuickMenuSelect(discord.ui.Select):
         if raw.startswith("fav:"):
             idx = int(raw.split(":", 1)[1])
             if idx < 0 or idx >= len(self.favorites):
-                return await interaction.response.send_message("Favorite not found.", ephemeral=True)
+                from core.reply_helpers import reply_error
+                return await reply_error(interaction, "Not found", "Favorite not found.")
             path = self.favorites[idx].split()
             label = f"/{self.favorites[idx]}"
             hint = None
         elif raw.startswith("recent:"):
             idx = int(raw.split(":", 1)[1])
             if idx < 0 or idx >= len(self.recent):
-                return await interaction.response.send_message("Recent entry not found.", ephemeral=True)
+                from core.reply_helpers import reply_error
+                return await reply_error(interaction, "Not found", "Recent entry not found.")
             path = self.recent[idx][0].split()
             label = f"/{self.recent[idx][0]}"
             hint = None
         else:
             idx = int(raw) - self.menu_offset
             if idx < 0 or idx >= len(MENU_ITEMS):
-                return await interaction.response.send_message("Invalid selection.", ephemeral=True)
+                from core.reply_helpers import reply_error
+                return await reply_error(interaction, "Invalid selection", "That menu item isn't available.")
             label, _emoji, path, hint = MENU_ITEMS[idx]
 
         if hint:

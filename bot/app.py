@@ -697,14 +697,16 @@ async def check_auto_mod(message: discord.Message) -> bool:
             if action == "warn":
                 action_taken = "delete + warn"
                 try:
-                    await message.author.send(
+                    from core.safe_send import safe_dm
+                    await safe_dm(
+                        message.author,
                         embed=obsidian_embed(
                             "⚠️ Auto-moderation warning",
                             f"Your message in {_channel_mention_safe(message.channel)} was removed for **{violation_type}**.\n\n"
                             "Please follow the server rules.",
                             color=discord.Color.orange(),
                             client=bot,
-                        )
+                        ),
                     )
                 except Exception:
                     pass
@@ -732,6 +734,19 @@ async def check_auto_mod(message: discord.Message) -> bool:
                 message.content[:500],
                 action_taken
             )
+            try:
+                from core.audit import log_audit
+                await log_audit(
+                    message.guild.id,
+                    f"automod_{violation_type}",
+                    0,
+                    target_id=message.author.id,
+                    target_type="user",
+                    details=action_taken[:200],
+                    bot=bot,
+                )
+            except Exception:
+                pass
 
             # DM user with appeal affordance
             log_ch_id = settings.get("log_channel_id")
@@ -745,7 +760,9 @@ async def check_auto_mod(message: discord.Message) -> bool:
                     preview=message.content[:300],
                     log_channel_id=int(log_ch_id) if log_ch_id else None,
                 )
-                await message.author.send(
+                from core.safe_send import safe_dm
+                await safe_dm(
+                    message.author,
                     embed=obsidian_embed(
                         "🛡️ Message removed",
                         f"Auto-mod removed your message in {_channel_mention_safe(message.channel)} "
@@ -1519,8 +1536,9 @@ async def on_member_join(member: discord.Member):
         if dm_enabled == "1" and dm_msg:
             dm_text = dm_msg.replace("{user}", str(member)).replace("{server}", member.guild.name)
             dm_text = dm_text.replace("{member_count}", str(member.guild.member_count or 0))
-            await member.send(dm_text[:2000])
-    except (discord.Forbidden, discord.HTTPException):
+            from core.safe_send import safe_dm
+            await safe_dm(member, content=dm_text[:2000])
+    except Exception:
         pass  # User may have DMs disabled
 
     # Default short welcome DM when no custom welcome_dm is configured.
@@ -1530,10 +1548,11 @@ async def on_member_join(member: discord.Member):
         if default_off != "1" and custom_dm != "1":
             short = (
                 f"Welcome to **{member.guild.name}**! "
-                "Try `/menu` for quick actions, `/help` for commands, and `/preferences` to set your timezone."
+                "Try `/start` or `/menu` for quick actions, `/help` for commands, and `/preferences` to set your timezone."
             )
-            await member.send(short[:2000])
-    except (discord.Forbidden, discord.HTTPException):
+            from core.safe_send import safe_dm
+            await safe_dm(member, content=short[:2000])
+    except Exception:
         pass
 
     # Item 8: first-run onboarding DM (additive — runs alongside the welcome DM above).

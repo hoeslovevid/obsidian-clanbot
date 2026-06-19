@@ -42,7 +42,7 @@ def _warframe_health_snippet() -> tuple[str, bool]:
 
 
 def _presence_mode() -> str:
-    """Rotation mode: default | menu | degraded | event (env PRESENCE_MODE)."""
+    """Rotation mode: default | menu | degraded | event | start (env PRESENCE_MODE)."""
     return (os.getenv("PRESENCE_MODE", "default") or "default").strip().lower()
 
 
@@ -51,6 +51,7 @@ def build_bot_activity(bot) -> discord.Activity:
 
     ``PRESENCE_MODE`` env:
     - ``menu`` — emphasize /menu discovery
+    - ``start`` — emphasize /start onboarding
     - ``degraded`` — surface WF API health when degraded
     - ``event`` — highlight /events
     - ``default`` — balanced mix
@@ -68,6 +69,8 @@ def build_bot_activity(bot) -> discord.Activity:
         parts.append(health or "WF degraded")
     elif mode == "menu":
         parts.append("/menu")
+    elif mode == "start":
+        parts.append("/start")
     elif mode == "event":
         parts.append("/events")
     else:

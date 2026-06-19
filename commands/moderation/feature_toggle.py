@@ -130,6 +130,18 @@ def setup(bot, group=None):
                 ),
                 ephemeral=True,
             )
+            try:
+                from core.audit import log_audit
+                bot_ref = getattr(modal_inter.client, "bot", modal_inter.client)
+                await log_audit(
+                    modal_inter.guild.id,
+                    "feature_toggle",
+                    modal_inter.user.id,
+                    details=f"{feat}={new_state}",
+                    bot=bot_ref,
+                )
+            except Exception:
+                pass
 
         await interaction.response.send_modal(_ConfirmDisableModal(feat, new_state, _apply))
 

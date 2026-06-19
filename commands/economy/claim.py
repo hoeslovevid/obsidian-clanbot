@@ -157,9 +157,17 @@ def setup(bot, group=None):
                         btn.callback = self._run_daily
                         self.add_item(btn)
 
+                async def _deny_other(self, btn_i: discord.Interaction):
+                    from core.reply_helpers import reply_error
+                    return await reply_error(
+                        btn_i,
+                        "Requester only",
+                        "This panel is for whoever ran `/claim`.",
+                    )
+
                 async def _claim_bounties(self, btn_i: discord.Interaction):
                     if btn_i.user.id != uid:
-                        return await btn_i.response.send_message("This panel is for the requester only.", ephemeral=True)
+                        return await self._deny_other(btn_i)
                     await btn_i.response.defer(ephemeral=True)
                     from commands.economy.bounties import claim_bounties
 
@@ -175,7 +183,7 @@ def setup(bot, group=None):
 
                 async def _collect_invest(self, btn_i: discord.Interaction):
                     if btn_i.user.id != uid:
-                        return await btn_i.response.send_message("This panel is for the requester only.", ephemeral=True)
+                        return await self._deny_other(btn_i)
                     await btn_i.response.defer(ephemeral=True)
                     from commands.economy.invest import collect_matured_investment
 
@@ -194,7 +202,7 @@ def setup(bot, group=None):
 
                 async def _run_daily(self, btn_i: discord.Interaction):
                     if btn_i.user.id != uid:
-                        return await btn_i.response.send_message("This panel is for the requester only.", ephemeral=True)
+                        return await self._deny_other(btn_i)
                     daily_cmd = command_mention("daily", fallback="`/daily`")
                     await btn_i.response.send_message(
                         f"Run {daily_cmd} to claim your streak reward (bounties auto-claim there too).",

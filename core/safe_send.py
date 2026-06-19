@@ -49,8 +49,34 @@ async def safe_channel_send(
     return None
 
 
-async def safe_dm(user: Optional[discord.abc.User], **send_kwargs: Any) -> Optional[discord.Message]:
+async def safe_dm(
+    user: Optional[discord.abc.User],
+    **send_kwargs: Any,
+) -> Optional[discord.Message]:
     """DM ``user``; never raises."""
     if user is None:
         return None
     return await safe_channel_send(None, dm_user=user, **send_kwargs)
+
+
+async def safe_dm_or_hint(
+    user: Optional[discord.abc.User],
+    interaction: Optional[discord.Interaction] = None,
+    *,
+    what_failed: str = "I couldn't send you a direct message.",
+    **send_kwargs: Any,
+) -> Optional[discord.Message]:
+    """DM user; if blocked, post dm_blocked_help to interaction (ephemeral)."""
+    sent = await safe_dm(user, **send_kwargs)
+    if sent or not interaction:
+        return sent
+    try:
+        from core.utils import dm_blocked_help_embed
+        emb = dm_blocked_help_embed("DM blocked", what_failed, client=interaction.client)
+        if interaction.response.is_done():
+            await interaction.followup.send(embed=emb, ephemeral=True)
+        else:
+            await interaction.response.send_message(embed=emb, ephemeral=True)
+    except Exception:
+        pass
+    return None

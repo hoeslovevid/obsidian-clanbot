@@ -15,6 +15,7 @@ _FEATURE_HINTS: dict[str, str] = {
     "preferences": "Set timezone and quiet hours so digests and reminders land at the right time.",
     "wfnotify": "One setup covers Baro, fissures, alerts, and more — try {search} for other WF commands.",
     "achievements": "Unlock badges over time — your profile shows equipped ones.",
+    "bounties": "Complete tasks today — `/daily` auto-claims finished bounties too.",
 }
 
 

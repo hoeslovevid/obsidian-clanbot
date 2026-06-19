@@ -17,6 +17,7 @@ from database import DB_PATH, now_utc, get_guild_setting, set_guild_setting, get
 from core.channels import resolve_channel_id, delete_temp_vc_and_panel
 from api.warframe_api import get_baro_status, get_all_cycles, fetch_invasions, fetch_archon_hunt_data, fetch_events_data, fetch_alerts, fetch_duviri_circuit
 from core.utils import obsidian_embed, ECONOMY_ENABLED, COINS_PER_MINUTE_VOICE, MIN_VOICE_MINUTES_FOR_REWARD, XP_ENABLED, XP_PER_MINUTE_VOICE
+from core.safe_send import safe_dm
 
 # ---------------------------------------------------------------------------
 # Notify channel health-check helper
@@ -355,7 +356,7 @@ def setup_tasks(bot):
                     try:
                         member = guild.get_member(int(user_id))
                         if member and not member.bot:
-                            await member.send(
+                            await safe_dm(member,
                                 embed=obsidian_embed(
                                     "⏳ Event Reminder",
                                     f"**{title}** in {guild.name} begins in ~{EVENT_REMINDER_MINUTES_BEFORE} minutes!\n**Time:** <t:{int(start_ts)}:F>",
@@ -452,7 +453,7 @@ def setup_tasks(bot):
                         try:
                             member = guild.get_member(int(uid))
                             if member and not member.bot:
-                                await member.send(
+                                await safe_dm(member,
                                     embed=obsidian_embed(
                                         "🟢 Event starting now",
                                         f"**{title}** is live in **{guild.name}**!\n"
@@ -784,9 +785,9 @@ def setup_tasks(bot):
 
                         try:
                             if view is not None:
-                                await member.send(embed=embed, view=view)
+                                await safe_dm(member,embed=embed, view=view)
                             else:
-                                await member.send(embed=embed)
+                                await safe_dm(member,embed=embed)
                             async with aiosqlite.connect(DB_PATH) as db:
                                 await db.execute(
                                     "INSERT OR IGNORE INTO event_dm_reminders_sent (event_id, user_id, sent_at) VALUES (?, ?, ?)",
@@ -866,7 +867,7 @@ def setup_tasks(bot):
                                     color=discord.Color.orange(),
                                     client=bot,
                                 )
-                                await member.send(embed=dm)
+                                await safe_dm(member,embed=dm)
                                 await mark_inactive_warned(guild.id, member.id)
                                 warned += 1
                             except (discord.Forbidden, discord.HTTPException):
@@ -1470,7 +1471,7 @@ def setup_tasks(bot):
                         continue
                     member = guild.get_member(creator_id)
                     if member:
-                        await member.send(
+                        await safe_dm(member,
                             embed=embed_template(
                                 "showcase",
                                 "⏰ LFG starting soon",
@@ -1525,7 +1526,7 @@ def setup_tasks(bot):
                         try:
                             from core.quiet_hours import in_quiet_hours
                             if not await in_quiet_hours(guild_id, user_id):
-                                await member.send(
+                                await safe_dm(member,
                                     embed=obsidian_embed(
                                         "⏰ Listing expires soon",
                                         f"Your **{listing_type}** for **{item_name}** expires within 24 hours.\n\n"
@@ -1574,7 +1575,7 @@ def setup_tasks(bot):
                                     color=discord.Color.orange(),
                                     client=bot,
                                 )
-                                await member.send(embed=dm)
+                                await safe_dm(member,embed=dm)
                             except (discord.Forbidden, discord.HTTPException):
                                 pass
 
@@ -1644,7 +1645,7 @@ def setup_tasks(bot):
 
                     msg = f"Your pet **{pet_name}** needs attention! Low: {', '.join(issues)}.\n\nUse `/economy pet_feed` and `/economy pet_play` to care for your pet."
                     try:
-                        await user.send(embed=obsidian_embed("🐾 Pet Needs Care", msg, color=discord.Color.orange(), client=bot))
+                        await safe_dm(user,embed=obsidian_embed("🐾 Pet Needs Care", msg, color=discord.Color.orange(), client=bot))
                         await set_guild_setting(guild_id, last_key, now.isoformat())
                     except discord.Forbidden:
                         pass
@@ -1726,7 +1727,7 @@ def setup_tasks(bot):
                         client=bot,
                     )
                     try:
-                        await user.send(embed=embed)
+                        await safe_dm(user,embed=embed)
                         await set_guild_setting(guild_id, f"daily_reminder_sent:{user_id}", today_str)
                     except discord.Forbidden:
                         pass
@@ -1819,7 +1820,7 @@ def setup_tasks(bot):
                     )
 
                     try:
-                        await user.send(embed=embed)
+                        await safe_dm(user,embed=embed)
                     except discord.Forbidden:
                         # Mark sent anyway — user can re-open DMs and check
                         # via /economy invest_status; we don't want to retry
@@ -2710,7 +2711,7 @@ def setup_tasks(bot):
                                 color=discord.Color.blue(),
                                 client=bot,
                             )
-                            sent_message = await user.send(embed=embed, view=ReminderSnoozeView())
+                            sent_message = await safe_dm(user,embed=embed, view=ReminderSnoozeView())
                             sent = True
                         except Exception:
                             pass  # User has DMs disabled
@@ -3346,7 +3347,7 @@ def setup_tasks(bot):
                     from core.quiet_hours import in_quiet_hours
                     if await in_quiet_hours(int(guild_id), int(creator_id)):
                         continue
-                    await user.send(
+                    await safe_dm(user,
                         embed=obsidian_embed(
                             "👋 Still looking for squad?",
                             f"Your **{mission}** LFG has had no replies for 2+ hours.\n\n"

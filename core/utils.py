@@ -370,6 +370,7 @@ def obsidian_embed(
     error_code: Optional[str] = None,
     cached_at: Optional[datetime] = None,
     compact: bool = False,
+    guild_id: Optional[int] = None,
 ) -> discord.Embed:
     """Create a standardized Obsidian-themed embed.
 
@@ -471,6 +472,14 @@ def obsidian_embed(
 
     # Set footer: always attach bot avatar as icon for a polished look
     footer_text = footer or EMBED_FOOTER_DEFAULT
+    if guild_id:
+        try:
+            from core.guild_branding import cached_guild_footer, merge_guild_footer
+            suffix = cached_guild_footer(guild_id)
+            if suffix:
+                footer_text = merge_guild_footer(footer_text, suffix)
+        except Exception:
+            pass
     if error_code:
         footer_text = f"{footer_text} · Code: {error_code}"
     if cached_at:

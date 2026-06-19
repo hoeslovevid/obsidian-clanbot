@@ -12,16 +12,28 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-18"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Q1** — `reply_helpers` rollout (views, LFG, events); WF `merge_wf_footer` on invasions; market context menu embed",
-    "**Q2** — `/feedback` + `/admin feedback_setup`; error embed **Send feedback** button; `/about` privacy line",
-    "**Q3** — `/menu` getting-started path; first-run nudges for price_watch/preferences/wfnotify/achievements",
-    "**Q4** — audit on kick/ban/incident/mass roles; `/admin mod_kpi_setup`; dashboard maintenance/incident alerts",
-    "**Q5** — `safe_dm` on digest + price-watch DMs; Presence intent for ticket auto-assign",
-    "**Q6** — profile template `category` fix; branded market lookup embed; Layout v2 remains default",
+    "**R1** — `reply_helpers` on menu, claim hub, component_handler; branded VC/LFG/complaint button replies",
+    "**R2** — `safe_dm` rollout (automod, welcome, onboarding, background tasks, wf recovery)",
+    "**R3** — `merge_wf_footer` on hub + LFG embeds (invasions already wired)",
+    "**R4** — `/admin audit` paginated viewer; audit on automod, ticket open, feature toggle; feedback modal pre-fills error code",
+    "**R5** — `/start` onboarding guide; first-run nudges on bounties/preferences/achievements; `empty_state_embed` on audit",
+    "**R6** — `/admin branding` custom guild footer (cached on embeds); `PRESENCE_MODE=start` for /start discovery",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "1.99.12",
+        "date": "2026-06-18",
+        "changes": [
+            "**Q1** — `reply_helpers` rollout (views, LFG, events); WF `merge_wf_footer` on invasions; market context menu embed",
+            "**Q2** — `/feedback` + `/admin feedback_setup`; error embed **Send feedback** button; `/about` privacy line",
+            "**Q3** — `/menu` getting-started path; first-run nudges for price_watch/preferences/wfnotify/achievements",
+            "**Q4** — audit on kick/ban/incident/mass roles; `/admin mod_kpi_setup`; dashboard maintenance/incident alerts",
+            "**Q5** — `safe_dm` on digest + price-watch DMs; Presence intent for ticket auto-assign",
+            "**Q6** — profile template `category` fix; branded market lookup embed; Layout v2 remains default",
+        ],
+    },
     {
         "version": "1.99.11",
         "date": "2026-06-18",

@@ -632,13 +632,15 @@ async def create_lfg_post(
     if cycle_nudge:
         fields.append(("🌍 World cycle", cycle_nudge, False))
 
+    from core.wf_copy import merge_wf_footer
+    lfg_footer = merge_wf_footer(f"{footer_for('community_lfg')} · ID {lfg_id}", "warframe:lfg")
     embed = embed_template(
         "showcase",
         "🔍 Looking for Group",
         f"> Host: {interaction.user.mention} · Mission **{mission_name}**",
         category="community",
         fields=fields,
-        footer=f"{footer_for('community_lfg')} · ID {lfg_id}",
+        footer=lfg_footer,
         client=interaction.client,
     )
     view = LFGView(lfg_id, has_radio=bool(radio_clean))

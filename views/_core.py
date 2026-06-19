@@ -7,7 +7,7 @@ import discord  # type: ignore
 import aiosqlite  # type: ignore
 from typing import Optional, Callable, Awaitable, Any, Tuple
 
-from core.utils import display_case_status, is_mod, obsidian_embed, render_bar
+from core.utils import display_case_status, is_mod, obsidian_embed, render_bar, error_embed, success_embed
 from core.vc_permissions import can_manage_temp_vc
 from database import DB_PATH, now_utc, log_complaint_action
 
@@ -210,7 +210,10 @@ class UndoView(discord.ui.View):
     @discord.ui.button(label="Undo", emoji="↩️", style=discord.ButtonStyle.secondary)
     async def undo_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self._used:
-            return await interaction.response.send_message("Already undone.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=error_embed("Already undone", "This action was already reversed.", client=interaction.client),
+                ephemeral=True,
+            )
         self._used = True
         for c in self.children:
             if isinstance(c, discord.ui.Button):
@@ -383,14 +386,23 @@ class SetLimitSelect(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction):
         vc = interaction.guild.get_channel(self.vc_id)
         if not isinstance(vc, discord.VoiceChannel):
-            return await interaction.response.send_message("Channel not found.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=error_embed("Channel not found", "That voice channel is gone.", client=interaction.client),
+                ephemeral=True,
+            )
         try:
             limit = int(self.values[0])
         except ValueError:
-            return await interaction.response.send_message("Invalid limit.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=error_embed("Invalid limit", "Choose a limit between 0 and 99.", client=interaction.client),
+                ephemeral=True,
+            )
 
         await vc.edit(user_limit=limit, reason="VC limit")
-        await interaction.response.send_message("Limit updated.", ephemeral=True)
+        await interaction.response.send_message(
+            embed=success_embed("Limit updated", "Squad capacity updated.", client=interaction.client),
+            ephemeral=True,
+        )
         try:
             from bot import update_vc_panel_embed
             await update_vc_panel_embed(interaction.guild, self.vc_id, force=True)
@@ -641,7 +653,10 @@ class RSVPView(discord.ui.View):
         else:
             embed.add_field(name="RSVP", value=summary, inline=False)
         await interaction.message.edit(embed=embed, view=self)
-        await interaction.response.send_message("RSVP recorded.", ephemeral=True)
+        await interaction.response.send_message(
+            embed=success_embed("RSVP recorded", "Your response was saved.", client=interaction.client),
+            ephemeral=True,
+        )
 
     async def delay_event(self, interaction: discord.Interaction, minutes: int = 15):
         if not interaction.guild:
@@ -656,7 +671,10 @@ class RSVPView(discord.ui.View):
             )
             row = await cur.fetchone()
         if not row:
-            return await interaction.response.send_message("Event not found.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=error_embed("Event not found", "This event may have ended or been removed.", client=interaction.client),
+                ephemeral=True,
+            )
         creator_id, start_ts, end_ts = int(row[0]), int(row[1]), int(row[2])
         from core.utils import is_mod
 
@@ -708,7 +726,10 @@ class RSVPView(discord.ui.View):
             )
             row = await cur.fetchone()
         if not row:
-            return await interaction.response.send_message("Event not found.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=error_embed("Event not found", "This event may have ended or been removed.", client=interaction.client),
+                ephemeral=True,
+            )
         creator_id, title = int(row[0]), row[1]
         from core.utils import is_mod
 
@@ -735,7 +756,10 @@ class RSVPView(discord.ui.View):
         for item in self.children:
             item.disabled = True
         await interaction.message.edit(embed=embed, view=self)
-        await interaction.response.send_message("Event cancelled.", ephemeral=True)
+        await interaction.response.send_message(
+            embed=success_embed("Event cancelled", "The event was cancelled and RSVPs cleared.", client=interaction.client),
+            ephemeral=True,
+        )
 
 
 class AutoModAppealView(discord.ui.View):
@@ -759,7 +783,10 @@ class AutoModAppealView(discord.ui.View):
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.user_id:
-            await interaction.response.send_message("This appeal is not for you.", ephemeral=True)
+            await interaction.response.send_message(
+                embed=error_embed("Not for you", "This appeal is not for you.", client=interaction.client),
+                ephemeral=True,
+            )
             return False
         return True
 
@@ -809,7 +836,10 @@ class TradingPostView(discord.ui.View):
     
     async def mark_sold_button(self, interaction: discord.Interaction):
         if interaction.user.id != self.owner_id:
-            return await interaction.response.send_message("Only the listing owner can mark it as sold.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=error_embed("Owners only", "Only the listing owner can mark it as sold.", client=interaction.client),
+                ephemeral=True,
+            )
         
         await interaction.response.defer(ephemeral=True)
         
@@ -841,7 +871,10 @@ class TradingPostView(discord.ui.View):
     
     async def delete_button(self, interaction: discord.Interaction):
         if interaction.user.id != self.owner_id:
-            return await interaction.response.send_message("Only the listing owner can delete it.", ephemeral=True)
+            return await interaction.response.send_message(
+                embed=error_embed("Owners only", "Only the listing owner can delete it.", client=interaction.client),
+                ephemeral=True,
+            )
         
         await interaction.response.defer(ephemeral=True)
         
@@ -1257,7 +1290,8 @@ class ApplicationManageView(discord.ui.View):
     
     async def approve_button(self, interaction: discord.Interaction):
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
-            return await interaction.response.send_message("Only moderators can use this.", ephemeral=True)
+            from core.reply_helpers import deny_mods_only
+            return await deny_mods_only(interaction)
         
         await interaction.response.defer(ephemeral=True)
         
@@ -1346,7 +1380,8 @@ class ApplicationManageView(discord.ui.View):
     
     async def reject_button(self, interaction: discord.Interaction):
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
-            return await interaction.response.send_message("Only moderators can use this.", ephemeral=True)
+            from core.reply_helpers import deny_mods_only
+            return await deny_mods_only(interaction)
         
         # Show modal for rejection reason
         from core.modals import ApplicationRejectModal

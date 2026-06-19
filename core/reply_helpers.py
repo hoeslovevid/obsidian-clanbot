@@ -3,7 +3,62 @@ from __future__ import annotations
 
 import discord
 
-from core.utils import error_embed, obsidian_embed
+from core.utils import error_embed, obsidian_embed, success_embed
+
+
+async def _send_ephemeral(
+    interaction: discord.Interaction,
+    embed: discord.Embed,
+    *,
+    ephemeral: bool = True,
+) -> None:
+    if interaction.response.is_done():
+        await interaction.followup.send(embed=embed, ephemeral=ephemeral)
+    else:
+        await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
+
+
+async def reply_success(
+    interaction: discord.Interaction,
+    title: str,
+    message: str,
+    *,
+    ephemeral: bool = True,
+) -> None:
+    await _send_ephemeral(
+        interaction,
+        success_embed(title, message, client=interaction.client),
+        ephemeral=ephemeral,
+    )
+
+
+async def reply_error(
+    interaction: discord.Interaction,
+    title: str,
+    message: str,
+    *,
+    action_hint: str | None = None,
+    ephemeral: bool = True,
+) -> None:
+    await _send_ephemeral(
+        interaction,
+        error_embed(title, message, action_hint=action_hint, client=interaction.client),
+        ephemeral=ephemeral,
+    )
+
+
+async def reply_info(
+    interaction: discord.Interaction,
+    title: str,
+    message: str,
+    *,
+    ephemeral: bool = True,
+) -> None:
+    await _send_ephemeral(
+        interaction,
+        obsidian_embed(title, message, client=interaction.client),
+        ephemeral=ephemeral,
+    )
 
 
 def server_only_embed(client=None) -> discord.Embed:

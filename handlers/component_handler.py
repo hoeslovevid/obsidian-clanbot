@@ -12,6 +12,7 @@ from typing import Any, Optional
 
 from core.config import DB_PATH
 from core.utils import is_mod, obsidian_embed
+from core.reply_helpers import deny_mods_only, reply_error
 from core.vc_permissions import (
     apply_staff_overwrites_to_mapping,
     can_manage_temp_vc,
@@ -49,7 +50,11 @@ async def handle_component(bot: discord.Client, interaction: discord.Interaction
                 logger.error(f"[button] complaints:open - error sending modal: {e}", exc_info=True)
                 try:
                     if not interaction.response.is_done():
-                        await interaction.response.send_message("Failed to open docket form. Please try again.", ephemeral=True)
+                        await reply_error(
+                            interaction,
+                            "Couldn't open form",
+                            "Failed to open docket form. Please try again.",
+                        )
                 except Exception:
                     pass
                 return
@@ -61,7 +66,7 @@ async def handle_component(bot: discord.Client, interaction: discord.Interaction
             if len(parts) == 3:
                 _, case_id, action = parts
                 if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
-                    return await interaction.response.send_message("Sorry, but you are not an Administrator in this server.", ephemeral=True)
+                    return await deny_mods_only(interaction)
 
                 view = ComplaintModView(case_id)
 
@@ -211,16 +216,16 @@ async def handle_component(bot: discord.Client, interaction: discord.Interaction
                 try:
                     vc_id = int(vc_id_s)
                 except ValueError:
-                    return await interaction.response.send_message("Invalid channel reference.", ephemeral=True)
+                    return await reply_error(interaction, "Invalid reference", "Invalid channel reference.")
 
                 # Permission check (owner or mods)
                 member = interaction.user
                 if not isinstance(member, discord.Member):
-                    return await interaction.response.send_message("Not allowed.", ephemeral=True)
+                    return await reply_error(interaction, "Not allowed", "This action isn't available here.")
 
                 guild_vc = interaction.guild
                 if guild_vc is None:
-                    return await interaction.response.send_message("Not allowed.", ephemeral=True)
+                    return await reply_error(interaction, "Not allowed", "This action isn't available here.")
 
                 async with aiosqlite.connect(DB_PATH) as db:
                     cur = await db.execute(
@@ -238,7 +243,7 @@ async def handle_component(bot: discord.Client, interaction: discord.Interaction
 
                 vc = guild_vc.get_channel(vc_id)
                 if not isinstance(vc, discord.VoiceChannel):
-                    return await interaction.response.send_message("Channel not found.", ephemeral=True)
+                    return await reply_error(interaction, "Not found", "Channel not found.")
 
                 # Helpers for @everyone overwrite tweaks
                 async def edit_everyone(*, connect: Optional[bool] = None, view: Optional[bool] = None):
@@ -387,7 +392,7 @@ async def handle_component(bot: discord.Client, interaction: discord.Interaction
                 try:
                     lfg_id = int(parts[1])
                 except ValueError:
-                    return await interaction.response.send_message("Invalid LFG reference.", ephemeral=True)
+                    return await reply_error(interaction, "Invalid LFG", "Invalid LFG reference.")
                 from core.lfg_fill import mark_lfg_filled
 
                 await interaction.response.defer(ephemeral=True)

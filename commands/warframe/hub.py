@@ -123,7 +123,8 @@ def build_hub_embed(
                 fields.append(("🎵 Clan radio", music_line, False))
 
     plat_note = warframe_footer_platform_note(platform, pc_only_api=platform == "pc")
-    footer = f"{footer_for('warframe_hub')} · {plat_note}"
+    from core.wf_copy import merge_wf_footer
+    footer = merge_wf_footer(f"{footer_for('warframe_hub')} · {plat_note}", "warframe:hub")
 
     return embed_template(
         "warframe_status",

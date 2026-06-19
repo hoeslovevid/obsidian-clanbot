@@ -116,7 +116,8 @@ def setup(bot, group=None):
                 ephemeral=True,
             )
         if not interaction.guild:
-            return await interaction.response.send_message("Server only.", ephemeral=True)
+            from core.reply_helpers import reply_server_only
+            return await reply_server_only(interaction)
         await interaction.response.defer(ephemeral=True)
         uid = interaction.user.id
         gid = interaction.guild.id
@@ -179,6 +180,8 @@ def setup(bot, group=None):
                 f"-# {b['desc']}"
             )
         desc = "\n\n".join(lines)
+        from core.first_run_nudge import maybe_first_run_hint
+        desc = await maybe_first_run_hint(gid, uid, desc, feature="bounties")
         embed = embed_template(
             "showcase",
             "Daily Bounties",

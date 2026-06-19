@@ -834,6 +834,21 @@ async def open_support_ticket(
         cur = await db.execute("SELECT last_insert_rowid()")
         ticket_db_id = (await cur.fetchone())[0]
 
+    try:
+        from core.audit import log_audit
+        bot_ref = getattr(interaction.client, "bot", interaction.client)
+        await log_audit(
+            interaction.guild.id,
+            "ticket_open",
+            interaction.user.id,
+            target_id=interaction.user.id,
+            target_type="user",
+            details=f"{ticket_id}: {subject[:120]}",
+            bot=bot_ref,
+        )
+    except Exception:
+        pass
+
     fields = [
         ("Subject", subject, True),
         ("Status", "Open", True),

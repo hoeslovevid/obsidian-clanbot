@@ -85,7 +85,9 @@ async def _watch(user: discord.abc.User, probe: str = "default") -> None:
                 ok = any(v is not None for v in data.values())
             if ok:
                 try:
-                    await user.send(
+                    from core.safe_send import safe_dm
+                    await safe_dm(
+                        user,
                         embed=discord.Embed(
                             title="✅ Warframe data is back",
                             description="The Warframe API is responding again — re-run your command to see fresh data.",
