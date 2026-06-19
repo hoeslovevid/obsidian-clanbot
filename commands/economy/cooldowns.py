@@ -147,9 +147,13 @@ async def _run_cooldowns(interaction: discord.Interaction):
 
     from core.embed_prefs import embed_kwargs
 
+    body = "\n".join(lines)
+    from core.first_run_nudge import maybe_first_run_hint
+    body = await maybe_first_run_hint(gid, uid, body, feature="preferences")
+
     embed = obsidian_embed(
         "⏳ Your Cooldowns",
-        "\n".join(lines),
+        body,
         color=EMBED_COLORS.get("economy", EMBED_COLORS.get("general", discord.Color.blue())),
         footer="Times update live as cooldowns expire",
         client=interaction.client,

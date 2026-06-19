@@ -210,6 +210,16 @@ def setup(bot, group=None):
             ("🗓️ Events", f"**Created:** {int(events_created or 0)}", True),
         ]
 
+        try:
+            from database import top_commands
+
+            cmd_rows = await top_commands(interaction.guild.id, limit=8)
+            if cmd_rows:
+                heat = "\n".join(f"`{name}` — **{cnt}**" for name, cnt in cmd_rows)
+                fields.append(("🔥 Top commands (7d est.)", heat[:1024], False))
+        except Exception:
+            pass
+
         embed = obsidian_embed(
             f"📊 Moderator KPIs (last {d} days)",
             "High-level workload + responsiveness metrics.",

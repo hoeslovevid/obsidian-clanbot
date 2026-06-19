@@ -91,6 +91,10 @@ async def claim_bounties(guild_id: int, user_id: int) -> tuple[int, int]:
     if not to_claim:
         return (0, 0)
     total = sum(b["reward"] for b in to_claim)
+    bonus = 0
+    if len(to_claim) >= len(BOUNTY_DEFS):
+        bonus = 25
+        total += bonus
     await add_coins(guild_id, user_id, total, "BOUNTY", "Daily bounties")
     async with aiosqlite.connect(DB_PATH) as db:
         for b in to_claim:

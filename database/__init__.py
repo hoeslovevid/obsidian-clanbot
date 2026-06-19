@@ -1693,6 +1693,63 @@ async def initialize_default_shop_items(guild_id: int):
         # This prevents issues with invalid role IDs
 
 
+async def _ensure_command_usage_table() -> None:
+    async with open_db() as db:
+        await db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS command_usage (
+                guild_id INTEGER NOT NULL,
+                command_name TEXT NOT NULL,
+                use_count INTEGER NOT NULL DEFAULT 0,
+                last_used_at TEXT NOT NULL,
+                PRIMARY KEY (guild_id, command_name)
+            )
+            """
+        )
+        await db.commit()
+
+
+async def record_command_usage(
+    guild_id: int,
+    user_id: int,
+    command_name: str,
+    weekday: int,
+) -> None:
+    """Aggregate per-guild command popularity (mods KPI heatmap)."""
+    del user_id, weekday
+    await _ensure_command_usage_table()
+    async with open_db() as db:
+        await db.execute(
+            """
+            INSERT INTO command_usage (guild_id, command_name, use_count, last_used_at)
+            VALUES (?, ?, 1, ?)
+            ON CONFLICT(guild_id, command_name) DO UPDATE SET
+                use_count = use_count + 1,
+                last_used_at = excluded.last_used_at
+            """,
+            (guild_id, command_name[:120], now_utc().isoformat()),
+        )
+        await db.commit()
+
+
+async def track_command_usage(guild_id: int, user_id: int) -> None:
+    """Legacy hook — no-op aggregate (per-user tracking not stored)."""
+    del guild_id, user_id
+
+
+async def top_commands(guild_id: int, *, limit: int = 10) -> list[tuple[str, int]]:
+    await _ensure_command_usage_table()
+    async with open_db() as db:
+        cur = await db.execute(
+            """
+            SELECT command_name, use_count FROM command_usage
+            WHERE guild_id=? ORDER BY use_count DESC LIMIT ?
+            """,
+            (guild_id, limit),
+        )
+        return list(await cur.fetchall())
+
+
 # ---------------------------------------------------------------------------
 # Database schema (DDL / migrations) lives in database/schema.py
 # ---------------------------------------------------------------------------

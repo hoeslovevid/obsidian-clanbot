@@ -124,6 +124,9 @@ async def get_user_profile_data(guild_id: int, user_id: int) -> dict:
         """, (g, u))
         data["achievements"] = await cur.fetchall()
 
+        cur = await db.execute("SELECT COUNT(*) FROM achievement_definitions")
+        data["achievements_total"] = int((await cur.fetchone())[0] or 0)
+
         cur = await db.execute("""
             SELECT bd.icon_emoji, bd.name FROM user_badges ub
             LEFT JOIN badge_definitions bd ON ub.badge_id = bd.badge_id
@@ -311,8 +314,9 @@ async def build_profile_embed(
     if community_text.strip() != "**Reputation:** 0":
         fields.append(("👥 Community", community_text, True))
 
-    if profile_data["achievements_count"] > 0:
-        achievements_text = f"**Total:** {profile_data['achievements_count']} unlocked\n\n"
+    if profile_data.get("achievements_count", 0) > 0 or profile_data.get("achievements_total"):
+        total_def = profile_data.get("achievements_total") or profile_data["achievements_count"]
+        achievements_text = f"**{profile_data['achievements_count']}/{total_def}** unlocked\n\n"
         if profile_data["achievements"]:
             achievements_text += "**Recent:**\n"
             for ach_id, unlocked_at, name, desc in profile_data["achievements"][:3]:

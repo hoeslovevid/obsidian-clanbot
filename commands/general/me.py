@@ -192,6 +192,20 @@ async def _run_me(interaction: discord.Interaction):
             True,
         ))
 
+    try:
+        from commands.general.onboarding import get_user_onboarding_progress, ONBOARDING_STEP_NAMES
+
+        done, _steps = await get_user_onboarding_progress(interaction.guild.id, interaction.user.id)
+        total = len(ONBOARDING_STEP_NAMES)
+        if done < total:
+            fields.append((
+                "🎓 Onboarding",
+                f"**{done}/{total}** steps complete\n-# `/start` · check your onboarding DM",
+                True,
+            ))
+    except Exception:
+        pass
+
     # Footer: pick the most urgent helpful hint
     if pet_urgent:
         footer = "🐾 Pet needs attention — `/pets feed` / `play`"

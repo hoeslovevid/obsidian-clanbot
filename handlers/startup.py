@@ -57,7 +57,15 @@ async def run_startup(bot: discord.Client) -> None:
         logger.debug(f"[ready] WF recovery resume skipped: {e}")
 
     try:
-        from core.command_tree_stats import collect_command_tree_stats
+        from core.guild_branding import preload_guild_footers
+
+        n = await preload_guild_footers(bot)
+        if n:
+            print(f"[ready] Preloaded guild embed footers for {n} guild(s)")
+    except Exception as e:
+        logger.debug(f"[ready] guild footer preload skipped: {e}")
+
+    try:
         from core.config import GUILD_ID
         from database import get_log_channel_id
 

@@ -13,6 +13,7 @@ _MAINTENANCE_MSG = (
     os.getenv("MAINTENANCE_MESSAGE", "").strip()
     or "Obsidian Bot is undergoing scheduled maintenance. Please try again shortly."
 )
+_MAINTENANCE_UNTIL = os.getenv("MAINTENANCE_UNTIL", "").strip()
 
 
 def maintenance_enabled() -> bool:
@@ -20,7 +21,16 @@ def maintenance_enabled() -> bool:
 
 
 def maintenance_message() -> str:
-    return _MAINTENANCE_MSG
+    msg = _MAINTENANCE_MSG
+    if _MAINTENANCE_UNTIL:
+        try:
+            from datetime import datetime
+
+            ts = int(datetime.fromisoformat(_MAINTENANCE_UNTIL.replace("Z", "+00:00")).timestamp())
+            msg += f"\n\nBack online <t:{ts}:R> (<t:{ts}:f>)"
+        except Exception:
+            msg += f"\n\nExpected back: {_MAINTENANCE_UNTIL}"
+    return msg
 
 
 async def maintenance_check(interaction: discord.Interaction) -> bool:

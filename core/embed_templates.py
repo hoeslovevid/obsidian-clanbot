@@ -104,6 +104,7 @@ def embed_template(
         footer=base_footer,
         client=client,
         brand=brand,
+        guild_id=kwargs.pop("guild_id", None),
         **kwargs,
     )
 

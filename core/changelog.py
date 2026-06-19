@@ -12,16 +12,28 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-18"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**R1** — `reply_helpers` on menu, claim hub, component_handler; branded VC/LFG/complaint button replies",
-    "**R2** — `safe_dm` rollout (automod, welcome, onboarding, background tasks, wf recovery)",
-    "**R3** — `merge_wf_footer` on hub + LFG embeds (invasions already wired)",
-    "**R4** — `/admin audit` paginated viewer; audit on automod, ticket open, feature toggle; feedback modal pre-fills error code",
-    "**R5** — `/start` onboarding guide; first-run nudges on bounties/preferences/achievements; `empty_state_embed` on audit",
-    "**R6** — `/admin branding` custom guild footer (cached on embeds); `PRESENCE_MODE=start` for /start discovery",
+    "**S1** — `/lfg list` browse; guild footer preload; `embed_template` guild_id; empty states + reply sweep",
+    "**S2** — `/start` in `/menu`; help path buttons (New/Warframe/Economy/Staff); onboarding progress on `/me`",
+    "**S3** — LFG **Notify when open** waitlist DMs; WF footer on list embeds",
+    "**S4** — `/admin audit view|export` with pagination; automod appeal staff dismiss/escalate; ticket SLA alerts; warn ladder on dashboard",
+    "**S5** — all-bounties bonus; achievement X/Y on profile; command usage heatmap on KPIs; giveaway ending-soon DMs",
+    "**S6** — `MAINTENANCE_UNTIL` countdown; feature toggle dependency warnings; mod ops line on `/status`; `record_command_usage` DB",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "1.99.13",
+        "date": "2026-06-18",
+        "changes": [
+            "**R1** — `reply_helpers` on menu, claim hub, component_handler; branded VC/LFG/complaint button replies",
+            "**R2** — `safe_dm` rollout (automod, welcome, onboarding, background tasks, wf recovery)",
+            "**R3** — `merge_wf_footer` on hub + LFG embeds (invasions already wired)",
+            "**R4** — `/admin audit` paginated viewer; audit on automod, ticket open, feature toggle; feedback modal pre-fills error code",
+            "**R5** — `/start` onboarding guide; first-run nudges on bounties/preferences/achievements; `empty_state_embed` on audit",
+            "**R6** — `/admin branding` custom guild footer (cached on embeds); `PRESENCE_MODE=start` for /start discovery",
+        ],
+    },
     {
         "version": "1.99.12",
         "date": "2026-06-18",

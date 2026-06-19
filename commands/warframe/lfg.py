@@ -292,6 +292,15 @@ class LFGView(discord.ui.View):
             )
             radio.callback = self.start_radio
             self.add_item(radio)
+        wait_btn = discord.ui.Button(
+            label="Notify when open",
+            style=discord.ButtonStyle.secondary,
+            emoji="🔔",
+            custom_id=f"lfg:{lfg_id}:wait",
+            row=1,
+        )
+        wait_btn.callback = self.notify_when_open
+        self.add_item(wait_btn)
     
     async def join(self, interaction: discord.Interaction):
         """Join the LFG group."""
@@ -300,6 +309,49 @@ class LFGView(discord.ui.View):
     async def leave(self, interaction: discord.Interaction):
         """Leave the LFG group."""
         await self._handle_rsvp(interaction, "LEAVE")
+
+    async def notify_when_open(self, interaction: discord.Interaction):
+        if not interaction.guild:
+            from core.reply_helpers import deny_server_only
+            return await deny_server_only(interaction)
+        await interaction.response.defer(ephemeral=True)
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT max_players, status, mission_type FROM lfg_posts WHERE id=?",
+                (self.lfg_id,),
+            )
+            row = await cur.fetchone()
+            if not row:
+                from core.reply_helpers import reply_error
+                return await reply_error(interaction, "Not found", "LFG post not found.")
+            max_players, status, mission_type = row
+            if status != "OPEN":
+                from core.reply_helpers import reply_error
+                return await reply_error(interaction, "Closed", "This LFG post is no longer open.")
+            cur = await db.execute(
+                "SELECT COUNT(*) FROM lfg_rsvps WHERE lfg_id=? AND response='JOIN'",
+                (self.lfg_id,),
+            )
+            joined = int((await cur.fetchone())[0] or 0)
+        if joined < max_players:
+            from core.reply_helpers import reply_info
+            return await reply_info(
+                interaction,
+                "Slots available",
+                f"**{max_players - joined}** slot(s) open — tap **Join** instead.",
+            )
+        from core.lfg_waitlist import add_waitlist
+
+        added = await add_waitlist(self.lfg_id, interaction.guild.id, interaction.user.id)
+        from core.reply_helpers import reply_success, reply_info
+        if added:
+            await reply_success(
+                interaction,
+                "You're on the list",
+                f"I'll DM you when **{mission_type}** has an open slot.",
+            )
+        else:
+            await reply_info(interaction, "Already waiting", "You're already on the notify list for this post.")
 
     async def start_radio(self, interaction: discord.Interaction):
         """Queue the LFG radio playlist in the requester's VC."""
@@ -391,22 +443,26 @@ class LFGView(discord.ui.View):
     async def _handle_rsvp(self, interaction: discord.Interaction, response: str):
         """Handle RSVP (join/leave)."""
         if not interaction.guild:
-            return await interaction.response.send_message("This only works in a server.", ephemeral=True)
+            from core.reply_helpers import deny_server_only
+            return await deny_server_only(interaction)
+        channel_id = message_id = mission_type = None
         async with aiosqlite.connect(DB_PATH) as db:
-            # Get LFG post info including thread_id
             cur = await db.execute(
-                "SELECT creator_id, max_players, status, thread_id FROM lfg_posts WHERE id=?",
-                (self.lfg_id,)
+                "SELECT creator_id, max_players, status, thread_id, channel_id, message_id, mission_type "
+                "FROM lfg_posts WHERE id=?",
+                (self.lfg_id,),
             )
             post = await cur.fetchone()
-            
+
             if not post:
-                return await interaction.response.send_message("LFG post not found.", ephemeral=True)
-            
-            creator_id, max_players, status, thread_id = post
-            
+                from core.reply_helpers import reply_error
+                return await reply_error(interaction, "Not found", "LFG post not found.")
+
+            creator_id, max_players, status, thread_id, channel_id, message_id, mission_type = post
+
             if status != "OPEN":
-                return await interaction.response.send_message("This LFG post is no longer open.", ephemeral=True)
+                from core.reply_helpers import reply_error
+                return await reply_error(interaction, "Closed", "This LFG post is no longer open.")
             
             # Check current RSVPs
             cur = await db.execute(
@@ -417,9 +473,12 @@ class LFGView(discord.ui.View):
             
             if response == "JOIN":
                 if current_count >= max_players:
-                    return await interaction.response.send_message(
-                        f"This group is full ({max_players}/{max_players} players).",
-                        ephemeral=True
+                    from core.reply_helpers import reply_error
+                    return await reply_error(
+                        interaction,
+                        "Group full",
+                        f"This group is full ({max_players}/{max_players} players). "
+                        "Tap **Notify when open** to get a DM if someone leaves.",
                     )
                 
                 # Add or update RSVP
@@ -504,6 +563,21 @@ class LFGView(discord.ui.View):
             except Exception:
                 pass
         await interaction.followup.send(f"You {action} the group! ({current_count}/{max_players}){thread_mention}", ephemeral=True)
+
+        if response == "LEAVE" and current_count < max_players:
+            try:
+                from core.lfg_waitlist import notify_waitlist
+
+                await notify_waitlist(
+                    interaction.client,
+                    self.lfg_id,
+                    mission=mission_type or "LFG",
+                    channel_id=channel_id,
+                    message_id=message_id,
+                    slots_open=max_players - current_count,
+                )
+            except Exception:
+                pass
 
         # DM the creator when the group becomes full
         if response == "JOIN" and current_count >= max_players:

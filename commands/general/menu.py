@@ -15,6 +15,7 @@ from database import get_guild_setting, set_guild_setting
 
 # (label, emoji, command path, hint for parameterized commands)
 MENU_ITEMS: list[tuple[str, str, list[str], str | None]] = [
+    ("Quick start guide", "👋", ["start"], None),
     ("Claim hub", "💰", ["claim"], None),
     ("Claim daily coins", "🎁", ["daily"], None),
     ("My cooldowns", "⏳", ["cooldowns"], None),
@@ -34,6 +35,7 @@ MENU_ITEMS: list[tuple[str, str, list[str], str | None]] = [
 ]
 
 AUTO_INVOKE_ALIASES: dict[str, list[list[str]]] = {
+    "start": [["start"]],
     "daily": [["daily"], ["economy", "daily"]],
     "claim": [["claim"]],
     "cooldowns": [["cooldowns"], ["economy", "cooldowns"]],

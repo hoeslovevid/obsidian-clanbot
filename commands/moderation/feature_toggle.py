@@ -39,11 +39,13 @@ class _ConfirmDisableModal(discord.ui.Modal, title="Confirm feature toggle"):
         max_length=20,
     )
 
-    def __init__(self, feature: str, new_state: str, on_done):
+    def __init__(self, feature: str, new_state: str, on_done, *, dep_warning: str | None = None):
         super().__init__()
         self.feature = feature
         self.new_state = new_state
         self.on_done = on_done
+        if dep_warning:
+            self.title = f"Confirm: turn {feature} OFF"
 
     async def on_submit(self, interaction: discord.Interaction):
         if str(self.confirmation.value).strip().upper() != "CONFIRM":
@@ -110,6 +112,9 @@ def setup(bot, group=None):
 
         feat = feature.value
         new_state = state.value
+        from core.feature_deps import dependency_warning
+
+        dep_note = dependency_warning(feat, turning_off=(new_state == "off"))
 
         async def _apply(modal_inter: discord.Interaction):
             try:
@@ -143,7 +148,9 @@ def setup(bot, group=None):
             except Exception:
                 pass
 
-        await interaction.response.send_modal(_ConfirmDisableModal(feat, new_state, _apply))
+        await interaction.response.send_modal(
+            _ConfirmDisableModal(feat, new_state, _apply, dep_warning=dep_note)
+        )
 
     if isinstance(target, app_commands.Group):
         target.add_command(features_group)

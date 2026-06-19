@@ -1,332 +1,227 @@
-"""LFG list command to view active groups (Item 16 — filters & joinable sort)."""
-from datetime import datetime, timezone
+"""Browse open LFG posts with filters and pagination."""
+from __future__ import annotations
+
+import logging
 from typing import Optional
 
+import aiosqlite
 import discord
 from discord import app_commands
-import aiosqlite
 
-from core.utils import obsidian_embed, error_embed
-from database import DB_PATH, get_user_platform
-from views import EmbedPaginator
-from commands.warframe.lfg import MISSION_TYPES
-from commands.general.preferences import PLATFORM_CHOICES
+from core.embed_footers import footer_for
+from core.embed_templates import embed_template
+from core.empty_states import empty_state_embed
+from core.reply_helpers import reply_server_only
+from core.utils import feature_enabled, feature_off_embed
+from core.wf_copy import merge_wf_footer
+from database import DB_PATH
 
-ITEMS_PER_PAGE = 15
+logger = logging.getLogger(__name__)
 
-
-async def mission_type_autocomplete(interaction: discord.Interaction, current: str):
-    """Autocomplete for mission type filter. Paginated: top 25 by relevance."""
-    from core.utils import AUTOCOMPLETE_MAX_CHOICES
-    current_lower = (current or "").lower().strip()
-    if not current_lower:
-        matches = list(MISSION_TYPES)[:AUTOCOMPLETE_MAX_CHOICES]
-    else:
-        exact = [m for m in MISSION_TYPES if m.lower() == current_lower]
-        start = [m for m in MISSION_TYPES if m.lower().startswith(current_lower) and m not in exact]
-        contains = [
-            m for m in MISSION_TYPES
-            if current_lower in m.lower() and m not in exact and m not in start
-        ]
-        matches = (exact + start + contains)[:AUTOCOMPLETE_MAX_CHOICES]
-    return [app_commands.Choice(name=m, value=m) for m in matches]
+_PER_PAGE = 6
 
 
-def _platform_choices_for_filter() -> list[app_commands.Choice]:
-    """Filter version: drop the "(clear)" option used by preferences."""
-    return [c for c in PLATFORM_CHOICES if c.value != "-"]
+async def _fetch_posts(
+    guild_id: int,
+    *,
+    mission: str | None = None,
+    tag: str | None = None,
+    open_only: bool = True,
+) -> list[tuple]:
+    clauses = ["guild_id=?"]
+    params: list = [guild_id]
+    if open_only:
+        clauses.append("status='OPEN'")
+    if mission:
+        clauses.append("LOWER(mission_type) LIKE ?")
+        params.append(f"%{mission.lower()}%")
+    if tag:
+        clauses.append("LOWER(COALESCE(role_tags,'')) LIKE ?")
+        params.append(f"%{tag.lower()}%")
+    where = " AND ".join(clauses)
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            f"""
+            SELECT p.id, p.mission_type, p.max_players, p.creator_id, p.channel_id,
+                   p.message_id, p.description, p.role_tags, p.scheduled_at,
+                   (SELECT COUNT(*) FROM lfg_rsvps r WHERE r.lfg_id=p.id AND r.response='JOIN') AS joined
+            FROM lfg_posts p
+            WHERE {where}
+            ORDER BY p.created_at DESC
+            LIMIT 60
+            """,
+            params,
+        )
+        return list(await cur.fetchall())
+
+
+class LFGListView(discord.ui.View):
+    def __init__(
+        self,
+        *,
+        posts: list[tuple],
+        page: int,
+        mission: str | None,
+        tag: str | None,
+        requester_id: int,
+    ):
+        super().__init__(timeout=120)
+        self.posts = posts
+        self.page = page
+        self.mission = mission
+        self.tag = tag
+        self.requester_id = requester_id
+        total_pages = max(1, (len(posts) + _PER_PAGE - 1) // _PER_PAGE)
+        if page > 0:
+            self.add_item(_PageButton("◀ Prev", page - 1, self))
+        if page < total_pages - 1:
+            self.add_item(_PageButton("Next ▶", page + 1, self))
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.requester_id:
+            from core.reply_helpers import reply_error
+            await reply_error(interaction, "Not for you", "Run `/lfg list` yourself to browse.")
+            return False
+        return True
+
+
+class _PageButton(discord.ui.Button):
+    def __init__(self, label: str, page: int, parent: LFGListView):
+        super().__init__(label=label, style=discord.ButtonStyle.secondary)
+        self._page = page
+        self._parent = parent
+
+    async def callback(self, interaction: discord.Interaction):
+        embed, view = _build_page(
+            interaction.guild,
+            self._parent.posts,
+            page=self._page,
+            mission=self._parent.mission,
+            tag=self._parent.tag,
+            requester_id=self._parent.requester_id,
+            client=interaction.client,
+        )
+        await interaction.response.edit_message(embed=embed, view=view)
+
+
+def _build_page(
+    guild: discord.Guild,
+    posts: list[tuple],
+    *,
+    page: int,
+    mission: str | None,
+    tag: str | None,
+    requester_id: int,
+    client,
+) -> tuple[discord.Embed, LFGListView]:
+    start = page * _PER_PAGE
+    chunk = posts[start : start + _PER_PAGE]
+    total_pages = max(1, (len(posts) + _PER_PAGE - 1) // _PER_PAGE)
+    lines = []
+    for row in chunk:
+        lfg_id, mission_type, max_p, creator_id, ch_id, msg_id, desc, tags, sched, joined = row
+        creator = guild.get_member(creator_id)
+        host = creator.display_name if creator else f"User {creator_id}"
+        slots = f"{joined}/{max_p}"
+        full = joined >= max_p
+        status = "🔴 Full" if full else f"🟢 {max_p - joined} open"
+        jump = ""
+        if ch_id and msg_id:
+            jump = f" · [Jump](https://discord.com/channels/{guild.id}/{ch_id}/{msg_id})"
+        line = f"**#{lfg_id}** · {mission_type} · {slots} · {status}{jump}\n-# Host: {host}"
+        if tags:
+            line += f" · Tags: {tags[:60]}"
+        if sched:
+            line += f" · 🕐 {sched[:40]}"
+        if desc:
+            line += f"\n-# {str(desc)[:80]}"
+        lines.append(line)
+
+    filters = []
+    if mission:
+        filters.append(f"mission `{mission}`")
+    if tag:
+        filters.append(f"tag `{tag}`")
+    filter_note = f"\n-# Filters: {', '.join(filters)}" if filters else ""
+
+    footer = merge_wf_footer(
+        f"{footer_for('community_lfg')} · {len(posts)} open · page {page + 1}/{total_pages}",
+        "warframe:lfg_list",
+    )
+    embed = embed_template(
+        "showcase",
+        "🤝 Open LFG posts",
+        ("\n\n".join(lines) if lines else "_No posts on this page._") + filter_note,
+        category="community",
+        footer=footer,
+        client=client,
+        guild_id=guild.id,
+    )
+    view = LFGListView(
+        posts=posts,
+        page=page,
+        mission=mission,
+        tag=tag,
+        requester_id=requester_id,
+    )
+    return embed, view
 
 
 def setup(bot, group=None):
-    """Register the lfg_list command."""
     command_decorator = (
-        group.command(name="lfg_list", description="View active Looking for Group posts.")
+        group.command(name="list", description="Browse open LFG posts (filter by mission or role tags).")
         if group
-        else bot.tree.command(name="lfg_list", description="View active Looking for Group posts.")
+        else bot.tree.command(name="lfg_list", description="Browse open LFG posts.")
     )
 
     @command_decorator
     @app_commands.describe(
-        mission_type="Filter by mission type (optional)",
-        platform="Show only posts whose creator uses this platform",
-        min_open_slots="Hide posts with fewer than this many free seats (default 1 — joinable)",
-        include_filled="Also include completed / filled posts (default off)",
-        sort="Sort order — defaults to joinable first then expiring soonest",
+        mission="Filter by mission name (partial match)",
+        tag="Filter by role tag (Steel Path, Support, etc.)",
+        include_full="Include full groups (default: open slots only)",
     )
-    @app_commands.autocomplete(mission_type=mission_type_autocomplete)
-    @app_commands.choices(platform=_platform_choices_for_filter())
-    @app_commands.choices(sort=[
-        app_commands.Choice(name="Joinable first (default)", value="joinable"),
-        app_commands.Choice(name="Newest first", value="newest"),
-        app_commands.Choice(name="Expiring soon", value="expiring_soon"),
-    ])
-    async def lfg_list(
+    async def lfg_list_cmd(
         interaction: discord.Interaction,
-        mission_type: Optional[str] = None,
-        platform: Optional[app_commands.Choice[str]] = None,
-        min_open_slots: int = 1,
-        include_filled: bool = False,
-        sort: Optional[app_commands.Choice[str]] = None,
+        mission: Optional[str] = None,
+        tag: Optional[str] = None,
+        include_full: bool = False,
     ):
         if not interaction.guild:
+            return await reply_server_only(interaction)
+        if not await feature_enabled(interaction.guild.id, "lfg"):
             return await interaction.response.send_message(
-                embed=error_embed("Invalid Context", "This command can only be used in a server.", client=interaction.client),
+                embed=feature_off_embed("LFG", client=interaction.client),
                 ephemeral=True,
             )
-        if not isinstance(interaction.channel, discord.TextChannel):
-            return await interaction.response.send_message(
-                embed=error_embed("Invalid Context", "Use this in a text channel where LFG posts are listed.", client=interaction.client),
-                ephemeral=True,
-            )
-        if mission_type and mission_type not in MISSION_TYPES:
-            return await interaction.response.send_message(
-                embed=error_embed(
-                    "Invalid Mission Type",
-                    f"'{mission_type}' is not valid. Choose from: {', '.join(list(MISSION_TYPES)[:10])}{'...' if len(MISSION_TYPES) > 10 else ''}",
-                    client=interaction.client,
-                ),
-                ephemeral=True,
-            )
-
-        # Status filter (default: hide COMPLETED)
-        status_clause = "1=1" if include_filled else "status != 'COMPLETED'"
-
-        # SQL-level order is just a stable secondary; we re-sort in Python so
-        # we can put joinable-now posts first regardless of which DB order is
-        # cheapest.
-        order = "created_at DESC"
-        if sort and sort.value == "expiring_soon":
-            order = "expires_at ASC"
-
         await interaction.response.defer(ephemeral=True)
-
-        async with aiosqlite.connect(DB_PATH) as db:
-            params: list = [interaction.guild.id, interaction.channel.id]
-            mission_clause = ""
-            if mission_type:
-                mission_clause = " AND mission_type LIKE ?"
-                params.append(f"%{mission_type}%")
-
-            cur = await db.execute(
-                f"""
-                SELECT id, creator_id, mission_type, max_players, description,
-                       expires_at, created_at, message_id, status
-                FROM lfg_posts
-                WHERE guild_id=? AND channel_id=? AND {status_clause}
-                {mission_clause}
-                ORDER BY {order}
-                LIMIT 100
-                """,
-                tuple(params),
-            )
-            posts = await cur.fetchall()
-
-            counts_by_id: dict[int, int] = {}
-            if posts:
-                ids = [p[0] for p in posts]
-                placeholders = ",".join(["?"] * len(ids))
-                cur = await db.execute(
-                    f"SELECT lfg_id, COUNT(*) FROM lfg_rsvps WHERE response='JOIN' AND lfg_id IN ({placeholders}) GROUP BY lfg_id",
-                    tuple(ids),
-                )
-                for lfg_id, cnt in await cur.fetchall():
-                    counts_by_id[int(lfg_id)] = int(cnt)
-
-        # Optional platform filter — resolved from creator preferences (LFG rows
-        # don't carry a platform column).
-        if platform and platform.value != "-":
-            keep: list = []
-            for p in posts:
-                creator_id = p[1]
-                try:
-                    creator_platform = await get_user_platform(interaction.guild.id, creator_id)
-                except Exception:
-                    creator_platform = None
-                if (creator_platform or "pc").lower() == platform.value.lower():
-                    keep.append(p)
-            posts = keep
-
-        # min_open_slots filter
-        if min_open_slots > 0:
-            filtered: list = []
-            for p in posts:
-                lfg_id, _creator, _mt, max_players, *_ = p
-                rsvp = counts_by_id.get(int(lfg_id), 0)
-                if (max_players - rsvp) >= min_open_slots:
-                    filtered.append(p)
-            posts = filtered
-
-        # Compute "open" / "filled" tallies for the summary line.
-        open_count = 0
-        filled_count = 0
-        for p in posts:
-            lfg_id, _creator, _mt, max_players, *_rest, status = p
-            rsvp = counts_by_id.get(int(lfg_id), 0)
-            if status == "COMPLETED" or rsvp >= max_players:
-                filled_count += 1
-            else:
-                open_count += 1
-
-        # Sort: joinable first (open seats > 0) then secondary by chosen order.
-        def _expiry_ts(p) -> float:
-            try:
-                dt = datetime.fromisoformat(str(p[5]).replace("Z", "+00:00"))
-                return dt.timestamp()
-            except Exception:
-                return float("inf")
-
-        def _created_ts(p) -> float:
-            try:
-                dt = datetime.fromisoformat(str(p[6]).replace("Z", "+00:00"))
-                return dt.timestamp()
-            except Exception:
-                return 0.0
-
-        def _open_seats(p) -> int:
-            return max(0, int(p[3]) - counts_by_id.get(int(p[0]), 0))
-
-        sort_value = sort.value if sort else "joinable"
-        if sort_value == "newest":
-            posts.sort(key=lambda p: (-(_open_seats(p) > 0), -_created_ts(p)))
-        elif sort_value == "expiring_soon":
-            posts.sort(key=lambda p: (-(_open_seats(p) > 0), _expiry_ts(p)))
-        else:  # "joinable" default
-            posts.sort(key=lambda p: (-(_open_seats(p) > 0), _expiry_ts(p)))
+        posts = await _fetch_posts(
+            interaction.guild.id,
+            mission=(mission or "").strip() or None,
+            tag=(tag or "").strip() or None,
+            open_only=not include_full,
+        )
+        if not include_full:
+            posts = [p for p in posts if p[9] < p[2]]  # joined < max_players
 
         if not posts:
             return await interaction.followup.send(
-                embed=obsidian_embed(
-                    "🔍 No Active Groups",
-                    "There are no active LFG posts matching your filters.\n\nUse `/lfg` to create one!",
-                    color=discord.Color.orange(),
+                embed=empty_state_embed(
+                    "🤝 No open LFG posts",
+                    "Nobody is recruiting right now.",
+                    action_hint="Post your own with `/lfg` or check back later.",
+                    category="community",
                     client=interaction.client,
                 ),
                 ephemeral=True,
             )
 
-        # Build pages
-        pages = []
-        for i in range(0, len(posts), ITEMS_PER_PAGE):
-            page_posts = posts[i : i + ITEMS_PER_PAGE]
-            fields = []
-            for lfg_id, creator_id, mission_type_val, max_players, description, expires_at, created_at, message_id, status in page_posts:
-                rsvp_count = counts_by_id.get(int(lfg_id), 0)
-                open_seats = max(0, max_players - rsvp_count)
-
-                creator = interaction.guild.get_member(creator_id)
-                creator_name = creator.display_name if creator else f"User {creator_id}"
-
-                try:
-                    expiry_dt = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
-                    time_remaining = expiry_dt - datetime.now(timezone.utc)
-                    if time_remaining.total_seconds() > 0:
-                        hours = int(time_remaining.total_seconds() // 3600)
-                        time_str = f"Expires in {hours}h" if hours > 0 else "Expiring soon"
-                    else:
-                        time_str = "Expired"
-                except Exception:
-                    time_str = "Unknown"
-
-                status_emoji = "🟢" if open_seats > 0 and status != "COMPLETED" else "⛔"
-
-                value = f"{status_emoji} **{rsvp_count}/{max_players}** · {open_seats} open\n"
-                value += f"👤 {creator_name}\n"
-                value += f"⏰ {time_str}\n"
-                if description:
-                    value += f"📝 _{description[:60]}{'...' if len(description) > 60 else ''}_\n"
-                jump_link = ""
-                if message_id and interaction.channel.id:
-                    jump_link = f"\n[Jump to post](https://discord.com/channels/{interaction.guild.id}/{interaction.channel.id}/{message_id})"
-                value += f"`ID: {lfg_id}`{jump_link}"
-
-                fields.append((f"🎯 {mission_type_val}", value, True))
-
-            desc_lines = [
-                f"**Total: {open_count} open · {filled_count} filled**"
-            ]
-            applied: list[str] = []
-            if mission_type:
-                applied.append(f"mission=`{mission_type}`")
-            if platform and platform.value != "-":
-                applied.append(f"platform=`{platform.value.upper()}`")
-            if min_open_slots > 1:
-                applied.append(f"min_open_slots=`{min_open_slots}`")
-            if include_filled:
-                applied.append("filled=included")
-            if applied:
-                desc_lines.append("Filters: " + ", ".join(applied))
-            pages.append({"description": "\n".join(desc_lines), "fields": fields})
-
-        if len(pages) == 1:
-            embed = obsidian_embed(
-                "🔍 Active LFG Posts",
-                pages[0]["description"],
-                color=discord.Color.blue(),
-                fields=pages[0]["fields"],
-                client=interaction.client,
-            )
-            await interaction.followup.send(embed=embed, ephemeral=True)
-        else:
-            view = EmbedPaginator(
-                "🔍 Active LFG Posts",
-                pages,
-                color=discord.Color.blue(),
-                client=interaction.client,
-                total_items=len(posts),
-                per_page=ITEMS_PER_PAGE,
-            )
-            await interaction.followup.send(embed=view._build_embed(), view=view, ephemeral=True)
-
-    subscribe_decorator = (
-        group.command(
-            name="subscribe",
-            description="Get a DM when a matching LFG is posted (DPS, Sortie, Steel Path, etc.).",
+        embed, view = _build_page(
+            interaction.guild,
+            posts,
+            page=0,
+            mission=mission,
+            tag=tag,
+            requester_id=interaction.user.id,
+            client=interaction.client,
         )
-        if group
-        else None
-    )
-    if subscribe_decorator:
-        @subscribe_decorator
-        @app_commands.describe(
-            tag="Role/mission tag to watch (e.g. DPS, Steel Path, Sortie)",
-            action="Subscribe or unsubscribe from this tag",
-        )
-        @app_commands.choices(action=[
-            app_commands.Choice(name="Subscribe", value="on"),
-            app_commands.Choice(name="Unsubscribe", value="off"),
-        ])
-        async def lfg_subscribe(
-            interaction: discord.Interaction,
-            tag: str,
-            action: app_commands.Choice[str],
-        ):
-            if not interaction.guild:
-                return await interaction.response.send_message("Server only.", ephemeral=True)
-            from core.lfg_extras import LFG_ROLE_TAGS
-            from database import now_utc
-
-            clean = tag.strip()[:40]
-            if not clean:
-                return await interaction.response.send_message("Tag required.", ephemeral=True)
-            async with aiosqlite.connect(DB_PATH) as db:
-                if action.value == "off":
-                    await db.execute(
-                        "DELETE FROM lfg_interest_subscriptions WHERE guild_id=? AND user_id=? AND tag=?",
-                        (interaction.guild.id, interaction.user.id, clean),
-                    )
-                    await db.commit()
-                    return await interaction.response.send_message(
-                        f"Unsubscribed from **{clean}** LFG alerts.", ephemeral=True,
-                    )
-                await db.execute(
-                    "INSERT OR REPLACE INTO lfg_interest_subscriptions "
-                    "(guild_id, user_id, tag, created_at) VALUES (?,?,?,?)",
-                    (interaction.guild.id, interaction.user.id, clean, now_utc().isoformat()),
-                )
-                await db.commit()
-            hints = ", ".join(LFG_ROLE_TAGS[:6])
-            await interaction.response.send_message(
-                f"Subscribed to **{clean}** — you'll get a DM when a matching LFG is posted.\n"
-                f"_Popular tags: {hints}_",
-                ephemeral=True,
-            )
+        await interaction.followup.send(embed=embed, view=view, ephemeral=True)

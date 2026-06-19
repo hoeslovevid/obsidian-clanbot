@@ -90,6 +90,24 @@ async def _build_mod_dashboard_embed(
         """, (guild.id, today_iso))
         warns_today = (await cur.fetchone())[0] or 0
 
+        warn_escalation = ""
+        try:
+            cur = await db.execute(
+                """
+                SELECT user_id, COUNT(*) AS c FROM warnings
+                WHERE guild_id=? AND datetime(created_at) >= datetime('now', '-30 days')
+                GROUP BY user_id HAVING c >= 3
+                ORDER BY c DESC LIMIT 3
+                """,
+                (guild.id,),
+            )
+            esc = await cur.fetchall()
+            if esc:
+                parts = [f"<@{uid}> ({cnt})" for uid, cnt in esc]
+                warn_escalation = f"\n**Warn ladder:** {', '.join(parts)} — consider timeout review"
+        except Exception:
+            pass
+
     automod = await get_auto_mod_settings(guild.id)
     if automod and automod.get("enabled"):
         rules = []
@@ -132,7 +150,8 @@ async def _build_mod_dashboard_embed(
             f"**Automod:** {automod_summary}"
             + ops_alerts
             + sla_note
-            + goal_line,
+            + goal_line
+            + warn_escalation,
             False,
         ),
     ]

@@ -60,6 +60,7 @@ def setup(bot, group=None):
 
         # Mods also see a one-line setup-health summary (links to /admin setup_status).
         setup_line = ""
+        task_line = ""
         prefs_line = ""
         from core.utils import is_mod
         from database import get_guild_setting
@@ -83,6 +84,11 @@ def setup(bot, group=None):
                 setup_line = await setup_health_line(interaction.guild)
             except Exception:
                 setup_line = ""
+            try:
+                bt = getattr(interaction.client, "_background_tasks", None) or {}
+                task_line = f"⚙️ **Ops:** {len(bt)} background loops running"
+            except Exception:
+                task_line = ""
 
         from core.maintenance import maintenance_enabled, maintenance_message
 
@@ -98,6 +104,7 @@ def setup(bot, group=None):
             f"{api_line}\n"
             + (f"{history}\n" if history else "")
             + (f"🧭 {setup_line}\n" if setup_line else "")
+            + (f"{task_line}\n" if task_line else "")
             + (f"{prefs_line}\n" if prefs_line else "")
             + f"\n{hint}"
         )

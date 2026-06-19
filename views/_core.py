@@ -762,6 +762,67 @@ class RSVPView(discord.ui.View):
         )
 
 
+class AutoModAppealStaffView(discord.ui.View):
+    """Staff actions on automod false-positive reports."""
+
+    def __init__(self, *, guild_id: int, user_id: int, violation_type: str):
+        super().__init__(timeout=86400)
+        self.guild_id = guild_id
+        self.user_id = user_id
+        self.violation_type = violation_type
+
+    @discord.ui.button(label="Dismiss", style=discord.ButtonStyle.secondary, emoji="✅")
+    async def dismiss(self, interaction: discord.Interaction, button: discord.ui.Button):
+        from core.reply_helpers import deny_mods_only
+        if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
+            return await deny_mods_only(interaction)
+        for c in self.children:
+            c.disabled = True
+        try:
+            from core.audit import log_audit
+            bot_ref = getattr(interaction.client, "bot", interaction.client)
+            await log_audit(
+                self.guild_id,
+                "automod_appeal_dismiss",
+                interaction.user.id,
+                target_id=self.user_id,
+                target_type="user",
+                details=self.violation_type[:120],
+                bot=bot_ref,
+            )
+        except Exception:
+            pass
+        await interaction.response.edit_message(view=self)
+        await interaction.followup.send("Appeal dismissed.", ephemeral=True)
+
+    @discord.ui.button(label="Escalate", style=discord.ButtonStyle.danger, emoji="🚩")
+    async def escalate(self, interaction: discord.Interaction, button: discord.ui.Button):
+        from core.reply_helpers import deny_mods_only
+        if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
+            return await deny_mods_only(interaction)
+        for c in self.children:
+            c.disabled = True
+        try:
+            from core.audit import log_audit
+            bot_ref = getattr(interaction.client, "bot", interaction.client)
+            await log_audit(
+                self.guild_id,
+                "automod_appeal_escalate",
+                interaction.user.id,
+                target_id=self.user_id,
+                target_type="user",
+                details=self.violation_type[:120],
+                bot=bot_ref,
+            )
+        except Exception:
+            pass
+        await interaction.response.edit_message(view=self)
+        await interaction.followup.send(
+            f"Escalated — follow up with <@{self.user_id}> manually.",
+            ephemeral=True,
+        )
+
+
 class AutoModAppealView(discord.ui.View):
     """Short-lived button for users to flag an automod removal."""
 
@@ -800,6 +861,11 @@ class AutoModAppealView(discord.ui.View):
             ch = guild.get_channel(self.log_channel_id)
             if isinstance(ch, discord.TextChannel):
                 try:
+                    staff_view = AutoModAppealStaffView(
+                        guild_id=self.guild_id,
+                        user_id=self.user_id,
+                        violation_type=self.violation_type,
+                    )
                     await ch.send(
                         embed=obsidian_embed(
                             "🚩 Automod false-positive report",
@@ -808,7 +874,8 @@ class AutoModAppealView(discord.ui.View):
                             f"**Message preview:** {self.preview}",
                             color=discord.Color.orange(),
                             client=interaction.client,
-                        )
+                        ),
+                        view=staff_view,
                     )
                     sent = True
                 except Exception:

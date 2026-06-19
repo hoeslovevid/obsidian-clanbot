@@ -3066,6 +3066,112 @@ def setup_tasks(bot):
     async def before_stale_ticket_reminder_loop():
         await bot.wait_until_ready()
 
+    @tasks.loop(minutes=15)
+    async def ticket_sla_breach_loop():
+        """Ping mod channel when open tickets lack first response past SLA."""
+        try:
+            from core.utils import get_mod_role
+            from database import get_log_channel_id
+
+            for guild in bot.guilds:
+                try:
+                    sla_raw = await get_guild_setting(guild.id, "ticket_sla_hours")
+                    sla_h = int(sla_raw) if sla_raw and str(sla_raw).isdigit() else 4
+                    cutoff = (now_utc() - timedelta(hours=sla_h)).isoformat()
+                    async with aiosqlite.connect(DB_PATH) as db:
+                        cur = await db.execute(
+                            """
+                            SELECT ticket_id, subject, channel_id FROM tickets
+                            WHERE guild_id=? AND status='open'
+                              AND (first_response_at IS NULL OR first_response_at='')
+                              AND created_at < ?
+                            LIMIT 5
+                            """,
+                            (guild.id, cutoff),
+                        )
+                        rows = await cur.fetchall()
+                    if not rows:
+                        continue
+                    ch_id = await get_log_channel_id(guild.id, "tickets") or await get_guild_setting(guild.id, "ticket_log_channel_id")
+                    ch = guild.get_channel(int(ch_id)) if ch_id and str(ch_id).isdigit() else None
+                    if not isinstance(ch, discord.TextChannel):
+                        continue
+                    mod_role = await get_mod_role(guild)
+                    mention = mod_role.mention if mod_role else ""
+                    for ticket_id, subject, tch in rows:
+                        warn_key = f"ticket_sla_warn:{ticket_id}"
+                        if await get_guild_setting(guild.id, warn_key):
+                            continue
+                        from core.safe_send import safe_channel_send
+
+                        await safe_channel_send(
+                            ch,
+                            content=mention,
+                            embed=obsidian_embed(
+                                "⏱️ Ticket SLA breach",
+                                f"**{ticket_id}** — {subject[:80]}\nNo first response in **{sla_h}h**.",
+                                color=discord.Color.orange(),
+                                client=bot,
+                            ),
+                        )
+                        await set_guild_setting(guild.id, warn_key, "1")
+                except Exception:
+                    continue
+        except Exception as e:
+            logger.error(f"[ticket_sla] loop error: {e}", exc_info=True)
+
+    @ticket_sla_breach_loop.before_loop
+    async def before_ticket_sla_breach_loop():
+        await bot.wait_until_ready()
+
+    @tasks.loop(minutes=5)
+    async def giveaway_ending_soon_loop():
+        """DM entrants ~1 hour before a giveaway ends."""
+        try:
+            from core.safe_send import safe_dm
+
+            window_start = now_utc() + timedelta(minutes=55)
+            window_end = now_utc() + timedelta(minutes=65)
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute(
+                    """
+                    SELECT id, prize, end_time, guild_id FROM giveaways
+                    WHERE ended=0 AND end_time IS NOT NULL AND end_time != ''
+                    """
+                )
+                rows = await cur.fetchall()
+            for gid, prize, end_str, guild_id in rows:
+                try:
+                    end_dt = datetime.fromisoformat(str(end_str).replace("Z", "+00:00"))
+                    if end_dt.tzinfo is None:
+                        end_dt = end_dt.replace(tzinfo=timezone.utc)
+                except Exception:
+                    continue
+                if not (window_start <= end_dt <= window_end):
+                    continue
+                async with aiosqlite.connect(DB_PATH) as db:
+                    cur = await db.execute(
+                        "SELECT user_id FROM giveaway_entries WHERE giveaway_id=?",
+                        (gid,),
+                    )
+                    entrants = [r[0] for r in await cur.fetchall()]
+                for uid in entrants:
+                    user = bot.get_user(uid) or await bot.fetch_user(uid)
+                    await safe_dm(
+                        user,
+                        embed=obsidian_embed(
+                            "🎁 Giveaway ending soon",
+                            f"**{prize}** ends <t:{int(end_dt.timestamp())}:R> — you're entered!",
+                            client=bot,
+                        ),
+                    )
+        except Exception as e:
+            logger.debug(f"[giveaway] ending-soon loop: {e}")
+
+    @giveaway_ending_soon_loop.before_loop
+    async def before_giveaway_ending_soon_loop():
+        await bot.wait_until_ready()
+
     @tasks.loop(minutes=30)
     async def forum_check_loop():
         """Check Warframe forums RSS for new posts."""
@@ -3398,6 +3504,8 @@ def setup_tasks(bot):
         ('scheduled_messages_loop', scheduled_messages_loop),
         ('twitch_check_loop', twitch_check_loop),
         ('stale_ticket_reminder_loop', stale_ticket_reminder_loop),
+        ('ticket_sla_breach_loop', ticket_sla_breach_loop),
+        ('giveaway_ending_soon_loop', giveaway_ending_soon_loop),
         ('forum_check_loop', forum_check_loop),
         ('youtube_check_loop', youtube_check_loop),
         ('digest_dm_loop', digest_dm_loop),

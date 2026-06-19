@@ -39,7 +39,8 @@ class PageButton(discord.ui.Button):
         """Handle page navigation."""
         view = cast(Optional[HelpSelectView], self.view)
         if view is None or not view.current_group:
-            return await interaction.response.send_message("No group selected.", ephemeral=True)
+            from core.reply_helpers import reply_error
+            return await reply_error(interaction, "No group", "Select a category first.")
         
         collected = _collect_group_commands(view.current_group, [view.current_group.name])
         total_commands = len(collected)
@@ -83,7 +84,8 @@ class PageSelect(discord.ui.Select):
         """Handle page jump."""
         view = cast(Optional[HelpSelectView], self.view)
         if view is None or not view.current_group:
-            return await interaction.response.send_message("No group selected.", ephemeral=True)
+            from core.reply_helpers import reply_error
+            return await reply_error(interaction, "No group", "Select a category first.")
         
         page = int(self.values[0])
         view.current_page = page
@@ -94,11 +96,40 @@ class PageSelect(discord.ui.Select):
             await select_item.update_embed(interaction, view.current_group, view.current_page)
 
 
+class HelpPathButton(discord.ui.Button):
+    """Quick path into a command category."""
+
+    def __init__(self, label: str, group_key: str, parent_view: "HelpSelectView"):
+        super().__init__(label=label, style=discord.ButtonStyle.primary)
+        self.group_key = group_key
+        self.parent_view = parent_view
+
+    async def callback(self, interaction: discord.Interaction):
+        group = None
+        src = (
+            self.parent_view.bot.tree.get_commands(guild=interaction.guild)
+            if interaction.guild
+            else self.parent_view.bot.tree.get_commands()
+        )
+        for cmd in src:
+            if isinstance(cmd, app_commands.Group) and cmd.name == self.group_key:
+                group = cmd
+                break
+        if not group:
+            from core.reply_helpers import reply_error
+            return await reply_error(interaction, "Not available", f"Group `{self.group_key}` isn't registered.")
+        self.parent_view.current_group = group
+        self.parent_view.current_page = 0
+        select_item = next((item for item in self.parent_view.children if isinstance(item, HelpSelect)), None)
+        if select_item:
+            await select_item.update_embed(interaction, group, 0)
+
+
 class HelpSelectView(discord.ui.View):
     """View with select menu for choosing command groups."""
-    
+
     def __init__(self, bot, is_user_mod: bool):
-        super().__init__(timeout=300)  # 5 minute timeout
+        super().__init__(timeout=300)
         from core.embed_links import add_link_row, help_link_buttons
 
         add_link_row(self, help_link_buttons())
@@ -106,11 +137,19 @@ class HelpSelectView(discord.ui.View):
         self.is_user_mod = is_user_mod
         self.current_group = None
         self.current_page = 0
-        self.commands_per_page = 15  # Commands per page
+        self.commands_per_page = 15
+        for label, group_key in (
+            ("👋 New here", "general"),
+            ("🎮 Warframe", "warframe"),
+            ("💰 Economy", "economy"),
+            ("🛡️ Staff", "admin"),
+        ):
+            if group_key == "admin" and not is_user_mod:
+                continue
+            self.add_item(HelpPathButton(label, group_key, self))
         self.add_item(HelpSelect(bot, is_user_mod, self))
-    
+
     async def on_timeout(self):
-        """Disable the view when it times out."""
         for item in self.children:
             if isinstance(item, (discord.ui.Button, discord.ui.Select)):
                 item.disabled = True
@@ -123,31 +162,26 @@ class HelpSelectView(discord.ui.View):
                 await msg.edit(embed=emb, view=self)
         except Exception:
             pass
-    
+
     def update_pagination_buttons(self):
-        """Update pagination buttons based on current state."""
-        # Remove existing pagination buttons
         pagination_items = [item for item in self.children if isinstance(item, (PageButton, PageSelect))]
         for item in pagination_items:
             self.remove_item(item)
-        
-        # Only add pagination if we have a group with multiple pages
+
         if self.current_group:
             collected = _collect_group_commands(self.current_group, [self.current_group.name])
             total_commands = len(collected)
             total_pages = (total_commands + self.commands_per_page - 1) // self.commands_per_page
-            
+
             if total_pages > 1:
-                # Add page navigation buttons
                 if self.current_page > 0:
                     self.add_item(PageButton("◀️ Previous", "prev", disabled=False))
                 else:
                     self.add_item(PageButton("◀️ Previous", "prev", disabled=True))
-                
-                # Add page selector (max 25 options, so limit if needed)
+
                 if total_pages <= 25:
                     self.add_item(PageSelect(total_pages, self.current_page))
-                
+
                 if self.current_page < total_pages - 1:
                     self.add_item(PageButton("Next ▶️", "next", disabled=False))
                 else:

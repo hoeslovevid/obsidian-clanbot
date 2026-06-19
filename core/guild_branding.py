@@ -33,6 +33,33 @@ def cached_guild_footer(guild_id: int | None) -> str | None:
     return _footer_cache.get(guild_id)
 
 
+async def preload_guild_footers(bot) -> int:
+    """Warm footer cache for all guilds on startup."""
+    count = 0
+    try:
+        import aiosqlite
+        from database import DB_PATH
+
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT guild_id, value FROM guild_settings WHERE key='guild_embed_footer' AND value!=''"
+            )
+            for gid, val in await cur.fetchall():
+                if val and str(val).strip():
+                    _footer_cache[int(gid)] = str(val).strip()[:120]
+                    count += 1
+    except Exception:
+        pass
+    for guild in getattr(bot, "guilds", []) or []:
+        if guild.id not in _footer_cache:
+            try:
+                await get_guild_embed_footer(guild.id)
+                count += 1
+            except Exception:
+                pass
+    return count
+
+
 def merge_guild_footer(base: str, suffix: str | None) -> str:
     if not suffix:
         return base
