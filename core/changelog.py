@@ -12,7 +12,8 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-18"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**2.0.0** — `bot/runner.py` startup; `handlers/interaction_router.py` + `incident_checks.py`; slim `app.py` (~370 lines)",
+    "**2.0.1 batch 16** — `bot/client.py` (ClanBot); `tasks/registry.py` (loop registry); `handlers/discord_events.py`",
+    "**2.0.0** — `bot/runner.py` startup; interaction router + incident checks; slim `app.py` (~130 lines)",
     "**2.0 batch 15** — `vc_loops`, `moderation_loops`, `wf_roles_loops`, `misc_loops`; `_core.py` thin wrappers + loop registry fixes",
     "**2.0 batch 14** — `handlers/voice_events.py`; `wf_live_loops`, `guild_stats_loops`; daily/investment DMs in `economy_loops`",
     "**2.0 batch 13** — `handlers/message_events.py`; `lfg_loops` + `trading_loops`; pet decay in `economy_loops`",
@@ -26,6 +27,14 @@ CURRENT_RELEASE_CHANGES: list[str] = [
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "2.0.0",
+        "date": "2026-06-18",
+        "changes": [
+            "**2.0.0 batch 15** — VC/moderation/WF-roles/misc loops; interaction router; runner; ~370-line app.py",
+            "**2.0 batches 11–14** — handler/loop extractions; mod ops KPI; Postgres scaffold",
+        ],
+    },
     {
         "version": "2.0.0-beta",
         "date": "2026-06-18",

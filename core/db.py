@@ -11,7 +11,7 @@ import aiosqlite  # type: ignore
 from core.config import DB_BACKEND, DB_PATH, DATABASE_URL
 
 if TYPE_CHECKING:
-    from bot.app import ClanBot
+    from bot.client import ClanBot
 
 DEFAULT_BUSY_TIMEOUT_MS = 15_000
 

@@ -147,9 +147,9 @@ async def build_health_embed(
         wf_cached = "n/a"
 
     try:
-        from bot.app import _vc_panel_update_pending
+        from handlers.vc_panel import pending_vc_flush_task_count
 
-        vc_pending = sum(1 for t in _vc_panel_update_pending.values() if not t.done())
+        vc_pending = pending_vc_flush_task_count()
     except Exception:
         vc_pending = 0
 

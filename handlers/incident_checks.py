@@ -10,7 +10,7 @@ from core.utils import is_mod
 from database import get_guild_setting, now_utc, set_guild_setting
 
 if TYPE_CHECKING:
-    from bot.app import ClanBot
+    from bot.client import ClanBot
 
 logger = logging.getLogger(__name__)
 

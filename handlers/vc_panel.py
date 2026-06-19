@@ -24,6 +24,11 @@ _guild_pending_vc_updates: Dict[int, set[int]] = {}
 _guild_vc_flush_tasks: Dict[int, asyncio.Task] = {}
 
 
+def pending_vc_flush_task_count() -> int:
+    """Active debounced VC panel flush tasks (for /admin health)."""
+    return sum(1 for t in _guild_vc_flush_tasks.values() if not t.done())
+
+
 async def post_vc_panel(
     bot: discord.Client,
     guild: discord.Guild,
