@@ -78,56 +78,12 @@ def setup_tasks(bot):
     
     @tasks.loop(minutes=VC_CLEANUP_INTERVAL_MINUTES)
     async def temp_vc_cleanup():
-        # Item 47: expire stale revival vote messages each cycle.
         try:
-            from commands.voice.vc import expire_pending_revivals
-            await expire_pending_revivals(bot)
+            from tasks.vc_loops import run_temp_vc_cleanup_cycle
+
+            await run_temp_vc_cleanup_cycle(bot)
         except Exception as e:
-            logger.debug(f"[vc-revival] expire pass failed: {e}")
-
-        cutoff = now_utc() - timedelta(minutes=VOICE_IDLE_DELETE_MINUTES)
-
-        for guild in bot.guilds:
-            async with aiosqlite.connect(DB_PATH) as db:
-                cur = await db.execute(
-                    "SELECT channel_id, last_nonempty_at FROM temp_vcs WHERE guild_id=?",
-                    (guild.id,),
-                )
-                rows = await cur.fetchall()
-
-            for channel_id, last_nonempty_at in rows:
-                vc = guild.get_channel(int(channel_id))
-                if not isinstance(vc, discord.VoiceChannel):
-                    await delete_temp_vc_and_panel(guild, int(channel_id), reason="Cleanup missing VC", bot=bot)
-                    continue
-
-                # Never delete join-to-create trigger
-                create_id_s = await get_guild_setting(guild.id, "create_vc_channel_id")
-                if create_id_s and create_id_s.isdigit() and vc.id == int(create_id_s):
-                    continue
-
-                try:
-                    last_dt = datetime.fromisoformat(last_nonempty_at)
-                except Exception:
-                    last_dt = now_utc()
-
-                if len(vc.members) == 0 and last_dt < cutoff:
-                    # Item 47: post a revival-vote message in the panel channel
-                    # BEFORE we delete the VC, so the metadata is still readable.
-                    try:
-                        from commands.voice.vc import _record_revival_intent
-                        from core.channels import resolve_channel_id
-                        from bot import VOICE_PANEL_CHANNEL_ID, VOICE_PANEL_CHANNEL_NAME
-                        panel_ch_id = await resolve_channel_id(
-                            guild, "voice_panel_channel_id",
-                            VOICE_PANEL_CHANNEL_ID, VOICE_PANEL_CHANNEL_NAME,
-                        )
-                        panel_ch = guild.get_channel(panel_ch_id) if panel_ch_id else None
-                        if isinstance(panel_ch, discord.TextChannel):
-                            await _record_revival_intent(guild, vc, log_channel=panel_ch)
-                    except Exception as e:
-                        logger.debug(f"[vc-revival] could not record revival intent: {e}")
-                    await delete_temp_vc_and_panel(guild, vc.id, reason="Temp VC idle cleanup", bot=bot)
+            logger.error(f"Error in temp_vc_cleanup: {e}", exc_info=True)
 
     @temp_vc_cleanup.before_loop
     async def before_temp_vc_cleanup():
@@ -208,71 +164,11 @@ def setup_tasks(bot):
         members whose ``activity_stats.last_activity_date`` (or join date when
         no activity row exists) is older than the per-guild threshold."""
         try:
-            from commands.moderation.inactive_role import (
-                get_inactive_role_id, get_inactive_threshold_days, _last_activity_for,
-                was_inactive_warned, mark_inactive_warned,
-            )
-            from core.utils import obsidian_embed
-            for guild in bot.guilds:
-                try:
-                    role_id = await get_inactive_role_id(guild.id)
-                    if not role_id:
-                        continue
-                    role = guild.get_role(role_id)
-                    if role is None:
-                        continue
-                    me = guild.me
-                    if me is None or role >= me.top_role:
-                        # Discord won't let us assign a role at/above our top role
-                        continue
-                    threshold = await get_inactive_threshold_days(guild.id)
-                    cutoff = now_utc() - timedelta(days=threshold)
-                    warn_days = max(1, int(threshold * 0.75))
-                    warn_cutoff = now_utc() - timedelta(days=warn_days)
-                    tagged = 0
-                    warned = 0
-                    for member in guild.members:
-                        if member.bot or role in member.roles:
-                            continue
-                        last = await _last_activity_for(guild.id, member.id)
-                        if last is None:
-                            joined = member.joined_at
-                            if joined is None:
-                                continue
-                            ref_dt = joined if joined.tzinfo else joined.replace(tzinfo=timezone.utc)
-                        else:
-                            ref_dt = last
-                        if ref_dt < cutoff:
-                            try:
-                                await member.add_roles(role, reason=f"Inactive {threshold}d (auto-sweep)")
-                                tagged += 1
-                            except (discord.Forbidden, discord.HTTPException) as e:
-                                logger.debug(f"[inactive_role] could not tag {member.id}: {e}")
-                        elif ref_dt < warn_cutoff and not await was_inactive_warned(guild.id, member.id):
-                            days_left = max(1, threshold - warn_days)
-                            try:
-                                dm = obsidian_embed(
-                                    "⚠️ Inactivity Notice",
-                                    f"You haven't been active in **{guild.name}** for about **{warn_days}** days.\n\n"
-                                    f"In **~{days_left}** more days you may receive the {role.mention} role "
-                                    f"(threshold: **{threshold}** days).\n\n"
-                                    f"_Chat, use commands, or join voice to stay active._",
-                                    color=discord.Color.orange(),
-                                    client=bot,
-                                )
-                                await safe_dm(member,embed=dm)
-                                await mark_inactive_warned(guild.id, member.id)
-                                warned += 1
-                            except (discord.Forbidden, discord.HTTPException):
-                                await mark_inactive_warned(guild.id, member.id)
-                    if tagged:
-                        logger.info(f"[inactive_role] tagged {tagged} member(s) in {guild.name}")
-                    if warned:
-                        logger.info(f"[inactive_role] warned {warned} member(s) in {guild.name}")
-                except Exception as e:
-                    logger.warning(f"[inactive_role] guild {guild.id} sweep failed: {e}")
+            from tasks.moderation_loops import run_inactive_role_sweep_cycle
+
+            await run_inactive_role_sweep_cycle(bot)
         except Exception as e:
-            logger.error(f"[inactive_role] sweep loop error: {e}", exc_info=True)
+            logger.error(f"Error in inactive_role_sweep_loop: {e}", exc_info=True)
 
     @inactive_role_sweep_loop.before_loop
     async def before_inactive_role_sweep_loop():
@@ -282,14 +178,11 @@ def setup_tasks(bot):
     async def goal_progress_loop():
         """Item 72 — recompute server-wide goal progress every 15 minutes."""
         try:
-            from commands.general.server_goals import evaluate_active_goal
-            for guild in bot.guilds:
-                try:
-                    await evaluate_active_goal(guild, bot)
-                except Exception as e:
-                    logger.debug(f"[server_goals] guild {guild.id} eval failed: {e}")
+            from tasks.moderation_loops import run_goal_progress_cycle
+
+            await run_goal_progress_cycle(bot)
         except Exception as e:
-            logger.error(f"[server_goals] goal_progress_loop error: {e}", exc_info=True)
+            logger.error(f"Error in goal_progress_loop: {e}", exc_info=True)
 
     @goal_progress_loop.before_loop
     async def before_goal_progress_loop():
@@ -371,72 +264,9 @@ def setup_tasks(bot):
     async def warframe_achievement_roles_loop():
         """Assign roles based on Warframe playtime and other in-game achievements."""
         try:
-            from database import (
-                get_all_linked_steam_accounts,
-                get_warframe_achievement_roles,
-                has_warframe_achievement_unlock,
-                record_warframe_achievement_unlock,
-                update_steam_playtime,
-            )
-            from api.warframe_api import fetch_steam_warframe_playtime
+            from tasks.wf_roles_loops import run_warframe_achievement_roles_cycle
 
-            if not os.environ.get("STEAM_API_KEY"):
-                return
-
-            for guild in bot.guilds:
-                try:
-                    role_configs = await get_warframe_achievement_roles(guild.id)
-                    if not role_configs:
-                        continue
-
-                    linked = await get_all_linked_steam_accounts(guild.id)
-                    if not linked:
-                        continue
-
-                    for user_id, steam_id_64 in linked:
-                        try:
-                            member = guild.get_member(user_id)
-                            if not member:
-                                continue
-
-                            # Fetch fresh playtime
-                            hours = await fetch_steam_warframe_playtime(steam_id_64)
-                            if hours is None:
-                                continue
-                            await update_steam_playtime(guild.id, user_id, hours)
-
-                            # Check each playtime role config
-                            for ach_type, threshold, role_id in role_configs:
-                                if ach_type != "playtime":
-                                    continue
-                                if hours < threshold:
-                                    continue
-                                if await has_warframe_achievement_unlock(guild.id, user_id, ach_type, threshold):
-                                    continue
-
-                                role = guild.get_role(role_id)
-                                if not role:
-                                    continue
-                                if role in member.roles:
-                                    await record_warframe_achievement_unlock(guild.id, user_id, ach_type, threshold)
-                                    continue
-                                if not guild.me.guild_permissions.manage_roles:
-                                    continue
-                                if guild.me.top_role <= role:
-                                    continue
-
-                                try:
-                                    await member.add_roles(role, reason=f"Warframe playtime: {hours:,}h (≥{threshold:,}h)")
-                                    await record_warframe_achievement_unlock(guild.id, user_id, ach_type, threshold)
-                                    logger.info(f"[warframe_roles] Assigned {role.name} to {member} ({hours}h playtime)")
-                                except discord.Forbidden:
-                                    logger.warning(f"[warframe_roles] Cannot assign role to {member}")
-                                except Exception as e:
-                                    logger.error(f"[warframe_roles] Error assigning role: {e}")
-                        except Exception as e:
-                            logger.error(f"[warframe_roles] Error processing user {user_id}: {e}")
-                except Exception as e:
-                    logger.error(f"[warframe_roles] Error processing guild {guild.id}: {e}")
+            await run_warframe_achievement_roles_cycle(bot)
         except Exception as e:
             logger.error(f"Error in warframe_achievement_roles_loop: {e}", exc_info=True)
 
@@ -590,13 +420,11 @@ def setup_tasks(bot):
             await check_ended_giveaways(bot)
         except Exception as e:
             logger.error(f"[giveaway] Error in giveaway check loop: {e}", exc_info=True)
-    
+
+    @giveaway_check_loop.before_loop
     async def before_giveaway_check_loop():
         await bot.wait_until_ready()
-    
-    giveaway_check_loop.before_loop(before_giveaway_check_loop)
-    giveaway_check_loop.start()
-    logger.info("[tasks] Started giveaway check loop")
+
     
     @tasks.loop(minutes=2)  # Update every 2 minutes for accuracy
     async def member_count_update_loop():
@@ -695,8 +523,6 @@ def setup_tasks(bot):
             await run_scheduled_messages_cycle(bot)
         except Exception as e:
             logger.error(f"Error in scheduled_messages_loop: {e}", exc_info=True)
-        except Exception as e:
-            logger.error(f"[schedule] Error in scheduled_messages_loop: {e}", exc_info=True)
 
     @scheduled_messages_loop.before_loop
     async def before_scheduled_messages_loop():
@@ -709,9 +535,6 @@ def setup_tasks(bot):
             from tasks.integration_loops import run_twitch_live_cycle
 
             await run_twitch_live_cycle(bot)
-        except Exception as e:
-            logger.error(f"Error in twitch_check_loop: {e}", exc_info=True)
-        
         except Exception as e:
             logger.error(f"Error in twitch_check_loop: {e}", exc_info=True)
     
@@ -728,8 +551,6 @@ def setup_tasks(bot):
             await run_stale_ticket_reminder_cycle(bot)
         except Exception as e:
             logger.error(f"Error in stale_ticket_reminder_loop: {e}", exc_info=True)
-        except Exception as e:
-            logger.error(f"[stale_ticket] Error in stale_ticket_reminder_loop: {e}", exc_info=True)
 
     @stale_ticket_reminder_loop.before_loop
     async def before_stale_ticket_reminder_loop():
@@ -804,13 +625,11 @@ def setup_tasks(bot):
     async def music_auto_leave_loop():
         """Disconnect from voice when the channel is empty too long."""
         try:
-            if not bot.is_ready():
-                return
-            from core.music_player import music_auto_leave_tick
+            from tasks.misc_loops import run_music_auto_leave_cycle
 
-            await music_auto_leave_tick(bot)
+            await run_music_auto_leave_cycle(bot)
         except Exception as e:
-            logger.error(f"[music] auto-leave loop error: {e}", exc_info=True)
+            logger.error(f"Error in music_auto_leave_loop: {e}", exc_info=True)
 
     @music_auto_leave_loop.before_loop
     async def before_music_auto_leave_loop():
@@ -819,13 +638,11 @@ def setup_tasks(bot):
     @tasks.loop(minutes=30)
     async def price_watch_loop():
         try:
-            if not bot.is_ready():
-                return
-            from core.price_watchlist import check_price_watches
+            from tasks.misc_loops import run_price_watch_cycle
 
-            await check_price_watches(bot)
+            await run_price_watch_cycle(bot)
         except Exception as e:
-            logger.error(f"[price_watch] loop error: {e}", exc_info=True)
+            logger.error(f"Error in price_watch_loop: {e}", exc_info=True)
 
     @price_watch_loop.before_loop
     async def before_price_watch_loop():
@@ -883,6 +700,7 @@ def setup_tasks(bot):
         ('cycle_check_loop', cycle_check_loop),
         ('invasion_check_loop', invasion_check_loop),
         ('archon_check_loop', archon_check_loop),
+        ('giveaway_check_loop', giveaway_check_loop),
         ('member_count_update_loop', member_count_update_loop),
         ('server_stats_update_loop', server_stats_update_loop),
         ('alert_check_loop', alert_check_loop),

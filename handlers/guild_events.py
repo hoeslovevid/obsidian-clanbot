@@ -14,8 +14,14 @@ async def handle_guild_join(bot: discord.Client, guild: discord.Guild) -> None:
         print(f"[install] Ensured join-to-create in {guild.name} (guild #{len(bot.guilds)})")
     except Exception as e:
         print(f"[install] Setup failed in {guild.name}: {e}")
+    from core.presence import refresh_bot_presence
+
+    await refresh_bot_presence(bot)
 
 
 async def handle_guild_remove(bot: discord.Client, guild: discord.Guild) -> None:
-    """Log guild removal (presence updated by caller)."""
+    """Log guild removal and refresh presence."""
     print(f"[install] Left {guild.name} (guilds remaining: {len(bot.guilds)})")
+    from core.presence import refresh_bot_presence
+
+    await refresh_bot_presence(bot)

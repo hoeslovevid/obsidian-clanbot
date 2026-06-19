@@ -85,3 +85,8 @@ def build_bot_activity(bot) -> discord.Activity:
         parts.append(servers)
     name = " · ".join(p for p in parts if p)[:128]
     return discord.Activity(type=discord.ActivityType.watching, name=name)
+
+
+async def refresh_bot_presence(bot) -> None:
+    """Update sidebar activity after guild join/leave."""
+    await bot.change_presence(activity=build_bot_activity(bot), status=discord.Status.online)

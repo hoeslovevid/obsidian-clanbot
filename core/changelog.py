@@ -12,23 +12,29 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-18"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**2.0-beta batch 14** — `handlers/voice_events.py`; `wf_live_loops` (Baro/cycle panels + cache warm); `guild_stats_loops`; daily/investment DMs in `economy_loops`",
-    "**2.0-beta batch 13** — `handlers/message_events.py` (full on_message pipeline); `lfg_loops` + `trading_loops`; pet decay in `economy_loops`",
-    "**2.0-beta batch 12** — `community_loops` (reminders/polls/schedule), `integration_loops` (Twitch), stale tickets + YouTube feeds, archon + RSVP DMs",
-    "**2.0-beta batch 12** — `handlers/command_tracking.py`, member ban/role logs in `message_logs.py`",
-    "**2.0-beta** — `handlers/reactions.py` + `handlers/message_logs.py`; slimmer `app.py`",
-    "**2.0-beta** — `tasks/event_loops.py` recurring + event-end; `ticket_loops.py` SLA; `wf_feed_loops.py` devstream/forum",
-    "**2.0-beta** — `/admin dashboard` Command KPI field + SLA target; `/admin usage_report` prune candidates",
-    "**2.0-beta** — `core/db.py` `DB_BACKEND` + `DATABASE_URL` scaffold (Postgres 2.1 preview)",
+    "**2.0.0** — `bot/runner.py` startup; `handlers/interaction_router.py` + `incident_checks.py`; slim `app.py` (~370 lines)",
+    "**2.0 batch 15** — `vc_loops`, `moderation_loops`, `wf_roles_loops`, `misc_loops`; `_core.py` thin wrappers + loop registry fixes",
+    "**2.0 batch 14** — `handlers/voice_events.py`; `wf_live_loops`, `guild_stats_loops`; daily/investment DMs in `economy_loops`",
+    "**2.0 batch 13** — `handlers/message_events.py`; `lfg_loops` + `trading_loops`; pet decay in `economy_loops`",
+    "**2.0 batch 12** — `community_loops`, `integration_loops` (Twitch), stale tickets + archon/RSVP DMs",
+    "**2.0 batch 11** — `handlers/reactions.py` + `message_logs.py`; `event/ticket/wf_feed` loops; `/admin usage_report`; Postgres scaffold",
     "**2.0 Platform** — global command sync for multi-guild (78+ servers); `COMMAND_SYNC_GUILD_ONLY` for dev",
     "**2.0 UX** — Layout v2 Warframe hub, help quick-path buttons, `/me` action row, console refresh",
     "**2.0 WF layer** — `core/wf_resolve.py` unified platform, cache footers, notify loops extracted",
     "**2.0 Ops** — `/admin health` guild count + heatmap; `tools/check_command_tree.py` CI gate",
-    "**Fix** — help category buttons use global tree (regression from guild-scoped lookup)",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "2.0.0-beta",
+        "date": "2026-06-18",
+        "changes": [
+            "**2.0-beta batches 11–14** — handler/loop extractions; mod ops dashboard KPI; command prune report",
+            "**2.0-beta** — `core/db.py` `DB_BACKEND` + `DATABASE_URL` scaffold (Postgres 2.1 preview)",
+            "**Fix** — help category buttons use global tree (regression from guild-scoped lookup)",
+        ],
+    },
     {
         "version": "2.0.0-alpha",
         "date": "2026-06-18",
