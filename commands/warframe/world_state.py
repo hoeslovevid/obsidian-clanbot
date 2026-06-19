@@ -37,19 +37,18 @@ logger = logging.getLogger(__name__)
 
 
 class WorldStateBoardView(discord.ui.View):
-    """Pinned world-state board — static custom_id survives bot restarts."""
+    """Pinned world-state board — static custom_id; refresh handled in component_handler."""
 
     def __init__(self):
         super().__init__(timeout=None)
-
-    @discord.ui.button(
-        label="Update data",
-        style=discord.ButtonStyle.secondary,
-        emoji="🔄",
-        custom_id="world_state:refresh",
-    )
-    async def refresh_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await refresh_pinned_world_state(interaction.client, interaction)
+        self.add_item(
+            discord.ui.Button(
+                label="Update data",
+                style=discord.ButtonStyle.secondary,
+                emoji="🔄",
+                custom_id="world_state:refresh",
+            )
+        )
 
 
 async def refresh_pinned_world_state(bot: discord.Client, interaction: discord.Interaction) -> None:
@@ -63,7 +62,11 @@ async def refresh_pinned_world_state(bot: discord.Client, interaction: discord.I
         return
 
     if not interaction.response.is_done():
-        await interaction.response.defer()
+        try:
+            await interaction.response.defer()
+        except (discord.InteractionResponded, discord.HTTPException) as exc:
+            if getattr(exc, "code", None) != 40060:
+                raise
 
     await wf_invalidate("warframe:baro", "warframe:cycles")
     new_emb = await build_world_state_embed(bot)

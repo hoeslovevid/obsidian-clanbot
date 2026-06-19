@@ -5,41 +5,39 @@ import discord  # type: ignore
 from discord import ui  # type: ignore
 
 from core.layout_v2 import ACCENT_DEFAULT, footer_display, make_container
-from core.console_hub import respond_console_hub_hint
+
+_LAYOUT_BUTTONS: tuple[tuple[str, str, str], ...] = (
+    ("Menu", "📋", "menu"),
+    ("Daily", "🎁", "daily"),
+    ("WF Hub", "🎮", "wf_hub"),
+    ("Status", "✅", "status"),
+    ("Ticket", "🎫", "ticket"),
+    ("Help", "❓", "help"),
+)
 
 
 class ConsoleHubLayout(ui.LayoutView):
-    """Pinned clan console — hint buttons on ActionRows."""
+    """Pinned clan console — hint buttons on ActionRows (handler-routed, no callbacks)."""
 
     def __init__(self, *, body: str):
         super().__init__(timeout=None)
         lines = ["## 🜂 Obsidian Clan Console", "", body.strip(), "", footer_display("console_hub")]
         self.add_item(make_container(lines, accent=ACCENT_DEFAULT))
         row1 = ui.ActionRow()
-        for label, emoji, cmd, hint in (
-            ("Menu", "📋", "/menu", "categorized command picker"),
-            ("Daily", "🎁", "/daily", "claim your daily coin streak"),
-            ("WF Hub", "🎮", "/warframe hub", "Baro, fissures, notify setup"),
-        ):
-            row1.add_item(_ConsoleHintButton(label, emoji, cmd, hint))
+        for label, emoji, action in _LAYOUT_BUTTONS[:3]:
+            row1.add_item(_console_hint_button(label, emoji, action))
         row2 = ui.ActionRow()
-        for label, emoji, cmd, hint in (
-            ("Status", "✅", "/status", "bot version and API health"),
-            ("Ticket", "🎫", "/ticket", "open a support ticket"),
-            ("Help", "❓", "/help", "searchable command reference"),
-        ):
-            row2.add_item(_ConsoleHintButton(label, emoji, cmd, hint))
+        for label, emoji, action in _LAYOUT_BUTTONS[3:]:
+            row2.add_item(_console_hint_button(label, emoji, action))
         self.add_item(row1)
         self.add_item(row2)
 
 
-class _ConsoleHintButton(ui.Button):
-    def __init__(self, label: str, emoji: str, command: str, detail: str):
-        style = discord.ButtonStyle.primary if label in ("Menu", "WF Hub") else discord.ButtonStyle.secondary
-        super().__init__(label=label, style=style, emoji=emoji, custom_id=f"obsidian_console:{label.lower().replace(' ', '_')}")
-        self._command = command
-        self._detail = detail
-
-    async def callback(self, interaction: discord.Interaction):
-        action = (self.custom_id or "").split(":", 1)[-1]
-        await respond_console_hub_hint(interaction, action)
+def _console_hint_button(label: str, emoji: str, action: str) -> ui.Button:
+    style = discord.ButtonStyle.primary if label in ("Menu", "WF Hub") else discord.ButtonStyle.secondary
+    return ui.Button(
+        label=label,
+        style=style,
+        emoji=emoji,
+        custom_id=f"obsidian_console:{action}",
+    )

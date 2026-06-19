@@ -10,34 +10,31 @@ from core.embed_templates import embed_template
 from core.embed_footers import footer_for
 from core.utils import error_embed, is_mod, success_embed
 from database import set_guild_setting
-from core.console_hub import respond_console_hub_hint
+
+# Stateless buttons — routed only via handlers/component_handler.py (no view callbacks).
+_CONSOLE_HUB_BUTTONS: tuple[tuple[str, str, discord.ButtonStyle, str], ...] = (
+    ("Menu", "📋", discord.ButtonStyle.primary, "menu"),
+    ("Daily", "🎁", discord.ButtonStyle.secondary, "daily"),
+    ("Status", "✅", discord.ButtonStyle.secondary, "status"),
+    ("Ticket", "🎫", discord.ButtonStyle.secondary, "ticket"),
+    ("Help", "❓", discord.ButtonStyle.secondary, "help"),
+)
 
 
 class ConsoleHubView(discord.ui.View):
-    """Persistent hub buttons — registered on startup for pinned console messages."""
+    """Persistent hub shell — custom_ids only; hints handled in component_handler."""
 
     def __init__(self):
         super().__init__(timeout=None)
-
-    @discord.ui.button(label="Menu", style=discord.ButtonStyle.primary, emoji="📋", custom_id="obsidian_console:menu")
-    async def menu_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await respond_console_hub_hint(interaction, "menu")
-
-    @discord.ui.button(label="Daily", style=discord.ButtonStyle.secondary, emoji="🎁", custom_id="obsidian_console:daily")
-    async def daily_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await respond_console_hub_hint(interaction, "daily")
-
-    @discord.ui.button(label="Status", style=discord.ButtonStyle.secondary, emoji="✅", custom_id="obsidian_console:status")
-    async def status_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await respond_console_hub_hint(interaction, "status")
-
-    @discord.ui.button(label="Ticket", style=discord.ButtonStyle.secondary, emoji="🎫", custom_id="obsidian_console:ticket")
-    async def ticket_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await respond_console_hub_hint(interaction, "ticket")
-
-    @discord.ui.button(label="Help", style=discord.ButtonStyle.secondary, emoji="❓", custom_id="obsidian_console:help")
-    async def help_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await respond_console_hub_hint(interaction, "help")
+        for label, emoji, style, action in _CONSOLE_HUB_BUTTONS:
+            self.add_item(
+                discord.ui.Button(
+                    label=label,
+                    style=style,
+                    emoji=emoji,
+                    custom_id=f"obsidian_console:{action}",
+                )
+            )
 
 
 def _hub_embed(client, guild: discord.Guild | None = None) -> discord.Embed:
@@ -157,7 +154,6 @@ def setup(bot, group=None):
         else:
             view = ConsoleHubView()
             msg = await target.send(embed=embed, view=view)
-        # Optional website row as a second message is noisy; help links live in embed footer.
         try:
             await msg.pin(reason="Obsidian Clan Console hub")
         except (discord.Forbidden, discord.HTTPException):

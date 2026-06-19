@@ -29,6 +29,17 @@ async def respond_console_hub_hint(interaction: discord.Interaction, action: str
     hint = CONSOLE_HUB_HINTS.get(action)
     if not hint:
         return False
+    if interaction.response.is_done():
+        # #region agent log
+        agent_log(
+            "console_hub.py:respond",
+            "skipped — already acknowledged",
+            data={"action": action},
+            hypothesis_id="H1",
+            run_id="post-fix",
+        )
+        # #endregion
+        return True
     command, detail = hint
     try:
         await interaction.response.send_message(
@@ -41,15 +52,29 @@ async def respond_console_hub_hint(interaction: discord.Interaction, action: str
             "hint sent",
             data={"action": action},
             hypothesis_id="H3",
+            run_id="post-fix",
         )
         # #endregion
-    except Exception as exc:
+    except (discord.InteractionResponded, discord.HTTPException) as exc:
+        code = getattr(exc, "code", None)
+        if isinstance(exc, discord.InteractionResponded) or code == 40060:
+            # #region agent log
+            agent_log(
+                "console_hub.py:respond",
+                "swallowed duplicate acknowledge",
+                data={"action": action, "code": code},
+                hypothesis_id="H1",
+                run_id="post-fix",
+            )
+            # #endregion
+            return True
         # #region agent log
         agent_log(
             "console_hub.py:respond",
             "hint send failed",
             data={"action": action, "error": type(exc).__name__, "msg": str(exc)[:200]},
             hypothesis_id="H3",
+            run_id="post-fix",
         )
         # #endregion
         raise
