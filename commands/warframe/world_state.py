@@ -35,6 +35,52 @@ from views import RefreshView
 
 logger = logging.getLogger(__name__)
 
+
+class WorldStateBoardView(discord.ui.View):
+    """Pinned world-state board — static custom_id survives bot restarts."""
+
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(
+        label="Update data",
+        style=discord.ButtonStyle.secondary,
+        emoji="🔄",
+        custom_id="world_state:refresh",
+    )
+    async def refresh_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await refresh_pinned_world_state(interaction.client, interaction)
+
+
+async def refresh_pinned_world_state(bot: discord.Client, interaction: discord.Interaction) -> None:
+    """Invalidate WF caches and edit the pinned board message in place."""
+    if not interaction.message:
+        if not interaction.response.is_done():
+            await interaction.response.send_message(
+                "This refresh button is no longer attached to a message.",
+                ephemeral=True,
+            )
+        return
+
+    if not interaction.response.is_done():
+        await interaction.response.defer()
+
+    await wf_invalidate("warframe:baro", "warframe:cycles")
+    new_emb = await build_world_state_embed(bot)
+    view = WorldStateBoardView()
+    try:
+        await interaction.message.edit(embed=new_emb, view=view)
+    except discord.HTTPException as e:
+        logger.debug("[world_state] refresh edit failed: %s", e)
+        try:
+            await interaction.followup.send(
+                "Couldn't refresh the board — try `/warframe world_state` again.",
+                ephemeral=True,
+            )
+        except discord.HTTPException:
+            pass
+
+
 _FISSURE_TIER_RANK = {"Requiem": 5, "Axi": 4, "Neo": 3, "Meso": 2, "Lith": 1}
 
 
@@ -196,16 +242,7 @@ def setup(bot, group=None):
             except (discord.NotFound, discord.Forbidden, discord.HTTPException):
                 message = None
 
-        async def on_refresh(btn_interaction: discord.Interaction):
-            await wf_invalidate("warframe:baro", "warframe:cycles")
-            new_emb = await build_world_state_embed(interaction.client)
-            view = RefreshView(on_refresh, timeout=None)
-            try:
-                await btn_interaction.message.edit(embed=new_emb, view=view)
-            except discord.HTTPException as e:
-                logger.debug("[world_state] refresh edit failed: %s", e)
-
-        view = RefreshView(on_refresh, timeout=None)
+        view = WorldStateBoardView()
 
         try:
             if message:

@@ -12,8 +12,8 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-18"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Fix** — message economy + automod pass `bot` explicitly (runtime `Message` has no `.client` on deploy)",
-    "**Fix** — `archon_check_loop` missing `fetch_archon_hunt_data` import in `wf_check_loops.py`",
+    "**Fix** — pinned Clan Console (V2 + classic) survives restarts: `core/console_hub.py`, `add_view(ConsoleHubLayout)`, `obsidian_console:*` router",
+    "**Fix** — pinned `/warframe world_state` board refresh uses `world_state:refresh` persistent button (re-post once to upgrade old boards)",
     "**v2.0 platform** — modular refactor for 78+ guilds: global slash sync, version-gated restarts, slim `bot/app.py` (~130 lines)",
     "**Batch 16** — `bot/client.py` (ClanBot + sync); `tasks/registry.py` (all loop definitions); `handlers/discord_events.py` (gateway events)",
     "**Batch 15 · 2.0.0** — `bot/runner.py` startup; `handlers/interaction_router.py` + `incident_checks.py`; `vc_loops`, `moderation_loops`, `wf_roles_loops`, `misc_loops`",
@@ -38,6 +38,14 @@ CURRENT_RELEASE_CHANGES: list[str] = [
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "2.0.2",
+        "date": "2026-06-18",
+        "changes": [
+            "**Fix** — message economy + automod pass `bot` explicitly (`Message` has no `.client` on deploy)",
+            "**Fix** — `archon_check_loop` missing `fetch_archon_hunt_data` import",
+        ],
+    },
     {
         "version": "2.0.1",
         "date": "2026-06-18",

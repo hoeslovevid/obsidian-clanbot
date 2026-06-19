@@ -32,6 +32,19 @@ async def handle_component(bot: discord.Client, interaction: discord.Interaction
         if not cid:
             return
 
+        if cid.startswith("obsidian_console:"):
+            from core.console_hub import respond_console_hub_hint
+
+            action = cid.split(":", 1)[1]
+            if await respond_console_hub_hint(interaction, action):
+                return
+
+        if cid == "world_state:refresh":
+            from commands.warframe.world_state import refresh_pinned_world_state
+
+            await refresh_pinned_world_state(bot, interaction)
+            return
+
         # Complaints: open modal
         if cid == "complaints:open":
             # Check if interaction is still valid (not expired)

@@ -10,6 +10,7 @@ from core.embed_templates import embed_template
 from core.embed_footers import footer_for
 from core.utils import error_embed, is_mod, success_embed
 from database import set_guild_setting
+from core.console_hub import respond_console_hub_hint
 
 
 class ConsoleHubView(discord.ui.View):
@@ -18,31 +19,25 @@ class ConsoleHubView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    async def _hint(self, interaction: discord.Interaction, command: str, detail: str):
-        await interaction.response.send_message(
-            f"Run **`{command}`** — {detail}",
-            ephemeral=True,
-        )
-
     @discord.ui.button(label="Menu", style=discord.ButtonStyle.primary, emoji="📋", custom_id="obsidian_console:menu")
     async def menu_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self._hint(interaction, "/menu", "categorized command picker.")
+        await respond_console_hub_hint(interaction, "menu")
 
     @discord.ui.button(label="Daily", style=discord.ButtonStyle.secondary, emoji="🎁", custom_id="obsidian_console:daily")
     async def daily_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self._hint(interaction, "/daily", "claim your daily coin streak.")
+        await respond_console_hub_hint(interaction, "daily")
 
     @discord.ui.button(label="Status", style=discord.ButtonStyle.secondary, emoji="✅", custom_id="obsidian_console:status")
     async def status_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self._hint(interaction, "/status", "bot version, latency, and API health.")
+        await respond_console_hub_hint(interaction, "status")
 
     @discord.ui.button(label="Ticket", style=discord.ButtonStyle.secondary, emoji="🎫", custom_id="obsidian_console:ticket")
     async def ticket_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self._hint(interaction, "/ticket", "open a support ticket.")
+        await respond_console_hub_hint(interaction, "ticket")
 
     @discord.ui.button(label="Help", style=discord.ButtonStyle.secondary, emoji="❓", custom_id="obsidian_console:help")
     async def help_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self._hint(interaction, "/help", "searchable command reference.")
+        await respond_console_hub_hint(interaction, "help")
 
 
 def _hub_embed(client, guild: discord.Guild | None = None) -> discord.Embed:

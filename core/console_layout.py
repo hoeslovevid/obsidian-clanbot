@@ -5,6 +5,7 @@ import discord  # type: ignore
 from discord import ui  # type: ignore
 
 from core.layout_v2 import ACCENT_DEFAULT, footer_display, make_container
+from core.console_hub import respond_console_hub_hint
 
 
 class ConsoleHubLayout(ui.LayoutView):
@@ -40,7 +41,5 @@ class _ConsoleHintButton(ui.Button):
         self._detail = detail
 
     async def callback(self, interaction: discord.Interaction):
-        await interaction.response.send_message(
-            f"Run **`{self._command}`** — {self._detail}",
-            ephemeral=True,
-        )
+        action = (self.custom_id or "").split(":", 1)[-1]
+        await respond_console_hub_hint(interaction, action)

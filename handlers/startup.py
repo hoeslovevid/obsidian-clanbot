@@ -136,9 +136,19 @@ async def run_startup(bot: discord.Client) -> None:
         bot.add_view(RSVPView())
         try:
             from commands.general.console import ConsoleHubView
+            from core.console_layout import ConsoleHubLayout
+
             bot.add_view(ConsoleHubView())
+            bot.add_view(ConsoleHubLayout(body=""))
         except Exception as e:
-            logger.debug(f"[ready] ConsoleHubView registration skipped: {e}")
+            logger.debug(f"[ready] Console hub view registration skipped: {e}")
+
+        try:
+            from commands.warframe.world_state import WorldStateBoardView
+
+            bot.add_view(WorldStateBoardView())
+        except Exception as e:
+            logger.debug(f"[ready] WorldStateBoardView registration skipped: {e}")
 
         # Reminder snooze buttons survive restarts (DB-backed, stateless view).
         try:
