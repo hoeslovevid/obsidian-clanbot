@@ -28,6 +28,25 @@ def _collect_group_commands(group: app_commands.Group, prefix: list[str]) -> lis
     return result
 
 
+def _tree_root_commands(bot, guild: Optional[discord.Guild] = None) -> list:
+    """Top-level commands from the local tree (global first, then guild-only)."""
+    roots = list(bot.tree.get_commands(guild=None))
+    if guild:
+        seen = {c.name for c in roots}
+        for cmd in bot.tree.get_commands(guild=guild):
+            if cmd.name not in seen:
+                roots.append(cmd)
+                seen.add(cmd.name)
+    return roots
+
+
+def _find_tree_group(bot, name: str, guild: Optional[discord.Guild] = None) -> Optional[app_commands.Group]:
+    for cmd in _tree_root_commands(bot, guild):
+        if isinstance(cmd, app_commands.Group) and cmd.name == name:
+            return cmd
+    return None
+
+
 class PageButton(discord.ui.Button):
     """Button for pagination."""
     
@@ -105,16 +124,9 @@ class HelpPathButton(discord.ui.Button):
         self.parent_view = parent_view
 
     async def callback(self, interaction: discord.Interaction):
-        group = None
-        src = (
-            self.parent_view.bot.tree.get_commands(guild=interaction.guild)
-            if interaction.guild
-            else self.parent_view.bot.tree.get_commands()
+        group = _find_tree_group(
+            self.parent_view.bot, self.group_key, guild=interaction.guild
         )
-        for cmd in src:
-            if isinstance(cmd, app_commands.Group) and cmd.name == self.group_key:
-                group = cmd
-                break
         if not group:
             from core.reply_helpers import reply_error
             return await reply_error(interaction, "Not available", f"Group `{self.group_key}` isn't registered.")
@@ -425,8 +437,7 @@ def setup(bot, group=None):
                 else:
                     out.append(p)
             return out
-        cmd_src = bot.tree.get_commands(guild=interaction.guild) if interaction.guild else bot.tree.get_commands()
-        all_paths = _paths(cmd_src)
+        all_paths = _paths(_tree_root_commands(bot, interaction.guild))
         current_lower = (current or "").lower()
         matches = [p for p in all_paths if not current_lower or current_lower in p.lower()][:25]
         return [app_commands.Choice(name=m, value=m) for m in matches]
@@ -447,8 +458,7 @@ def setup(bot, group=None):
             
             # Find the command (supports 1–3 levels: economy, economy balance, economy pets shop)
             found_command = None
-            commands_source = bot.tree.get_commands(guild=interaction.guild) if interaction.guild else bot.tree.get_commands()
-            for cmd in commands_source:
+            for cmd in _tree_root_commands(bot, interaction.guild):
                 if cmd.name != parts[0]:
                     continue
                 if len(parts) == 1:
