@@ -57,6 +57,13 @@ def _hub_embed(client, guild: discord.Guild | None = None) -> discord.Embed:
         "• **`/help`** — full command reference\n"
         "• **`/favorite_add`** — pin commands; they show in `/menu` and `/help`"
     )
+    try:
+        from core.command_sync import sync_scope_description
+        from core.config import BOT_VERSION
+
+        body += f"\n\n-# **v{BOT_VERSION}** · {sync_scope_description()} · staff: `/admin health`"
+    except Exception:
+        pass
     if guild:
         try:
             from core.music_player import format_music_console_block

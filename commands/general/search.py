@@ -149,3 +149,10 @@ def setup(bot, group=None):
             ),
             ephemeral=True,
         )
+        if interaction.guild:
+            try:
+                from commands.general.onboarding import record_onboarding_step
+
+                await record_onboarding_step(interaction.guild.id, interaction.user.id, "use_search")
+            except Exception:
+                pass

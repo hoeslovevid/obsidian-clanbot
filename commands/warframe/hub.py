@@ -24,7 +24,13 @@ from core.embed_footers import footer_for
 from core.embed_links import add_link_row, baro_link_buttons, link_button
 from core.embed_templates import embed_template
 from core.utils import BUTTON_ONLY_RUNNER_MSG, warframe_data_unavailable_embed
-from core.warframe_platform import resolve_warframe_platform, warframe_footer_platform_note
+from core.wf_resolve import (
+    wf_invalidate_hub_snapshot,
+    wf_platform_for,
+    wf_retry_denied,
+    wf_retry_guard,
+)
+from core.warframe_platform import warframe_footer_platform_note
 from core.music_player import format_guild_music_line
 from core.wf_hub_extras import (
     format_daily_ops_snippet,
@@ -167,11 +173,7 @@ async def _wishlist_modal_cb(btn_interaction: discord.Interaction) -> None:
 def _hub_view(interaction: discord.Interaction, platform: str, guild_id: int) -> discord.ui.View:
     async def on_refresh(btn_interaction: discord.Interaction):
         # Read-only public data — anyone may refresh.
-        from api.warframe_api import invalidate
-
-        invalidate("warframe:baro")
-        invalidate("warframe:alerts")
-        invalidate("warframe:cycles")
+        await wf_invalidate_hub_snapshot(platform)
         br, ar, cr, fr, sr, ir, sp, arb, nw = await _fetch_hub_data(platform)
         ia, bd = br
         wishlist = None
@@ -328,10 +330,11 @@ def setup(bot, group=None):
     async def warframe_hub(interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=False)
 
-        platform = "pc"
+        platform = await wf_platform_for(
+            interaction.guild.id if interaction.guild else None,
+            interaction.user.id,
+        )
         guild_id = interaction.guild.id if interaction.guild else 0
-        if interaction.guild:
-            platform = await resolve_warframe_platform(interaction.guild.id, interaction.user.id)
 
         results = await _fetch_hub_data(platform)
         baro_result, alerts_data, cycles_data, fissures_data = results[0], results[1], results[2], results[3]
@@ -340,8 +343,8 @@ def setup(bot, group=None):
 
         if not baro_data and not alerts_data and not cycles_data:
             async def on_retry(btn_interaction: discord.Interaction):
-                if btn_interaction.user.id != interaction.user.id:
-                    return await btn_interaction.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
+                if not wf_retry_guard(btn_interaction, interaction.user.id):
+                    return await wf_retry_denied(btn_interaction)
                 await btn_interaction.response.defer()
                 br, ar, cr, fr, sr, ir, sp, arb, nw = await _fetch_hub_data(platform)
                 ia, bd = br
@@ -407,6 +410,14 @@ def setup(bot, group=None):
         view = _hub_view(interaction, platform, guild_id)
         from core.help_layout import help_layout_v2_enabled
         from core.warframe_hub_layout import WarframeHubLayout
+
+        if interaction.guild:
+            try:
+                from commands.general.onboarding import record_onboarding_step
+
+                await record_onboarding_step(interaction.guild.id, interaction.user.id, "open_wf_hub")
+            except Exception:
+                pass
 
         if help_layout_v2_enabled():
             try:

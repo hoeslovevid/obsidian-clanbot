@@ -40,6 +40,40 @@ async def wf_invalidate_daily_ops(platform: str) -> None:
         await wf_invalidate(key)
 
 
+BARO_CACHE_KEY = "warframe:baro"
+CYCLES_CACHE_KEY = "warframe:cycles"
+SORTIE_CACHE_KEY = "warframe:sortie"
+INVASIONS_CACHE_KEY = "warframe:invasions"
+HUB_CACHE_KEY = "warframe:hub"
+
+
+async def wf_invalidate_status_snapshot(platform: str) -> None:
+    """Invalidate caches used by /warframe status and hub refresh."""
+    plat = (platform or "pc").strip().lower()
+    await wf_invalidate(
+        BARO_CACHE_KEY,
+        "warframe:alerts",
+        CYCLES_CACHE_KEY,
+        f"warframe:fissures:{plat}",
+        SORTIE_CACHE_KEY,
+        INVASIONS_CACHE_KEY,
+    )
+
+
+async def wf_invalidate_hub_snapshot(platform: str) -> None:
+    """Invalidate all caches backing the Warframe hub dashboard."""
+    await wf_invalidate_status_snapshot(platform)
+    await wf_invalidate_daily_ops(platform)
+    await wf_invalidate(HUB_CACHE_KEY)
+
+
+def wf_all_fetch_failed(*values: Any) -> bool:
+    """True when every payload in a hub/status gather failed."""
+    if not values:
+        return True
+    return all(wf_fetch_failed(v) for v in values)
+
+
 def wf_fetch_failed(data: Any) -> bool:
     """True when an API wrapper returned None (hard failure)."""
     return data is None

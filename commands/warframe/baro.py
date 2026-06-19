@@ -18,6 +18,7 @@ from core.utils import (
     format_number,
     warframe_data_unavailable_embed,
 )
+from core.wf_resolve import BARO_CACHE_KEY, wf_invalidate, wf_retry_denied, wf_retry_guard
 from database import (
     DB_PATH,
     get_baro_inventory_hash,
@@ -345,6 +346,7 @@ async def _resolve_baro_status(*, fresh: bool = False):
     from api.warframe_api import _baro_is_active, fetch_baro_data_fresh, get_baro_status
 
     if fresh:
+        await wf_invalidate(BARO_CACHE_KEY)
         data = await fetch_baro_data_fresh(retries=2, retry_delay=10.0)
         if not data:
             return False, None
@@ -399,8 +401,8 @@ def setup(bot, group=None):
         if not baro_data:
 
             async def on_retry(btn_interaction: discord.Interaction):
-                if btn_interaction.user.id != interaction.user.id:
-                    return await btn_interaction.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
+                if not wf_retry_guard(btn_interaction, interaction.user.id):
+                    return await wf_retry_denied(btn_interaction)
                 await btn_interaction.response.defer()
                 new_active, new_data = await _resolve_baro_status(fresh=True)
                 if not new_data:

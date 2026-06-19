@@ -5,7 +5,13 @@ from datetime import datetime, timezone
 import dateparser
 
 from core.embed_templates import embed_template
-from core.utils import warframe_data_unavailable_embed, BUTTON_ONLY_RUNNER_MSG
+from core.utils import warframe_data_unavailable_embed
+from core.wf_resolve import (
+    wf_invalidate_status_snapshot,
+    wf_platform_for,
+    wf_retry_denied,
+    wf_retry_guard,
+)
 from api.warframe_api import wf_staleness_for_path
 from api.warframe_api import get_baro_status, fetch_alerts, get_all_cycles, fetch_fissures, fetch_sortie, fetch_invasions
 from commands.warframe.alerts import format_alert_rewards
@@ -242,30 +248,35 @@ def setup(bot, group=None):
         """Display Baro, alerts, and cycles in one embed."""
         await interaction.response.defer(ephemeral=False)
 
-        platform = "pc"
-        if interaction.guild:
-            from core.warframe_platform import resolve_warframe_platform
-
-            platform = await resolve_warframe_platform(
-                interaction.guild.id, interaction.user.id
-            )
+        platform = await wf_platform_for(
+            interaction.guild.id if interaction.guild else None,
+            interaction.user.id,
+        )
 
         import asyncio
         baro_result, alerts_data, cycles_data, fissures_data, sortie_data, invasions_data = await asyncio.gather(
-            get_baro_status(), fetch_alerts(), get_all_cycles(), fetch_fissures(), fetch_sortie(), fetch_invasions(),
+            get_baro_status(),
+            fetch_alerts(),
+            get_all_cycles(),
+            fetch_fissures(platform),
+            fetch_sortie(),
+            fetch_invasions(),
         )
         is_active, baro_data = baro_result
 
         if not baro_data and not alerts_data and not cycles_data and not fissures_data and not sortie_data:
             async def on_retry(btn_interaction: discord.Interaction):
-                if btn_interaction.user.id != interaction.user.id:
-                    return await btn_interaction.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
+                if not wf_retry_guard(btn_interaction, interaction.user.id):
+                    return await wf_retry_denied(btn_interaction)
                 await btn_interaction.response.defer()
-                invalidate("warframe:baro")
-                invalidate("warframe:alerts")
-                invalidate("warframe:cycles")
+                await wf_invalidate_status_snapshot(platform)
                 br, ar, cr, fr, sr, ir = await asyncio.gather(
-                    get_baro_status(), fetch_alerts(), get_all_cycles(), fetch_fissures(), fetch_sortie(), fetch_invasions(),
+                    get_baro_status(),
+                    fetch_alerts(),
+                    get_all_cycles(),
+                    fetch_fissures(platform),
+                    fetch_sortie(),
+                    fetch_invasions(),
                 )
                 ia, bd = br
                 emb = build_status_embed(
@@ -291,12 +302,14 @@ def setup(bot, group=None):
         )
 
         async def on_refresh(btn_interaction: discord.Interaction):
-            # Read-only public data — anyone may refresh.
-            invalidate("warframe:baro")
-            invalidate("warframe:alerts")
-            invalidate("warframe:cycles")
+            await wf_invalidate_status_snapshot(platform)
             br, ar, cr, fr, sr, ir = await asyncio.gather(
-                get_baro_status(), fetch_alerts(), get_all_cycles(), fetch_fissures(), fetch_sortie(), fetch_invasions(),
+                get_baro_status(),
+                fetch_alerts(),
+                get_all_cycles(),
+                fetch_fissures(platform),
+                fetch_sortie(),
+                fetch_invasions(),
             )
             ia, bd = br
             new_emb = build_status_embed(

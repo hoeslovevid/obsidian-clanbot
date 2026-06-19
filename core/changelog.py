@@ -20,6 +20,10 @@ CURRENT_RELEASE_CHANGES: list[str] = [
     "**2.0 Ops** — `/admin health` shows guild count, sync scope, command usage heatmap; Baro notify extracted to `tasks/wf_notify.py`",
     "**2.0 Batch 3** — `wf_resolve` on sortie/alerts/daily_ops; WF notify loops in `tasks/wf_check_loops.py`; message economy in `handlers/message_economy.py`",
     "**2.0 Docs** — `docs/POSTGRES.md` migration guide; prune hints on `/admin health` when many commands are never used",
+    "**2.0 Batch 4** — `wf_resolve` complete on baro/status/hub/world_state; platform-aware `/warframe status` fissures",
+    "**2.0 Batch 5** — `handlers/automod.py` + `handlers/vc_panel.py` extracted from `app.py`",
+    "**2.0 Batch 6** — `tasks/event_loops.py` for event reminders; questline steps + `/me` progress chips",
+    "**2.0 Batch 7** — `/admin console` shows version + sync scope; onboarding tracks hub/search/achievements",
     "**Fix** — help category buttons use global tree (regression from guild-scoped lookup)",
 ]
 

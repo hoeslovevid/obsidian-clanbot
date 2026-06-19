@@ -41,7 +41,15 @@ def setup(bot, group=None):
             )
         
         await interaction.response.defer(ephemeral=(user is None))
-        
+
+        if interaction.guild and user is None:
+            try:
+                from commands.general.onboarding import record_onboarding_step
+
+                await record_onboarding_step(interaction.guild.id, interaction.user.id, "view_achievements")
+            except Exception:
+                pass
+
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute("""
                 SELECT a.achievement_id, a.unlocked_at, ad.name, ad.description, ad.category

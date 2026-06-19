@@ -29,6 +29,7 @@ from core.utils import (
     success_embed,
     warframe_data_unavailable_embed,
 )
+from core.wf_resolve import wf_invalidate, wf_retry_denied, wf_retry_guard
 from database import get_guild_setting, set_guild_setting
 from views import RefreshView
 
@@ -196,10 +197,7 @@ def setup(bot, group=None):
                 message = None
 
         async def on_refresh(btn_interaction: discord.Interaction):
-            from core.cache_utils import invalidate
-
-            invalidate("warframe:baro")
-            invalidate("warframe:cycles")
+            await wf_invalidate("warframe:baro", "warframe:cycles")
             new_emb = await build_world_state_embed(interaction.client)
             view = RefreshView(on_refresh, timeout=None)
             try:

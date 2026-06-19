@@ -43,6 +43,9 @@ ONBOARDING_STEP_NAMES: tuple[str, ...] = (
     "claim_daily",
     "view_profile",
     "browse_help",
+    "open_wf_hub",
+    "use_search",
+    "view_achievements",
 )
 
 

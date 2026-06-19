@@ -193,15 +193,26 @@ async def _run_me(interaction: discord.Interaction):
         ))
 
     onboarding_chip = ""
+    chips_parts: list[str] = []
     try:
         from commands.general.onboarding import get_user_onboarding_progress, ONBOARDING_STEP_NAMES
 
         done, _steps = await get_user_onboarding_progress(interaction.guild.id, interaction.user.id)
         total = len(ONBOARDING_STEP_NAMES)
         if done < total:
-            onboarding_chip = f"🎓 Onboarding **{done}/{total}** — `/onboarding resume`"
+            chips_parts.append(f"🎓 Onboarding **{done}/{total}** — `/onboarding resume`")
     except Exception:
         pass
+
+    ach_count = int(data.get("achievements_count") or 0)
+    ach_total = int(data.get("achievements_total") or 0)
+    if ach_total > 0:
+        chips_parts.append(f"🏆 Achievements **{ach_count}/{ach_total}**")
+
+    if streak > 0:
+        chips_parts.append(f"🔥 Daily streak **{streak}** day{'s' if streak != 1 else ''}")
+
+    onboarding_chip = "\n".join(chips_parts)
 
     # Footer: pick the most urgent helpful hint
     if pet_urgent:
