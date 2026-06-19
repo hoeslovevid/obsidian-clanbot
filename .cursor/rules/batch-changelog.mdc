@@ -1,0 +1,42 @@
+---
+description: Require changelog + version updates before every batch commit (guild update logs)
+alwaysApply: true
+---
+
+# Batch commits must update the changelog first
+
+Guild update logs, `/whatsnew`, `/about`, release DMs, and `changelog_channel_id` posts all read from `core/changelog.py` and `BOT_VERSION` in `core/config.py`. **Never commit a batch without updating these in the same commit.**
+
+## Before every batch commit
+
+1. **`core/changelog.py`** — add a bullet to `CURRENT_RELEASE_CHANGES` describing the batch (modules moved, commands added, fixes). Use the `**Batch N** — …` or `**Fix** — …` prefix style already in the file.
+2. **`core/config.py`** — bump `BOT_VERSION` when shipping (patch for hotfixes, minor for batches). Update `BOT_CHANGELOG` one-line summary to match.
+3. **Version archive** — when bumping `BOT_VERSION`, move the previous release bullets into `CHANGELOG_HISTORY` (newest first) with the **previous** version string. Keep `CURRENT_RELEASE_DATE` accurate.
+4. **Same commit** — changelog + version changes belong in the **same commit** as the batch code, not a follow-up.
+
+## What triggers guild update logs
+
+- `BOT_VERSION` change → slash sync marker, release announce, update-log embeds
+- `CURRENT_RELEASE_CHANGES` → `/whatsnew` page 1, release announce body, showcase embeds
+- Do not rely on `BOT_CHANGELOG` env alone; `core/changelog.py` is the curated source
+
+## Commit message pattern
+
+```
+Batch N: <short title>.
+
+<optional body>; changelog + BOT_VERSION bump.
+```
+
+## Checklist (do not skip)
+
+- [ ] `CURRENT_RELEASE_CHANGES` has a bullet for this batch
+- [ ] `BOT_VERSION` bumped if releasing (Railway must match)
+- [ ] Previous version archived to `CHANGELOG_HISTORY` when version bumped
+- [ ] Changelog staged in the same commit as the batch diff
+
+## Example bullet
+
+```python
+"**Batch 17** — `handlers/foo.py`; `tasks/bar_loops.py`; slim `app.py` further",
+```
