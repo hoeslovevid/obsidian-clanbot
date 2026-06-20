@@ -184,23 +184,24 @@ async def get_twitch_streaming_line(guild_id: int) -> str | None:
         if not await cur.fetchone():
             return None
         cur = await db.execute(
-            "SELECT streamer_name FROM twitch_streamers WHERE guild_id=? AND enabled=1 LIMIT 8",
+            "SELECT streamer_name FROM twitch_streamers WHERE guild_id=? LIMIT 8",
             (guild_id,),
         )
         streamers = [r[0] for r in await cur.fetchall()]
     if not streamers:
         return None
     try:
-        from commands.general.twitch import get_twitch_access_token, check_twitch_stream
+        from core.twitch_api import fetch_twitch_streams_batch, get_twitch_access_token
 
         token = await get_twitch_access_token()
         if not token:
             return None
+        live_streams = await fetch_twitch_streams_batch(streamers, token)
         live: list[str] = []
         for name in streamers:
-            data = await check_twitch_stream(name, token)
-            if data:
-                live.append(f"[{name}](https://twitch.tv/{name})")
+            login = str(name).lower()
+            if login in live_streams:
+                live.append(f"[{login}](https://twitch.tv/{login})")
         if live:
             return f"📺 Live now: {', '.join(live[:3])}"
     except Exception:

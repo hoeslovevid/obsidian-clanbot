@@ -12,12 +12,20 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-19"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Fix** — release/update channel posts use `CURRENT_RELEASE_CHANGES` only (no archived v2.0 batch bullets)",
-    "**Fix** — `/updates force_version_update` matches auto announce embed (no command-hash dump)",
+    "**Fix · Twitch** — validate streamers on add; warn when `/community twitch_setup` missing; live API status in `/community twitch_list`",
+    "**Fix · Twitch** — token cache + batch Helix polling, API error logging, 3‑min poll; mod `diagnostics` / `force_check` on list",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "2.0.8",
+        "date": "2026-06-19",
+        "changes": [
+            "**Fix** — release/update channel posts use `CURRENT_RELEASE_CHANGES` only (no archived v2.0 batch bullets)",
+            "**Fix** — `/updates force_version_update` matches auto announce embed (no command-hash dump)",
+        ],
+    },
     {
         "version": "2.0.7",
         "date": "2026-06-19",

@@ -528,7 +528,7 @@ def setup_tasks(bot):
     async def before_scheduled_messages_loop():
         await bot.wait_until_ready()
 
-    @tasks.loop(minutes=5)  # Check every 5 minutes for Twitch streams
+    @tasks.loop(minutes=3)  # Check every 3 minutes for Twitch streams
     async def twitch_check_loop():
         """Check for Twitch streamers going live."""
         try:
