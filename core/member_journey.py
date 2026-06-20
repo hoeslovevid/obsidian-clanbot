@@ -20,7 +20,8 @@ _JOURNEY_DAYS: dict[int, tuple[str, str]] = {
 }
 
 
-async def _ensure_journey_table() -> None:
+async def _ensure_journey_tables() -> None:
+    """Create journey tables before any read (loop may run before first member join)."""
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
             """
@@ -33,6 +34,16 @@ async def _ensure_journey_table() -> None:
             )
             """
         )
+        await db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS member_join_log (
+                guild_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                joined_at TEXT NOT NULL,
+                PRIMARY KEY (guild_id, user_id)
+            )
+            """
+        )
         await db.commit()
 
 
@@ -40,7 +51,7 @@ async def run_member_journey_cycle(bot: discord.Client) -> None:
     """Send day 1/3/7 DMs to eligible members (respects onboarding opt-out)."""
     if not bot.is_ready():
         return
-    await _ensure_journey_table()
+    await _ensure_journey_tables()
     now = now_utc()
 
     for guild in bot.guilds:
@@ -97,18 +108,8 @@ async def run_member_journey_cycle(bot: discord.Client) -> None:
 
 async def record_member_join(guild_id: int, user_id: int) -> None:
     """Log join date for journey DMs."""
-    await _ensure_journey_table()
+    await _ensure_journey_tables()
     async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute(
-            """
-            CREATE TABLE IF NOT EXISTS member_join_log (
-                guild_id INTEGER NOT NULL,
-                user_id INTEGER NOT NULL,
-                joined_at TEXT NOT NULL,
-                PRIMARY KEY (guild_id, user_id)
-            )
-            """
-        )
         await db.execute(
             """
             INSERT OR REPLACE INTO member_join_log (guild_id, user_id, joined_at)
