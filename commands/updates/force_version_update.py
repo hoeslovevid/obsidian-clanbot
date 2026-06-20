@@ -1,7 +1,5 @@
 """Force version update command for moderators to manually trigger version updates."""
 import discord
-from discord import app_commands
-from datetime import datetime, timezone
 
 from core.utils import obsidian_embed, is_mod
 from database import DB_PATH
@@ -14,7 +12,7 @@ def setup(bot, group=None):
     
     @command_decorator
     async def force_version_update(interaction: discord.Interaction):
-        """Force post the most recent detected update to the update log channel."""
+        """Force post the current release changelog to the update log channel."""
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
             return await interaction.response.send_message(
                 embed=obsidian_embed(
@@ -37,221 +35,73 @@ def setup(bot, group=None):
             )
 
         await interaction.response.defer(ephemeral=True)
-        
-        # Get update log channel
-        async with aiosqlite.connect(DB_PATH) as db:
-            cur = await db.execute("""
-                SELECT channel_id FROM update_log_settings WHERE guild_id = ?
-            """, (interaction.guild.id,))
-            row = await cur.fetchone()
-        
-        if not row or not row[0]:
+
+        from core.config import BOT_VERSION
+        from core.changelog import get_release_announce_changes
+        from core.release_announce import post_release_to_channel, _resolve_changelog_channel_id
+
+        bullets = get_release_announce_changes()
+        if not bullets:
             return await interaction.followup.send(
                 embed=obsidian_embed(
-                    "❌ Update Log Channel Not Set",
-                    "Please configure an update log channel first using `/update_log_setup`.",
+                    "❌ No Release Notes",
+                    "No bullets in `CURRENT_RELEASE_CHANGES` for this version. Update `core/changelog.py` first.",
                     color=discord.Color.red(),
                     client=interaction.client,
                 ),
-                ephemeral=True
+                ephemeral=True,
             )
-        
-        channel_id = row[0]
+
+        channel_id = await _resolve_changelog_channel_id(interaction.guild.id)
+        if not channel_id:
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute(
+                    "SELECT channel_id FROM update_log_settings WHERE guild_id = ?",
+                    (interaction.guild.id,),
+                )
+                row = await cur.fetchone()
+            channel_id = row[0] if row and row[0] else None
+
+        if not channel_id:
+            return await interaction.followup.send(
+                embed=obsidian_embed(
+                    "❌ Update Log Channel Not Set",
+                    "Configure a changelog channel with `/updates update_log_setup` or `/admin branding`.",
+                    color=discord.Color.red(),
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+
         channel = interaction.guild.get_channel(channel_id)
-        
         if not isinstance(channel, discord.TextChannel):
             return await interaction.followup.send(
                 embed=obsidian_embed(
                     "❌ Channel Not Found",
-                    "The configured update log channel no longer exists. Please reconfigure using `/update_log_setup`.",
+                    "The configured update log channel no longer exists. Please reconfigure.",
                     color=discord.Color.red(),
                     client=interaction.client,
                 ),
-                ephemeral=True
+                ephemeral=True,
             )
-        
-        # Get current version and check if it's already posted
-        async with aiosqlite.connect(DB_PATH) as db:
-            cur = await db.execute("""
-                SELECT current_version, previous_commands FROM bot_version_tracking WHERE id = 1
-            """)
-            row = await cur.fetchone()
-            if not row:
-                return await interaction.followup.send(
-                    embed=obsidian_embed(
-                        "❌ No Version Found",
-                        "No version information found. The bot may need to restart first.",
-                        color=discord.Color.red(),
-                        client=interaction.client,
-                    ),
-                    ephemeral=True
-                )
-            
-            current_version = row[0]
-            previous_commands_str = row[1] if len(row) > 1 and row[1] else None
-            
-            # Check if this version has already been posted
-            cur = await db.execute("""
-                SELECT 1 FROM update_log_posted_versions 
-                WHERE guild_id = ? AND version = ?
-            """, (interaction.guild.id, current_version))
-            already_posted = await cur.fetchone()
-        
-        # Detect changes automatically by comparing with previous version
-        from bot import GUILD_ID, detect_and_update_version
-        detected_version, detected_changes = await detect_and_update_version(interaction.client)
-        
-        # Get current commands for comparison
-        current_commands = set()
+
         try:
-            if GUILD_ID:
-                guild = discord.Object(id=GUILD_ID)
-                current_commands = set(cmd.name for cmd in interaction.client.tree.get_commands(guild=guild))
-            else:
-                current_commands = set(cmd.name for cmd in interaction.client.tree.get_commands(guild=None))
-        except Exception:
-            pass
-        
-        # Compare with previous commands
-        previous_commands = set()
-        if previous_commands_str:
-            try:
-                previous_commands = set(previous_commands_str.split(",")) if previous_commands_str else set()
-            except Exception:
-                pass
-        
-        added_commands = current_commands - previous_commands
-        removed_commands = previous_commands - current_commands
-        
-        # Build git-style commit summary (same format as automatic updates)
-        from bot import BOT_CHANGELOG
-        
-        # Parse changes into categories
-        parsed_added = []
-        parsed_removed = []
-        other_changes = []
-        
-        # Parse detected changes
-        for change in detected_changes:
-            if "✅ **Added" in change or "Added" in change:
-                if "command(s):" in change:
-                    cmd_list = change.split("command(s):")[-1].strip()
-                    parsed_added.extend([cmd.strip() for cmd in cmd_list.split(",")])
-            elif "❌ **Removed" in change or "Removed" in change:
-                if "command(s):" in change:
-                    cmd_list = change.split("command(s):")[-1].strip()
-                    parsed_removed.extend([cmd.strip() for cmd in cmd_list.split(",")])
-            else:
-                other_changes.append(change)
-        
-        # Also use direct command comparison as fallback
-        if not parsed_added and added_commands:
-            parsed_added = sorted(added_commands)
-        if not parsed_removed and removed_commands:
-            parsed_removed = sorted(removed_commands)
-        
-        # Build summary
-        summary_parts = []
-        
-        # Main summary from BOT_CHANGELOG if available
-        if BOT_CHANGELOG:
-            summary_parts.append(f"**Summary:**\n{BOT_CHANGELOG}")
-        
-        # Build changes summary
-        changes_summary = []
-        
-        if parsed_added:
-            changes_summary.append(f"**Added ({len(parsed_added)}):**\n" + "\n".join([f"  + `{cmd}`" for cmd in sorted(parsed_added)]))
-        
-        if parsed_removed:
-            changes_summary.append(f"**Removed ({len(parsed_removed)}):**\n" + "\n".join([f"  - `{cmd}`" for cmd in sorted(parsed_removed)]))
-        
-        if other_changes:
-            for change in other_changes:
-                clean_change = change.replace("**", "").replace("🔄", "").replace("🚀", "").strip()
-                if clean_change:
-                    changes_summary.append(f"**Modified:**\n  {clean_change}")
-        
-        # Combine summary
-        if summary_parts:
-            description = "\n\n".join(summary_parts)
-        else:
-            description = f"**Update Summary:**\nBot updated to version {current_version}"
-        
-        if changes_summary:
-            description += "\n\n" + "\n\n".join(changes_summary)
-        
-        # If no changes detected
-        if not changes_summary and not BOT_CHANGELOG:
-            description = f"Bot has been updated to version {current_version}."
-        
-        # Force post the current version by temporarily removing it from posted versions
-        # if it was already posted, so it will be posted again
-        if already_posted:
-            async with aiosqlite.connect(DB_PATH) as db:
-                await db.execute("""
-                    DELETE FROM update_log_posted_versions 
-                    WHERE guild_id = ? AND version = ?
-                """, (interaction.guild.id, current_version))
-                await db.commit()
-        
-        # Truncate description to fit within 1024 character limit per field
-        max_field_length = 1024
-        if len(description) > max_field_length:
-            # Try to truncate intelligently at a newline or sentence boundary
-            truncated = description[:max_field_length]
-            # Find the last newline before the limit
-            last_newline = truncated.rfind('\n')
-            if last_newline > max_field_length - 100:  # If we have a reasonable amount left
-                truncated = truncated[:last_newline]
-            else:
-                # Find last sentence boundary
-                last_period = truncated.rfind('.')
-                if last_period > max_field_length - 50:
-                    truncated = truncated[:last_period + 1]
-                else:
-                    # Just truncate and add ellipsis
-                    truncated = truncated[:max_field_length - 3] + "..."
-            description = truncated
-        
-        # Create update log embed
-        fields = [
-            ("Changelog", description, False),
-            ("Version", current_version, True),
-            ("Posted By", interaction.user.mention, True),
-            ("Date", f"<t:{int(datetime.now(timezone.utc).timestamp())}:F>", True),
-        ]
-        
-        embed = obsidian_embed(
-            f"🔔 Bot Update: Bot Updated to v{current_version}",
-            "",
-            color=discord.Color.blue(),
-            fields=fields,
-            client=interaction.client,
-        )
-        
-        # Set timestamp
-        embed.timestamp = datetime.now(timezone.utc)
-        
-        try:
-            await channel.send(embed=embed)
-            
-            # Mark this version as posted for this guild
-            async with aiosqlite.connect(DB_PATH) as db:
-                await db.execute("""
-                    INSERT OR REPLACE INTO update_log_posted_versions (guild_id, version, posted_at)
-                    VALUES (?, ?, ?)
-                """, (interaction.guild.id, current_version, datetime.now(timezone.utc).isoformat()))
-                await db.commit()
-            
+            await post_release_to_channel(
+                interaction.client,
+                interaction.guild,
+                channel,
+                version=BOT_VERSION,
+                mark_posted=True,
+            )
             await interaction.followup.send(
                 embed=obsidian_embed(
                     "✅ Update Posted",
-                    f"Current bot version **{current_version}** has been posted to {channel.mention}.",
+                    f"Release notes for **v{BOT_VERSION}** ({len(bullets)} bullet(s)) posted to {channel.mention}.\n"
+                    f"-# Only the current release is announced — older versions stay in `/whatsnew` history.",
                     color=discord.Color.green(),
                     client=interaction.client,
                 ),
-                ephemeral=True
+                ephemeral=True,
             )
         except discord.Forbidden:
             await interaction.followup.send(
@@ -261,7 +111,7 @@ def setup(bot, group=None):
                     color=discord.Color.red(),
                     client=interaction.client,
                 ),
-                ephemeral=True
+                ephemeral=True,
             )
         except Exception as e:
             import logging
@@ -273,5 +123,5 @@ def setup(bot, group=None):
                     color=discord.Color.red(),
                     client=interaction.client,
                 ),
-                ephemeral=True
+                ephemeral=True,
             )

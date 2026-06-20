@@ -7,7 +7,11 @@ from typing import Optional
 import aiosqlite  # type: ignore
 import discord  # type: ignore
 
-from core.changelog import resolve_current_release
+from core.changelog import (
+    CURRENT_RELEASE_DATE,
+    format_release_summary,
+    get_release_announce_changes,
+)
 from core.config import BOT_VERSION
 from core.embed_links import LinkRowView, help_link_buttons
 from core.embed_templates import embed_template
@@ -16,6 +20,25 @@ from database import DB_PATH, get_guild_setting, now_utc, set_guild_setting
 logger = logging.getLogger(__name__)
 
 _SETTING_PREFIX = "release_announced_version:"
+
+
+def build_release_announce_embed(
+    bot: discord.Client,
+    *,
+    version: Optional[str] = None,
+) -> discord.Embed:
+    """Showcase embed for the current release only (never CHANGELOG_HISTORY)."""
+    ver = version or BOT_VERSION
+    bullets = get_release_announce_changes()
+    summary = format_release_summary(bullets)
+    return embed_template(
+        "showcase",
+        f"🚀 Obsidian Bot v{ver}",
+        summary,
+        category="general",
+        footer=f"Released {CURRENT_RELEASE_DATE} · /whatsnew",
+        client=bot,
+    )
 
 
 async def _resolve_changelog_channel_id(guild_id: int) -> Optional[int]:
@@ -111,15 +134,32 @@ async def _dm_changelog_subscribers(
         logger.debug("[release] changelog DM step failed: %s", exc)
 
 
+async def post_release_to_channel(
+    bot: discord.Client,
+    guild: discord.Guild,
+    channel: discord.TextChannel,
+    *,
+    version: Optional[str] = None,
+    mark_posted: bool = True,
+) -> bool:
+    """Post the current-release embed to a channel. Returns True on success."""
+    ver = version or BOT_VERSION
+    embed = build_release_announce_embed(bot, version=ver)
+    view = LinkRowView(*help_link_buttons())
+    await channel.send(embed=embed, view=view)
+    if mark_posted:
+        await _mark_announced(guild.id, ver)
+        await _dm_changelog_subscribers(bot, guild, embed, view=view)
+    return True
+
+
 async def announce_release_if_needed(bot: discord.Client) -> None:
     """For each guild, post once per BOT_VERSION when a changelog channel is configured."""
     if not BOT_VERSION:
         return
-    release = resolve_current_release()
-    bullets = release.get("changes") or []
-    summary = "\n".join(f"• {b}" for b in bullets[:12])
-    if len(bullets) > 12:
-        summary += f"\n-# …and {len(bullets) - 12} more in /whatsnew"
+    if not get_release_announce_changes():
+        logger.info("[release] No CURRENT_RELEASE_CHANGES for v%s — skipping channel announce", BOT_VERSION)
+        return
 
     for guild in bot.guilds:
         try:
@@ -138,18 +178,7 @@ async def announce_release_if_needed(bot: discord.Client) -> None:
             if not perms.send_messages or not perms.embed_links:
                 continue
 
-            embed = embed_template(
-                "showcase",
-                f"🚀 Obsidian Bot v{BOT_VERSION}",
-                summary or "The bot was updated. See **/whatsnew** for details.",
-                category="general",
-                footer=f"Released {release.get('date', '')} · /whatsnew",
-                client=bot,
-            )
-            view = LinkRowView(*help_link_buttons())
-            await channel.send(embed=embed, view=view)
-            await _mark_announced(guild.id, BOT_VERSION)
-            await _dm_changelog_subscribers(bot, guild, embed, view=view)
+            await post_release_to_channel(bot, guild, channel)
             logger.info("[release] Announced v%s in %s (#%s)", BOT_VERSION, guild.name, channel.name)
         except Exception as exc:
             logger.debug("[release] skip guild %s: %s", guild.id, exc)

@@ -12,16 +12,24 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-19"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**QoL · Today** — `/today` unified daily panel (daily, bounties, Baro, LFG, events, pet, onboarding)",
-    "**QoL · Notify** — `/wfnotify why_dm` + `test_ping`; DM coalescing for Baro wishlist & price-watch alerts",
-    "**QoL · LFG** — **Open squad VC** button; `/lfg preset_save|list|use`; host AFK + badge on posts",
-    "**QoL · Social** — `/profile @user compare:True`; onboarding completion reward (+150 coins + badge)",
-    "**QoL · UX** — time-aware `/menu` + continue-setup row; expired-panel recovery; weekly recap DM pref",
-    "**QoL · Alerts** — Baro wishlist DM action hints; price-watch **Post trade** button; mention keyword expansion",
+    "**Fix** — release/update channel posts use `CURRENT_RELEASE_CHANGES` only (no archived v2.0 batch bullets)",
+    "**Fix** — `/updates force_version_update` matches auto announce embed (no command-hash dump)",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "2.0.7",
+        "date": "2026-06-19",
+        "changes": [
+            "**QoL · Today** — `/today` unified daily panel (daily, bounties, Baro, LFG, events, pet, onboarding)",
+            "**QoL · Notify** — `/wfnotify why_dm` + `test_ping`; DM coalescing for Baro wishlist & price-watch alerts",
+            "**QoL · LFG** — **Open squad VC** button; `/lfg preset_save|list|use`; host AFK + badge on posts",
+            "**QoL · Social** — `/profile @user compare:True`; onboarding completion reward (+150 coins + badge)",
+            "**QoL · UX** — time-aware `/menu` + continue-setup row; expired-panel recovery; weekly recap DM pref",
+            "**QoL · Alerts** — Baro wishlist DM action hints; price-watch **Post trade** button; mention keyword expansion",
+        ],
+    },
     {
         "version": "2.0.6",
         "date": "2026-06-18",
@@ -467,18 +475,39 @@ CHANGELOG_HISTORY: list[dict] = [
 ]
 
 
+# Discord release posts must never include CHANGELOG_HISTORY — only this release's bullets.
+MAX_RELEASE_ANNOUNCE_BULLETS = 12
+
+
+def get_release_announce_changes() -> list[str]:
+    """Bullets for channel/DM release posts (current release only, never archived history)."""
+    if CURRENT_RELEASE_CHANGES:
+        return list(CURRENT_RELEASE_CHANGES)
+    summary = BOT_CHANGELOG.strip()
+    if summary:
+        return [summary]
+    return []
+
+
+def format_release_summary(changes: list[str], *, max_bullets: int = MAX_RELEASE_ANNOUNCE_BULLETS) -> str:
+    """Format changelog bullets for a release embed description."""
+    if not changes:
+        return "The bot was updated. See **/whatsnew** for details."
+    lines = [f"• {b}" for b in changes[:max_bullets]]
+    summary = "\n".join(lines)
+    if len(changes) > max_bullets:
+        summary += f"\n-# …and {len(changes) - max_bullets} more in /whatsnew"
+    return summary
+
+
 def resolve_current_release() -> dict:
     """Current release entry; ``version`` is always ``BOT_VERSION``."""
-    changes: list[str] = list(CURRENT_RELEASE_CHANGES)
+    changes = get_release_announce_changes()
     if not changes:
-        summary = BOT_CHANGELOG.strip()
-        if summary:
-            changes = [summary]
-        else:
-            for entry in CHANGELOG_HISTORY:
-                if str(entry.get("version", "")) == BOT_VERSION:
-                    changes = list(entry.get("changes") or [])
-                    break
+        for entry in CHANGELOG_HISTORY:
+            if str(entry.get("version", "")) == BOT_VERSION:
+                changes = list(entry.get("changes") or [])
+                break
     return {
         "version": BOT_VERSION,
         "date": CURRENT_RELEASE_DATE,
