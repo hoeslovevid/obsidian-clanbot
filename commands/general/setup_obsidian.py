@@ -199,7 +199,7 @@ class SetupChecklistView(discord.ui.View):
             ephemeral=True,
         )
 
-    @discord.ui.button(label="Post Clan Console", style=discord.ButtonStyle.primary, emoji="🜂")
+    @discord.ui.button(label="Post Clan Console", style=discord.ButtonStyle.primary, emoji="🖥️")
     async def post_console(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message(
             "Run **`/admin console`** in your voice panel channel to pin the member hub.",

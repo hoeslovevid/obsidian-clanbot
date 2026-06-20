@@ -273,12 +273,168 @@ class LFGTemplateView(discord.ui.View):
         )
 
 
+async def _format_rsvp_field(
+    guild: discord.Guild,
+    rsvps: list[tuple[int]],
+    max_players: int,
+) -> str:
+    """Build the Players field body for an LFG post."""
+    lines: list[str] = []
+    for i, (user_id,) in enumerate(rsvps[:max_players], 1):
+        user = guild.get_member(user_id)
+        username = user.display_name if user else f"User {user_id}"
+        lines.append(f"{i}. {username}")
+    remaining = max_players - len(rsvps)
+    if remaining > 0:
+        lines.append(f"\n_{remaining} slot(s) remaining_")
+    else:
+        lines.append("\n_**Group is full!**_")
+    return "\n".join(lines) if lines else "No players yet"
+
+
+async def _sync_lfg_thread_member(
+    thread: discord.Thread,
+    member: discord.Member,
+    *,
+    action: str,
+    creator_id: int,
+) -> None:
+    """Add/remove a member on an LFG private thread (Thread has no set_permissions)."""
+    if action == "JOIN":
+        await thread.add_user(member)
+    elif action == "LEAVE" and member.id != creator_id:
+        await thread.remove_user(member)
+
+
+async def _rebuild_lfg_fields(
+    guild: discord.Guild,
+    *,
+    mission_type: str,
+    creator_id: int,
+    max_players: int,
+    description: str | None,
+    role_tags: str | None,
+    scheduled_at: str | None,
+    radio_query: str | None,
+    expires_at_iso: str | None,
+    rsvps: list[tuple[int]],
+) -> list[tuple[str, str, bool]]:
+    """Rebuild embed/layout fields for an LFG post after RSVP changes."""
+    creator = guild.get_member(creator_id)
+    host_line = (
+        await _format_host_line(guild, creator)
+        if creator
+        else f"<@{creator_id}>"
+    )
+    expires_str = "Unknown"
+    if expires_at_iso:
+        try:
+            exp = datetime.fromisoformat(str(expires_at_iso).replace("Z", "+00:00"))
+            expires_str = f"<t:{int(exp.timestamp())}:R>"
+        except Exception:
+            expires_str = str(expires_at_iso)[:40]
+
+    fields: list[tuple[str, str, bool]] = [
+        ("🎯 Mission", mission_type, True),
+        ("👤 Created by", host_line, True),
+        ("⏰ Expires", expires_str, True),
+    ]
+    if description:
+        fields.append(("📝 Notes", str(description)[:500], False))
+    if role_tags:
+        fields.append(("🏷️ Roles", str(role_tags), True))
+    if scheduled_at:
+        fields.append(("🕐 Scheduled", str(scheduled_at), True))
+    if radio_query:
+        fields.append(
+            (
+                "🎵 Squad radio",
+                f"`{str(radio_query)[:120]}`\nTap **Start squad radio** when you're in VC.",
+                False,
+            )
+        )
+    fields.append(
+        ("👥 Players", await _format_rsvp_field(guild, rsvps, max_players), False)
+    )
+    cycle_nudge = await _build_cycle_nudge(mission_type)
+    if cycle_nudge:
+        fields.append(("🌍 World cycle", cycle_nudge, False))
+    return fields
+
+
+async def _edit_lfg_rsvp_message(
+    interaction: discord.Interaction,
+    view: "LFGView",
+    *,
+    guild: discord.Guild,
+    creator_id: int,
+    mission_type: str,
+    max_players: int,
+    description: str | None,
+    role_tags: str | None,
+    scheduled_at: str | None,
+    radio_query: str | None,
+    expires_at_iso: str | None,
+    rsvps: list[tuple[int]],
+) -> discord.Embed | None:
+    """Update the LFG post message after join/leave (embed or Components V2 layout)."""
+    message = interaction.message
+    if not message:
+        return None
+
+    fields = await _rebuild_lfg_fields(
+        guild,
+        mission_type=mission_type,
+        creator_id=creator_id,
+        max_players=max_players,
+        description=description,
+        role_tags=role_tags,
+        scheduled_at=scheduled_at,
+        radio_query=radio_query,
+        expires_at_iso=expires_at_iso,
+        rsvps=rsvps,
+    )
+    embed_for_dm: discord.Embed | None = None
+
+    if message.embeds:
+        embed = message.embeds[0].copy()
+        for i, field in enumerate(embed.fields):
+            if field.name == "Players":
+                players_value = next((v for n, v, _ in fields if n == "👥 Players"), field.value)
+                embed.set_field_at(i, name="Players", value=players_value, inline=False)
+                break
+        await interaction.response.edit_message(embed=embed, view=view)
+        embed_for_dm = embed
+    else:
+        from core.help_layout import help_layout_v2_enabled
+        from core.lfg_layout import LFGPanelLayout
+
+        if help_layout_v2_enabled():
+            creator = guild.get_member(creator_id)
+            host_mention = creator.mention if creator else f"<@{creator_id}>"
+            layout = LFGPanelLayout(
+                lfg_id=view.lfg_id,
+                intro=f"> Host: {host_mention} · Mission **{mission_type}**",
+                fields=fields,
+                on_join=view.join,
+                on_leave=view.leave,
+                on_filled=view.mark_filled,
+                on_radio=view.start_radio if view._has_radio else None,
+            )
+            await interaction.response.edit_message(view=layout)
+        else:
+            await interaction.response.edit_message(view=view)
+
+    return embed_for_dm
+
+
 class LFGView(discord.ui.View):
     """View with RSVP buttons for LFG posts."""
     
     def __init__(self, lfg_id: int, *, has_radio: bool = True):
         super().__init__(timeout=None)
         self.lfg_id = lfg_id
+        self._has_radio = has_radio
         join = discord.ui.Button(
             label="Join",
             style=discord.ButtonStyle.success,
@@ -491,10 +647,14 @@ class LFGView(discord.ui.View):
             from core.reply_helpers import deny_server_only
             return await deny_server_only(interaction)
         channel_id = message_id = mission_type = None
+        description = role_tags = scheduled_at = radio_query = expires_at_iso = None
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute(
-                "SELECT creator_id, max_players, status, thread_id, channel_id, message_id, mission_type "
-                "FROM lfg_posts WHERE id=?",
+                """
+                SELECT creator_id, max_players, status, thread_id, channel_id, message_id, mission_type,
+                       description, role_tags, scheduled_at, radio_query, expires_at
+                FROM lfg_posts WHERE id=?
+                """,
                 (self.lfg_id,),
             )
             post = await cur.fetchone()
@@ -503,7 +663,20 @@ class LFGView(discord.ui.View):
                 from core.reply_helpers import reply_error
                 return await reply_error(interaction, "Not found", "LFG post not found.")
 
-            creator_id, max_players, status, thread_id, channel_id, message_id, mission_type = post
+            (
+                creator_id,
+                max_players,
+                status,
+                thread_id,
+                channel_id,
+                message_id,
+                mission_type,
+                description,
+                role_tags,
+                scheduled_at,
+                radio_query,
+                expires_at_iso,
+            ) = post
 
             if status != "OPEN":
                 from core.reply_helpers import reply_error
@@ -548,56 +721,34 @@ class LFGView(discord.ui.View):
             rsvps = await cur.fetchall()
             current_count = len(rsvps)
         
-        # Update thread permissions if thread exists
-        if thread_id:
+        # Update thread membership if thread exists
+        if thread_id and isinstance(interaction.user, discord.Member):
             try:
                 thread = interaction.guild.get_thread(thread_id)
                 if thread:
-                    if response == "JOIN":
-                        # Add user to thread permissions
-                        await thread.set_permissions(
-                            interaction.user,
-                            view_channel=True,
-                            send_messages=True,
-                            read_message_history=True
-                        )
-                    else:  # LEAVE
-                        # Remove user from thread permissions (unless they're the creator)
-                        if interaction.user.id != creator_id:
-                            await thread.set_permissions(
-                                interaction.user,
-                                view_channel=False,
-                                send_messages=False
-                            )
-            except Exception as e:
-                # If thread permission update fails, log but continue
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.error(f"Failed to update thread permissions for LFG {self.lfg_id}: {e}")
-        
-        # Update embed
-        embed = interaction.message.embeds[0]
-        
-        # Rebuild RSVP list
-        rsvp_list = ""
-        for i, (user_id,) in enumerate(rsvps[:max_players], 1):
-            user = interaction.guild.get_member(user_id)
-            username = user.display_name if user else f"User {user_id}"
-            rsvp_list += f"{i}. {username}\n"
-        
-        if current_count < max_players:
-            rsvp_list += f"\n_{max_players - current_count} slot(s) remaining_"
-        else:
-            rsvp_list += "\n_**Group is full!**_"
-        
-        # Update the RSVP field
-        for i, field in enumerate(embed.fields):
-            if field.name == "Players":
-                embed.set_field_at(i, name="Players", value=rsvp_list or "No players yet", inline=False)
-                break
-        
-        await interaction.response.edit_message(embed=embed, view=self)
+                    await _sync_lfg_thread_member(
+                        thread,
+                        interaction.user,
+                        action=response,
+                        creator_id=int(creator_id),
+                    )
+            except Exception as exc:
+                logger.error("Failed to update thread membership for LFG %s: %s", self.lfg_id, exc)
 
+        embed = await _edit_lfg_rsvp_message(
+            interaction,
+            self,
+            guild=interaction.guild,
+            creator_id=int(creator_id),
+            mission_type=str(mission_type or "LFG"),
+            max_players=int(max_players),
+            description=description,
+            role_tags=role_tags,
+            scheduled_at=scheduled_at,
+            radio_query=radio_query,
+            expires_at_iso=expires_at_iso,
+            rsvps=rsvps,
+        )
         action = "joined" if response == "JOIN" else "left"
         thread_mention = ""
         if thread_id:
@@ -634,7 +785,7 @@ class LFGView(discord.ui.View):
 
                     dm_embed = obsidian_embed(
                         "✅ Your LFG Group is Full!",
-                        f"Your **{embed.title or 'LFG'}** group has reached **{max_players}/{max_players}** players.\n\n"
+                        f"Your **{(embed.title if embed else mission_type) or 'LFG'}** group has reached **{max_players}/{max_players}** players.\n\n"
                         f"The last player to join was **{interaction.user.display_name}**.\n\n"
                         f"Tap **Open squad VC** on the post when you're ready to voice up.",
                         color=discord.Color.green(),
@@ -797,22 +948,38 @@ async def create_lfg_post(
             max_mission_len = 100 - len(creator_name) - 3
             thread_name = f"{creator_name} - {mission_name[:max_mission_len]}" if max_mission_len > 0 else mission_name[:100]
 
-        thread = await message.create_thread(name=thread_name, auto_archive_duration=1440, reason="LFG group discussion thread")
-        thread_id = thread.id
+        try:
+            thread = await message.create_thread(
+                name=thread_name,
+                type=discord.ChannelType.private_thread,
+                auto_archive_duration=1440,
+                reason="LFG group discussion thread",
+            )
+        except discord.HTTPException:
+            thread = await message.create_thread(
+                name=thread_name,
+                auto_archive_duration=1440,
+                reason="LFG group discussion thread",
+            )
 
-        await thread.set_permissions(interaction.guild.default_role, view_channel=False)
-        creator = interaction.guild.get_member(interaction.user.id)
-        if creator:
-            await thread.set_permissions(creator, view_channel=True, send_messages=True, read_message_history=True)
+        thread_id = thread.id
+        await thread.add_user(interaction.user)
         mod_role = get_mod_role(interaction.guild)
         if mod_role:
-            await thread.set_permissions(mod_role, view_channel=True, send_messages=True, read_message_history=True, manage_messages=True)
+            for mod_member in mod_role.members[:25]:
+                try:
+                    await thread.add_user(mod_member)
+                except (discord.Forbidden, discord.HTTPException):
+                    pass
 
-        welcome_msg = f"Welcome to the {mission_name} LFG thread!\n\nThis thread is for coordinating with {interaction.user.mention} and other players who join.\nOnly the creator, RSVPs, and moderators can see this thread."
+        welcome_msg = (
+            f"Welcome to the {mission_name} LFG thread!\n\n"
+            f"This thread is for coordinating with {interaction.user.mention} and other players who join.\n"
+            "Only the creator, RSVPs, and moderators are added automatically."
+        )
         await thread.send(welcome_msg)
     except Exception as e:
-        import logging
-        logging.getLogger(__name__).error(f"Failed to create thread for LFG {lfg_id}: {e}")
+        logger.error("Failed to create thread for LFG %s: %s", lfg_id, e)
 
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("UPDATE lfg_posts SET message_id=?, thread_id=? WHERE id=?", (message_id, thread_id, lfg_id))

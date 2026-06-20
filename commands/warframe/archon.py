@@ -100,19 +100,12 @@ async def _refresh_archon(interaction: discord.Interaction):
     last = _last_refresh.get(interaction.user.id, 0.0)
     remaining = _REFRESH_COOLDOWN_SECONDS - (now - last)
     if remaining > 0:
-        try:
-            return await interaction.response.send_message(
-                f"⏳ Slow down — try again in {int(remaining) + 1}s.",
-                ephemeral=True,
-            )
-        except discord.InteractionResponded:
-            return await interaction.followup.send(
-                f"⏳ Slow down — try again in {int(remaining) + 1}s.",
-                ephemeral=True,
-            )
+        return await interaction.followup.send(
+            f"⏳ Slow down — try again in {int(remaining) + 1}s.",
+            ephemeral=True,
+        )
     _last_refresh[interaction.user.id] = now
 
-    await interaction.response.defer()
     archon_data = await fetch_archon_hunt_data()
     if not archon_data:
         return await interaction.followup.send(

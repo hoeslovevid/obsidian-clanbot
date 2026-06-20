@@ -10,14 +10,23 @@ from __future__ import annotations
 from core.config import BOT_CHANGELOG, BOT_VERSION
 
 # Current release (version string comes from BOT_VERSION only).
-CURRENT_RELEASE_DATE = "2026-06-19"
+CURRENT_RELEASE_DATE = "2026-06-20"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Fix · Twitch** — validate streamers on add; warn when `/community twitch_setup` missing; live API status in `/community twitch_list`",
-    "**Fix · Twitch** — token cache + batch Helix polling, API error logging, 3‑min poll; mod `diagnostics` / `force_check` on list",
+    "**Fix** — `/warframe archon` refresh no longer double-defers (InteractionResponded)",
+    "**Fix** — `/general setup` checklist button emoji (invalid 🜂 → 🖥️) no longer breaks wizard finish",
+    "**Fix** — LFG private threads use `add_user`/`remove_user`; Join/Leave works with Components V2 layout",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "2.0.9",
+        "date": "2026-06-19",
+        "changes": [
+            "**Fix · Twitch** — validate streamers on add; warn when `/community twitch_setup` missing; live API status in `/community twitch_list`",
+            "**Fix · Twitch** — token cache + batch Helix polling, API error logging, 3‑min poll; mod `diagnostics` / `force_check` on list",
+        ],
+    },
     {
         "version": "2.0.8",
         "date": "2026-06-19",
