@@ -1134,18 +1134,26 @@ async def fetch_alerts() -> Optional[List[Dict[str, Any]]]:
     return await get_cached("warframe:alerts", 60, _fetch, stale_seconds=_warframe_cache_stale_seconds())
 
 
+_WF_WARM_PLATFORMS = ("pc", "xbox", "ps4", "switch")
+
+
 async def warm_hot_warframe_endpoints() -> None:
     """Prefetch hot endpoints so member slash commands hit warm cache."""
-    await asyncio.gather(
+    tasks: list = [
         fetch_baro_data(),
         fetch_fissures(),
         fetch_alerts(),
-        fetch_steel_path(),
-        fetch_arbitration(),
-        fetch_nightwave(),
         fetch_sortie(),
-        return_exceptions=True,
-    )
+    ]
+    for plat in _WF_WARM_PLATFORMS:
+        tasks.extend(
+            [
+                fetch_steel_path(plat),
+                fetch_arbitration(plat),
+                fetch_nightwave(plat),
+            ]
+        )
+    await asyncio.gather(*tasks, return_exceptions=True)
 
 
 # Warframe Steam App ID (for playtime lookup)

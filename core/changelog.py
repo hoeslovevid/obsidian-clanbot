@@ -12,13 +12,21 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-20"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Fix** — `/warframe archon` refresh no longer double-defers (InteractionResponded)",
-    "**Fix** — `/general setup` checklist button emoji (invalid 🜂 → 🖥️) no longer breaks wizard finish",
-    "**Fix** — LFG private threads use `add_user`/`remove_user`; Join/Leave works with Components V2 layout",
+    "**Perf** — `/warframe daily_ops` serves cached Steel Path/Arbitration/Nightwave instantly when warm; background refresh",
+    "**Perf** — Warframe cache warm runs on bot ready and prefetches daily_ops for PC + console platforms",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "2.0.10",
+        "date": "2026-06-20",
+        "changes": [
+            "**Fix** — `/warframe archon` refresh no longer double-defers (InteractionResponded)",
+            "**Fix** — `/general setup` checklist button emoji (invalid 🜂 → 🖥️) no longer breaks wizard finish",
+            "**Fix** — LFG private threads use `add_user`/`remove_user`; Join/Leave works with Components V2 layout",
+        ],
+    },
     {
         "version": "2.0.9",
         "date": "2026-06-19",

@@ -45,6 +45,12 @@ def _start_fetch_task(key: str, ttl_seconds: float, fetch: Callable[[], Awaitabl
     return task
 
 
+def peek_cached(key: str) -> Any | None:
+    """Return the last cached value for ``key``, even if TTL expired (may be stale)."""
+    entry = _cache.get(key)
+    return entry[0] if entry else None
+
+
 async def get_cached(
     key: str,
     ttl_seconds: float,

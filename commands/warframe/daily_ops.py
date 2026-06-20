@@ -19,7 +19,7 @@ from core.wf_resolve import (
 from core.wf_copy import merge_wf_footer
 from api.warframe_api import fetch_steel_path, fetch_arbitration, fetch_nightwave
 from views import RetryView, RefreshView
-from core.cache_utils import freshness_note
+from core.cache_utils import freshness_note, peek_cached
 
 
 def _fmt_expiry(expiry_str: str) -> str:
@@ -32,13 +32,24 @@ def _fmt_expiry(expiry_str: str) -> str:
         return ""
 
 
-async def _fetch_daily_ops(guild_id: int | None, user_id: int) -> tuple:
-    plat = await wf_platform_for(guild_id, user_id)
-    results = await asyncio.gather(
+async def _pull_daily_ops(plat: str) -> tuple:
+    return await asyncio.gather(
         fetch_steel_path(plat),
         fetch_arbitration(plat),
         fetch_nightwave(plat),
     )
+
+
+async def _fetch_daily_ops(guild_id: int | None, user_id: int) -> tuple:
+    plat = await wf_platform_for(guild_id, user_id)
+    sp_key, arb_key, nw_key = wf_daily_ops_cache_keys(plat)
+    sp_p = peek_cached(sp_key)
+    arb_p = peek_cached(arb_key)
+    nw_p = peek_cached(nw_key)
+    if sp_p is not None and arb_p is not None and nw_p is not None:
+        asyncio.create_task(_pull_daily_ops(plat))
+        return (sp_p, arb_p, nw_p), plat
+    results = await _pull_daily_ops(plat)
     return results, plat
 
 

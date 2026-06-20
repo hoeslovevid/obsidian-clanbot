@@ -259,6 +259,13 @@ def setup_tasks(bot):
     @warframe_cache_warm_loop.before_loop
     async def before_warframe_cache_warm_loop():
         await bot.wait_until_ready()
+        try:
+            from tasks.wf_live_loops import run_warframe_cache_warm_cycle
+
+            await run_warframe_cache_warm_cycle(bot)
+            logger.info("[wf-warm] initial Warframe cache warm complete")
+        except Exception as e:
+            logger.debug("[wf-warm] initial cache warm failed: %s", e)
 
     @tasks.loop(hours=6)  # Check every 6 hours for Warframe playtime role assignments
     async def warframe_achievement_roles_loop():

@@ -195,7 +195,7 @@ async def run_cycle_live_update_cycle(bot: discord.Client) -> None:
 
 
 async def run_warframe_cache_warm_cycle(bot: discord.Client) -> None:
-    """Keep baro/fissures/alerts cache warm for fast slash commands."""
+    """Keep baro/fissures/alerts/daily_ops cache warm for fast slash commands."""
     if not bot.is_ready():
         return
     from api.warframe_api import warm_hot_warframe_endpoints
