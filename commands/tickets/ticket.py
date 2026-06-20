@@ -747,6 +747,14 @@ async def _ticket_confirm_body(
         body = await maybe_first_run_hint(
             interaction.guild.id, interaction.user.id, body, feature="ticket"
         )
+        try:
+            from core.next_hints import get_next_step_hint
+
+            hint = await get_next_step_hint(interaction.guild.id, interaction.user.id, "ticket")
+            if hint:
+                body += f"\n\n-# {hint}"
+        except Exception:
+            pass
     return body
 
 

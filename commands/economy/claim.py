@@ -118,9 +118,19 @@ def setup(bot, group=None):
             except Exception:
                 pass
 
+        claim_body = "\n".join(lines) or "Nothing to claim right now."
+        try:
+            from core.next_hints import get_next_step_hint
+
+            hint = await get_next_step_hint(interaction.guild.id, interaction.user.id, "claim")
+            if hint:
+                claim_body += f"\n\n-# {hint}"
+        except Exception:
+            pass
+
         embed = obsidian_embed(
             "💰 Claim Hub",
-            "\n".join(lines) or "Nothing to claim right now.",
+            claim_body,
             color=EMBED_COLORS.get("economy", discord.Color.gold()),
             footer="Daily auto-claims bounties when you run `/daily`",
             client=interaction.client,
@@ -209,7 +219,7 @@ def setup(bot, group=None):
                         ephemeral=True,
                     )
 
-            body = "\n".join(lines) or "Nothing to claim right now."
+            body = claim_body
             from core.help_layout import help_layout_v2_enabled
             from core.claim_layout import ClaimLayout
 

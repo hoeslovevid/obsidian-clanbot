@@ -104,6 +104,8 @@ def load_all_commands(bot):
         "commands.general.start",
         "commands.general.recent",
         "commands.general.whatsnew",
+        "commands.general.notifications",
+        "commands.general.clan_hq",
         "commands.general.reputation",
         "commands.general.twitch",
         "commands.music.music",
@@ -415,6 +417,8 @@ def load_all_commands(bot):
         "commands.general.status",
         "commands.economy.claim",
         "commands.general.today",
+        "commands.general.notifications",
+        "commands.general.clan_hq",
         "commands.trading.price_watch",
     }
 

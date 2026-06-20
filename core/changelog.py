@@ -12,12 +12,24 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-20"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Perf** — `/warframe daily_ops` serves cached Steel Path/Arbitration/Nightwave instantly when warm; background refresh",
-    "**Perf** — Warframe cache warm runs on bot ready and prefetches daily_ops for PC + console platforms",
+    "**QoL · Discovery** — channel-aware `/menu`, role-based suggestions, search pinned/recent, welcome card buttons",
+    "**QoL · Hub** — `/notifications` unified alert panel; `/hq` clan dashboard (LFG, events, Baro, Twitch)",
+    "**QoL · Flow** — post-command next-step hints on `/daily`, `/claim`, LFG, tickets; streak freeze messaging",
+    "**QoL · Staff** — `/mod inbox` aggregate; suggestion staff threads on Under Review; expanded `/admin setup_status`",
+    "**QoL · UX** — profile Compare button (context menu); LFG copy-invite + auto-archive thread on fill; expired-panel hints",
+    "**Retention** — 7-day new-member DM journey (day 1/3/7)",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "2.0.11",
+        "date": "2026-06-20",
+        "changes": [
+            "**Perf** — `/warframe daily_ops` serves cached Steel Path/Arbitration/Nightwave instantly when warm; background refresh",
+            "**Perf** — Warframe cache warm runs on bot ready and prefetches daily_ops for PC + console platforms",
+        ],
+    },
     {
         "version": "2.0.10",
         "date": "2026-06-20",

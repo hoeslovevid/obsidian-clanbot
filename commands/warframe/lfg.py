@@ -490,6 +490,43 @@ class LFGView(discord.ui.View):
         )
         squad_vc.callback = self.open_squad_vc
         self.add_item(squad_vc)
+        copy_btn = discord.ui.Button(
+            label="Copy invite",
+            style=discord.ButtonStyle.secondary,
+            emoji="🔗",
+            custom_id=f"lfg:{lfg_id}:copy",
+            row=2,
+        )
+        copy_btn.callback = self.copy_invite
+        self.add_item(copy_btn)
+    
+    async def copy_invite(self, interaction: discord.Interaction):
+        if not interaction.guild:
+            from core.reply_helpers import deny_server_only
+            return await deny_server_only(interaction)
+        await interaction.response.defer(ephemeral=True)
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT channel_id, message_id, thread_id FROM lfg_posts WHERE id=?",
+                (self.lfg_id,),
+            )
+            row = await cur.fetchone()
+        if not row:
+            return await interaction.followup.send("LFG post not found.", ephemeral=True)
+        channel_id, message_id, thread_id = row
+        url = None
+        if thread_id:
+            thread = interaction.guild.get_thread(int(thread_id))
+            if thread:
+                url = thread.jump_url
+        if not url and channel_id and message_id:
+            url = f"https://discord.com/channels/{interaction.guild.id}/{channel_id}/{message_id}"
+        if not url:
+            return await interaction.followup.send("Could not build an invite link for this post.", ephemeral=True)
+        await interaction.followup.send(
+            f"Share this LFG link:\n{url}",
+            ephemeral=True,
+        )
     
     async def open_squad_vc(self, interaction: discord.Interaction):
         if not interaction.guild or not isinstance(interaction.user, discord.Member):
@@ -1007,6 +1044,7 @@ async def create_lfg_post(
 
     try:
         from core.first_run_nudge import maybe_first_run_hint
+        from core.next_hints import get_next_step_hint
 
         hint = await maybe_first_run_hint(
             interaction.guild.id,
@@ -1014,7 +1052,10 @@ async def create_lfg_post(
             "✅ Your LFG post is live.",
             feature="lfg",
         )
-        if "💡" in hint:
+        next_hint = await get_next_step_hint(interaction.guild.id, interaction.user.id, "lfg")
+        if next_hint:
+            hint = f"{hint}\n-# {next_hint}" if hint else f"-# {next_hint}"
+        if hint and ("💡" in hint or "Next:" in hint):
             await interaction.followup.send(hint, ephemeral=True)
     except Exception:
         pass

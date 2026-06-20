@@ -568,6 +568,35 @@ def setup(bot, group=None):
             ephemeral=True,
         )
 
+    inbox_decorator = (
+        group.command(
+            name="inbox",
+            description="Staff inbox — tickets, apps, suggestions, LFG, and setup gaps.",
+        )
+        if group
+        else bot.tree.command(
+            name="inbox",
+            description="Staff inbox — tickets, apps, suggestions, LFG, and setup gaps.",
+        )
+    )
+
+    @inbox_decorator
+    async def mod_inbox(interaction: discord.Interaction):
+        if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
+            return await interaction.response.send_message(
+                "Sorry, but you are not an Administrator in this server.",
+                ephemeral=True,
+            )
+        if not interaction.guild:
+            return await interaction.response.send_message(
+                "This command can only be used in a server.", ephemeral=True
+            )
+        await interaction.response.defer(ephemeral=True)
+        from core.mod_inbox import build_mod_inbox_embed
+
+        embed = await build_mod_inbox_embed(interaction.guild, client=interaction.client)
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
     usage_decorator = (
         group.command(
             name="usage_report",

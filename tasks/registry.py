@@ -696,6 +696,20 @@ def setup_tasks(bot):
     async def before_lfg_poster_nudge_loop():
         await bot.wait_until_ready()
 
+    @tasks.loop(hours=6)
+    async def member_journey_loop():
+        """Day 1/3/7 new-member DM nudges."""
+        try:
+            from core.member_journey import run_member_journey_cycle
+
+            await run_member_journey_cycle(bot)
+        except Exception as e:
+            logger.error(f"[member_journey] loop error: {e}", exc_info=True)
+
+    @member_journey_loop.before_loop
+    async def before_member_journey_loop():
+        await bot.wait_until_ready()
+
     # Start all tasks with error handling
     tasks_to_start = [
         ('temp_vc_cleanup', temp_vc_cleanup),
@@ -738,6 +752,7 @@ def setup_tasks(bot):
         ('price_watch_loop', price_watch_loop),
         ('lfg_bump_loop', lfg_bump_loop),
         ('lfg_poster_nudge_loop', lfg_poster_nudge_loop),
+        ('member_journey_loop', member_journey_loop),
         ('weekly_recap_loop', weekly_recap_loop),
         ('dm_coalesce_flush_loop', dm_coalesce_flush_loop),
         ('mod_kpi_digest_loop', mod_kpi_digest_loop),

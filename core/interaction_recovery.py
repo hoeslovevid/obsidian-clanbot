@@ -12,6 +12,11 @@ EXPIRED_HINTS: dict[str, str] = {
     "me": "Run **`/me`** or **`/today`** for a fresh snapshot.",
     "menu": "Run **`/menu`** to reopen the quick picker.",
     "warframe": "Run **`/warframe hub`** or **`/warframe status`**.",
+    "welcome": "Run **`/start`** or **`/menu`** to get started.",
+    "notification": "Run **`/notifications`** for your alert summary.",
+    "hq": "Run **`/hq`** for the clan dashboard.",
+    "suggest": "Run **`/community suggest`** to submit again.",
+    "ticket": "Run **`/ticket`** to open a new ticket.",
     "default": "Run the command again to get a fresh panel.",
 }
 

@@ -43,6 +43,13 @@ async def handle_member_join(bot: discord.Client, member: discord.Member) -> Non
     
     # Raid protection - record join
     try:
+        from core.member_journey import record_member_join
+
+        await record_member_join(member.guild.id, member.id)
+    except Exception as e:
+        logger.debug(f"[member_journey] join log failed: {e}")
+
+    try:
         from commands.moderation.raid_protection import record_join, check_raid_condition, trigger_raid_protection
         account_age = None
         if member.created_at:
@@ -127,6 +134,16 @@ async def handle_member_join(bot: discord.Client, member: discord.Member) -> Non
     
     try:
         await channel.send(formatted_message)
+        card_off = await get_guild_setting(member.guild.id, "welcome_card_off")
+        if card_off != "1":
+            from core.welcome_card import WelcomeCardView, welcome_card_embed
+
+            view = WelcomeCardView(member.guild.id)
+            bot.add_view(view)
+            await channel.send(
+                embed=welcome_card_embed(member, client=bot),
+                view=view,
+            )
     except Exception as e:
         logger.error(f"[welcome] Error sending welcome message: {e}")
 

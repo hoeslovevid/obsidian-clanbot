@@ -92,8 +92,11 @@ class QuickMenuSelect(discord.ui.Select):
             )
         try:
             from core.menu_helpers import time_sorted_menu_indices
+            from core.discovery import reorder_menu_indices
 
-            menu_order = time_sorted_menu_indices(MENU_ITEMS)
+            base_order = time_sorted_menu_indices(MENU_ITEMS)
+            channel = interaction.channel if interaction.guild else None
+            menu_order = reorder_menu_indices(MENU_ITEMS, channel=channel, base_order=base_order)
         except Exception:
             menu_order = list(range(len(MENU_ITEMS)))
         for i in menu_order:
@@ -246,8 +249,26 @@ def setup(bot, group=None):
             except Exception:
                 pass
 
+        channel_blurb = ""
+        role_blurb = ""
+        if interaction.guild and isinstance(interaction.user, discord.Member):
+            try:
+                from core.discovery import channel_menu_slug_bias, role_suggestion_lines
+
+                bias = channel_menu_slug_bias(interaction.channel)
+                if bias and interaction.channel and hasattr(interaction.channel, "name"):
+                    picks = ", ".join(f"`/{s}`" for s in list(bias)[:4])
+                    channel_blurb = f"_Suggested in #{interaction.channel.name}: {picks}_\n\n"
+                role_lines = role_suggestion_lines(interaction.user)
+                if role_lines:
+                    role_blurb = "**For your roles**\n" + "\n".join(role_lines) + "\n\n"
+            except Exception:
+                pass
+
         desc = (
             whats_new_blurb
+            + channel_blurb
+            + role_blurb
             + fav_blurb
             + recent_blurb
             + "**Quick start** — pick an action below, or type these shortcuts directly:\n\n"

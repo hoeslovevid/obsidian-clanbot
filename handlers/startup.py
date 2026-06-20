@@ -68,6 +68,7 @@ async def run_startup(bot: discord.Client) -> None:
     try:
         from core.config import GUILD_ID
         from database import get_log_channel_id
+        from core.command_tree_stats import collect_command_tree_stats
 
         stats = collect_command_tree_stats(bot)
         if stats.headroom_warnings:
@@ -143,6 +144,13 @@ async def run_startup(bot: discord.Client) -> None:
             bot.add_view(ReminderSnoozeView())
         except Exception as e:
             logger.debug(f"[ready] ReminderSnoozeView registration skipped: {e}")
+
+        try:
+            from core.welcome_card import WelcomeCardView
+
+            bot.add_view(WelcomeCardView(0))
+        except Exception as e:
+            logger.debug(f"[ready] WelcomeCardView registration skipped: {e}")
 
         # Item 47: re-register pending VC revival vote buttons.
         try:

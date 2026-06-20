@@ -94,6 +94,23 @@ def setup(bot, group=None):
                 ephemeral=True,
             )
 
+        pinned_fields: list[tuple[str, str, bool]] = []
+        if interaction.guild:
+            from commands.general.favorites import get_user_favorites
+            from core.command_history import get_recent_commands
+
+            favorites = await get_user_favorites(interaction.guild.id, interaction.user.id)
+            recent = await get_recent_commands(interaction.guild.id, interaction.user.id, limit=5)
+            pin_lines: list[str] = []
+            for cmd in favorites[:4]:
+                pin_lines.append(command_mention(cmd, fallback=f"`/{cmd}`"))
+            for cmd, _at in recent[:3]:
+                m = command_mention(cmd, fallback=f"`/{cmd}`")
+                if m not in pin_lines:
+                    pin_lines.append(m)
+            if pin_lines:
+                pinned_fields.append(("Pinned & recent", " · ".join(pin_lines), False))
+
         scored = [
             (s, name, desc)
             for name, desc in _all_leaf_commands(interaction.client)
@@ -121,7 +138,7 @@ def setup(bot, group=None):
                 ephemeral=True,
             )
 
-        fields = []
+        fields = list(pinned_fields)
         if top:
             lines = []
             for _, name, desc in top:

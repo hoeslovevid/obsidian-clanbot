@@ -39,6 +39,8 @@ async def mark_lfg_filled(
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("UPDATE lfg_posts SET status='COMPLETED' WHERE id=?", (lfg_id,))
         await db.commit()
+        cur = await db.execute("SELECT thread_id FROM lfg_posts WHERE id=?", (lfg_id,))
+        thread_row = await cur.fetchone()
 
     channel = guild.get_channel(int(channel_id)) if channel_id else None
     if isinstance(channel, discord.TextChannel) and message_id:
@@ -55,6 +57,14 @@ async def mark_lfg_filled(
 
                 await safe_message_edit(msg, embed=embed)
         except (discord.NotFound, discord.HTTPException):
+            pass
+
+    if thread_row and thread_row[0] and guild:
+        try:
+            thread = guild.get_thread(int(thread_row[0]))
+            if thread and not thread.archived:
+                await thread.edit(archived=True, locked=True, reason="LFG marked filled")
+        except (discord.Forbidden, discord.HTTPException):
             pass
 
     return True, "Group marked as filled! Your LFG post now shows **[FILLED ✅]**."

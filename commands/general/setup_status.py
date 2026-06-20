@@ -66,6 +66,8 @@ async def compute_setup_health(guild: discord.Guild) -> tuple[int, int, str, str
 
     async def _extra_section():
         nonlocal configured, total
+        from core.command_mentions import command_mention
+
         rows = []
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute(
@@ -73,6 +75,16 @@ async def compute_setup_health(guild: discord.Guild) -> tuple[int, int, str, str
                 (guild.id,),
             )
             row = await cur.fetchone()
+            cur2 = await db.execute(
+                "SELECT channel_id FROM update_log_settings WHERE guild_id=? AND channel_id IS NOT NULL",
+                (guild.id,),
+            )
+            update_row = await cur2.fetchone()
+            cur3 = await db.execute(
+                "SELECT COUNT(*) FROM twitch_streamers WHERE guild_id=?",
+                (guild.id,),
+            )
+            twitch_count = int((await cur3.fetchone())[0] or 0)
         total += 1
         if row and row[0]:
             ch = guild.get_channel(int(row[0]))
@@ -84,6 +96,50 @@ async def compute_setup_health(guild: discord.Guild) -> tuple[int, int, str, str
         else:
             rows.append(
                 f"❌ ⭐ Starboard — set up with {command_mention('mod starboard_setup', fallback='`/mod starboard_setup`')}"
+            )
+        total += 1
+        ch_id = await get_configured_channel_id(guild.id, "complaints_channel_id")
+        ch = guild.get_channel(ch_id) if ch_id else None
+        if ch_id and ch:
+            configured += 1
+            rows.append(f"✅ ⚖️ Inheritor docket → {ch.mention}")
+        elif ch_id:
+            rows.append("⚠️ ⚖️ Inheritor docket → channel missing/deleted")
+        else:
+            rows.append(
+                f"❌ ⚖️ Inheritor docket — {command_mention('general setup_docket', fallback='`/general setup_docket`')}"
+            )
+        total += 1
+        sugg_id = await get_configured_channel_id(guild.id, "suggestions_channel_id")
+        sugg_ch = guild.get_channel(sugg_id) if sugg_id else None
+        if sugg_id and sugg_ch:
+            configured += 1
+            rows.append(f"✅ 💡 Suggestions → {sugg_ch.mention}")
+        elif sugg_id:
+            rows.append("⚠️ 💡 Suggestions → channel missing/deleted")
+        else:
+            rows.append(
+                f"❌ 💡 Suggestions — {command_mention('community suggest_setup', fallback='`/community suggest_setup`')}"
+            )
+        total += 1
+        if update_row and update_row[0]:
+            ul_ch = guild.get_channel(int(update_row[0]))
+            if ul_ch:
+                configured += 1
+                rows.append(f"✅ 📝 Update log → {ul_ch.mention}")
+            else:
+                rows.append("⚠️ 📝 Update log → channel missing/deleted")
+        else:
+            rows.append(
+                f"❌ 📝 Update log — {command_mention('updates update_log_setup', fallback='`/updates update_log_setup`')}"
+            )
+        total += 1
+        if twitch_count > 0:
+            configured += 1
+            rows.append(f"✅ 📺 Twitch watchlist → **{twitch_count}** streamer(s)")
+        else:
+            rows.append(
+                f"❌ 📺 Twitch watchlist — {command_mention('community twitch_add', fallback='`/community twitch_add`')}"
             )
         return "\n".join(rows)
 

@@ -78,6 +78,8 @@ def setup(bot, group=None):
         if prefs_bits:
             prefs_line = f"⚙️ Your prefs: {', '.join(prefs_bits)} · `/preferences`"
 
+        notify_line = "🔔 **`/notifications`** — your watches, DMs, and guild feeds"
+
         if isinstance(interaction.user, discord.Member) and is_mod(interaction.user):
             try:
                 from commands.general.setup_status import setup_health_line
@@ -106,6 +108,7 @@ def setup(bot, group=None):
             + (f"🧭 {setup_line}\n" if setup_line else "")
             + (f"{task_line}\n" if task_line else "")
             + (f"{prefs_line}\n" if prefs_line else "")
+            + f"{notify_line}\n"
             + f"\n{hint}"
         )
         embed = embed_template(

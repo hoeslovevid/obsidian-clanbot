@@ -129,6 +129,43 @@ class SuggestionView(discord.ui.View):
             except Exception as e:
                 import logging
                 logging.getLogger(__name__).error(f"Error updating suggestion message: {e}")
+
+        if status == "UNDER_REVIEW" and message_id and interaction.channel:
+            try:
+                message = await interaction.channel.fetch_message(message_id)
+                thread_name = f"staff-{self.suggestion_id}"[:100]
+                existing = discord.utils.get(message.threads, name=thread_name)
+                if not existing:
+                    try:
+                        thread = await message.create_thread(
+                            name=thread_name,
+                            type=discord.ChannelType.private_thread,
+                            auto_archive_duration=10080,
+                            reason=f"Staff review for suggestion #{self.suggestion_id}",
+                        )
+                    except discord.HTTPException:
+                        thread = await message.create_thread(
+                            name=thread_name,
+                            auto_archive_duration=10080,
+                            reason=f"Staff review for suggestion #{self.suggestion_id}",
+                        )
+                    await thread.add_user(interaction.user)
+                    if isinstance(interaction.user, discord.Member):
+                        from core.utils import get_mod_role
+
+                        mod_role = get_mod_role(interaction.guild)
+                        if mod_role:
+                            for mod in mod_role.members[:20]:
+                                try:
+                                    await thread.add_user(mod)
+                                except (discord.Forbidden, discord.HTTPException):
+                                    pass
+                    await thread.send(
+                        f"Staff thread for suggestion **#{self.suggestion_id}**.\n"
+                        f"Submitted by <@{user_id}>.\n\n{suggestion_text[:800]}"
+                    )
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                pass
         
         # DM the user who submitted the suggestion
         try:

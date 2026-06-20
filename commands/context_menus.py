@@ -29,7 +29,34 @@ def setup(bot, group=None):
             viewer=interaction.user,
             client=interaction.client,
         )
-        await interaction.followup.send(embed=embed, ephemeral=True)
+        view = None
+        if member.id != interaction.user.id and isinstance(interaction.user, discord.Member):
+            class _ProfileCompareView(discord.ui.View):
+                def __init__(self, target: discord.Member):
+                    super().__init__(timeout=120)
+                    self.target = target
+
+                @discord.ui.button(label="Compare with me", style=discord.ButtonStyle.secondary, emoji="📊")
+                async def compare_btn(self, btn_i: discord.Interaction, button: discord.ui.Button):
+                    if not btn_i.guild or not isinstance(btn_i.user, discord.Member):
+                        return await btn_i.response.send_message("Server only.", ephemeral=True)
+                    await btn_i.response.defer(ephemeral=True)
+                    from core.profile_compare import build_compare_embed
+
+                    viewer_data = await get_user_profile_data(btn_i.guild.id, btn_i.user.id)
+                    target_data = await get_user_profile_data(btn_i.guild.id, self.target.id)
+                    cmp_embed = await build_compare_embed(
+                        btn_i.guild,
+                        btn_i.user,
+                        self.target,
+                        viewer_data,
+                        target_data,
+                        client=btn_i.client,
+                    )
+                    await btn_i.followup.send(embed=cmp_embed, ephemeral=True)
+
+            view = _ProfileCompareView(member)
+        await interaction.followup.send(embed=embed, view=view, ephemeral=True)
 
     @bot.tree.context_menu(name="View Balance")
     async def view_balance_context(interaction: discord.Interaction, member: discord.Member):
