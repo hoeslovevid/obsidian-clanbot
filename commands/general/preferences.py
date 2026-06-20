@@ -64,6 +64,7 @@ def setup(bot, group=None):
         quiet_hours="Suppress nudge DMs during these local hours, e.g. '22-7' (or 'off' to clear)",
         digest_section="Pick a daily-digest section to turn on/off (use together with digest_state)",
         digest_state="On/off for the chosen digest_section",
+        weekly_recap="Monday DM recap of your week (coins, XP, LFG, achievements)",
     )
     @app_commands.choices(timezone=[
         app_commands.Choice(name=label, value=tz) for tz, label in COMMON_TIMEZONES
@@ -147,6 +148,10 @@ def setup(bot, group=None):
         app_commands.Choice(name="On", value="1"),
         app_commands.Choice(name="Off", value="0"),
     ])
+    @app_commands.choices(weekly_recap=[
+        app_commands.Choice(name="On", value="1"),
+        app_commands.Choice(name="Off", value="0"),
+    ])
     async def preferences(
         interaction: discord.Interaction,
         timezone: Optional[app_commands.Choice[str]] = None,
@@ -168,6 +173,7 @@ def setup(bot, group=None):
         quiet_hours: Optional[str] = None,
         digest_section: Optional[app_commands.Choice[str]] = None,
         digest_state: Optional[app_commands.Choice[str]] = None,
+        weekly_recap: Optional[app_commands.Choice[str]] = None,
     ):
         """Set timezone or quieter mode."""
         if not interaction.guild:
@@ -334,6 +340,17 @@ def setup(bot, group=None):
         elif digest_section or digest_state:
             lines.append("⚠️ Set both `digest_section` and `digest_state` together to change a digest section.")
 
+        if weekly_recap:
+            from database import set_guild_setting
+
+            await set_guild_setting(
+                interaction.guild.id,
+                f"user_weekly_recap:{interaction.user.id}",
+                weekly_recap.value,
+            )
+            state = "On" if weekly_recap.value == "1" else "Off"
+            updated.append(f"**Weekly recap DM:** {state}")
+
         if not lines and not updated:
             # Show current preferences
             current_tz = await get_user_timezone(interaction.guild.id, interaction.user.id)
@@ -352,6 +369,8 @@ def setup(bot, group=None):
                 "off": "Off",
             }
             digest_on = await get_digest_dm(interaction.guild.id, interaction.user.id)
+            wr_val = await get_guild_setting(interaction.guild.id, f"user_weekly_recap:{interaction.user.id}")
+            wr_on = wr_val == "1"
             tf = await get_user_time_format(interaction.guild.id, interaction.user.id)
             inv_val = await get_guild_setting(interaction.guild.id, f"user_investment_dm:{interaction.user.id}")
             inv_on = inv_val == "1"  # default OFF when unset
@@ -376,6 +395,7 @@ def setup(bot, group=None):
             lines.append(f"**Level-up notification:** {'DM (private) 📬' if lu_dm else 'Public channel'}")
             lines.append(f"**Achievement notifications:** {an_labels.get(an_style, an_style)}")
             lines.append(f"**Daily digest DM:** {'On ☀️' if digest_on else 'Off'}")
+            lines.append(f"**Weekly recap DM:** {'On 📊' if wr_on else 'Off'}")
             lines.append(f"**Time format:** {'24-hour' if tf == '24' else '12-hour'}")
             lines.append(f"**Investment maturity DM:** {'On 📈' if inv_on else 'Off'}")
             lines.append(f"**Typo helper:** {'On 💡' if th_on else 'Off'}")

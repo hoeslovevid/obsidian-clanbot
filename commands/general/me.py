@@ -227,6 +227,8 @@ async def _run_me(interaction: discord.Interaction):
         footer = f"Next daily in <t:{next_daily}:R>"
     else:
         footer = footer_for("me")
+    if footer == footer_for("me"):
+        footer = f"{footer} · `/today` for your day"
 
     from core.embed_prefs import embed_kwargs
 

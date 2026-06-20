@@ -1270,7 +1270,8 @@ async def init_db() -> None:
         )""")
         # Seed default pets if shop is empty
         cur = await db.execute("SELECT COUNT(*) FROM pet_types")
-        if (await cur.fetchone())[0] == 0:
+        row = await cur.fetchone()
+        if row is None or row[0] == 0:
             default_pets = [
                 ("Dog", 100, 50, "A loyal companion"),
                 ("Cat", 150, 60, "An independent friend"),
@@ -1300,7 +1301,8 @@ async def init_db() -> None:
 
         # Seed pet evolutions (base_type -> evolved_type at required_level)
         cur = await db.execute("SELECT COUNT(*) FROM pet_evolutions")
-        if (await cur.fetchone())[0] == 0:
+        row = await cur.fetchone()
+        if row is None or row[0] == 0:
             evolutions = [
                 ("Dog", "Golden Retriever", 25),
                 ("Cat", "Shadow Cat", 30),
@@ -1703,9 +1705,28 @@ async def init_db() -> None:
                 await db.execute("ALTER TABLE lfg_posts ADD COLUMN scheduled_at TEXT")
             if "reminder_sent" not in lfg_cols:
                 await db.execute("ALTER TABLE lfg_posts ADD COLUMN reminder_sent INTEGER DEFAULT 0")
+            if "squad_vc_id" not in lfg_cols:
+                await db.execute("ALTER TABLE lfg_posts ADD COLUMN squad_vc_id INTEGER")
             await db.commit()
         except Exception as e:
             logger.warning(f"[db] LFG v1.94 column migration: {e}")
+
+        await db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS lfg_presets (
+                guild_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                preset_name TEXT NOT NULL,
+                mission_type TEXT NOT NULL,
+                max_players INTEGER NOT NULL DEFAULT 4,
+                description TEXT,
+                radio_query TEXT,
+                created_at TEXT NOT NULL,
+                PRIMARY KEY (guild_id, user_id, preset_name)
+            )
+            """
+        )
+        await db.commit()
 
         try:
             cur = await db.execute("PRAGMA table_info(applications)")

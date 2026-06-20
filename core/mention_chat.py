@@ -36,7 +36,14 @@ KEYWORD_RESPONSES = [
     (r"\b(links?|wiki|market)\b", f"Quick links: **`/general links`** – Website, Wiki, Market, Drop Tables."),
     (r"\b(drop|drops?|where.*drop)\b", "Find where items drop: **`/warframe drop`** – links to Wiki drop tables."),
     (r"\b(bount(y|ies))\b", "Daily bounties for bonus coins: **`/economy bounties`**."),
-    (r"\bwho are you\b", "I'm the **Obsidian Clan Bot** – your Warframe clan assistant! Use **`/help`** to explore."),
+    (r"\b(ticket|support)\b", "Open a ticket with **`/ticket`** — staff will follow up in a private channel."),
+    (r"\b(giveaway|giveaways)\b", "Browse giveaways with **`/giveaways giveaway_list`** or check pinned posts."),
+    (r"\b(pet|pets)\b", "Care for pets with **`/pets`** — shop, feed, play, and battles."),
+    (r"\b(invest|investment)\b", "Invest coins with **`/economy invest`** — collect when mature."),
+    (r"\b(today|priorities)\b", "See your day at a glance with **`/today`** — daily, Baro, LFG, events."),
+    (r"\b(remind|reminder)\b", "Set a reminder with **`/general remind`** — e.g. `in 2 hours`."),
+    (r"\b(compare|vs)\b", "Compare stats with **`/profile @user compare:True`**."),
+    (r"\bwhy.*dm\b", "Run **`/wfnotify why_dm`** to see why a notification didn't arrive."),
 ]
 
 

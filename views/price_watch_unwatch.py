@@ -6,11 +6,24 @@ from discord import ui
 
 
 class PriceWatchUnwatchView(ui.View):
-    def __init__(self, guild_id: int, user_id: int, item_name: str):
+    def __init__(self, guild_id: int, user_id: int, item_name: str, listing_type: str = "WTS"):
         super().__init__(timeout=None)
         self.guild_id = guild_id
         self.user_id = user_id
         self.item_name = item_name
+        self.listing_type = listing_type
+
+    @ui.button(label="Post trade", style=discord.ButtonStyle.primary, emoji="💼")
+    async def post_trade(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("This watch belongs to someone else.", ephemeral=True)
+        hint = (
+            f"Run **`/trade`** in your server:\n"
+            f"• Item: **{self.item_name}**\n"
+            f"• Type: **{self.listing_type}**\n"
+            f"• Add your price from the watch alert."
+        )
+        await interaction.response.send_message(hint, ephemeral=True)
 
     @ui.button(label="Stop watching", style=discord.ButtonStyle.secondary, emoji="🔕")
     async def unwatch(self, interaction: discord.Interaction, button: discord.ui.Button):

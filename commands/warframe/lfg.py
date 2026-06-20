@@ -16,6 +16,30 @@ logger = logging.getLogger(__name__)
 _LFG_COLUMNS_READY = False
 
 
+async def _format_host_line(guild: discord.Guild, member: discord.Member) -> str:
+    """Host mention with optional AFK flag and equipped badge."""
+    line = member.display_name
+    try:
+        from database import get_afk_status
+
+        afk = await get_afk_status(guild.id, member.id)
+        if afk:
+            reason = afk.get("reason") if isinstance(afk, dict) else None
+            line += " · 💤 AFK" + (f" ({str(reason)[:40]})" if reason else "")
+    except Exception:
+        pass
+    try:
+        from commands.general.profile import get_user_profile_data
+
+        pdata = await get_user_profile_data(guild.id, member.id)
+        badge = pdata.get("equipped_badge")
+        if badge and isinstance(badge, (list, tuple)) and len(badge) >= 2:
+            line = f"{badge[0]} {line}"
+    except Exception:
+        pass
+    return f"{member.mention} ({line})"
+
+
 async def _ensure_lfg_columns() -> None:
     global _LFG_COLUMNS_READY
     if _LFG_COLUMNS_READY:
@@ -301,7 +325,28 @@ class LFGView(discord.ui.View):
         )
         wait_btn.callback = self.notify_when_open
         self.add_item(wait_btn)
+        squad_vc = discord.ui.Button(
+            label="Open squad VC",
+            style=discord.ButtonStyle.secondary,
+            emoji="🎙️",
+            custom_id=f"lfg:{lfg_id}:squad_vc",
+            row=1,
+        )
+        squad_vc.callback = self.open_squad_vc
+        self.add_item(squad_vc)
     
+    async def open_squad_vc(self, interaction: discord.Interaction):
+        if not interaction.guild or not isinstance(interaction.user, discord.Member):
+            from core.reply_helpers import deny_server_only
+            return await deny_server_only(interaction)
+        await interaction.response.defer(ephemeral=True)
+        from core.lfg_squad_vc import create_squad_vc_for_lfg
+
+        ok, msg, _vc = await create_squad_vc_for_lfg(
+            interaction.client, interaction.guild, self.lfg_id, interaction.user,
+        )
+        await interaction.followup.send(msg, ephemeral=True)
+
     async def join(self, interaction: discord.Interaction):
         """Join the LFG group."""
         await self._handle_rsvp(interaction, "JOIN")
@@ -591,7 +636,7 @@ class LFGView(discord.ui.View):
                         "✅ Your LFG Group is Full!",
                         f"Your **{embed.title or 'LFG'}** group has reached **{max_players}/{max_players}** players.\n\n"
                         f"The last player to join was **{interaction.user.display_name}**.\n\n"
-                        f"*Mark the post filled when you're done recruiting.*",
+                        f"Tap **Open squad VC** on the post when you're ready to voice up.",
                         color=discord.Color.green(),
                         client=interaction.client,
                     )
@@ -682,9 +727,10 @@ async def create_lfg_post(
 
     mission_name = mission_type
     expires_str = f"Expires in {duration_hours}h • <t:{int(expires_at.timestamp())}:R>"
+    host_line = await _format_host_line(interaction.guild, interaction.user)
     fields = [
         ("🎯 Mission", mission_name, True),
-        ("👤 Created by", interaction.user.mention, True),
+        ("👤 Created by", host_line, True),
         ("⏰ Expires", expires_str, True),
     ]
     if description:
@@ -696,8 +742,6 @@ async def create_lfg_post(
     if radio_clean:
         fields.append(("🎵 Squad radio", f"`{radio_clean[:120]}`\nTap **Start squad radio** when you're in VC.", False))
     fields.append(("👥 Players", f"1. {interaction.user.display_name}\n\n_{max_players - 1} slot(s) remaining_", False))
-
-    # Item 35: cycle-aware nudge for location-coupled missions. Silent on failure.
     cycle_nudge: Optional[str] = None
     try:
         cycle_nudge = await _build_cycle_nudge(mission_type)
@@ -831,6 +875,72 @@ def setup(bot, group=None):
                 ),
                 view=LFGTemplateView(bot),
                 ephemeral=True,
+            )
+
+        @group.command(name="preset_save", description="Save an LFG template for one-tap reposting.")
+        @app_commands.describe(
+            name="Preset name (e.g. hydron)",
+            mission_type="Mission type",
+            max_players="Max squad size (1-8)",
+            description="Default notes",
+        )
+        async def lfg_preset_save(
+            interaction: discord.Interaction,
+            name: str,
+            mission_type: str,
+            max_players: app_commands.Range[int, 1, 8] = 4,
+            description: str = "",
+        ):
+            if not interaction.guild:
+                return await interaction.response.send_message("Server only.", ephemeral=True)
+            from core.lfg_presets import save_preset
+
+            ok, msg = await save_preset(
+                interaction.guild.id,
+                interaction.user.id,
+                name,
+                mission_type,
+                max_players,
+                description,
+            )
+            await interaction.response.send_message(msg, ephemeral=True)
+
+        @group.command(name="preset_list", description="List your saved LFG presets.")
+        async def lfg_preset_list(interaction: discord.Interaction):
+            if not interaction.guild:
+                return await interaction.response.send_message("Server only.", ephemeral=True)
+            from core.lfg_presets import list_presets
+
+            presets = await list_presets(interaction.guild.id, interaction.user.id)
+            if not presets:
+                return await interaction.response.send_message(
+                    "No presets yet — `/lfg preset_save` to save one.", ephemeral=True,
+                )
+            lines = [
+                f"**{p['name']}** — {p['mission_type']} ({p['max_players']}p)"
+                for p in presets
+            ]
+            await interaction.response.send_message("\n".join(lines), ephemeral=True)
+
+        @group.command(name="preset_use", description="Post an LFG from a saved preset.")
+        @app_commands.describe(name="Preset name")
+        async def lfg_preset_use(interaction: discord.Interaction, name: str):
+            if not interaction.guild:
+                return await interaction.response.send_message("Server only.", ephemeral=True)
+            from core.lfg_presets import get_preset
+
+            preset = await get_preset(interaction.guild.id, interaction.user.id, name)
+            if not preset:
+                return await interaction.response.send_message("Preset not found.", ephemeral=True)
+            await create_lfg_post(
+                bot,
+                interaction,
+                preset["mission_type"],
+                preset["max_players"],
+                24,
+                preset.get("description") or "",
+                None,
+                radio_query=preset.get("radio_query") or None,
             )
 
     command_decorator = group.command(name="lfg", description="Create an LFG post for a Warframe mission.") if group else bot.tree.command(name="lfg", description="Create an LFG post for a Warframe mission.")

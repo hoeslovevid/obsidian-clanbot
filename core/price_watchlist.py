@@ -142,10 +142,16 @@ async def check_price_watches(bot) -> None:
                 color=discord.Color.gold(),
             )
             view = PriceWatchUnwatchView(int(guild_id), int(user_id), item_name)
-            from core.safe_send import safe_dm
-            sent = await safe_dm(user, embed=embed, view=view)
-            if not sent:
-                continue
+            from core.dm_coalesce import queue_coalesced_dm
+
+            await queue_coalesced_dm(
+                bot,
+                int(guild_id),
+                int(user_id),
+                "Price watch",
+                embed,
+                view=view,
+            )
             async with aiosqlite.connect(DB_PATH) as db:
                 await db.execute(
                     "UPDATE price_watches SET last_notified_at=? WHERE id=?",

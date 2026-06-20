@@ -30,6 +30,14 @@ async def get_quiet_hours(guild_id: int, user_id: int) -> Optional[tuple[int, in
     return parse_quiet_hours(await get_guild_setting(guild_id, f"user_quiet_hours:{user_id}"))
 
 
+async def get_quiet_hours_label(guild_id: int, user_id: int) -> Optional[str]:
+    """Human-readable quiet hours string, or empty."""
+    raw = await get_guild_setting(guild_id, f"user_quiet_hours:{user_id}")
+    if not raw or str(raw).lower() in ("off", "-", "none"):
+        return ""
+    return str(raw)
+
+
 async def in_quiet_hours(guild_id: int, user_id: int) -> bool:
     """True when the user's local time falls inside their configured quiet window."""
     window = await get_quiet_hours(guild_id, user_id)

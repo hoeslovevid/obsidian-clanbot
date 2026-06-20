@@ -121,14 +121,28 @@ async def dm_baro_wishlist_matches(
             continue
         shown = ", ".join(f"**{n}**" for n in items[:6])
         extra = f" +{len(items) - 6} more" if len(items) > 6 else ""
+        embed = obsidian_embed(
+            "🛒 Baro wishlist match",
+            f"Baro is here{loc} with items on your wishlist:\n{shown}{extra}\n\n"
+            "`/warframe hub` · `/baro` · `/lfg` for Baro farming squads",
+            color=discord.Color.gold(),
+            client=bot,
+        )
+        from views.baro_wishlist_dm import BaroWishlistDMView
+        from core.dm_coalesce import queue_coalesced_dm
+
+        view = BaroWishlistDMView(guild_id)
         try:
-            await user.send(
-                embed=obsidian_embed(
-                    "🛒 Baro wishlist match",
-                    f"Baro is here{loc} with items on your wishlist:\n{shown}{extra}",
-                    color=discord.Color.gold(),
-                    client=bot,
-                )
+            bot.add_view(view)
+        except Exception:
+            pass
+        try:
+            from core.quiet_hours import in_quiet_hours
+
+            if await in_quiet_hours(guild_id, user_id):
+                continue
+            await queue_coalesced_dm(
+                bot, guild_id, user_id, "Baro wishlist", embed, view=view,
             )
         except Exception:
             pass

@@ -130,6 +130,9 @@ def create_weekly_recap_loop(bot):
     @tasks.loop(hours=6)
     async def weekly_recap_loop():
         try:
+            from core.weekly_recap import run_weekly_recap_cycle
+
+            await run_weekly_recap_cycle(bot)
             for guild in bot.guilds:
                 try:
                     ch_raw = await get_guild_setting(guild.id, "recap_channel_id")

@@ -21,6 +21,7 @@ MENU_ITEMS: list[tuple[str, str, list[str], str | None]] = [
     ("My cooldowns", "⏳", ["cooldowns"], None),
     ("My profile", "👤", ["profile"], None),
     ("Quick snapshot (me)", "📊", ["me"], None),
+    ("Your day (today)", "📅", ["today"], None),
     ("My wallet", "💼", ["economy", "wallet"], None),
     ("Warframe notify setup", "🔔", ["wfnotify", "configure"], None),
     ("Baro Ki'Teer", "🛒", ["baro"], None),
@@ -43,6 +44,7 @@ AUTO_INVOKE_ALIASES: dict[str, list[list[str]]] = {
     "baro": [["baro"], ["warframe", "baro"]],
     "profile": [["profile"], ["general", "profile"]],
     "me": [["me"], ["general", "me"]],
+    "today": [["today"]],
     "search": [["search"], ["general", "help_search"]],
     "wallet": [["economy", "wallet"]],
     "configure": [["wfnotify", "configure"]],
@@ -88,7 +90,14 @@ class QuickMenuSelect(discord.ui.Select):
                     description="Run again"[:100],
                 )
             )
-        for i, (label, emoji, _path, _hint) in enumerate(MENU_ITEMS):
+        try:
+            from core.menu_helpers import time_sorted_menu_indices
+
+            menu_order = time_sorted_menu_indices(MENU_ITEMS)
+        except Exception:
+            menu_order = list(range(len(MENU_ITEMS)))
+        for i in menu_order:
+            label, emoji, _path, _hint = MENU_ITEMS[i]
             options.append(
                 discord.SelectOption(label=label[:100], emoji=emoji, value=str(menu_offset + i))
             )
@@ -207,6 +216,17 @@ def setup(bot, group=None):
                 + " · ".join(f"`/{cmd}`" for cmd, _ in recent)
                 + "\n\n"
             )
+        if interaction.guild:
+            try:
+                from core.menu_helpers import get_onboarding_continue_hint
+
+                cont = await get_onboarding_continue_hint(
+                    interaction.guild.id, interaction.user.id,
+                )
+                if cont:
+                    recent_blurb = cont + "\n\n" + recent_blurb
+            except Exception:
+                pass
 
         whats_new_blurb = ""
         if interaction.guild:

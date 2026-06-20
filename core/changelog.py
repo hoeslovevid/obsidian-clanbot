@@ -10,33 +10,33 @@ from __future__ import annotations
 from core.config import BOT_CHANGELOG, BOT_VERSION
 
 # Current release (version string comes from BOT_VERSION only).
-CURRENT_RELEASE_DATE = "2026-06-18"
+CURRENT_RELEASE_DATE = "2026-06-19"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Fix** — pinned console/world-state: stateless buttons + component_handler-only routing (no add_view double-dispatch)",
-    "**v2.0 platform** — modular refactor for 78+ guilds: global slash sync, version-gated restarts, slim `bot/app.py` (~130 lines)",
-    "**Batch 16** — `bot/client.py` (ClanBot + sync); `tasks/registry.py` (all loop definitions); `handlers/discord_events.py` (gateway events)",
-    "**Batch 15 · 2.0.0** — `bot/runner.py` startup; `handlers/interaction_router.py` + `incident_checks.py`; `vc_loops`, `moderation_loops`, `wf_roles_loops`, `misc_loops`",
-    "**Batch 14** — `handlers/voice_events.py` (economy voice, join-to-create, VC panels); `wf_live_loops` (Baro/cycle panels + cache warm); `guild_stats_loops`; daily/investment DMs in `economy_loops`",
-    "**Batch 13** — `handlers/message_events.py` (full `on_message` pipeline); `lfg_loops` + `trading_loops`; pet decay reminders in `economy_loops`",
-    "**Batch 12** — `community_loops` (reminders, polls, scheduled messages); `integration_loops` (Twitch); stale-ticket + SLA loops; `command_tracking` + ban/role logs in `message_logs`",
-    "**Batch 11 · beta** — `handlers/reactions.py` + `message_logs.py`; `event_loops`, `ticket_loops`, `wf_feed_loops`; `/admin dashboard` KPI + SLA; `/admin usage_report` prune candidates; `core/db.py` `DB_BACKEND` Postgres scaffold",
-    "**Batch 10** — `tools/check_command_tree.py` deploy CI gate (25-subcommand headroom warnings)",
-    "**Batch 9** — `handlers/member_events.py` (join/leave, welcome, achievements cache)",
-    "**Batch 8** — `tasks/economy_loops.py` (voice rewards) + `giveaway_loops.py` (ended giveaways, ending-soon DMs)",
-    "**Batch 7** — `tasks/event_loops.py` (reminders, recurring events, event-end recaps, RSVP DMs); `handlers/automod.py` + `handlers/vc_panel.py` extracted from `app.py`",
-    "**Batch 6** — `wf_resolve` rollout on baro, status, hub, world_state; onboarding questline (hub/search/achievements); `/me` action chips; console ops footer",
-    "**Batch 5** — `tasks/wf_check_loops.py` (cycle/invasion/archon/alert notify); extended stale-data + refresh UX on Warframe commands",
-    "**Batch 4** — `handlers/message_economy.py`; `wf_resolve` on sortie/alerts/daily_ops; command-usage prune hints on `/admin health`",
-    "**Batch 3** — `core/wf_resolve.py` unified fetch/retry/cache layer; `tasks/wf_notify.py` (Baro arrival + live embed cache); fissures/cycles/invasions wired first",
-    "**Batch 2** — global command sync for multi-guild; `/admin health` guild count + usage heatmap; `docs/MULTI_GUILD.md` + `docs/POSTGRES.md`",
-    "**Batch 1** — v2.0 kickoff: Layout v2 Warframe hub, help quick-path buttons, `/me` refresh row, `core/wf_resolve` + notify loop split plan",
-    "**2.0 UX** — Components V2 hubs (`/menu`, `/warframe hub`, `/status`, `/whatsnew`, `/daily`, `/me`); branded embed footers + WF cache age",
-    "**2.0 Ops** — `/admin health` guild stats, WF cache line, VC pending flush count, digest subscribers, never-used command list",
-    "**Fix** — help category buttons resolve against global tree (regression from guild-scoped lookup)",
+    "**QoL · Today** — `/today` unified daily panel (daily, bounties, Baro, LFG, events, pet, onboarding)",
+    "**QoL · Notify** — `/wfnotify why_dm` + `test_ping`; DM coalescing for Baro wishlist & price-watch alerts",
+    "**QoL · LFG** — **Open squad VC** button; `/lfg preset_save|list|use`; host AFK + badge on posts",
+    "**QoL · Social** — `/profile @user compare:True`; onboarding completion reward (+150 coins + badge)",
+    "**QoL · UX** — time-aware `/menu` + continue-setup row; expired-panel recovery; weekly recap DM pref",
+    "**QoL · Alerts** — Baro wishlist DM action hints; price-watch **Post trade** button; mention keyword expansion",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "2.0.6",
+        "date": "2026-06-18",
+        "changes": [
+            "**Fix** — pinned console/world-state: stateless buttons + component_handler-only routing (no add_view double-dispatch)",
+            "**Fix** — debug instrumentation removed from production paths",
+        ],
+    },
+    {
+        "version": "2.0.5",
+        "date": "2026-06-18",
+        "changes": [
+            "**Fix** — pinned console V2 + world-state persistent buttons; `obsidian_console:*` router",
+        ],
+    },
     {
         "version": "2.0.4",
         "date": "2026-06-18",

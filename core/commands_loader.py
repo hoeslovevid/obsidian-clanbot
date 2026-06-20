@@ -220,6 +220,7 @@ def load_all_commands(bot):
         "commands.general.server_stats",
         "commands.general.profile",
         "commands.general.me",
+        "commands.general.today",
         "commands.general.bot_status",
         "commands.general.status",
         "commands.general.console",
@@ -413,6 +414,7 @@ def load_all_commands(bot):
         "commands.general.whatsnew",
         "commands.general.status",
         "commands.economy.claim",
+        "commands.general.today",
         "commands.trading.price_watch",
     }
 

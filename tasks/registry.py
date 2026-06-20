@@ -618,6 +618,19 @@ def setup_tasks(bot):
     from tasks.weekly_recap_loop import create_weekly_recap_loop
     weekly_recap_loop = create_weekly_recap_loop(bot)
 
+    @tasks.loop(minutes=2)
+    async def dm_coalesce_flush_loop():
+        try:
+            from core.dm_coalesce import flush_all_coalesced_dms
+
+            await flush_all_coalesced_dms(bot)
+        except Exception as e:
+            logger.error(f"Error in dm_coalesce_flush_loop: {e}", exc_info=True)
+
+    @dm_coalesce_flush_loop.before_loop
+    async def before_dm_coalesce_flush_loop():
+        await bot.wait_until_ready()
+
     from tasks.mod_kpi_digest_loop import create_mod_kpi_digest_loop
     mod_kpi_digest_loop = create_mod_kpi_digest_loop(bot)
 
@@ -719,6 +732,7 @@ def setup_tasks(bot):
         ('lfg_bump_loop', lfg_bump_loop),
         ('lfg_poster_nudge_loop', lfg_poster_nudge_loop),
         ('weekly_recap_loop', weekly_recap_loop),
+        ('dm_coalesce_flush_loop', dm_coalesce_flush_loop),
         ('mod_kpi_digest_loop', mod_kpi_digest_loop),
         ('music_auto_leave_loop', music_auto_leave_loop),
     ]

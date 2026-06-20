@@ -406,6 +406,22 @@ async def handle_component(bot: discord.Client, interaction: discord.Interaction
         # LFG: DM mark-as-filled button (works from DMs where guild is None)
         if cid.startswith("lfg:"):
             parts = cid.split(":")
+            if len(parts) >= 3 and parts[2] == "squad_vc":
+                try:
+                    lfg_id = int(parts[1])
+                except ValueError:
+                    return await reply_error(interaction, "Invalid LFG", "Invalid LFG reference.")
+                if not interaction.guild or not isinstance(interaction.user, discord.Member):
+                    from core.reply_helpers import deny_server_only
+                    return await deny_server_only(interaction)
+                await interaction.response.defer(ephemeral=True)
+                from core.lfg_squad_vc import create_squad_vc_for_lfg
+
+                _ok, msg, _vc = await create_squad_vc_for_lfg(
+                    bot, interaction.guild, lfg_id, interaction.user,
+                )
+                await interaction.followup.send(msg, ephemeral=True)
+                return
             if len(parts) >= 3 and parts[2] == "dm_fill":
                 try:
                     lfg_id = int(parts[1])
@@ -492,6 +508,13 @@ async def handle_component(bot: discord.Client, interaction: discord.Interaction
         if isinstance(e, discord.errors.NotFound) and "Unknown interaction" in str(e):
             logger.warning(f"[outer_handler] Interaction expired (404), cannot send error message: {e}")
             return  # Interaction expired, can't respond
+
+        from core.interaction_recovery import is_expired_interaction, reply_expired_panel
+
+        if is_expired_interaction(e):
+            cid = interaction.data.get("custom_id") if interaction.data else None
+            await reply_expired_panel(interaction, custom_id=cid)
+            return
 
         # Send a consistent, user-friendly error embed (with error code + copy
         # button) instead of leaking the raw exception string. send_error_reply

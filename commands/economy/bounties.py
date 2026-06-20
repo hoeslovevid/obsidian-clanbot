@@ -186,6 +186,9 @@ def setup(bot, group=None):
         desc = "\n\n".join(lines)
         from core.first_run_nudge import maybe_first_run_hint
         desc = await maybe_first_run_hint(gid, uid, desc, feature="bounties")
+        from core.progress_nudge import append_progress_nudge
+
+        desc = await append_progress_nudge(desc, gid, uid, context="bounties")
         embed = embed_template(
             "showcase",
             "Daily Bounties",

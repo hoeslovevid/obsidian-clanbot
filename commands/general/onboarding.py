@@ -100,6 +100,12 @@ async def _record_onboarding_step(guild_id: int, user_id: int, step_name: str) -
 async def record_onboarding_step(guild_id: int, user_id: int, step_name: str) -> None:
     """Public API — record questline progress from commands across the bot."""
     await _record_onboarding_step(guild_id, user_id, step_name)
+    try:
+        from core.onboarding_reward import try_grant_onboarding_reward
+
+        await try_grant_onboarding_reward(guild_id, user_id)
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------

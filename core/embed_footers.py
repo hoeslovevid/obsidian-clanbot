@@ -15,6 +15,7 @@ FOOTERS: dict[str, str] = {
     "economy_transfer": "Large transfers need confirmation · balances update instantly",
     "profile": "/achievements for badges · /general set_bio to personalize",
     "me": "/daily · /wallet · /preferences — your quick toolkit",
+    "today": "Urgent items first · `/me` for full snapshot · `/claim` for rewards",
     "warframe_status": "Tap Update data to refresh · platform follows /preferences",
     "warframe_baro": "Warframe Market link below · /warframe status for everything",
     "warframe_notify": "Recommended: /wfnotify configure · legacy per-type commands still work",

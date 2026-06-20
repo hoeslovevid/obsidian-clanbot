@@ -419,11 +419,13 @@ def setup(bot, group=None):
     @app_commands.describe(
         user="The user to view the profile of (defaults to yourself)",
         share="Post your profile publicly in the channel for others to see (default: False)",
+        compare="Side-by-side stats when viewing another member (default: False)",
     )
     async def profile_callback(
         interaction: discord.Interaction,
         user: Optional[discord.Member] = None,
         share: bool = False,
+        compare: bool = False,
     ):
         """Display a comprehensive user profile."""
         # When sharing own profile: public. Viewing someone else: always public.
@@ -453,6 +455,28 @@ def setup(bot, group=None):
             return await interaction.followup.send("User not found in this server.", ephemeral=True)
         
         profile_data = await get_user_profile_data(interaction.guild.id, target_user.id)
+        if compare and not is_self and isinstance(interaction.user, discord.Member):
+            viewer_data = await get_user_profile_data(interaction.guild.id, interaction.user.id)
+            from core.profile_compare import build_compare_embed
+            from core.progress_nudge import append_progress_nudge
+
+            body = await append_progress_nudge(
+                f"Quick stats for **{interaction.user.display_name}** vs **{target_user.display_name}**.",
+                interaction.guild.id,
+                interaction.user.id,
+                context="profile",
+            )
+            embed = build_compare_embed(
+                interaction.guild,
+                interaction.user,
+                target_user,
+                viewer_data,
+                profile_data,
+                client=interaction.client,
+            )
+            embed.description = body
+            return await interaction.followup.send(embed=embed, ephemeral=defer_ephemeral)
+
         if is_self:
             try:
                 from commands.general.onboarding import record_onboarding_step

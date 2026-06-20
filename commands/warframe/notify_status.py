@@ -60,7 +60,46 @@ def setup(bot, group=None):
             "📢 Notification Settings",
             "\n".join(lines),
             color=discord.Color.blue(),
-            footer="Use /wfnotify <type> enable/disable to configure",
+            footer="Use /wfnotify why_dm · test_ping · configure",
             client=interaction.client,
         )
         await interaction.followup.send(embed=embed, ephemeral=True)
+
+    @group.command(name="why_dm", description="Why didn't I get a DM? Check your notification settings.")
+    async def why_dm(interaction: discord.Interaction):
+        if not interaction.guild:
+            return await interaction.response.send_message("Use in a server.", ephemeral=True)
+        from core.notify_explain import build_notify_explain_embed
+
+        embed = await build_notify_explain_embed(
+            interaction.guild, interaction.user, client=interaction.client,
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @group.command(name="test_ping", description="Send a test DM to verify bot notifications work.")
+    async def test_ping(interaction: discord.Interaction):
+        if not interaction.guild:
+            return await interaction.response.send_message("Use in a server.", ephemeral=True)
+        await interaction.response.defer(ephemeral=True)
+        from core.safe_send import safe_dm_or_hint
+
+        embed = obsidian_embed(
+            "🔔 Test ping",
+            "If you received this in DMs, personal notifications are working!\n\n"
+            "Channel alerts (Baro, cycles) are separate — configure those with `/wfnotify configure`.",
+            color=discord.Color.green(),
+            client=interaction.client,
+        )
+        sent = await safe_dm_or_hint(
+            interaction.user,
+            interaction,
+            what_failed="Couldn't send the test DM.",
+            embed=embed,
+        )
+        if sent:
+            await interaction.followup.send("✅ Test DM sent — check your DMs.", ephemeral=True)
+        else:
+            await interaction.followup.send(
+                "Couldn't deliver a test DM. See the hint above or run `/wfnotify why_dm`.",
+                ephemeral=True,
+            )
