@@ -142,23 +142,25 @@ def setup(bot, group=None):
         async def refresh_cb(btn_interaction: discord.Interaction):
             if btn_interaction.user.id != interaction.user.id:
                 from core.utils import BUTTON_ONLY_RUNNER_MSG
+                from views._core import refresh_runner_only
 
-                return await btn_interaction.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
+                return await refresh_runner_only(btn_interaction, BUTTON_ONLY_RUNNER_MSG)
             from core.wallet_layout import wallet_layout_v2_enabled
 
             if wallet_layout_v2_enabled():
                 try:
                     layout = await _wallet_layout_for(btn_interaction)
-                    await btn_interaction.response.edit_message(view=layout)
+                    if btn_interaction.message:
+                        await btn_interaction.message.edit(view=layout)
                     return
                 except Exception:
                     pass
-            await btn_interaction.response.defer(ephemeral=True)
             new_embed = await _build_wallet_embed(btn_interaction)
             from views import RefreshView
 
             view = RefreshView(refresh_cb)
-            await btn_interaction.message.edit(embed=new_embed, view=view)
+            if btn_interaction.message:
+                await btn_interaction.message.edit(embed=new_embed, view=view)
 
         from core.wallet_layout import wallet_layout_v2_enabled
 

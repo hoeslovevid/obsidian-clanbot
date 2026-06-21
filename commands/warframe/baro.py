@@ -442,8 +442,7 @@ def setup(bot, group=None):
             )
 
         async def on_refresh(btn_interaction: discord.Interaction):
-            # Read-only public data — anyone may refresh.
-            await btn_interaction.response.defer()
+            # Read-only public data — anyone may refresh (RefreshView already deferred).
             new_active, new_data = await _resolve_baro_status(fresh=True)
             if not new_data:
                 await btn_interaction.followup.send(

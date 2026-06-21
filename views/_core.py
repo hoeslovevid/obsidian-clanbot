@@ -21,6 +21,22 @@ async def _interaction_followup_ephemeral(interaction: discord.Interaction, cont
         pass
 
 
+async def refresh_followup(
+    interaction: discord.Interaction,
+    content: str | None = None,
+    *,
+    embed: discord.Embed | None = None,
+    ephemeral: bool = True,
+) -> None:
+    """Send from a RefreshView callback (RefreshView already deferred the interaction)."""
+    await interaction.followup.send(content=content, embed=embed, ephemeral=ephemeral)
+
+
+async def refresh_runner_only(interaction: discord.Interaction, message: str) -> None:
+    """Deny a RefreshView click from a non-runner after defer."""
+    await refresh_followup(interaction, message)
+
+
 async def _reenable_view_buttons(interaction: discord.Interaction, view: discord.ui.View) -> None:
     for c in view.children:
         c.disabled = False
@@ -295,12 +311,28 @@ class RefreshView(discord.ui.View):
 
     @discord.ui.button(label="Update data", style=discord.ButtonStyle.secondary, emoji="🔄")
     async def refresh_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if button.disabled:
+            from core.interaction_recovery import reply_expired_panel
+
+            if not interaction.response.is_done():
+                await reply_expired_panel(interaction, title="Panel expired")
+            else:
+                await _interaction_followup_ephemeral(
+                    interaction, "This panel expired — run the command again."
+                )
+            return
         for c in self.children:
             c.disabled = True
         if not interaction.response.is_done():
             await interaction.response.defer()
         try:
             await self.refresh_callback(interaction)
+        except discord.InteractionResponded:
+            logger.debug("[RefreshView] refresh callback double-responded")
+            await _interaction_followup_ephemeral(
+                interaction, "Couldn't refresh — try **Update data** again."
+            )
+            await _reenable_view_buttons(interaction, self)
         except discord.NotFound:
             await _interaction_followup_ephemeral(
                 interaction, "This message was deleted — run the command again."

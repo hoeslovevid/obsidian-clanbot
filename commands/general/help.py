@@ -264,6 +264,9 @@ class HelpSelect(discord.ui.Select):
     
     async def update_embed(self, interaction: discord.Interaction, group: app_commands.Group, page: int):
         """Update the embed with commands for the specified page."""
+        if not interaction.response.is_done():
+            await interaction.response.defer()
+
         # Build command list (including nested subgroups)
         collected = _collect_group_commands(group, [group.name])
         if interaction.guild:
@@ -377,17 +380,23 @@ class HelpSelect(discord.ui.Select):
         
         # Update the message
         target = interaction.message
-        if interaction.response.is_done():
-            if target is not None:
-                try:
-                    await interaction.followup.edit_message(target.id, embed=embed, view=self.parent_view)
-                except Exception:
-                    try:
-                        await target.edit(embed=embed, view=self.parent_view)
-                    except Exception:
-                        pass
-        else:
-            await interaction.response.edit_message(embed=embed, view=self.parent_view)
+        if target is None:
+            return
+        try:
+            await interaction.followup.edit_message(
+                target.id, embed=embed, view=self.parent_view
+            )
+        except discord.NotFound:
+            from core.interaction_recovery import reply_expired_panel
+
+            await reply_expired_panel(interaction, custom_id="menu", title="Help menu expired")
+        except discord.HTTPException:
+            try:
+                await target.edit(embed=embed, view=self.parent_view)
+            except Exception:
+                from core.interaction_recovery import reply_expired_panel
+
+                await reply_expired_panel(interaction, custom_id="menu", title="Help menu expired")
 
 
 def setup(bot, group=None):

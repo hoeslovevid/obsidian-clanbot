@@ -12,11 +12,20 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-20"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Fix** — member journey loop creates `member_join_log` on startup (no more missing-table errors before first join)",
+    "**Fix** — Baro **Update data** / RefreshView no longer double-defers (InteractionResponded)",
+    "**Fix** — `/help` category buttons defer before building embed (Unknown interaction)",
+    "**Fix** — wallet/leaderboard/trade price refresh callbacks use followup after RefreshView defer",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "2.1.1",
+        "date": "2026-06-21",
+        "changes": [
+            "**Fix** — member journey loop creates `member_join_log` on startup (no more missing-table errors before first join)",
+        ],
+    },
     {
         "version": "2.1.0",
         "date": "2026-06-20",
