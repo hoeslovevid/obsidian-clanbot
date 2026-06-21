@@ -12,13 +12,20 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-20"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Fix** — Baro **Update data** / RefreshView no longer double-defers (InteractionResponded)",
-    "**Fix** — `/help` category buttons defer before building embed (Unknown interaction)",
-    "**Fix** — wallet/leaderboard/trade price refresh callbacks use followup after RefreshView defer",
+    "**Fix** — Baro **Update data** uses defer-if-needed (works with RefreshView + paginated BaroInventoryView)",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "2.1.2",
+        "date": "2026-06-21",
+        "changes": [
+            "**Fix** — Baro **Update data** / RefreshView no longer double-defers (InteractionResponded)",
+            "**Fix** — `/help` category buttons defer before building embed (Unknown interaction)",
+            "**Fix** — wallet/leaderboard/trade price refresh callbacks use followup after RefreshView defer",
+        ],
+    },
     {
         "version": "2.1.1",
         "date": "2026-06-21",

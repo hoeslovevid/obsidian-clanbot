@@ -328,9 +328,34 @@ class BaroInventoryView(discord.ui.View):
 
     @discord.ui.button(label="Update data", style=discord.ButtonStyle.secondary, emoji="🔄")
     async def refresh_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if button.disabled:
+            from core.interaction_recovery import reply_expired_panel
+
+            if not interaction.response.is_done():
+                await reply_expired_panel(interaction, title="Panel expired")
+            return
         for c in self.children:
             c.disabled = True
-        await self.refresh_callback(interaction)
+        if not interaction.response.is_done():
+            await interaction.response.defer()
+        try:
+            await self.refresh_callback(interaction)
+        except discord.InteractionResponded:
+            logger.debug("[BaroInventoryView] refresh callback double-responded")
+        except discord.NotFound:
+            from views._core import _interaction_followup_ephemeral
+
+            await _interaction_followup_ephemeral(
+                interaction, "This message was deleted — run `/warframe baro` again."
+            )
+        except discord.HTTPException as exc:
+            logger.debug("[BaroInventoryView] refresh failed: %s", exc)
+            from views._core import _interaction_followup_ephemeral, _reenable_view_buttons
+
+            await _interaction_followup_ephemeral(
+                interaction, "Couldn't refresh — try **Update data** again."
+            )
+            await _reenable_view_buttons(interaction, self)
 
 
 async def _resolve_mark_new(guild_id: Optional[int], inventory: list) -> bool:
@@ -442,7 +467,9 @@ def setup(bot, group=None):
             )
 
         async def on_refresh(btn_interaction: discord.Interaction):
-            # Read-only public data — anyone may refresh (RefreshView already deferred).
+            # RefreshView defers first; BaroInventoryView may not — defer only if needed.
+            if not btn_interaction.response.is_done():
+                await btn_interaction.response.defer()
             new_active, new_data = await _resolve_baro_status(fresh=True)
             if not new_data:
                 await btn_interaction.followup.send(
