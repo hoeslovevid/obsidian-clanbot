@@ -1191,6 +1191,7 @@ async def init_db() -> None:
             twitch_user_id TEXT,
             last_live_status INTEGER NOT NULL DEFAULT 0,
             last_notified_at TEXT,
+            last_stream_id TEXT,
             UNIQUE(guild_id, streamer_name)
         )""")
 

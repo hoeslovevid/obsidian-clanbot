@@ -210,12 +210,13 @@ def setup(bot, group=None):
 
             live_now = await check_twitch_stream(login, token)
             initial_status = 1 if live_now else 0
+            initial_stream_id = str(live_now.get("id") or "") if live_now else None
             await db.execute(
                 """
-                INSERT INTO twitch_streamers (guild_id, streamer_name, twitch_user_id, last_live_status)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO twitch_streamers (guild_id, streamer_name, twitch_user_id, last_live_status, last_stream_id)
+                VALUES (?, ?, ?, ?, ?)
                 """,
-                (interaction.guild.id, login, str(user.get("id", "")), initial_status),
+                (interaction.guild.id, login, str(user.get("id", "")), initial_status, initial_stream_id),
             )
             await db.commit()
 
@@ -395,11 +396,18 @@ def setup(bot, group=None):
             )
 
         logins = [str(name).lower() for name, _, _ in streamers]
+        user_ids = []
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT twitch_user_id FROM twitch_streamers WHERE guild_id=?",
+                (interaction.guild.id,),
+            )
+            user_ids = [str(r[0]) for r in await cur.fetchall() if r and r[0]]
         live_map: dict[str, dict] = {}
         if twitch_credentials_configured():
             token = await get_twitch_access_token()
             if token:
-                live_map = await fetch_twitch_streams_batch(logins, token)
+                live_map = await fetch_twitch_streams_batch(logins, token, user_ids=user_ids)
 
         lines: list[str] = []
         for name, db_status, last_notified in streamers:

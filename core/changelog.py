@@ -12,11 +12,20 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-20"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Fix** — Baro **Update data** uses defer-if-needed (works with RefreshView + paginated BaroInventoryView)",
+    "**Fix · Twitch** — track `last_stream_id` so every go-live session alerts (not just the first); poll by user ID + login",
+    "**Fix · Twitch** — reliable live/offline state parsing; token refresh on 401 during batch checks",
+    "**QoL · Twitch** — showcase go-live embed with preview, category, viewers, tags, and Watch/Profile buttons",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "2.1.3",
+        "date": "2026-06-21",
+        "changes": [
+            "**Fix** — Baro **Update data** uses defer-if-needed (works with RefreshView + paginated BaroInventoryView)",
+        ],
+    },
     {
         "version": "2.1.2",
         "date": "2026-06-21",

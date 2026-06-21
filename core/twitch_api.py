@@ -116,46 +116,117 @@ async def check_twitch_stream(streamer_name: str, access_token: str) -> Optional
     return results.get(streamer_name.strip().lower())
 
 
+def twitch_was_live(last_status: Any) -> bool:
+    """Parse twitch_streamers.last_live_status reliably (handles int/str/NULL)."""
+    if last_status is None:
+        return False
+    if isinstance(last_status, bool):
+        return last_status
+    if isinstance(last_status, str):
+        return last_status.strip().lower() in ("1", "true", "yes")
+    try:
+        return int(last_status) != 0
+    except (TypeError, ValueError):
+        return bool(last_status)
+
+
+async def ensure_twitch_streamer_schema() -> None:
+    """Add columns used by go-live session tracking."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("PRAGMA table_info(twitch_streamers)")
+        cols = {row[1] for row in await cur.fetchall()}
+        if "last_stream_id" not in cols:
+            await db.execute("ALTER TABLE twitch_streamers ADD COLUMN last_stream_id TEXT")
+            await db.commit()
+
+
+async def _fetch_streams_chunk(
+    session: aiohttp.ClientSession,
+    access_token: str,
+    *,
+    param_name: str,
+    values: list[str],
+) -> tuple[list[dict[str, Any]], bool]:
+    """Returns (streams, unauthorized)."""
+    if not values:
+        return [], False
+    params = [(param_name, value) for value in values]
+    async with session.get(
+        f"{_HELIX}/streams",
+        params=params,
+        headers=_helix_headers(access_token),
+        timeout=aiohttp.ClientTimeout(total=20),
+    ) as response:
+        if response.status == 401:
+            logger.warning("[twitch] streams %s unauthorized", param_name)
+            return [], True
+        if response.status != 200:
+            body = await response.text()
+            logger.warning(
+                "[twitch] streams %s status=%s count=%s body=%s",
+                param_name,
+                response.status,
+                len(values),
+                body[:200],
+            )
+            return [], False
+        data = await response.json()
+        return list(data.get("data") or []), False
+
+
 async def fetch_twitch_streams_batch(
     logins: list[str],
     access_token: str,
+    *,
+    user_ids: Optional[list[str]] = None,
+    retry_on_unauthorized: bool = True,
 ) -> dict[str, dict[str, Any]]:
     """Map lowercase login -> stream payload for streamers currently live."""
     normalized = list(dict.fromkeys(ln.strip().lower() for ln in logins if ln and ln.strip()))
-    if not normalized or not twitch_client_id():
+    uid_list = list(dict.fromkeys(str(uid).strip() for uid in (user_ids or []) if uid and str(uid).strip()))
+    if (not normalized and not uid_list) or not twitch_client_id():
         return {}
 
-    live: dict[str, dict[str, Any]] = {}
-    try:
-        async with aiohttp.ClientSession() as session:
-            for i in range(0, len(normalized), _BATCH_SIZE):
-                chunk = normalized[i : i + _BATCH_SIZE]
-                params = [("user_login", login) for login in chunk]
-                async with session.get(
-                    f"{_HELIX}/streams",
-                    params=params,
-                    headers=_helix_headers(access_token),
-                    timeout=aiohttp.ClientTimeout(total=20),
-                ) as response:
-                    if response.status == 401:
-                        logger.warning("[twitch] streams batch unauthorized")
-                        return live
-                    if response.status != 200:
-                        body = await response.text()
-                        logger.warning(
-                            "[twitch] streams batch status=%s count=%s body=%s",
-                            response.status,
-                            len(chunk),
-                            body[:200],
-                        )
-                        continue
-                    data = await response.json()
-                    for stream in data.get("data") or []:
+    async def _run(token: str) -> tuple[dict[str, dict[str, Any]], bool]:
+        live: dict[str, dict[str, Any]] = {}
+        unauthorized = False
+        try:
+            async with aiohttp.ClientSession() as session:
+                seen_ids: set[str] = set()
+                for uid_chunk in [uid_list[i : i + _BATCH_SIZE] for i in range(0, len(uid_list), _BATCH_SIZE)]:
+                    streams, auth_err = await _fetch_streams_chunk(
+                        session, token, param_name="user_id", values=uid_chunk
+                    )
+                    unauthorized = unauthorized or auth_err
+                    for stream in streams:
                         login = str(stream.get("user_login", "")).lower()
                         if login:
                             live[login] = stream
-    except Exception as exc:
-        logger.warning("[twitch] streams batch error: %s", exc)
+                            sid = str(stream.get("id") or "")
+                            if sid:
+                                seen_ids.add(sid)
+                missing_logins = [ln for ln in normalized if ln not in live]
+                for login_chunk in [
+                    missing_logins[i : i + _BATCH_SIZE] for i in range(0, len(missing_logins), _BATCH_SIZE)
+                ]:
+                    streams, auth_err = await _fetch_streams_chunk(
+                        session, token, param_name="user_login", values=login_chunk
+                    )
+                    unauthorized = unauthorized or auth_err
+                    for stream in streams:
+                        login = str(stream.get("user_login", "")).lower()
+                        sid = str(stream.get("id") or "")
+                        if login and sid not in seen_ids:
+                            live[login] = stream
+        except Exception as exc:
+            logger.warning("[twitch] streams batch error: %s", exc)
+        return live, unauthorized
+
+    live, unauthorized = await _run(access_token)
+    if unauthorized and retry_on_unauthorized:
+        fresh = await get_twitch_access_token(force_refresh=True)
+        if fresh and fresh != access_token:
+            live, _ = await _run(fresh)
     return live
 
 
