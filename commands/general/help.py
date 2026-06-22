@@ -710,7 +710,7 @@ def setup(bot, group=None):
         desc += "\n\n**💡 Tips:** Type `/` and start typing (Discord searches names + descriptions). "
         desc += "Pin favorites with **`/favorite_add`**. New? Try **`/menu`**."
         
-        help_footer = "Shortcuts: /help /search /menu • /help command:<name> for details"
+        help_footer = "Shortcuts: /help /search /menu • Can't find it? /search <keyword>"
         if BOT_WEBSITE:
             help_footer += f" • {website_host() or 'Website'}"
         

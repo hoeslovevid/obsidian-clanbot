@@ -140,11 +140,15 @@ def setup(bot, group=None):
 
         fields = list(pinned_fields)
         if top:
+            from core.menu_command_map import menu_label_for_command
+
             lines = []
             for _, name, desc in top:
                 mention = command_mention(name, fallback=f"`/{name}`")
                 short = (desc[:80] + "…") if len(desc) > 80 else desc
-                lines.append(f"{mention} — {short}" if short else mention)
+                menu_label = menu_label_for_command(name)
+                menu_hint = f" · also in **`/menu`** ({menu_label})" if menu_label else ""
+                lines.append(f"{mention} — {short}{menu_hint}" if short else mention)
             fields.append(("Commands", "\n".join(lines), False))
 
         if items:
@@ -161,7 +165,7 @@ def setup(bot, group=None):
                 "",
                 color=EMBED_COLORS.get("general", discord.Color.blue()),
                 fields=fields,
-                footer="Tip: click a command to run it instantly",
+                footer="Tip: click a command to run it · Can't find it? Try **`/help`**",
                 client=interaction.client,
             ),
             ephemeral=True,

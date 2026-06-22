@@ -400,6 +400,12 @@ async def build_profile_embed(
 
     member_color = target_user.color if target_user.color.value != 0 else EMBED_COLORS["general"]
 
+    pref_kw: dict = {}
+    if isinstance(viewer, discord.Member):
+        from core.embed_prefs import embed_kwargs
+
+        pref_kw = await embed_kwargs(guild.id, viewer.id)
+
     return obsidian_embed(
         f"👤 {target_user.display_name}",
         desc,
@@ -411,6 +417,7 @@ async def build_profile_embed(
         fields=fields,
         footer=footer_text,
         client=client,
+        **pref_kw,
     )
 
 

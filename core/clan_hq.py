@@ -8,7 +8,43 @@ from core.utils import obsidian_embed, EMBED_COLORS
 from database import DB_PATH
 
 
-async def build_clan_hq_embed(guild: discord.Guild, *, client=None) -> discord.Embed:
+async def _user_baro_wishlist_line(guild_id: int, user_id: int, baro_inventory: list) -> str | None:
+    if not baro_inventory:
+        return None
+    inv_names = {
+        str(i.get("item") or i.get("name") or "").strip().lower()
+        for i in baro_inventory
+        if i
+    }
+    inv_names.discard("")
+    if not inv_names:
+        return None
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            "SELECT item_name FROM baro_wishlist WHERE guild_id=? AND user_id=?",
+            (guild_id, user_id),
+        )
+        wish = [str(r[0]) for r in await cur.fetchall()]
+    hits = [n for n in wish if n.strip().lower() in inv_names]
+    if not hits:
+        return None
+    shown = ", ".join(f"**{h}**" for h in hits[:4])
+    extra = f" +{len(hits) - 4} more" if len(hits) > 4 else ""
+    return f"⭐ Your wishlist: {shown}{extra}"
+
+
+async def _twitch_live_summary(guild_id: int) -> str | None:
+    from core.wf_hub_extras import get_twitch_streaming_line
+
+    return await get_twitch_streaming_line(guild_id)
+
+
+async def build_clan_hq_embed(
+    guild: discord.Guild,
+    *,
+    client=None,
+    user_id: int | None = None,
+) -> discord.Embed:
     """One-glance clan hub: LFG, events, Baro, live streamers."""
     lines: list[str] = [f"**{guild.name}** — your clan at a glance\n"]
 
@@ -28,7 +64,7 @@ async def build_clan_hq_embed(guild: discord.Guild, *, client=None) -> discord.E
         )
         events = await cur.fetchall()
         cur = await db.execute(
-            "SELECT streamer_name FROM twitch_streamers WHERE guild_id=? LIMIT 5",
+            "SELECT streamer_name FROM twitch_streamers WHERE guild_id=? LIMIT 8",
             (guild.id,),
         )
         streamers = [r[0] for r in await cur.fetchall()]
@@ -42,26 +78,45 @@ async def build_clan_hq_embed(guild: discord.Guild, *, client=None) -> discord.E
     else:
         lines.append("📅 **Events:** none scheduled — `/events`")
 
+    baro_inventory: list = []
     try:
         from api.warframe_api import get_baro_status
 
         active, data = await get_baro_status()
         if active and data:
             loc = data.get("location", "?")
-            lines.append(f"🛒 **Baro:** active at **{loc}** — `/warframe baro`")
+            baro_inventory = data.get("inventory") or data.get("Inventory") or []
+            line = f"🛒 **Baro:** active at **{loc}** — `/warframe baro`"
+            if user_id:
+                wish_line = await _user_baro_wishlist_line(guild.id, user_id, baro_inventory)
+                if wish_line:
+                    line += f"\n{wish_line}"
+            lines.append(line)
         else:
             lines.append("🛒 **Baro:** away — `/warframe baro`")
     except Exception:
         lines.append("🛒 **Baro:** `/warframe baro`")
 
-    if streamers:
+    live_line = await _twitch_live_summary(guild.id)
+    if live_line:
+        lines.append(live_line)
+    elif streamers:
         live_hint = ", ".join(f"`{s}`" for s in streamers[:4])
-        lines.append(f"📺 **Monitored streamers:** {live_hint}")
+        lines.append(f"📺 **Monitored streamers:** {live_hint} (offline)")
     lines.append("\n-# `/menu` · `/today` · `/notifications` · `/warframe hub`")
+
+    footer = "Tap **Update data** to refresh · `/status` for API health"
+    try:
+        from core.wf_copy import merge_wf_footer
+
+        footer = merge_wf_footer(footer, "warframe:baro")
+    except Exception:
+        pass
 
     return obsidian_embed(
         "🏠 Clan HQ",
         "\n".join(lines),
         color=EMBED_COLORS.get("warframe", discord.Color.dark_grey()),
+        footer=footer,
         client=client,
     )

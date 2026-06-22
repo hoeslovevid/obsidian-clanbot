@@ -1,4 +1,8 @@
-"""Per-user embed display options (compact mode, etc.)."""
+"""Per-user embed display options (compact mode, etc.).
+
+Use ``embed_kwargs(guild_id, user_id)`` on personal panels: ``/today``, ``/me``,
+``/profile`` (viewer), ``/cooldowns``, etc.
+"""
 from __future__ import annotations
 
 

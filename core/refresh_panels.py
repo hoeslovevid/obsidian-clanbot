@@ -238,9 +238,25 @@ async def _refresh_wf_invasions(interaction: discord.Interaction, payload: dict[
             "The stats API is still busy — try again in a minute.",
         )
         return False
-    emb = _build_invasions_embed(new_data, interaction.client)
-    view = RefreshView.panel("wf_invasions")
-    await refresh_edit_message(interaction, embed=emb, view=view, panel_type="wf_invasions")
+    faction_filter = payload.get("faction_filter") or None
+    if faction_filter == "":
+        faction_filter = None
+    if not faction_filter and interaction.guild:
+        from core.user_prefs import default_invasion_faction
+
+        faction_filter = await default_invasion_faction(
+            interaction.guild.id, interaction.user.id,
+        )
+    if faction_filter:
+        fl = str(faction_filter).lower()
+        new_data = [
+            inv for inv in new_data
+            if fl in str((inv.get("attacker") or {}).get("faction", "")).lower()
+            or fl in str((inv.get("defender") or {}).get("faction", "")).lower()
+        ]
+    emb = _build_invasions_embed(new_data, interaction.client, faction_filter=faction_filter)
+    view = RefreshView.panel("wf_invasions", payload=payload)
+    await refresh_edit_message(interaction, embed=emb, view=view, panel_type="wf_invasions", payload=payload)
     return True
 
 
@@ -408,6 +424,51 @@ async def _refresh_trade_price(interaction: discord.Interaction, payload: dict[s
     return await refresh_trade_price_panel(interaction, payload)
 
 
+async def _refresh_clan_hq(interaction: discord.Interaction, payload: dict[str, Any]) -> bool:
+    from core.action_panel_views import clan_hq_panel_view
+    from core.clan_hq import build_clan_hq_embed
+    from views._core import RefreshView
+
+    if not interaction.guild:
+        return False
+    user_id = int(payload.get("user_id") or interaction.user.id)
+    embed = await build_clan_hq_embed(
+        interaction.guild,
+        client=interaction.client,
+        user_id=user_id,
+    )
+    view = clan_hq_panel_view(guild_id=interaction.guild.id, user_id=user_id)
+    await refresh_edit_message(
+        interaction, embed=embed, view=view, panel_type="clan_hq", payload=payload,
+    )
+    return True
+
+
+async def _refresh_notifications(interaction: discord.Interaction, payload: dict[str, Any]) -> bool:
+    from core.action_panel_views import notifications_panel_view
+    from core.notifications_hub import build_notifications_status_embed
+    from views._core import RefreshView
+
+    if not interaction.guild:
+        return False
+    user_id = int(payload.get("user_id") or interaction.user.id)
+    member = interaction.guild.get_member(user_id) or interaction.user
+    embed = await build_notifications_status_embed(
+        interaction.guild, member, client=interaction.client,
+    )
+    view = notifications_panel_view(guild_id=interaction.guild.id, user_id=user_id)
+    await refresh_edit_message(
+        interaction, embed=embed, view=view, panel_type="notifications", payload=payload,
+    )
+    return True
+
+
+async def _refresh_today(interaction: discord.Interaction, payload: dict[str, Any]) -> bool:
+    from commands.general.today import refresh_today_panel
+
+    return await refresh_today_panel(interaction)
+
+
 PANEL_HANDLERS: dict[str, PanelHandler] = {
     "wf_archon": _refresh_wf_archon,
     "wf_sortie": _refresh_wf_sortie,
@@ -424,6 +485,9 @@ PANEL_HANDLERS: dict[str, PanelHandler] = {
     "eco_wallet": _refresh_eco_wallet,
     "eco_leaderboard": _refresh_eco_leaderboard,
     "trade_price": _refresh_trade_price,
+    "clan_hq": _refresh_clan_hq,
+    "notifications": _refresh_notifications,
+    "today": _refresh_today,
 }
 
 

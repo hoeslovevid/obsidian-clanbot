@@ -25,7 +25,8 @@ def setup(bot, group=None):
                 "**3-step quick start**\n"
                 "1. `/daily` — claim coins · 2. `/profile` — your stats · 3. `/baro` or `/lfg`\n\n"
                 "**Explore**\n"
-                "• `/menu` — shortcuts · `/search` — find commands · `/preferences` — timezone & quiet hours\n"
+                "• `/menu` — shortcuts · `/search` — find commands\n"
+                "• `/preferences` — timezone, **quiet hours**, compact embeds, weekly recap\n"
                 "• `/wfnotify configure` — Warframe alert DMs · `/ticket` — staff help\n\n"
                 "**Need humans?** `/feedback` for bot issues · `/ticket` for server support"
             ),

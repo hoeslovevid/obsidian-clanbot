@@ -228,7 +228,7 @@ def build_today_fields(data: dict[str, Any]) -> list[tuple[str, str, bool]]:
         line = f"Baro at **{loc}** — `/baro`"
         if data["baro_wishlist_hits"]:
             hits = ", ".join(f"**{h}**" for h in data["baro_wishlist_hits"])
-            line += f"\nWishlist match: {hits}"
+            line += f"\n⭐ **Wishlist in stock:** {hits}"
         fields.append(("🛒 Baro", line, True))
 
     if data["investment_ready"]:

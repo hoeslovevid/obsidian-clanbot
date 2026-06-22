@@ -17,7 +17,7 @@ from core.refresh_panels import register_refresh_panel
 import dateparser
 
 
-def _build_invasions_embed(invasions_data, client):
+def _build_invasions_embed(invasions_data, client, *, faction_filter: str | None = None):
     """Build the invasions embed. Used for initial display and refresh."""
     invasions_data = sorted(invasions_data, key=lambda x: x.get("completion", 0))
     now_utc = datetime.now(timezone.utc)
@@ -75,6 +75,8 @@ def _build_invasions_embed(invasions_data, client):
         fields.append((f"📍 {node}", value, False))
 
     desc = f"**{len(invasions_data)} Active Invasion{'s' if len(invasions_data) != 1 else ''}**"
+    if faction_filter:
+        desc = f"_Filter: **{faction_filter}** — `/preferences invasion_faction` to change_\n\n{desc}"
     if len(invasions_data) > 5:
         desc += f"\n_Showing 5 of {len(invasions_data)} invasions_"
 
@@ -119,7 +121,7 @@ def setup(bot, group=None):
                         "Invasions still won't load. Try **Try again** again in a minute.",
                         ephemeral=True,
                     )
-                emb = _build_invasions_embed(new_data, interaction.client)
+                emb = _build_invasions_embed(new_data, interaction.client, faction_filter=faction_filter)
                 await btn_interaction.message.edit(embed=emb, view=None)
 
             from core.wf_recovery import attach_notify_when_back
@@ -134,7 +136,7 @@ def setup(bot, group=None):
                     "📋 Active Invasions",
                     "No active invasions at this time. Check back later!",
                     category="warframe",
-                    footer="warframestat.us",
+                    footer=wf_footer("warframestat.us", "warframe:invasions"),
                     client=interaction.client,
                 ),
             )
@@ -150,13 +152,15 @@ def setup(bot, group=None):
                 return await interaction.followup.send(
                     embed=obsidian_embed(
                         "⚔️ Active Invasions",
-                        f"No invasions matching **{faction_filter}** right now.",
+                        f"No invasions matching **{faction_filter}** right now.\n\n"
+                        "Try another faction or clear the preset in **`/preferences invasion_faction`**.",
                         category="warframe",
                         client=interaction.client,
                     ),
                 )
 
-        embed = _build_invasions_embed(invasions_data, interaction.client)
-        view = RefreshView.panel("wf_invasions")
+        embed = _build_invasions_embed(invasions_data, interaction.client, faction_filter=faction_filter)
+        payload = {"faction_filter": faction_filter or ""}
+        view = RefreshView.panel("wf_invasions", payload=payload)
         msg = await interaction.followup.send(embed=embed, view=view)
-        await register_refresh_panel(msg, "wf_invasions", {})
+        await register_refresh_panel(msg, "wf_invasions", payload)

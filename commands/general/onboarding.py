@@ -175,6 +175,7 @@ class OnboardingView(discord.ui.View):
                 "showcase",
                 "🌐 Set your timezone",
                 "Pick a timezone — used for reminders, events, and `/me`.\n\n"
+                "Also set **quiet hours** in **`/preferences`** (e.g. `22-7`) so DMs pause overnight.\n\n"
                 "You can also run **`/preferences`** anytime.",
                 category="general",
                 client=interaction.client,

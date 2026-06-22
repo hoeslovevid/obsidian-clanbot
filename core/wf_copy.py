@@ -20,11 +20,18 @@ def wf_unavailable_body() -> str:
 
 def merge_wf_footer(base: str, cache_key: str | None = None, *, stale_after: float = 120.0) -> str:
     """Append standard degraded/cache suffix to a Warframe embed footer."""
-    if not cache_key:
-        return base
     from core.cache_utils import freshness_note
 
-    suffix = freshness_note(cache_key, stale_after=stale_after)
+    suffix = freshness_note(cache_key, stale_after=stale_after) if cache_key else ""
+    if not suffix:
+        try:
+            from api.warframe_api import warframe_api_health
+
+            _line, degraded = warframe_api_health()
+            if degraded:
+                suffix = " • cached world-state"
+        except Exception:
+            pass
     if not suffix:
         return base
     return (base or "").rstrip() + suffix

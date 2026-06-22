@@ -56,6 +56,18 @@ async def handle_component(bot: discord.Client, interaction: discord.Interaction
             await handle_refresh_button(bot, interaction)
             return
 
+        if cid.startswith("wf_hub:"):
+            from core.wf_hub_actions import handle_wf_hub_button
+
+            if await handle_wf_hub_button(interaction, cid):
+                return
+
+        if cid.startswith("panel:"):
+            from core.action_panel_views import handle_panel_action
+
+            if await handle_panel_action(interaction, cid):
+                return
+
         # Complaints: open modal
         if cid == "complaints:open":
             # Check if interaction is still valid (not expired)
@@ -453,6 +465,15 @@ async def handle_component(bot: discord.Client, interaction: discord.Interaction
                     except Exception:
                         pass
                 await interaction.followup.send(msg, ephemeral=True)
+                return
+            if len(parts) >= 3 and parts[2] == "repost":
+                try:
+                    lfg_id = int(parts[1])
+                except ValueError:
+                    return await reply_error(interaction, "Invalid LFG", "Invalid LFG reference.")
+                from core.lfg_repost import open_lfg_repost_modal
+
+                await open_lfg_repost_modal(interaction, bot, lfg_id)
                 return
 
         # Trading posts (trade:{id}:sold|delete): handled by TradingPostView callbacks.

@@ -12,13 +12,24 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-21"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Fix** — **Update data** uses persistent `obsidian:refresh` routing + DB panel registry (works after bot restart)",
-    "**Fix** — unified defer → `message.edit` refresh path; buttons re-enable on failure; cycle panel empty-fetch feedback",
-    "**Fix** — V2 hub/wallet **Refresh** defers before slow API fetches",
+    "**QoL · Panels** — `/hq`, `/notifications`, and `/today` have refresh + action buttons (LFG, Baro, digest, test DM)",
+    "**QoL · LFG** — `/lfg list` browse open posts; **Re-post** clones filled squads; empty list shows quick templates",
+    "**QoL · Warframe** — persistent `wf_hub:*` hint routing; degraded/cache footers on hub & invasions; fissure/invasion preset headers",
+    "**QoL · Discovery** — `/search` links menu items; `/help` footer nudge; welcome card **Quiet hours**; preferences surfaced in `/start` & journey DMs",
+    "**QoL · UX** — Baro wishlist highlights in `/today` & `/hq`; compact embeds on `/profile` for viewers with that preference",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "2.1.5",
+        "date": "2026-06-21",
+        "changes": [
+            "**Fix** — **Update data** uses persistent `obsidian:refresh` routing + DB panel registry (works after bot restart)",
+            "**Fix** — unified defer → `message.edit` refresh path; buttons re-enable on failure; cycle panel empty-fetch feedback",
+            "**Fix** — V2 hub/wallet **Refresh** defers before slow API fetches",
+        ],
+    },
     {
         "version": "2.1.4",
         "date": "2026-06-20",

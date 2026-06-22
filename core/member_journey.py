@@ -14,8 +14,8 @@ from database import DB_PATH, get_guild_setting, now_utc
 logger = logging.getLogger(__name__)
 
 _JOURNEY_DAYS: dict[int, tuple[str, str]] = {
-    1: ("👋 Day 1", "Run **`/daily`** and **`/preferences`** (timezone + platform). **`/menu`** has everything else."),
-    3: ("🔔 Day 3", "Set Warframe alerts with **`/wfnotify configure`**. Check **`/today`** for your daily snapshot."),
+    1: ("👋 Day 1", "Run **`/daily`** and **`/preferences`** (timezone, platform, quiet hours). **`/menu`** has everything else."),
+    3: ("🔔 Day 3", "Set Warframe alerts with **`/wfnotify configure`**. Check **`/today`** · enable digest in **`/preferences digest_dm`**."),
     7: ("📊 Day 7", "Try **`/profile`**, **`/achievements`**, and opt into weekly recap in **`/preferences weekly_recap`**."),
 }
 

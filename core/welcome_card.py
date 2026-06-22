@@ -37,6 +37,19 @@ class WelcomeCardView(discord.ui.View):
             ephemeral=True,
         )
 
+    @discord.ui.button(label="Quiet hours", style=discord.ButtonStyle.secondary, emoji="🌙", custom_id="welcome:quiet")
+    async def quiet_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message(
+            embed=obsidian_embed(
+                "🌙 Quiet hours",
+                "Run **`/preferences quiet_hours`** (e.g. `22-7`) so DMs and digests pause overnight.\n"
+                "Also try **`/preferences weekly_recap`** for Monday summaries.",
+                color=EMBED_COLORS["general"],
+                client=interaction.client,
+            ),
+            ephemeral=True,
+        )
+
     @discord.ui.button(label="Open menu", style=discord.ButtonStyle.success, emoji="📋", custom_id="welcome:menu")
     async def menu_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message(

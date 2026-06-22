@@ -499,6 +499,21 @@ class LFGView(discord.ui.View):
         )
         copy_btn.callback = self.copy_invite
         self.add_item(copy_btn)
+        repost = discord.ui.Button(
+            label="Re-post",
+            style=discord.ButtonStyle.secondary,
+            emoji="🔁",
+            custom_id=f"lfg:{lfg_id}:repost",
+            row=2,
+        )
+
+        async def repost_cb(btn_interaction: discord.Interaction):
+            from core.lfg_repost import open_lfg_repost_modal
+
+            await open_lfg_repost_modal(btn_interaction, btn_interaction.client, self.lfg_id)
+
+        repost.callback = repost_cb  # type: ignore
+        self.add_item(repost)
     
     async def copy_invite(self, interaction: discord.Interaction):
         if not interaction.guild:
@@ -677,6 +692,23 @@ class LFGView(discord.ui.View):
         except Exception:
             pass
         await interaction.followup.send(msg, ephemeral=True)
+        try:
+            repost_view = discord.ui.View(timeout=120)
+            repost_view.add_item(
+                discord.ui.Button(
+                    label="Re-post same mission",
+                    style=discord.ButtonStyle.primary,
+                    emoji="🔁",
+                    custom_id=f"lfg:{self.lfg_id}:repost",
+                )
+            )
+            await interaction.followup.send(
+                "Need another squad? Tap **Re-post** to clone this LFG.",
+                view=repost_view,
+                ephemeral=True,
+            )
+        except Exception:
+            pass
     
     async def _handle_rsvp(self, interaction: discord.Interaction, response: str):
         """Handle RSVP (join/leave)."""
@@ -1084,6 +1116,25 @@ def setup(bot, group=None):
                 view=LFGTemplateView(bot),
                 ephemeral=True,
             )
+
+        @group.command(name="list", description="Browse open LFG posts in this server.")
+        async def lfg_list(interaction: discord.Interaction):
+            if not interaction.guild:
+                return await interaction.response.send_message("Server only.", ephemeral=True)
+            from core.utils import feature_enabled, feature_off_embed
+
+            if not await feature_enabled(interaction.guild.id, "lfg"):
+                return await interaction.response.send_message(
+                    embed=feature_off_embed("LFG", client=interaction.client), ephemeral=True,
+                )
+            await interaction.response.defer(ephemeral=True)
+            from core.lfg_list import LFGListEmptyView, build_lfg_list_embed
+
+            embed = await build_lfg_list_embed(interaction.guild, client=interaction.client)
+            view = None
+            if embed.description and "No open squad posts" in embed.description:
+                view = LFGListEmptyView(bot)
+            await interaction.followup.send(embed=embed, view=view, ephemeral=True)
 
         @group.command(name="preset_save", description="Save an LFG template for one-tap reposting.")
         @app_commands.describe(

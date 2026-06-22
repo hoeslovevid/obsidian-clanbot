@@ -153,10 +153,15 @@ def _build_embed(fissures_list, client, *, tier_filter: str = "all", cache_key: 
     note = " • ⚠️ Approx. locations (API unavailable)" if is_fallback else ""
     if tier_filter and tier_filter != "all":
         note = f" • Filter: {tier_filter}{note}"
+    preset_header = ""
+    if tier_filter and tier_filter != "all":
+        preset_header = (
+            f"_Showing **{tier_filter}** fissures — change preset in `/preferences fissure_tier`_\n\n"
+        )
     base_footer = f"See also: /warframe sortie, /warframe baro{note}"
     return obsidian_embed(
         "⚡ Void Fissures",
-        desc,
+        preset_header + desc,
         color=EMBED_COLORS["warframe"],
         footer=wf_footer(base_footer, cache_key),
         client=client,

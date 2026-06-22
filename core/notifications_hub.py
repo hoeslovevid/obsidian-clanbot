@@ -76,6 +76,6 @@ async def build_notifications_status_embed(
         "🔔 Notification Status",
         "\n".join(lines)[:3900],
         color=EMBED_COLORS["general"],
-        footer="Test DMs: /wfnotify test_ping · Guild feeds: /wfnotify status",
+        footer="Use the buttons below · Test DMs · toggle digest · `/wfnotify configure`",
         client=client,
     )

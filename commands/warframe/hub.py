@@ -131,7 +131,12 @@ def build_hub_embed(
 
     plat_note = warframe_footer_platform_note(platform, pc_only_api=platform == "pc")
     from core.wf_copy import merge_wf_footer
-    footer = merge_wf_footer(f"{footer_for('warframe_hub')} · {plat_note}", "warframe:hub")
+    from core.wf_resolve import HUB_CACHE_KEY
+
+    footer = merge_wf_footer(
+        f"{footer_for('warframe_hub')} · {plat_note}",
+        HUB_CACHE_KEY,
+    )
 
     return embed_template(
         "warframe_status",
