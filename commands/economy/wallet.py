@@ -18,6 +18,8 @@ from core.utils import (
     render_bar,
 )
 from database import xp_for_level, xp_for_next_level
+from core.refresh_panels import refresh_edit_message, register_refresh_panel
+from views import RefreshView
 
 
 async def _build_wallet_embed(interaction: discord.Interaction) -> discord.Embed:
@@ -104,6 +106,47 @@ async def _build_wallet_embed(interaction: discord.Interaction) -> discord.Embed
     )
 
 
+async def refresh_wallet_panel(interaction: discord.Interaction, payload: dict) -> bool:
+    """Persistent refresh handler for wallet panels."""
+    from core.utils import BUTTON_ONLY_RUNNER_MSG
+    from core.refresh_panels import runner_only
+
+    if not await runner_only(interaction, payload, BUTTON_ONLY_RUNNER_MSG):
+        return False
+    if not interaction.guild:
+        return False
+
+    class _WalletInter:
+        def __init__(self, inter: discord.Interaction):
+            self.guild = inter.guild
+            self.user = inter.user
+            self.client = inter.client
+
+    fake = _WalletInter(interaction)
+    from core.wallet_layout import wallet_layout_v2_enabled, WalletLayout
+
+    if wallet_layout_v2_enabled():
+        try:
+            emb = await _build_wallet_embed(fake)  # type: ignore[arg-type]
+            fields = [(f.name, f.value, f.inline) for f in emb.fields]
+            layout = WalletLayout(
+                title=emb.title or "💼 Your Wallet",
+                intro=emb.description or "",
+                fields=fields,
+                on_refresh=lambda i: refresh_wallet_panel(i, payload),
+            )
+            await refresh_edit_message(interaction, view=layout, panel_type="eco_wallet", payload=payload)
+            return True
+        except Exception:
+            pass
+    new_embed = await _build_wallet_embed(fake)  # type: ignore[arg-type]
+    view = RefreshView.panel("eco_wallet", payload=payload)
+    await refresh_edit_message(
+        interaction, embed=new_embed, view=view, panel_type="eco_wallet", payload=payload,
+    )
+    return True
+
+
 def setup(bot, group=None):
     """Register /economy wallet."""
 
@@ -126,53 +169,30 @@ def setup(bot, group=None):
             )
 
         embed = await _build_wallet_embed(interaction)
+        payload = {
+            "runner_id": interaction.user.id,
+            "guild_id": interaction.guild.id,
+        }
 
-        async def _wallet_layout_for(inter: discord.Interaction):
-            from core.wallet_layout import WalletLayout
-
-            emb = await _build_wallet_embed(inter)
-            fields = [(f.name, f.value, f.inline) for f in emb.fields]
-            return WalletLayout(
-                title=emb.title or "💼 Your Wallet",
-                intro=emb.description or "",
-                fields=fields,
-                on_refresh=refresh_cb,
-            )
-
-        async def refresh_cb(btn_interaction: discord.Interaction):
-            if btn_interaction.user.id != interaction.user.id:
-                from core.utils import BUTTON_ONLY_RUNNER_MSG
-                from views._core import refresh_runner_only
-
-                return await refresh_runner_only(btn_interaction, BUTTON_ONLY_RUNNER_MSG)
-            from core.wallet_layout import wallet_layout_v2_enabled
-
-            if wallet_layout_v2_enabled():
-                try:
-                    layout = await _wallet_layout_for(btn_interaction)
-                    if btn_interaction.message:
-                        await btn_interaction.message.edit(view=layout)
-                    return
-                except Exception:
-                    pass
-            new_embed = await _build_wallet_embed(btn_interaction)
-            from views import RefreshView
-
-            view = RefreshView(refresh_cb)
-            if btn_interaction.message:
-                await btn_interaction.message.edit(embed=new_embed, view=view)
-
-        from core.wallet_layout import wallet_layout_v2_enabled
+        from core.wallet_layout import wallet_layout_v2_enabled, WalletLayout
 
         if wallet_layout_v2_enabled():
             try:
-                layout = await _wallet_layout_for(interaction)
+                fields = [(f.name, f.value, f.inline) for f in embed.fields]
+                layout = WalletLayout(
+                    title=embed.title or "💼 Your Wallet",
+                    intro=embed.description or "",
+                    fields=fields,
+                    on_refresh=lambda i: refresh_wallet_panel(i, payload),
+                )
                 await interaction.response.send_message(view=layout, ephemeral=True)
+                msg = await interaction.original_response()
+                await register_refresh_panel(msg, "eco_wallet", payload)
                 return
             except Exception:
                 pass
 
-        from views import RefreshView
-
-        view = RefreshView(refresh_cb)
+        view = RefreshView.panel("eco_wallet", payload=payload)
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        msg = await interaction.original_response()
+        await register_refresh_panel(msg, "eco_wallet", payload)

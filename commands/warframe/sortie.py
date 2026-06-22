@@ -13,6 +13,7 @@ from core.wf_resolve import (
     wf_retry_guard,
 )
 from api.warframe_api import fetch_sortie
+from core.refresh_panels import register_refresh_panel
 from views import RetryView, RefreshView
 
 SORTIE_CACHE_KEY = "warframe:sortie"
@@ -42,18 +43,9 @@ def setup(bot, group=None):
             )
         embed = _build_embed(data, interaction.client)
 
-        async def on_refresh(btn_i: discord.Interaction):
-            await wf_invalidate(SORTIE_CACHE_KEY)
-            nd = await fetch_sortie()
-            if wf_fetch_failed(nd):
-                return await btn_i.followup.send(
-                    "Couldn't refresh the sortie yet — try **Update data** again soon.",
-                    ephemeral=True,
-                )
-            emb = _build_embed(nd, interaction.client)
-            await btn_i.message.edit(embed=emb, view=RefreshView(on_refresh, timeout=300))
-
-        await interaction.followup.send(embed=embed, view=RefreshView(on_refresh, timeout=300))
+        view = RefreshView.panel("wf_sortie")
+        msg = await interaction.followup.send(embed=embed, view=view)
+        await register_refresh_panel(msg, "wf_sortie", {})
 
 
 def _build_embed(data, client):

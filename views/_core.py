@@ -291,11 +291,44 @@ class RetryView(discord.ui.View):
 
 
 class RefreshView(discord.ui.View):
-    """View with Refresh button to invalidate cache and refetch (e.g. cycles, Baro)."""
+    """View with Refresh button — routed via ``obsidian:refresh`` (survives restarts)."""
 
-    def __init__(self, refresh_callback, *, timeout: float = 300):
+    def __init__(
+        self,
+        refresh_callback=None,
+        *,
+        panel_type: str | None = None,
+        payload: dict | None = None,
+        timeout: float = 300,
+    ):
         super().__init__(timeout=timeout)
-        self.refresh_callback = refresh_callback
+        self.panel_type = panel_type
+        self.payload = payload or {}
+        if refresh_callback is not None and panel_type is None:
+            raise TypeError(
+                "RefreshView requires panel_type= (closure callbacks are no longer supported). "
+                "Use RefreshView.panel('wf_sortie') and register_refresh_panel after send."
+            )
+        from core.refresh_panels import REFRESH_CUSTOM_ID
+
+        self.add_item(
+            discord.ui.Button(
+                label="Update data",
+                style=discord.ButtonStyle.secondary,
+                emoji="🔄",
+                custom_id=REFRESH_CUSTOM_ID,
+            )
+        )
+
+    @classmethod
+    def panel(
+        cls,
+        panel_type: str,
+        *,
+        payload: dict | None = None,
+        timeout: float = 300,
+    ) -> "RefreshView":
+        return cls(panel_type=panel_type, payload=payload, timeout=timeout)
 
     async def on_timeout(self):
         for c in self.children:
@@ -308,51 +341,6 @@ class RefreshView(discord.ui.View):
                 await self.message.edit(embed=emb, view=self)
         except Exception:
             pass
-
-    @discord.ui.button(label="Update data", style=discord.ButtonStyle.secondary, emoji="🔄")
-    async def refresh_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if button.disabled:
-            from core.interaction_recovery import reply_expired_panel
-
-            if not interaction.response.is_done():
-                await reply_expired_panel(interaction, title="Panel expired")
-            else:
-                await _interaction_followup_ephemeral(
-                    interaction, "This panel expired — run the command again."
-                )
-            return
-        for c in self.children:
-            c.disabled = True
-        if not interaction.response.is_done():
-            await interaction.response.defer()
-        try:
-            await self.refresh_callback(interaction)
-        except discord.InteractionResponded:
-            logger.debug("[RefreshView] refresh callback double-responded")
-            await _interaction_followup_ephemeral(
-                interaction, "Couldn't refresh — try **Update data** again."
-            )
-            await _reenable_view_buttons(interaction, self)
-        except discord.NotFound:
-            await _interaction_followup_ephemeral(
-                interaction, "This message was deleted — run the command again."
-            )
-        except discord.Forbidden:
-            logger.warning(
-                "[RefreshView] missing access editing message in channel=%s",
-                getattr(interaction.channel, "id", None),
-            )
-            await _interaction_followup_ephemeral(
-                interaction,
-                "I can't update this message anymore (missing channel access). Run the command again.",
-            )
-            await _reenable_view_buttons(interaction, self)
-        except discord.HTTPException as exc:
-            logger.debug("[RefreshView] refresh edit failed: %s", exc)
-            await _interaction_followup_ephemeral(
-                interaction, "Couldn't refresh — try again in a moment."
-            )
-            await _reenable_view_buttons(interaction, self)
 
 
 class ConfirmView(discord.ui.View):

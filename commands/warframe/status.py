@@ -16,6 +16,7 @@ from api.warframe_api import wf_staleness_for_path
 from api.warframe_api import get_baro_status, fetch_alerts, get_all_cycles, fetch_fissures, fetch_sortie, fetch_invasions
 from commands.warframe.alerts import format_alert_rewards
 from views import RetryView, RefreshView
+from core.refresh_panels import register_refresh_panel
 from core.warframe_platform import warframe_footer_platform_note
 
 
@@ -236,6 +237,33 @@ def build_status_embed(
     )
 
 
+async def refresh_status_data(client, platform: str) -> discord.Embed:
+    """Refetch and rebuild the status embed (persistent refresh handler)."""
+    import asyncio
+
+    await wf_invalidate_status_snapshot(platform)
+    br, ar, cr, fr, sr, ir = await asyncio.gather(
+        get_baro_status(),
+        fetch_alerts(),
+        get_all_cycles(),
+        fetch_fissures(platform),
+        fetch_sortie(),
+        fetch_invasions(),
+    )
+    ia, bd = br
+    return build_status_embed(
+        ia,
+        bd or {},
+        ar or [],
+        cr or {},
+        fr or [],
+        sr or {},
+        client,
+        ir or [],
+        platform=platform,
+    )
+
+
 def setup(bot, group=None):
     """Register the status command."""
     command_decorator = (
@@ -301,26 +329,10 @@ def setup(bot, group=None):
             platform=platform,
         )
 
-        async def on_refresh(btn_interaction: discord.Interaction):
-            await wf_invalidate_status_snapshot(platform)
-            br, ar, cr, fr, sr, ir = await asyncio.gather(
-                get_baro_status(),
-                fetch_alerts(),
-                get_all_cycles(),
-                fetch_fissures(platform),
-                fetch_sortie(),
-                fetch_invasions(),
-            )
-            ia, bd = br
-            new_emb = build_status_embed(
-                ia, bd or {}, ar or [], cr or {}, fr or [], sr or {},
-                interaction.client, ir or [], platform=platform,
-            )
-            view = RefreshView(on_refresh)
-            await btn_interaction.message.edit(embed=new_emb, view=view)
-
-        view = RefreshView(on_refresh)
+        view = RefreshView.panel("wf_status", payload={"platform": platform})
         await interaction.edit_original_response(embed=embed, view=view)
+        msg = await interaction.original_response()
+        await register_refresh_panel(msg, "wf_status", {"platform": platform})
 
     @command_decorator
     async def status(interaction: discord.Interaction):

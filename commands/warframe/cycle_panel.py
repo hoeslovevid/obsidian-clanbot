@@ -14,6 +14,7 @@ from core.cycles_live import (
     register_cycle_live_message,
 )
 from core.utils import error_embed, is_mod, success_embed, warframe_data_unavailable_embed
+from core.refresh_panels import register_refresh_panel
 from views import RefreshView
 
 logger = logging.getLogger(__name__)
@@ -82,21 +83,7 @@ def setup(bot, group=None):
             except (discord.NotFound, discord.Forbidden, discord.HTTPException):
                 message = None
 
-        async def on_refresh(btn_interaction: discord.Interaction):
-            from core.cache_utils import invalidate
-
-            invalidate("warframe:cycles")
-            fresh = await get_all_cycles()
-            if not any(v for v in (fresh or {}).values()):
-                return
-            new_emb = build_cycles_live_embed(interaction.client, fresh or {})
-            view = RefreshView(on_refresh, timeout=None)
-            try:
-                await btn_interaction.message.edit(embed=new_emb, view=view)
-            except discord.HTTPException as exc:
-                logger.debug("[cycle_panel] refresh edit failed: %s", exc)
-
-        view = RefreshView(on_refresh, timeout=None)
+        view = RefreshView.panel("wf_cycle_live", timeout=None)
 
         try:
             if message:
@@ -112,6 +99,7 @@ def setup(bot, group=None):
                 target.id,
                 message.id,
             )
+            await register_refresh_panel(message, "wf_cycle_live", {})
         except discord.Forbidden:
             return await interaction.followup.send(
                 embed=error_embed(

@@ -7,6 +7,7 @@ import dateparser  # type: ignore
 
 from core.utils import obsidian_embed, warframe_data_unavailable_embed
 from api.warframe_api import fetch_archon_hunt_data
+from core.refresh_panels import refresh_edit_message, refresh_followup_ephemeral, register_refresh_panel
 from views import RefreshView
 
 # Per-user refresh cooldown (Item 15) — guards the warframestat.us API from abuse
@@ -94,25 +95,30 @@ def build_archon_embed(archon_data: dict, client=None) -> discord.Embed:
     )
 
 
-async def _refresh_archon(interaction: discord.Interaction):
-    """Refresh callback for RefreshView; respects a per-user 30s cooldown."""
+async def refresh_archon_panel(interaction: discord.Interaction) -> bool:
+    """Persistent refresh handler for Archon Hunt panels."""
     now = time.monotonic()
     last = _last_refresh.get(interaction.user.id, 0.0)
     remaining = _REFRESH_COOLDOWN_SECONDS - (now - last)
     if remaining > 0:
-        return await interaction.followup.send(
+        await refresh_followup_ephemeral(
+            interaction,
             f"⏳ Slow down — try again in {int(remaining) + 1}s.",
-            ephemeral=True,
         )
+        return False
     _last_refresh[interaction.user.id] = now
 
     archon_data = await fetch_archon_hunt_data()
     if not archon_data:
-        return await interaction.followup.send(
-            embed=warframe_data_unavailable_embed(interaction.client), ephemeral=True
+        await refresh_followup_ephemeral(
+            interaction,
+            embed=warframe_data_unavailable_embed(interaction.client),
         )
+        return False
     embed = build_archon_embed(archon_data, interaction.client)
-    await interaction.edit_original_response(embed=embed, view=RefreshView(_refresh_archon))
+    view = RefreshView.panel("wf_archon")
+    await refresh_edit_message(interaction, embed=embed, view=view, panel_type="wf_archon")
+    return True
 
 
 def setup(bot, group=None):
@@ -130,4 +136,6 @@ def setup(bot, group=None):
                 ephemeral=True,
             )
         embed = build_archon_embed(archon_data, interaction.client)
-        await interaction.followup.send(embed=embed, view=RefreshView(_refresh_archon), ephemeral=False)
+        view = RefreshView.panel("wf_archon")
+        msg = await interaction.followup.send(embed=embed, view=view, ephemeral=False)
+        await register_refresh_panel(msg, "wf_archon", {})

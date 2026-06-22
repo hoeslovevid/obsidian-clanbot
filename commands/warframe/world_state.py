@@ -32,6 +32,7 @@ from core.utils import (
 from core.wf_resolve import wf_invalidate, wf_retry_denied, wf_retry_guard
 from database import get_guild_setting, set_guild_setting
 from views import RefreshView
+from core.refresh_panels import register_refresh_panel
 
 logger = logging.getLogger(__name__)
 
@@ -185,6 +186,16 @@ async def build_worth_embed(client) -> discord.Embed:
     )
 
 
+async def refresh_worth_data(client) -> discord.Embed:
+    """Invalidate caches and rebuild the worth embed."""
+    from core.cache_utils import invalidate
+
+    invalidate("warframe:fissures")
+    invalidate("warframe:invasions")
+    invalidate("warframe:cycles")
+    return await build_worth_embed(client)
+
+
 def setup(bot, group=None):
     """Register world_state and worth subcommands."""
     if not group:
@@ -305,16 +316,6 @@ def setup(bot, group=None):
                 ephemeral=True,
             )
 
-        async def on_refresh(btn_interaction: discord.Interaction):
-            # Read-only public data — anyone may refresh.
-            from core.cache_utils import invalidate
-
-            invalidate("warframe:fissures")
-            invalidate("warframe:invasions")
-            invalidate("warframe:cycles")
-            new_emb = await build_worth_embed(interaction.client)
-            view = RefreshView(on_refresh)
-            await btn_interaction.message.edit(embed=new_emb, view=view)
-
-        view = RefreshView(on_refresh)
-        await interaction.followup.send(embed=embed, view=view, ephemeral=False)
+        view = RefreshView.panel("wf_worth")
+        msg = await interaction.followup.send(embed=embed, view=view, ephemeral=False)
+        await register_refresh_panel(msg, "wf_worth", {})

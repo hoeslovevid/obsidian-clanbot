@@ -135,6 +135,56 @@ async def run_startup(bot: discord.Client) -> None:
         # Basic views
         bot.add_view(ComplaintPanel())
         bot.add_view(RSVPView())
+        try:
+            from core.refresh_panels import PersistentRefreshView
+
+            bot.add_view(PersistentRefreshView())
+        except Exception as e:
+            logger.debug(f"[ready] PersistentRefreshView registration skipped: {e}")
+
+        try:
+            from core.refresh_panels import register_refresh_panel
+
+            async with aiosqlite.connect(DB_PATH) as db:
+                cur = await db.execute(
+                    "SELECT guild_id, channel_id, message_id FROM cycle_live_messages"
+                )
+                cycle_rows = await cur.fetchall()
+                cur = await db.execute(
+                    "SELECT guild_id, channel_id, message_id FROM baro_live_messages"
+                )
+                baro_rows = await cur.fetchall()
+            backfilled = 0
+            for guild_id, channel_id, message_id in cycle_rows:
+                guild = bot.get_guild(int(guild_id))
+                if not guild:
+                    continue
+                channel = guild.get_channel(int(channel_id))
+                if not isinstance(channel, discord.TextChannel):
+                    continue
+                try:
+                    msg = await channel.fetch_message(int(message_id))
+                    await register_refresh_panel(msg, "wf_cycle_live", {})
+                    backfilled += 1
+                except Exception:
+                    pass
+            for guild_id, channel_id, message_id in baro_rows:
+                guild = bot.get_guild(int(guild_id))
+                if not guild:
+                    continue
+                channel = guild.get_channel(int(channel_id))
+                if not isinstance(channel, discord.TextChannel):
+                    continue
+                try:
+                    msg = await channel.fetch_message(int(message_id))
+                    await register_refresh_panel(msg, "wf_baro", {"guild_id": int(guild_id)})
+                    backfilled += 1
+                except Exception:
+                    pass
+            if backfilled:
+                print(f"[ready] Backfilled refresh_panel_meta for {backfilled} live panel(s)")
+        except Exception as e:
+            logger.debug(f"[ready] refresh panel backfill skipped: {e}")
         # Console + world-state boards use stateless custom_ids routed in component_handler
         # only (no add_view — avoids LayoutView / callback double-dispatch).
 

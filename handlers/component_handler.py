@@ -50,6 +50,12 @@ async def handle_component(bot: discord.Client, interaction: discord.Interaction
             await refresh_pinned_world_state(bot, interaction)
             return
 
+        if cid == "obsidian:refresh":
+            from core.refresh_panels import handle_refresh_button
+
+            await handle_refresh_button(bot, interaction)
+            return
+
         # Complaints: open modal
         if cid == "complaints:open":
             # Check if interaction is still valid (not expired)

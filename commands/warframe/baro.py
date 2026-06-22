@@ -3,7 +3,7 @@ import hashlib
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Callable, Optional
+from typing import Optional
 
 import aiosqlite
 import dateparser
@@ -25,6 +25,12 @@ from database import (
     set_baro_inventory_hash,
 )
 from views import RefreshView, RetryView
+from core.refresh_panels import (
+    REFRESH_CUSTOM_ID,
+    refresh_edit_message,
+    refresh_followup_ephemeral,
+    register_refresh_panel,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -269,7 +275,6 @@ class BaroInventoryView(discord.ui.View):
         is_active: bool,
         baro_data: dict,
         mark_new: bool,
-        refresh_callback: Callable,
         page: int = 0,
         timeout: float = 300,
     ):
@@ -281,9 +286,16 @@ class BaroInventoryView(discord.ui.View):
         self.is_active = is_active
         self.baro_data = baro_data
         self.mark_new = mark_new
-        self.refresh_callback = refresh_callback
         self.page = page
         self._update_nav_buttons()
+        self.add_item(
+            discord.ui.Button(
+                label="Update data",
+                style=discord.ButtonStyle.secondary,
+                emoji="🔄",
+                custom_id=REFRESH_CUSTOM_ID,
+            )
+        )
 
     def _inventory(self) -> list:
         return self.baro_data.get("inventory", []) or []
@@ -326,36 +338,51 @@ class BaroInventoryView(discord.ui.View):
         self._update_nav_buttons()
         await interaction.response.edit_message(embed=self.build_embed(interaction.client), view=self)
 
-    @discord.ui.button(label="Update data", style=discord.ButtonStyle.secondary, emoji="🔄")
-    async def refresh_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if button.disabled:
-            from core.interaction_recovery import reply_expired_panel
 
-            if not interaction.response.is_done():
-                await reply_expired_panel(interaction, title="Panel expired")
-            return
-        for c in self.children:
-            c.disabled = True
-        if not interaction.response.is_done():
-            await interaction.response.defer()
-        try:
-            await self.refresh_callback(interaction)
-        except discord.InteractionResponded:
-            logger.debug("[BaroInventoryView] refresh callback double-responded")
-        except discord.NotFound:
-            from views._core import _interaction_followup_ephemeral
-
-            await _interaction_followup_ephemeral(
-                interaction, "This message was deleted — run `/warframe baro` again."
+async def refresh_baro_panel(
+    interaction: discord.Interaction,
+    guild_id: Optional[int],
+) -> bool:
+    """Persistent refresh handler for Baro panels."""
+    new_active, new_data = await _resolve_baro_status(fresh=True)
+    if not new_data:
+        await refresh_followup_ephemeral(
+            interaction,
+            "Couldn't refresh Baro yet — stats server is still struggling. Try again soon.",
+        )
+        return False
+    if new_data and not new_active:
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT arrival_time, departure_time, location, inventory_json "
+                "FROM baro_visits ORDER BY id DESC LIMIT 1"
             )
-        except discord.HTTPException as exc:
-            logger.debug("[BaroInventoryView] refresh failed: %s", exc)
-            from views._core import _interaction_followup_ephemeral, _reenable_view_buttons
-
-            await _interaction_followup_ephemeral(
-                interaction, "Couldn't refresh — try **Update data** again."
-            )
-            await _reenable_view_buttons(interaction, self)
+            new_data["_last_visit"] = await cur.fetchone()
+    inv = new_data.get("inventory", []) or []
+    mark = await _resolve_mark_new(guild_id, inv)
+    view = _baro_view_for(
+        guild_id=guild_id,
+        is_active=new_active,
+        baro_data=new_data,
+        mark_new=mark,
+        client=interaction.client,
+    )
+    new_emb = build_baro_embed(
+        new_data,
+        new_active,
+        interaction.client,
+        guild_id=guild_id,
+        mark_new=mark,
+    )
+    await refresh_edit_message(
+        interaction,
+        embed=new_emb,
+        view=view,
+        panel_type="wf_baro",
+        payload={"guild_id": guild_id},
+    )
+    await _persist_inventory_hash(guild_id, inv)
+    return True
 
 
 async def _resolve_mark_new(guild_id: Optional[int], inventory: list) -> bool:
@@ -466,49 +493,15 @@ def setup(bot, group=None):
                 interaction.guild.id, interaction.user.id, embed.description, feature="baro"
             )
 
-        async def on_refresh(btn_interaction: discord.Interaction):
-            # RefreshView defers first; BaroInventoryView may not — defer only if needed.
-            if not btn_interaction.response.is_done():
-                await btn_interaction.response.defer()
-            new_active, new_data = await _resolve_baro_status(fresh=True)
-            if not new_data:
-                await btn_interaction.followup.send(
-                    "Couldn't refresh Baro yet — stats server is still struggling. Try again soon.",
-                    ephemeral=True,
-                )
-                return
-            if new_data and not new_active:
-                async with aiosqlite.connect(DB_PATH) as db:
-                    cur = await db.execute(
-                        "SELECT arrival_time, departure_time, location, inventory_json "
-                        "FROM baro_visits ORDER BY id DESC LIMIT 1"
-                    )
-                    new_data["_last_visit"] = await cur.fetchone()
-            inv = new_data.get("inventory", []) or []
-            mark = await _resolve_mark_new(guild_id, inv)
-            view = _baro_view_for(
-                guild_id=guild_id,
-                is_active=new_active,
-                baro_data=new_data,
-                mark_new=mark,
-                refresh_callback=on_refresh,
-                client=interaction.client,
-            )
-            new_emb = build_baro_embed(
-                new_data, new_active, interaction.client, guild_id=guild_id, mark_new=mark,
-            )
-            await btn_interaction.message.edit(embed=new_emb, view=view)
-            await _persist_inventory_hash(guild_id, inv)
-
         view = _baro_view_for(
             guild_id=guild_id,
             is_active=is_active,
             baro_data=baro_data,
             mark_new=mark_new,
-            refresh_callback=on_refresh,
             client=interaction.client,
         )
         message = await interaction.followup.send(embed=embed, view=view, ephemeral=baro_ephemeral)
+        await register_refresh_panel(message, "wf_baro", {"guild_id": guild_id})
         await _persist_inventory_hash(guild_id, inventory)
 
         if is_active and interaction.guild and isinstance(interaction.channel, discord.TextChannel):
@@ -545,7 +538,6 @@ def _baro_view_for(
     is_active: bool,
     baro_data: dict,
     mark_new: bool,
-    refresh_callback: Callable,
     client,
 ) -> discord.ui.View:
     inventory = baro_data.get("inventory", []) or []
@@ -555,10 +547,9 @@ def _baro_view_for(
             is_active=is_active,
             baro_data=baro_data,
             mark_new=mark_new,
-            refresh_callback=refresh_callback,
         )
     from core.embed_links import add_link_row, baro_link_buttons
 
-    view = RefreshView(refresh_callback)
+    view = RefreshView.panel("wf_baro", payload={"guild_id": guild_id})
     add_link_row(view, baro_link_buttons())
     return view

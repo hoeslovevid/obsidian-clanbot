@@ -13,6 +13,7 @@ from core.wf_resolve import (
 )
 from api.warframe_api import fetch_invasions
 from views import RetryView, RefreshView
+from core.refresh_panels import register_refresh_panel
 import dateparser
 
 
@@ -155,20 +156,7 @@ def setup(bot, group=None):
                     ),
                 )
 
-        async def on_refresh(btn_interaction: discord.Interaction):
-            await wf_invalidate("warframe:invasions")
-            new_data = await fetch_invasions()
-            if wf_fetch_failed(new_data):
-                return await btn_interaction.followup.send(
-                    embed=error_embed(
-                        "Couldn't refresh",
-                        "The stats API is still busy — try again in a minute.",
-                        client=btn_interaction.client,
-                    ),
-                    ephemeral=True,
-                )
-            emb = _build_invasions_embed(new_data, interaction.client)
-            await btn_interaction.message.edit(embed=emb, view=RefreshView(on_refresh, timeout=300))
-
         embed = _build_invasions_embed(invasions_data, interaction.client)
-        await interaction.followup.send(embed=embed, view=RefreshView(on_refresh, timeout=300))
+        view = RefreshView.panel("wf_invasions")
+        msg = await interaction.followup.send(embed=embed, view=view)
+        await register_refresh_panel(msg, "wf_invasions", {})

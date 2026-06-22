@@ -10,15 +10,24 @@ from __future__ import annotations
 from core.config import BOT_CHANGELOG, BOT_VERSION
 
 # Current release (version string comes from BOT_VERSION only).
-CURRENT_RELEASE_DATE = "2026-06-20"
+CURRENT_RELEASE_DATE = "2026-06-21"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Fix · Twitch** — track `last_stream_id` so every go-live session alerts (not just the first); poll by user ID + login",
-    "**Fix · Twitch** — reliable live/offline state parsing; token refresh on 401 during batch checks",
-    "**QoL · Twitch** — showcase go-live embed with preview, category, viewers, tags, and Watch/Profile buttons",
+    "**Fix** — **Update data** uses persistent `obsidian:refresh` routing + DB panel registry (works after bot restart)",
+    "**Fix** — unified defer → `message.edit` refresh path; buttons re-enable on failure; cycle panel empty-fetch feedback",
+    "**Fix** — V2 hub/wallet **Refresh** defers before slow API fetches",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "2.1.4",
+        "date": "2026-06-20",
+        "changes": [
+            "**Fix · Twitch** — track `last_stream_id` so every go-live session alerts (not just the first); poll by user ID + login",
+            "**Fix · Twitch** — reliable live/offline state parsing; token refresh on 401 during batch checks",
+            "**QoL · Twitch** — showcase go-live embed with preview, category, viewers, tags, and Watch/Profile buttons",
+        ],
+    },
     {
         "version": "2.1.3",
         "date": "2026-06-21",

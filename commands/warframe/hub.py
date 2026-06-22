@@ -40,6 +40,7 @@ from core.wf_hub_extras import (
     toggle_baro_wishlist,
 )
 from views import RefreshView, RetryView
+from core.refresh_panels import refresh_edit_message, register_refresh_panel
 
 
 def _hub_link_buttons() -> list[discord.ui.Button]:
@@ -170,56 +171,9 @@ async def _wishlist_modal_cb(btn_interaction: discord.Interaction) -> None:
     await btn_interaction.response.send_modal(BaroWishlistModal(btn_interaction.guild.id))
 
 
-def _hub_view(interaction: discord.Interaction, platform: str, guild_id: int) -> discord.ui.View:
-    async def on_refresh(btn_interaction: discord.Interaction):
-        # Read-only public data — anyone may refresh.
-        await wf_invalidate_hub_snapshot(platform)
-        br, ar, cr, fr, sr, ir, sp, arb, nw = await _fetch_hub_data(platform)
-        ia, bd = br
-        wishlist = None
-        if bd and ia:
-            inv = bd.get("inventory") or bd.get("Inventory") or []
-            wishlist = await get_baro_wishlist_overlap(guild_id, inv)
-        twitch = await get_twitch_streaming_line(guild_id)
-        panel_ch = await _hub_cycle_panel_channel(guild_id)
-        new_emb = build_hub_embed(
-            baro_active=ia,
-            baro_data=bd or {},
-            alerts_data=ar or [],
-            cycles_data=cr or {},
-            fissures_data=fr or [],
-            client=interaction.client,
-            platform=platform,
-            steel_path=sp,
-            arbitration=arb,
-            nightwave=nw,
-            wishlist_line=wishlist,
-            twitch_line=twitch,
-            guild_id=guild_id,
-            cycle_panel_channel_id=panel_ch,
-        )
-        from core.help_layout import help_layout_v2_enabled
-        from core.warframe_hub_layout import WarframeHubLayout
-
-        if help_layout_v2_enabled():
-            try:
-                fields = [(f.name, f.value, f.inline) for f in new_emb.fields]
-                layout = WarframeHubLayout(
-                    title=new_emb.title or "🎮 Warframe Hub",
-                    intro=new_emb.description or "",
-                    fields=fields,
-                    on_refresh=on_refresh,
-                    guild_id=guild_id,
-                    on_wishlist=_wishlist_modal_cb,
-                )
-                await btn_interaction.message.edit(view=layout)
-                return
-            except Exception:
-                pass
-        view = _hub_view(interaction, platform, guild_id)
-        await btn_interaction.message.edit(embed=new_emb, view=view)
-
-    view = RefreshView(on_refresh)
+def _hub_view(platform: str, guild_id: int) -> discord.ui.View:
+    payload = {"platform": platform, "guild_id": guild_id}
+    view = RefreshView.panel("wf_hub", payload=payload)
     add_link_row(view, _hub_link_buttons())
 
     wish = discord.ui.Button(
@@ -311,6 +265,60 @@ def _hub_view(interaction: discord.Interaction, platform: str, guild_id: int) ->
     return view
 
 
+async def refresh_hub_panel(interaction: discord.Interaction, payload: dict) -> bool:
+    """Persistent refresh handler for `/warframe hub` panels."""
+    platform = str(payload.get("platform") or "pc")
+    guild_id = int(payload.get("guild_id") or 0)
+    await wf_invalidate_hub_snapshot(platform)
+    br, ar, cr, fr, sr, ir, sp, arb, nw = await _fetch_hub_data(platform)
+    ia, bd = br
+    wishlist = None
+    if bd and ia:
+        inv = bd.get("inventory") or bd.get("Inventory") or []
+        wishlist = await get_baro_wishlist_overlap(guild_id, inv)
+    twitch = await get_twitch_streaming_line(guild_id)
+    panel_ch = await _hub_cycle_panel_channel(guild_id)
+    new_emb = build_hub_embed(
+        baro_active=ia,
+        baro_data=bd or {},
+        alerts_data=ar or [],
+        cycles_data=cr or {},
+        fissures_data=fr or [],
+        client=interaction.client,
+        platform=platform,
+        steel_path=sp,
+        arbitration=arb,
+        nightwave=nw,
+        wishlist_line=wishlist,
+        twitch_line=twitch,
+        guild_id=guild_id,
+        cycle_panel_channel_id=panel_ch,
+    )
+    from core.help_layout import help_layout_v2_enabled
+    from core.warframe_hub_layout import WarframeHubLayout
+
+    if help_layout_v2_enabled():
+        try:
+            fields = [(f.name, f.value, f.inline) for f in new_emb.fields]
+            layout = WarframeHubLayout(
+                title=new_emb.title or "🎮 Warframe Hub",
+                intro=new_emb.description or "",
+                fields=fields,
+                on_refresh=lambda i: refresh_hub_panel(i, payload),
+                guild_id=guild_id,
+                on_wishlist=_wishlist_modal_cb,
+            )
+            await refresh_edit_message(interaction, view=layout, panel_type="wf_hub", payload=payload)
+            return True
+        except Exception:
+            pass
+    view = _hub_view(platform, guild_id)
+    await refresh_edit_message(
+        interaction, embed=new_emb, view=view, panel_type="wf_hub", payload=payload,
+    )
+    return True
+
+
 def setup(bot, group=None):
     """Register `/warframe hub` — refreshable member hub."""
 
@@ -375,7 +383,7 @@ def setup(bot, group=None):
                     guild_id=guild_id,
                     cycle_panel_channel_id=panel_ch,
                 )
-                view = _hub_view(interaction, platform, guild_id)
+                view = _hub_view(platform, guild_id)
                 await btn_interaction.message.edit(embed=emb, view=view)
 
             from core.wf_recovery import attach_notify_when_back
@@ -407,7 +415,8 @@ def setup(bot, group=None):
             guild_id=guild_id,
             cycle_panel_channel_id=panel_ch,
         )
-        view = _hub_view(interaction, platform, guild_id)
+        view = _hub_view(platform, guild_id)
+        hub_payload = {"platform": platform, "guild_id": guild_id}
         from core.help_layout import help_layout_v2_enabled
         from core.warframe_hub_layout import WarframeHubLayout
 
@@ -421,23 +430,21 @@ def setup(bot, group=None):
 
         if help_layout_v2_enabled():
             try:
-                # Re-use refresh handler from the classic view's first child callback chain
-                refresh_cb = None
-                for child in view.children:
-                    if getattr(child, "label", None) == "Refresh":
-                        refresh_cb = child.callback
-                        break
                 fields = [(f.name, f.value, f.inline) for f in embed.fields]
                 layout = WarframeHubLayout(
                     title=embed.title or "🎮 Warframe Hub",
                     intro=embed.description or "",
                     fields=fields,
-                    on_refresh=refresh_cb,
+                    on_refresh=lambda i: refresh_hub_panel(i, hub_payload),
                     guild_id=guild_id,
                     on_wishlist=_wishlist_modal_cb,
                 )
                 await interaction.edit_original_response(view=layout)
+                msg = await interaction.original_response()
+                await register_refresh_panel(msg, "wf_hub", hub_payload)
                 return
             except Exception:
                 pass
         await interaction.edit_original_response(embed=embed, view=view)
+        msg = await interaction.original_response()
+        await register_refresh_panel(msg, "wf_hub", hub_payload)

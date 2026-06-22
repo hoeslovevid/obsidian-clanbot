@@ -36,7 +36,13 @@ class WarframeHubLayout(ui.LayoutView):
         row1 = ui.ActionRow()
         if on_refresh:
             refresh = ui.Button(label="Refresh", style=discord.ButtonStyle.primary, emoji="🔄")
-            refresh.callback = lambda i: on_refresh(i)  # type: ignore[assignment]
+
+            async def _refresh_cb(interaction: discord.Interaction) -> None:
+                if not interaction.response.is_done():
+                    await interaction.response.defer()
+                await on_refresh(interaction)
+
+            refresh.callback = _refresh_cb  # type: ignore[assignment]
             row1.add_item(refresh)
         row1.add_item(_HintButton("Notify setup", "🔔", "`/wfnotify configure`", "recommended alert wizard"))
         row1.add_item(_HintButton("Post LFG", "🤝", "`/lfg`", "squad finder"))

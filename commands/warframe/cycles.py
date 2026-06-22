@@ -13,6 +13,7 @@ from core.wf_resolve import (
     wf_retry_guard,
 )
 from api.warframe_api import get_all_cycles
+from core.refresh_panels import register_refresh_panel
 from views import RetryView, RefreshView
 
 
@@ -75,32 +76,6 @@ def setup(bot, group=None):
             client=interaction.client,
         )
 
-        async def on_refresh(btn_interaction: discord.Interaction):
-            await wf_invalidate("warframe:cycles")
-            new_data = await get_all_cycles()
-            new_success, new_failed = wf_cycles_split(new_data)
-            if not new_success:
-                await btn_interaction.followup.send(
-                    "Couldn't refresh cycles yet — try again in a moment.",
-                    ephemeral=True,
-                )
-                return
-            new_fields = _build_cycle_fields(new_success)
-            partial = [k for k in ("cetus", "vallis", "cambion") if k not in new_success]
-            new_desc = "Partial data: " + ", ".join(partial) + " unavailable." if partial else ""
-            new_emb = obsidian_embed(
-                "🌍 Open World Cycles",
-                new_desc or "",
-                color=EMBED_COLORS["warframe"],
-                fields=new_fields,
-                footer=wf_footer_with_freshness(
-                    "See also: /warframe baro, /warframe alerts • **Update data** refreshes",
-                    "warframe:cycles",
-                ),
-                client=interaction.client,
-            )
-            view = RefreshView(on_refresh)
-            await btn_interaction.message.edit(embed=new_emb, view=view)
-
-        view = RefreshView(on_refresh)
-        await interaction.followup.send(embed=embed, view=view, ephemeral=False)
+        view = RefreshView.panel("wf_cycles")
+        msg = await interaction.followup.send(embed=embed, view=view, ephemeral=False)
+        await register_refresh_panel(msg, "wf_cycles", {})

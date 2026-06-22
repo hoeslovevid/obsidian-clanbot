@@ -15,6 +15,7 @@ from core.wf_resolve import (
 )
 from api.warframe_api import fetch_fissures
 from views import RetryView, RefreshView
+from core.refresh_panels import register_refresh_panel
 
 FISSURE_TIER_CHOICES = [
     app_commands.Choice(name="All tiers", value="all"),
@@ -86,19 +87,10 @@ def setup(bot, group=None):
                 embed=obsidian_embed("⚡ Void Fissures", "No active fissures.", color=EMBED_COLORS["warframe"], client=interaction.client),
             )
         embed = _build_embed(data, interaction.client, tier_filter=tier_filter, cache_key=cache_key)
-
-        async def on_refresh(btn_i: discord.Interaction):
-            await wf_invalidate(cache_key)
-            nd = await fetch_fissures(platform)
-            if wf_fetch_failed(nd):
-                return await btn_i.followup.send(
-                    "Couldn't refresh fissures yet — stats API is still having issues.",
-                    ephemeral=True,
-                )
-            emb = _build_embed(nd, interaction.client, tier_filter=tier_filter, cache_key=cache_key)
-            await btn_i.message.edit(embed=emb, view=RefreshView(on_refresh, timeout=300))
-
-        await interaction.followup.send(embed=embed, view=RefreshView(on_refresh, timeout=300))
+        payload = {"platform": platform, "tier_filter": tier_filter}
+        view = RefreshView.panel("wf_fissures", payload=payload)
+        msg = await interaction.followup.send(embed=embed, view=view)
+        await register_refresh_panel(msg, "wf_fissures", payload)
 
 
 def _filter_by_tier(fissures_list: list, tier_filter: str) -> list:

@@ -8,6 +8,7 @@ from core.utils import obsidian_embed, error_embed, EMBED_COLORS, BUTTON_ONLY_RU
 from api.warframe_api import search_warframe_market_item, get_warframe_market_price
 from views import RetryView, RefreshView
 from core.cache_utils import invalidate
+from core.refresh_panels import refresh_edit_message, register_refresh_panel, runner_only
 
 POPULAR_ITEMS = [
     "Mesa Prime Set", "Saryn Prime Set", "Rhino Prime Set", "Nova Prime Set",
@@ -80,6 +81,54 @@ def _build_trade_embed(item_data: dict, price_data: dict, platform_val: str, cli
         footer=footer,
         client=client,
     )
+
+
+def _trade_price_view(payload: dict, market_url: str) -> RefreshView:
+    view = RefreshView.panel("trade_price", payload=payload)
+    view.add_item(
+        discord.ui.Button(
+            label="View on Warframe Market",
+            url=market_url,
+            style=discord.ButtonStyle.link,
+            emoji="🔗",
+        )
+    )
+    return view
+
+
+async def refresh_trade_price_panel(interaction: discord.Interaction, payload: dict) -> bool:
+    if not await runner_only(interaction, payload, BUTTON_ONLY_RUNNER_MSG):
+        return False
+    item_url_name = payload["item_url_name"]
+    platform_val = payload["platform"]
+    item_data = payload.get("item_data") or {}
+    market_url = f"https://warframe.market/items/{item_url_name}"
+    invalidate(f"warframe_market:price:{item_url_name}:{platform_val}")
+    new_price = await get_warframe_market_price(item_url_name, platform_val)
+    if not new_price:
+        from core.refresh_panels import refresh_followup_ephemeral
+
+        await refresh_followup_ephemeral(
+            interaction,
+            "Couldn't refresh prices right now. Warframe Market might be slow—try **Update data** again soon.",
+        )
+        return False
+    from datetime import datetime, timezone
+
+    author = interaction.user
+    new_emb = _build_trade_embed(
+        item_data,
+        new_price,
+        platform_val,
+        interaction.client,
+        author=author,
+        fetched_at=datetime.now(timezone.utc),
+    )
+    view = _trade_price_view(payload, market_url)
+    await refresh_edit_message(
+        interaction, embed=new_emb, view=view, panel_type="trade_price", payload=payload,
+    )
+    return True
 
 
 def setup(bot, group=None):
@@ -175,25 +224,12 @@ def setup(bot, group=None):
         fetched_at = datetime.now(timezone.utc)
         embed = _build_trade_embed(item_data, price_data, platform_val, interaction.client, author=interaction.user, fetched_at=fetched_at)
         market_url = f"https://warframe.market/items/{item_url_name}"
-
-        async def on_refresh(btn_interaction: discord.Interaction):
-            if btn_interaction.user.id != interaction.user.id:
-                from views._core import refresh_runner_only
-
-                return await refresh_runner_only(btn_interaction, BUTTON_ONLY_RUNNER_MSG)
-            invalidate(f"warframe_market:price:{item_url_name}:{platform_val}")
-            new_price = await get_warframe_market_price(item_url_name, platform_val)
-            if not new_price:
-                return await btn_interaction.followup.send(
-                    "Couldn't refresh prices right now. Warframe Market might be slow—try **Update data** again soon.",
-                    ephemeral=True,
-                )
-            from datetime import datetime, timezone
-            new_emb = _build_trade_embed(item_data, new_price, platform_val, interaction.client, author=interaction.user, fetched_at=datetime.now(timezone.utc))
-            v2 = RefreshView(on_refresh, timeout=300)
-            v2.add_item(discord.ui.Button(label="View on Warframe Market", url=market_url, style=discord.ButtonStyle.link, emoji="🔗"))
-            await btn_interaction.message.edit(embed=new_emb, view=v2)
-
-        v = RefreshView(on_refresh, timeout=300)
-        v.add_item(discord.ui.Button(label="View on Warframe Market", url=market_url, style=discord.ButtonStyle.link, emoji="🔗"))
-        await interaction.followup.send(embed=embed, view=v, ephemeral=True)
+        payload = {
+            "runner_id": interaction.user.id,
+            "item_url_name": item_url_name,
+            "platform": platform_val,
+            "item_data": item_data,
+        }
+        v = _trade_price_view(payload, market_url)
+        msg = await interaction.followup.send(embed=embed, view=v, ephemeral=True)
+        await register_refresh_panel(msg, "trade_price", payload)

@@ -44,6 +44,8 @@ class WalletRefreshButton(ui.Button):
         self._on_refresh = on_refresh
 
     async def callback(self, interaction: discord.Interaction):
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
         await self._on_refresh(interaction)
 
 

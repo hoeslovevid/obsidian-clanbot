@@ -19,6 +19,7 @@ from core.wf_resolve import (
 from core.wf_copy import merge_wf_footer
 from api.warframe_api import fetch_steel_path, fetch_arbitration, fetch_nightwave
 from views import RetryView, RefreshView
+from core.refresh_panels import register_refresh_panel
 from core.cache_utils import freshness_note, peek_cached
 
 
@@ -84,14 +85,10 @@ def setup(bot, group=None):
                 view=attach_notify_when_back(RetryView(on_retry)),
             )
         embed = _build_embed(sp, arb, nw, interaction.client, platform=plat)
-
-        async def on_refresh(btn_i: discord.Interaction):
-            await wf_invalidate_daily_ops(plat)
-            (sp2, arb2, nw2), plat2 = await _fetch_daily_ops(gid, interaction.user.id)
-            emb = _build_embed(sp2, arb2, nw2, interaction.client, platform=plat2)
-            await btn_i.message.edit(embed=emb, view=RefreshView(on_refresh, timeout=300))
-
-        await interaction.followup.send(embed=embed, view=RefreshView(on_refresh, timeout=300))
+        payload = {"guild_id": gid, "user_id": interaction.user.id}
+        view = RefreshView.panel("wf_daily_ops", payload=payload)
+        msg = await interaction.followup.send(embed=embed, view=view)
+        await register_refresh_panel(msg, "wf_daily_ops", payload)
 
 
 def _build_embed(sp, arb, nw, client, *, platform: str = "pc"):

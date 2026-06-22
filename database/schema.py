@@ -1787,3 +1787,7 @@ async def init_db() -> None:
         
         await db.commit()
         logger.info("[db] Database tables initialized successfully")
+
+    from core.refresh_panels import ensure_refresh_panel_table
+
+    await ensure_refresh_panel_table()

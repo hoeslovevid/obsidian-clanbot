@@ -14,6 +14,7 @@ from core.wf_resolve import (
 )
 from api.warframe_api import fetch_alerts
 from views import RetryView, RefreshView
+from core.refresh_panels import register_refresh_panel
 
 ALERTS_CACHE_KEY = "warframe:alerts"
 
@@ -158,18 +159,6 @@ def setup(bot, group=None):
                 client=interaction.client,
             )
 
-        async def on_refresh(btn_interaction: discord.Interaction):
-            # Read-only public data — anyone may refresh.
-            await wf_invalidate(ALERTS_CACHE_KEY)
-            new_data = await fetch_alerts()
-            if wf_fetch_failed(new_data):
-                return await btn_interaction.followup.send(
-                    "Couldn't refresh yet — the stats service is still having trouble. Try again soon.",
-                    ephemeral=True,
-                )
-            emb = _build_alerts_embed(new_data)
-            await btn_interaction.message.edit(embed=emb, view=RefreshView(on_refresh, timeout=300))
-
         embed = obsidian_embed(
             "📢 Active Alerts",
             desc,
@@ -178,4 +167,6 @@ def setup(bot, group=None):
             footer=wf_footer(f"{len(alerts_data)} active · warframestat.us", ALERTS_CACHE_KEY),
             client=interaction.client,
         )
-        await interaction.followup.send(embed=embed, view=RefreshView(on_refresh, timeout=300))
+        view = RefreshView.panel("wf_alerts")
+        msg = await interaction.followup.send(embed=embed, view=view)
+        await register_refresh_panel(msg, "wf_alerts", {})
