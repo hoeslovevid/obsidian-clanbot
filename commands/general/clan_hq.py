@@ -22,6 +22,7 @@ def setup(bot, group=None):
             interaction.guild,
             client=interaction.client,
             user_id=interaction.user.id,
+            viewer=interaction.user if isinstance(interaction.user, discord.Member) else None,
         )
         payload = {"guild_id": interaction.guild.id, "user_id": interaction.user.id}
         view = clan_hq_panel_view(

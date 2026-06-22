@@ -684,7 +684,7 @@ def setup_tasks(bot):
 
     @tasks.loop(minutes=20)
     async def lfg_poster_nudge_loop():
-        """DM LFG creators after ~2h with no thread replies."""
+        """DM LFG creators after ~48h with no thread replies."""
         try:
             from tasks.lfg_loops import run_lfg_poster_nudge_cycle
 

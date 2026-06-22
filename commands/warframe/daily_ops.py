@@ -13,12 +13,11 @@ from core.wf_resolve import (
     wf_fetch_failed,
     wf_invalidate_daily_ops,
     wf_platform_for,
-    wf_retry_denied,
-    wf_retry_guard,
 )
 from core.wf_copy import merge_wf_footer
+from core.wf_retry_panels import send_wf_retry_message
 from api.warframe_api import fetch_steel_path, fetch_arbitration, fetch_nightwave
-from views import RetryView, RefreshView
+from views import RefreshView
 from core.refresh_panels import register_refresh_panel
 from core.cache_utils import freshness_note, peek_cached
 
@@ -67,22 +66,14 @@ def setup(bot, group=None):
         gid = interaction.guild.id if interaction.guild else None
         (sp, arb, nw), plat = await _fetch_daily_ops(gid, interaction.user.id)
         if _all_daily_ops_failed(sp, arb, nw):
-            async def on_retry(btn_i: discord.Interaction):
-                if not wf_retry_guard(btn_i, interaction.user.id):
-                    return await wf_retry_denied(btn_i)
-                await btn_i.response.defer()
-                (sp2, arb2, nw2), plat2 = await _fetch_daily_ops(gid, interaction.user.id)
-                if _all_daily_ops_failed(sp2, arb2, nw2):
-                    return await btn_i.followup.send(
-                        "Still can't load daily ops. Try **Try again** again in a bit.",
-                        ephemeral=True,
-                    )
-                emb = _build_embed(sp2, arb2, nw2, interaction.client, platform=plat2)
-                await btn_i.message.edit(embed=emb, view=None)
-            from core.wf_recovery import attach_notify_when_back
-            return await interaction.followup.send(
+            ops_payload = {"guild_id": gid, "user_id": interaction.user.id}
+            return await send_wf_retry_message(
+                interaction,
                 embed=warframe_data_unavailable_embed(interaction.client),
-                view=attach_notify_when_back(RetryView(on_retry)),
+                retry_type="wf_daily_ops",
+                payload=ops_payload,
+                owner_user_id=interaction.user.id,
+                edit=False,
             )
         embed = _build_embed(sp, arb, nw, interaction.client, platform=plat)
         payload = {"guild_id": gid, "user_id": interaction.user.id}

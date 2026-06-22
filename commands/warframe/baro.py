@@ -18,13 +18,15 @@ from core.utils import (
     format_number,
     warframe_data_unavailable_embed,
 )
-from core.wf_resolve import BARO_CACHE_KEY, wf_invalidate, wf_retry_denied, wf_retry_guard
+from core.wf_resolve import BARO_CACHE_KEY, wf_invalidate
+from core.wf_copy import merge_wf_footer
+from core.wf_retry_panels import send_wf_retry_message
 from database import (
     DB_PATH,
     get_baro_inventory_hash,
     set_baro_inventory_hash,
 )
-from views import RefreshView, RetryView
+from views import RefreshView
 from core.refresh_panels import (
     REFRESH_CUSTOM_ID,
     refresh_edit_message,
@@ -192,7 +194,10 @@ def build_baro_embed(
             client=client,
             cached_at=cached_at,
             fields=fields,
-            footer=f"PC data · Use Refresh · {warframe_footer_platform_note('pc', pc_only_api=True)}",
+            footer=merge_wf_footer(
+                f"PC data · Use Refresh · {warframe_footer_platform_note('pc', pc_only_api=True)}",
+                BARO_CACHE_KEY,
+            ),
         )
 
     fields = []
@@ -261,7 +266,10 @@ def build_baro_embed(
         client=client,
         cached_at=cached_at,
         fields=fields,
-        footer=f"PC data · Baro visits every ~2 weeks · {warframe_footer_platform_note('pc', pc_only_api=True)}",
+        footer=merge_wf_footer(
+            f"PC data · Baro visits every ~2 weeks · {warframe_footer_platform_note('pc', pc_only_api=True)}",
+            BARO_CACHE_KEY,
+        ),
     )
 
 
@@ -451,33 +459,14 @@ def setup(bot, group=None):
                 baro_data["_last_visit"] = await cur.fetchone()
 
         if not baro_data:
-
-            async def on_retry(btn_interaction: discord.Interaction):
-                if not wf_retry_guard(btn_interaction, interaction.user.id):
-                    return await wf_retry_denied(btn_interaction)
-                await btn_interaction.response.defer()
-                new_active, new_data = await _resolve_baro_status(fresh=True)
-                if not new_data:
-                    return await btn_interaction.followup.send(
-                        "Still can't reach the stats server. Try **Try again** again in a minute.",
-                        ephemeral=True,
-                    )
-                if new_data and not new_active:
-                    async with aiosqlite.connect(DB_PATH) as db:
-                        cur = await db.execute(
-                            "SELECT arrival_time, departure_time, location, inventory_json "
-                            "FROM baro_visits ORDER BY id DESC LIMIT 1"
-                        )
-                        new_data["_last_visit"] = await cur.fetchone()
-                mark = await _resolve_mark_new(guild_id, new_data.get("inventory", []) or [])
-                emb = build_baro_embed(new_data, new_active, interaction.client, guild_id=guild_id, mark_new=mark)
-                await btn_interaction.message.edit(embed=emb, view=None)
-                await _persist_inventory_hash(guild_id, new_data.get("inventory", []) or [])
-
-            from core.wf_recovery import attach_notify_when_back
-            return await interaction.followup.send(
+            baro_payload = {"guild_id": guild_id}
+            return await send_wf_retry_message(
+                interaction,
                 embed=warframe_data_unavailable_embed(interaction.client),
-                view=attach_notify_when_back(RetryView(on_retry)),
+                retry_type="wf_baro",
+                payload=baro_payload,
+                owner_user_id=interaction.user.id,
+                edit=False,
                 ephemeral=True,
             )
 

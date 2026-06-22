@@ -29,7 +29,8 @@ from core.utils import (
     success_embed,
     warframe_data_unavailable_embed,
 )
-from core.wf_resolve import wf_invalidate, wf_retry_denied, wf_retry_guard
+from core.wf_copy import merge_wf_footer
+from core.wf_resolve import wf_invalidate
 from database import get_guild_setting, set_guild_setting
 from views import RefreshView
 from core.refresh_panels import register_refresh_panel
@@ -126,7 +127,10 @@ async def build_world_state_embed(client) -> discord.Embed:
         client=client,
         cached_at=_world_state_cached_at(),
         fields=fields,
-        footer="Pinned board · Use **Update data** to refresh · /warframe worth",
+        footer=merge_wf_footer(
+            "Pinned board · Use **Update data** to refresh · /warframe worth",
+            "warframe:world_state",
+        ),
     )
 
 
@@ -182,7 +186,10 @@ async def build_worth_embed(client) -> discord.Embed:
         client=client,
         cached_at=cached,
         fields=fields,
-        footer="Use **Update data** to refresh · /warframe world_state for pinned board",
+        footer=merge_wf_footer(
+            "Use **Update data** to refresh · /warframe world_state for pinned board",
+            "warframe:world_state",
+        ),
     )
 
 

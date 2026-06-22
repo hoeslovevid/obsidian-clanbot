@@ -12,15 +12,25 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-06-21"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**QoL · Panels** — `/hq`, `/notifications`, and `/today` have refresh + action buttons (LFG, Baro, digest, test DM)",
-    "**QoL · LFG** — `/lfg list` browse open posts; **Re-post** clones filled squads; empty list shows quick templates",
-    "**QoL · Warframe** — persistent `wf_hub:*` hint routing; degraded/cache footers on hub & invasions; fissure/invasion preset headers",
-    "**QoL · Discovery** — `/search` links menu items; `/help` footer nudge; welcome card **Quiet hours**; preferences surfaced in `/start` & journey DMs",
-    "**QoL · UX** — Baro wishlist highlights in `/today` & `/hq`; compact embeds on `/profile` for viewers with that preference",
+    "**QoL · Warframe** — persistent **Try again** on API failures (restart-safe); V2 hub hint/refresh buttons; degraded footers on status, Baro, archon, world state",
+    "**QoL · Panels** — `/claim` refresh + action row; `/mod inbox` refresh + staff shortcuts; digest **section** toggles on `/notifications`",
+    "**QoL · HQ** — mods see setup health line on `/hq`",
+    "**QoL · LFG** — stale host DM nudge after **48h** with **Re-post** button",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "2.2.0",
+        "date": "2026-06-21",
+        "changes": [
+            "**QoL · Panels** — `/hq`, `/notifications`, and `/today` have refresh + action buttons (LFG, Baro, digest, test DM)",
+            "**QoL · LFG** — `/lfg list` browse open posts; **Re-post** clones filled squads; empty list shows quick templates",
+            "**QoL · Warframe** — persistent `wf_hub:*` hint routing; degraded/cache footers on hub & invasions; fissure/invasion preset headers",
+            "**QoL · Discovery** — `/search` links menu items; `/help` footer nudge; welcome card **Quiet hours**; preferences surfaced in `/start` & journey DMs",
+            "**QoL · UX** — Baro wishlist highlights in `/today` & `/hq`; compact embeds on `/profile` for viewers with that preference",
+        ],
+    },
     {
         "version": "2.1.5",
         "date": "2026-06-21",

@@ -141,6 +141,12 @@ async def run_startup(bot: discord.Client) -> None:
             bot.add_view(PersistentRefreshView())
         except Exception as e:
             logger.debug(f"[ready] PersistentRefreshView registration skipped: {e}")
+        try:
+            from core.wf_retry_panels import PersistentWfRetryView
+
+            bot.add_view(PersistentWfRetryView())
+        except Exception as e:
+            logger.debug(f"[ready] PersistentWfRetryView registration skipped: {e}")
 
         try:
             from core.refresh_panels import register_refresh_panel

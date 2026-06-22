@@ -7,7 +7,7 @@ import dateparser  # type: ignore
 
 from core.utils import obsidian_embed, warframe_data_unavailable_embed
 from api.warframe_api import fetch_archon_hunt_data
-from core.refresh_panels import refresh_edit_message, refresh_followup_ephemeral, register_refresh_panel
+from core.wf_resolve import wf_footer
 from views import RefreshView
 
 # Per-user refresh cooldown (Item 15) — guards the warframestat.us API from abuse
@@ -90,7 +90,7 @@ def build_archon_embed(archon_data: dict, client=None) -> discord.Embed:
         "",
         color=color,
         fields=fields,
-        footer="warframestat.us • Tap 🔄 to refresh",
+        footer=wf_footer("warframestat.us • Tap 🔄 to refresh", "warframe:archon"),
         client=client,
     )
 

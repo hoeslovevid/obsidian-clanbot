@@ -4,6 +4,8 @@ from __future__ import annotations
 import discord
 from discord import ui
 
+from core.utils import is_mod
+
 
 async def handle_panel_action(interaction: discord.Interaction, custom_id: str) -> bool:
     """Route ``panel:*`` button clicks. Returns True if handled."""
@@ -21,6 +23,10 @@ async def handle_panel_action(interaction: discord.Interaction, custom_id: str) 
         return await _handle_today_action(interaction, action)
     if panel == "hq":
         return await _handle_hq_action(interaction, action)
+    if panel == "claim":
+        return await _handle_claim_action(interaction, action)
+    if panel == "mod":
+        return await _handle_mod_action(interaction, action)
     return False
 
 
@@ -68,7 +74,24 @@ async def _handle_notifications_action(interaction: discord.Interaction, action:
         await set_digest_dm(gid, uid, not current)
         state = "On" if not current else "Off"
         await interaction.response.send_message(
-            f"Daily digest DM is now **{state}**. Use **`/preferences digest_dm`** for section toggles.",
+            f"Daily digest DM is now **{state}**. Use the section buttons to fine-tune.",
+            ephemeral=True,
+        )
+        return True
+
+    if action.startswith("digest_"):
+        section = action[7:]
+        from core.notifications_hub import DIGEST_SECTIONS, digest_section_enabled
+        from database import set_guild_setting
+
+        valid = {k for k, _, _ in DIGEST_SECTIONS}
+        if section not in valid:
+            return False
+        on = await digest_section_enabled(gid, uid, section)
+        await set_guild_setting(gid, f"user_digest_feat:{uid}:{section}", "0" if on else "1")
+        label = next(l for k, l, _ in DIGEST_SECTIONS if k == section)
+        await interaction.response.send_message(
+            f"Digest **{label}** is now **{'Off' if on else 'On'}**.",
             ephemeral=True,
         )
         return True
@@ -134,9 +157,198 @@ async def _handle_hq_action(interaction: discord.Interaction, action: str) -> bo
     return False
 
 
+async def _handle_claim_action(interaction: discord.Interaction, action: str) -> bool:
+    if not interaction.guild:
+        from core.reply_helpers import reply_server_only
+
+        await reply_server_only(interaction)
+        return True
+
+    gid = interaction.guild.id
+    uid = interaction.user.id
+
+    if action == "refresh":
+        from commands.economy.claim import refresh_claim_panel
+
+        await refresh_claim_panel(interaction)
+        return True
+
+    owner_only = "This panel is for whoever ran `/claim`."
+
+    if action == "bounties":
+        await interaction.response.defer(ephemeral=True)
+        from commands.economy.bounties import claim_bounties
+        from core.utils import format_number, success_embed
+
+        total, count = await claim_bounties(gid, uid)
+        msg = (
+            f"Claimed **{format_number(total)}** coins from {count} bounties."
+            if count
+            else "No bounties were ready to claim."
+        )
+        await interaction.followup.send(
+            embed=success_embed("Bounties", msg, client=interaction.client),
+            ephemeral=True,
+        )
+        return True
+
+    if action == "invest":
+        await interaction.response.defer(ephemeral=True)
+        from commands.economy.invest import collect_matured_investment
+        from core.utils import format_number, success_embed
+
+        ok, msg, payout = await collect_matured_investment(gid, uid)
+        if ok:
+            await interaction.followup.send(
+                embed=success_embed(
+                    "Investment collected",
+                    f"{msg}\n**+{format_number(payout)}** coins",
+                    client=interaction.client,
+                ),
+                ephemeral=True,
+            )
+        else:
+            await interaction.followup.send(msg, ephemeral=True)
+        return True
+
+    if action == "daily":
+        from core.command_mentions import command_mention
+
+        daily_cmd = command_mention("daily", fallback="`/daily`")
+        await interaction.response.send_message(
+            f"Run {daily_cmd} to claim your streak reward (bounties auto-claim there too).",
+            ephemeral=True,
+        )
+        return True
+
+    await interaction.response.send_message(
+        owner_only + " Run **`/claim`** again for a fresh panel.",
+        ephemeral=True,
+    )
+    return True
+
+
+async def _handle_mod_action(interaction: discord.Interaction, action: str) -> bool:
+    if not interaction.guild:
+        from core.reply_helpers import reply_server_only
+
+        await reply_server_only(interaction)
+        return True
+    if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
+        await interaction.response.send_message(
+            "Only moderators can use staff inbox actions.",
+            ephemeral=True,
+        )
+        return True
+
+    hints = {
+        "tickets": "Run **`/ticket list`** or check your ticket channel for open threads.",
+        "setup": "Run **`/admin setup_status`** for the full checklist.",
+        "suggestions": "Run **`/community suggest_manage`** to review pending suggestions.",
+        "dashboard": "Run **`/mod dashboard`** for the full officer board.",
+    }
+    if action == "refresh":
+        from commands.moderation.dashboard import refresh_mod_inbox_panel
+
+        await refresh_mod_inbox_panel(interaction)
+        return True
+    if action in hints:
+        await interaction.response.send_message(hints[action], ephemeral=True)
+        return True
+    return False
+
+
+def claim_panel_view(
+    *,
+    guild_id: int,
+    user_id: int,
+    daily_ready: bool,
+    bounty_ready: bool,
+    invest_ready: bool,
+) -> discord.ui.View:
+    from views import RefreshView
+
+    payload = {"guild_id": guild_id, "user_id": user_id}
+    view = RefreshView.panel("claim_hub", payload=payload, timeout=300)
+    row = ui.ActionRow()
+    if bounty_ready:
+        row.add_item(
+            ui.Button(
+                label="Claim bounties",
+                style=discord.ButtonStyle.success,
+                emoji="🎯",
+                custom_id="panel:claim:bounties",
+            )
+        )
+    if invest_ready:
+        row.add_item(
+            ui.Button(
+                label="Collect investment",
+                style=discord.ButtonStyle.primary,
+                emoji="📈",
+                custom_id="panel:claim:invest",
+            )
+        )
+    if daily_ready:
+        row.add_item(
+            ui.Button(
+                label="Run daily",
+                style=discord.ButtonStyle.secondary,
+                emoji="🎁",
+                custom_id="panel:claim:daily",
+            )
+        )
+    if row.children:
+        view.add_item(row)
+    return view
+
+
+def mod_inbox_panel_view(*, guild_id: int) -> discord.ui.View:
+    from views import RefreshView
+
+    payload = {"guild_id": guild_id}
+    view = RefreshView.panel("mod_inbox", payload=payload, timeout=300)
+    row = ui.ActionRow()
+    row.add_item(
+        ui.Button(
+            label="Tickets",
+            style=discord.ButtonStyle.primary,
+            emoji="🎫",
+            custom_id="panel:mod:tickets",
+        )
+    )
+    row.add_item(
+        ui.Button(
+            label="Setup status",
+            style=discord.ButtonStyle.secondary,
+            emoji="🧭",
+            custom_id="panel:mod:setup",
+        )
+    )
+    row.add_item(
+        ui.Button(
+            label="Suggestions",
+            style=discord.ButtonStyle.secondary,
+            emoji="💡",
+            custom_id="panel:mod:suggestions",
+        )
+    )
+    row.add_item(
+        ui.Button(
+            label="Dashboard",
+            style=discord.ButtonStyle.secondary,
+            emoji="🛡️",
+            custom_id="panel:mod:dashboard",
+        )
+    )
+    view.add_item(row)
+    return view
+
+
 def notifications_panel_view(*, guild_id: int, user_id: int) -> discord.ui.View:
     """Refreshable notifications dashboard."""
     from views import RefreshView
+    from core.notifications_hub import DIGEST_SECTIONS
 
     payload = {"guild_id": guild_id, "user_id": user_id}
     view = RefreshView.panel("notifications", payload=payload, timeout=300)
@@ -176,6 +388,29 @@ def notifications_panel_view(*, guild_id: int, user_id: int) -> discord.ui.View:
         )
     )
     view.add_item(row2)
+
+    digest_row = ui.ActionRow()
+    for key, label, emoji in DIGEST_SECTIONS[:3]:
+        digest_row.add_item(
+            ui.Button(
+                label=label[:12],
+                style=discord.ButtonStyle.secondary,
+                emoji=emoji,
+                custom_id=f"panel:notifications:digest_{key}",
+            )
+        )
+    view.add_item(digest_row)
+    digest_row2 = ui.ActionRow()
+    for key, label, emoji in DIGEST_SECTIONS[3:]:
+        digest_row2.add_item(
+            ui.Button(
+                label=label[:12],
+                style=discord.ButtonStyle.secondary,
+                emoji=emoji,
+                custom_id=f"panel:notifications:digest_{key}",
+            )
+        )
+    view.add_item(digest_row2)
     return view
 
 

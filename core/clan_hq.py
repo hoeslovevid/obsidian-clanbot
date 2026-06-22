@@ -4,7 +4,7 @@ from __future__ import annotations
 import aiosqlite
 import discord
 
-from core.utils import obsidian_embed, EMBED_COLORS
+from core.utils import is_mod, obsidian_embed, EMBED_COLORS
 from database import DB_PATH
 
 
@@ -44,6 +44,7 @@ async def build_clan_hq_embed(
     *,
     client=None,
     user_id: int | None = None,
+    viewer: discord.Member | None = None,
 ) -> discord.Embed:
     """One-glance clan hub: LFG, events, Baro, live streamers."""
     lines: list[str] = [f"**{guild.name}** — your clan at a glance\n"]
@@ -104,6 +105,14 @@ async def build_clan_hq_embed(
         live_hint = ", ".join(f"`{s}`" for s in streamers[:4])
         lines.append(f"📺 **Monitored streamers:** {live_hint} (offline)")
     lines.append("\n-# `/menu` · `/today` · `/notifications` · `/warframe hub`")
+
+    if viewer and is_mod(viewer):
+        try:
+            from commands.general.setup_status import setup_health_line
+
+            lines.append(f"\n🧭 _Staff:_ {await setup_health_line(guild)}")
+        except Exception:
+            pass
 
     footer = "Tap **Update data** to refresh · `/status` for API health"
     try:

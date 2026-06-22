@@ -7,6 +7,30 @@ import discord
 from core.utils import obsidian_embed, EMBED_COLORS
 from database import DB_PATH, get_digest_dm, get_guild_setting
 
+DIGEST_SECTIONS: list[tuple[str, str, str]] = [
+    ("economy", "Economy", "🎁"),
+    ("events", "Events", "📅"),
+    ("baro", "Baro", "🛒"),
+    ("investments", "Investments", "📈"),
+    ("pets", "Pets", "🐾"),
+    ("market", "Market", "💰"),
+]
+
+
+async def digest_section_enabled(guild_id: int, user_id: int, section: str) -> bool:
+    """Sections default to on unless explicitly disabled."""
+    val = await get_guild_setting(guild_id, f"user_digest_feat:{user_id}:{section}")
+    return val != "0"
+
+
+async def digest_section_lines(guild_id: int, user_id: int) -> str:
+    """Compact digest section state block."""
+    parts: list[str] = []
+    for key, label, emoji in DIGEST_SECTIONS:
+        on = await digest_section_enabled(guild_id, user_id, key)
+        parts.append(f"{emoji} {label}: {'On' if on else 'Off'}")
+    return " · ".join(parts)
+
 
 async def build_notifications_status_embed(
     guild: discord.Guild,
@@ -70,12 +94,14 @@ async def build_notifications_status_embed(
         lines.append("• Twitch (server): none (`/community twitch_add`)")
 
     digest = await get_digest_dm(gid, uid)
-    lines.append(f"• Daily digest DM: {'On' if digest else 'Off'} (`/preferences digest_dm`)")
+    lines.append(f"• Daily digest DM: {'On' if digest else 'Off'}")
+    if digest:
+        lines.append(f"• Digest sections: {await digest_section_lines(gid, uid)}")
 
     return obsidian_embed(
         "🔔 Notification Status",
         "\n".join(lines)[:3900],
         color=EMBED_COLORS["general"],
-        footer="Use the buttons below · Test DMs · toggle digest · `/wfnotify configure`",
+        footer="Buttons below · toggle digest sections · `/wfnotify configure`",
         client=client,
     )

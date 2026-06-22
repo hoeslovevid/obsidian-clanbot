@@ -9,13 +9,13 @@ from core.utils import warframe_data_unavailable_embed
 from core.wf_resolve import (
     wf_invalidate_status_snapshot,
     wf_platform_for,
-    wf_retry_denied,
-    wf_retry_guard,
 )
+from core.wf_copy import merge_wf_footer
+from core.wf_retry_panels import send_wf_retry_message
 from api.warframe_api import wf_staleness_for_path
 from api.warframe_api import get_baro_status, fetch_alerts, get_all_cycles, fetch_fissures, fetch_sortie, fetch_invasions
 from commands.warframe.alerts import format_alert_rewards
-from views import RetryView, RefreshView
+from views import RefreshView
 from core.refresh_panels import register_refresh_panel
 from core.warframe_platform import warframe_footer_platform_note
 
@@ -190,9 +190,10 @@ def build_status_embed(
     now = datetime.now(timezone.utc)
     footer_ts = int(now.timestamp())
     plat_label = platform.upper() if platform else "PC"
-    footer = (
+    footer = merge_wf_footer(
         f"Last updated <t:{footer_ts}:R> · {plat_label} data · Use Refresh · "
-        f"{warframe_footer_platform_note(platform, pc_only_api=True)}"
+        f"{warframe_footer_platform_note(platform, pc_only_api=True)}",
+        "warframe:status",
     )
 
     fields = []
@@ -293,28 +294,14 @@ def setup(bot, group=None):
         is_active, baro_data = baro_result
 
         if not baro_data and not alerts_data and not cycles_data and not fissures_data and not sortie_data:
-            async def on_retry(btn_interaction: discord.Interaction):
-                if not wf_retry_guard(btn_interaction, interaction.user.id):
-                    return await wf_retry_denied(btn_interaction)
-                await btn_interaction.response.defer()
-                await wf_invalidate_status_snapshot(platform)
-                br, ar, cr, fr, sr, ir = await asyncio.gather(
-                    get_baro_status(),
-                    fetch_alerts(),
-                    get_all_cycles(),
-                    fetch_fissures(platform),
-                    fetch_sortie(),
-                    fetch_invasions(),
-                )
-                ia, bd = br
-                emb = build_status_embed(
-                    ia, bd, ar, cr, fr, sr, interaction.client, ir, platform=platform
-                )
-                await btn_interaction.message.edit(embed=emb, view=None)
-            from core.wf_recovery import attach_notify_when_back
-            return await interaction.edit_original_response(
+            status_payload = {"platform": platform}
+            return await send_wf_retry_message(
+                interaction,
                 embed=warframe_data_unavailable_embed(interaction.client),
-                view=attach_notify_when_back(RetryView(on_retry)),
+                retry_type="wf_status",
+                payload=status_payload,
+                owner_user_id=interaction.user.id,
+                edit=True,
             )
 
         embed = build_status_embed(

@@ -9,12 +9,11 @@ from core.wf_resolve import (
     wf_cycles_split,
     wf_footer_with_freshness,
     wf_invalidate,
-    wf_retry_denied,
-    wf_retry_guard,
 )
 from api.warframe_api import get_all_cycles
 from core.refresh_panels import register_refresh_panel
-from views import RetryView, RefreshView
+from core.wf_retry_panels import send_wf_retry_message
+from views import RefreshView
 
 
 def setup(bot, group=None):
@@ -30,30 +29,16 @@ def setup(bot, group=None):
         success, failed = wf_cycles_split(cycles_data)
 
         if not success:
-            embed = warframe_data_unavailable_embed(interaction.client)
-
-            async def on_retry(btn_interaction: discord.Interaction):
-                if not wf_retry_guard(btn_interaction, interaction.user.id):
-                    return await wf_retry_denied(btn_interaction)
-                await btn_interaction.response.defer()
-                await wf_invalidate("warframe:cycles")
-                new_data = await get_all_cycles()
-                new_success, _ = wf_cycles_split(new_data)
-                if not new_success:
-                    await btn_interaction.followup.send(
-                        "Still no cycle data. The stats service may need another minute.",
-                        ephemeral=True,
-                    )
-                    return
-                fields = _build_cycle_fields(new_success)
-                desc = "Partial data (some cycles unavailable)." if len(new_success) < 3 else ""
-                emb = obsidian_embed("🌍 Open World Cycles", desc, color=EMBED_COLORS["warframe"], fields=fields, client=interaction.client)
-                await btn_interaction.message.edit(embed=emb, view=None)
-
-            view = RetryView(on_retry)
-            from core.wf_recovery import attach_notify_when_back
-            attach_notify_when_back(view, get_all_cycles)
-            return await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+            return await send_wf_retry_message(
+                interaction,
+                embed=warframe_data_unavailable_embed(interaction.client),
+                retry_type="wf_cycles",
+                payload={},
+                owner_user_id=interaction.user.id,
+                fetch_probe=get_all_cycles,
+                edit=False,
+                ephemeral=True,
+            )
 
         fields = _build_cycle_fields(success)
         desc = "Partial data: " + ", ".join(failed) + " unavailable." if failed else ""

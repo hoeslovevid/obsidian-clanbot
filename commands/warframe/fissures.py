@@ -10,12 +10,11 @@ from core.wf_resolve import (
     wf_footer,
     wf_invalidate,
     wf_platform,
-    wf_retry_denied,
-    wf_retry_guard,
 )
 from api.warframe_api import fetch_fissures
-from views import RetryView, RefreshView
+from views import RefreshView
 from core.refresh_panels import register_refresh_panel
+from core.wf_retry_panels import send_wf_retry_message
 
 FISSURE_TIER_CHOICES = [
     app_commands.Choice(name="All tiers", value="all"),
@@ -65,22 +64,15 @@ def setup(bot, group=None):
         cache_key = f"warframe:fissures:{platform}"
         data = await fetch_fissures(platform)
         if wf_fetch_failed(data):
-            async def on_retry(btn_i: discord.Interaction):
-                if not wf_retry_guard(btn_i, interaction.user.id):
-                    return await wf_retry_denied(btn_i)
-                await btn_i.response.defer()
-                nd = await fetch_fissures(platform)
-                if wf_fetch_failed(nd):
-                    return await btn_i.followup.send(
-                        "Still can't load fissures. Try **Try again** again in a bit.",
-                        ephemeral=True,
-                    )
-                emb = _build_embed(nd, interaction.client, tier_filter=tier_filter, cache_key=cache_key)
-                await btn_i.message.edit(embed=emb, view=None)
-            from core.wf_recovery import attach_notify_when_back
-            return await interaction.followup.send(
+            fiss_payload = {"platform": platform, "tier_filter": tier_filter}
+            return await send_wf_retry_message(
+                interaction,
                 embed=warframe_data_unavailable_embed(interaction.client),
-                view=attach_notify_when_back(RetryView(on_retry), lambda: fetch_fissures(platform)),
+                retry_type="wf_fissures",
+                payload=fiss_payload,
+                owner_user_id=interaction.user.id,
+                fetch_probe=lambda: fetch_fissures(platform),
+                edit=False,
             )
         if not data:
             return await interaction.followup.send(
@@ -106,7 +98,7 @@ def _build_embed(fissures_list, client, *, tier_filter: str = "all", cache_key: 
             "⚡ Void Fissures",
             f"No active **{tier_filter}** fissures right now.\n\nTry another tier or check back later.",
             color=EMBED_COLORS["warframe"],
-            footer="See also: /warframe sortie, /warframe baro",
+            footer=wf_footer("See also: /warframe sortie, /warframe baro", cache_key),
             client=client,
         )
 

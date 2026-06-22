@@ -74,6 +74,6 @@ async def build_mod_inbox_embed(guild: discord.Guild, *, client=None) -> discord
         "📥 Mod Inbox",
         "\n".join(sections),
         color=EMBED_COLORS.get("moderation", discord.Color.orange()),
-        footer=f"Updated {now_utc().strftime('%H:%M UTC')}",
+        footer="Use **Update data** · `/mod dashboard` · `/admin setup_status`",
         client=client,
     )

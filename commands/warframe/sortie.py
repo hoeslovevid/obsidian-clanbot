@@ -9,12 +9,11 @@ from core.wf_resolve import (
     wf_fetch_failed,
     wf_footer,
     wf_invalidate,
-    wf_retry_denied,
-    wf_retry_guard,
 )
 from api.warframe_api import fetch_sortie
 from core.refresh_panels import register_refresh_panel
-from views import RetryView, RefreshView
+from core.wf_retry_panels import send_wf_retry_message
+from views import RefreshView
 
 SORTIE_CACHE_KEY = "warframe:sortie"
 
@@ -27,19 +26,14 @@ def setup(bot, group=None):
         await interaction.response.defer()
         data = await fetch_sortie()
         if wf_fetch_failed(data):
-            async def on_retry(btn_i: discord.Interaction):
-                if not wf_retry_guard(btn_i, interaction.user.id):
-                    return await wf_retry_denied(btn_i)
-                await btn_i.response.defer()
-                nd = await fetch_sortie()
-                if wf_fetch_failed(nd):
-                    return await btn_i.followup.send("Still unable to fetch.", ephemeral=True)
-                emb = _build_embed(nd, interaction.client)
-                await btn_i.message.edit(embed=emb, view=None)
-            from core.wf_recovery import attach_notify_when_back
-            return await interaction.followup.send(
+            return await send_wf_retry_message(
+                interaction,
                 embed=warframe_data_unavailable_embed(interaction.client),
-                view=attach_notify_when_back(RetryView(on_retry)),
+                retry_type="wf_sortie",
+                payload={},
+                owner_user_id=interaction.user.id,
+                fetch_probe=fetch_sortie,
+                edit=False,
             )
         embed = _build_embed(data, interaction.client)
 

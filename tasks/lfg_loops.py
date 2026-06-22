@@ -172,12 +172,12 @@ async def run_lfg_bump_cycle(bot: discord.Client) -> None:
 
 
 async def run_lfg_poster_nudge_cycle(bot: discord.Client) -> None:
-    """DM LFG creators after ~2h with no thread replies."""
+    """DM LFG creators after ~48h with no thread replies."""
     if not bot.is_ready():
         return
     from database import get_guild_setting, set_guild_setting
 
-    cutoff = (now_utc() - timedelta(hours=2)).isoformat()
+    cutoff = (now_utc() - timedelta(hours=48)).isoformat()
     async with aiosqlite.connect(DB_PATH) as db:
         cur = await db.execute(
             """
@@ -207,13 +207,24 @@ async def run_lfg_poster_nudge_cycle(bot: discord.Client) -> None:
             from core.quiet_hours import in_quiet_hours
             if await in_quiet_hours(int(guild_id), int(creator_id)):
                 continue
-            await safe_dm(user,
+            repost_view = discord.ui.View(timeout=None)
+            repost_view.add_item(
+                discord.ui.Button(
+                    label="Re-post",
+                    style=discord.ButtonStyle.primary,
+                    emoji="🔄",
+                    custom_id=f"lfg:{lfg_id}:repost",
+                )
+            )
+            await safe_dm(
+                user,
                 embed=obsidian_embed(
                     "👋 Still looking for squad?",
-                    f"Your **{mission}** LFG has had no replies for 2+ hours.\n\n"
-                    f"[Jump to post]({msg.jump_url}) — bump in chat or mark filled when done.",
+                    f"Your **{mission}** LFG has had no replies for 48+ hours.\n\n"
+                    f"[Jump to post]({msg.jump_url}) — tap **Re-post** to clone it, or mark filled when done.",
                     client=bot,
-                )
+                ),
+                view=repost_view,
             )
             await set_guild_setting(int(guild_id), f"lfg_creator_nudged:{lfg_id}", "1")
         except Exception as exc:

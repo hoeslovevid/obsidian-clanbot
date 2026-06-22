@@ -56,6 +56,12 @@ async def handle_component(bot: discord.Client, interaction: discord.Interaction
             await handle_refresh_button(bot, interaction)
             return
 
+        if cid == "obsidian:wf_retry":
+            from core.wf_retry_panels import handle_wf_retry_button
+
+            await handle_wf_retry_button(bot, interaction)
+            return
+
         if cid.startswith("wf_hub:"):
             from core.wf_hub_actions import handle_wf_hub_button
 

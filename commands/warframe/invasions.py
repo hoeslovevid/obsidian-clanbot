@@ -8,12 +8,11 @@ from core.wf_resolve import (
     wf_fetch_failed,
     wf_footer,
     wf_invalidate,
-    wf_retry_denied,
-    wf_retry_guard,
 )
 from api.warframe_api import fetch_invasions
-from views import RetryView, RefreshView
+from views import RefreshView
 from core.refresh_panels import register_refresh_panel
+from core.wf_retry_panels import send_wf_retry_message
 import dateparser
 
 
@@ -111,23 +110,15 @@ def setup(bot, group=None):
             )
 
         if wf_fetch_failed(invasions_data):
-            async def on_retry(btn_interaction: discord.Interaction):
-                if not wf_retry_guard(btn_interaction, interaction.user.id):
-                    return await wf_retry_denied(btn_interaction)
-                await btn_interaction.response.defer()
-                new_data = await fetch_invasions()
-                if wf_fetch_failed(new_data):
-                    return await btn_interaction.followup.send(
-                        "Invasions still won't load. Try **Try again** again in a minute.",
-                        ephemeral=True,
-                    )
-                emb = _build_invasions_embed(new_data, interaction.client, faction_filter=faction_filter)
-                await btn_interaction.message.edit(embed=emb, view=None)
-
-            from core.wf_recovery import attach_notify_when_back
-            return await interaction.followup.send(
+            inv_payload = {"faction_filter": faction_filter or ""}
+            return await send_wf_retry_message(
+                interaction,
                 embed=warframe_data_unavailable_embed(interaction.client),
-                view=attach_notify_when_back(RetryView(on_retry)),
+                retry_type="wf_invasions",
+                payload=inv_payload,
+                owner_user_id=interaction.user.id,
+                fetch_probe=fetch_invasions,
+                edit=False,
             )
 
         if not invasions_data:

@@ -27,9 +27,8 @@ from core.utils import BUTTON_ONLY_RUNNER_MSG, warframe_data_unavailable_embed
 from core.wf_resolve import (
     wf_invalidate_hub_snapshot,
     wf_platform_for,
-    wf_retry_denied,
-    wf_retry_guard,
 )
+from core.wf_retry_panels import send_wf_retry_message
 from core.warframe_platform import warframe_footer_platform_note
 from core.music_player import format_guild_music_line
 from core.wf_hub_extras import (
@@ -39,7 +38,7 @@ from core.wf_hub_extras import (
     get_twitch_streaming_line,
     toggle_baro_wishlist,
 )
-from views import RefreshView, RetryView
+from views import RefreshView
 from core.refresh_panels import refresh_edit_message, register_refresh_panel
 
 
@@ -169,104 +168,25 @@ class BaroWishlistModal(discord.ui.Modal, title="Baro wishlist item"):
         await interaction.response.send_message(msg, ephemeral=True)
 
 
-async def _wishlist_modal_cb(btn_interaction: discord.Interaction) -> None:
-    if not btn_interaction.guild:
-        from core.reply_helpers import reply_server_only
-        return await reply_server_only(btn_interaction)
-    await btn_interaction.response.send_modal(BaroWishlistModal(btn_interaction.guild.id))
-
-
 def _hub_view(platform: str, guild_id: int) -> discord.ui.View:
     payload = {"platform": platform, "guild_id": guild_id}
     view = RefreshView.panel("wf_hub", payload=payload)
     add_link_row(view, _hub_link_buttons())
-
-    wish = discord.ui.Button(
-        label="Baro wishlist",
-        style=discord.ButtonStyle.secondary,
-        emoji="⭐",
-        custom_id="wf_hub:baro_wish",
-    )
-
-    async def wish_cb(btn_interaction: discord.Interaction):
-        if not btn_interaction.guild:
-            from core.reply_helpers import reply_server_only
-            return await reply_server_only(btn_interaction)
-        await btn_interaction.response.send_modal(BaroWishlistModal(btn_interaction.guild.id))
-
-    wish.callback = wish_cb  # type: ignore
-    view.add_item(wish)
-
-    hint = discord.ui.Button(
-        label="Full status",
-        style=discord.ButtonStyle.secondary,
-        emoji="📋",
-        custom_id="wf_hub:status_hint",
-    )
-
-    async def status_hint_cb(btn_interaction: discord.Interaction):
-        await btn_interaction.response.send_message(
-            "Run **`/warframe status`** for Baro, alerts, cycles, fissures, sortie, and invasions.",
-            ephemeral=True,
+    for label, emoji, cid in (
+        ("Baro wishlist", "⭐", "wf_hub:baro_wish"),
+        ("Full status", "📋", "wf_hub:status_hint"),
+        ("Notify setup", "🔔", "wf_hub:notify_hint"),
+        ("Post LFG", "🤝", "wf_hub:lfg_hint"),
+        ("My fissures", "💎", "wf_hub:my_fissures"),
+    ):
+        view.add_item(
+            discord.ui.Button(
+                label=label,
+                style=discord.ButtonStyle.secondary,
+                emoji=emoji,
+                custom_id=cid,
+            )
         )
-
-    hint.callback = status_hint_cb  # type: ignore
-    view.add_item(hint)
-    notify = discord.ui.Button(
-        label="Notify setup",
-        style=discord.ButtonStyle.primary,
-        emoji="🔔",
-        custom_id="wf_hub:notify_hint",
-    )
-
-    async def notify_hint_cb(btn_interaction: discord.Interaction):
-        await btn_interaction.response.send_message(
-            "Run **`/wfnotify configure`** — recommended wizard for Baro, cycles, and alerts.",
-            ephemeral=True,
-        )
-
-    notify.callback = notify_hint_cb  # type: ignore
-    view.add_item(notify)
-    lfg = discord.ui.Button(
-        label="Post LFG",
-        style=discord.ButtonStyle.secondary,
-        emoji="🤝",
-        custom_id="wf_hub:lfg_hint",
-    )
-
-    async def lfg_hint_cb(btn_interaction: discord.Interaction):
-        await btn_interaction.response.send_message(
-            "Run **`/lfg`** to post a squad — or right-click a message → **Create LFG**.",
-            ephemeral=True,
-        )
-
-    lfg.callback = lfg_hint_cb  # type: ignore
-    view.add_item(lfg)
-
-    fissures = discord.ui.Button(
-        label="My fissures",
-        style=discord.ButtonStyle.secondary,
-        emoji="💎",
-        custom_id="wf_hub:my_fissures",
-    )
-
-    async def fissures_cb(btn_interaction: discord.Interaction):
-        if not btn_interaction.guild:
-            from core.reply_helpers import reply_server_only
-            return await reply_server_only(btn_interaction)
-        from core.user_prefs import default_fissure_tier
-
-        tier = await default_fissure_tier(btn_interaction.guild.id, btn_interaction.user.id)
-        tier_note = f" (preset: **{tier}**)" if tier and tier != "all" else ""
-        fiss_cmd = "`/warframe fissures`"
-        await btn_interaction.response.send_message(
-            f"Run {fiss_cmd} to see void fissures{tier_note}.\n"
-            "-# Set a default tier in `/general preferences fissure_tier`.",
-            ephemeral=True,
-        )
-
-    fissures.callback = fissures_cb  # type: ignore
-    view.add_item(fissures)
     return view
 
 
@@ -309,9 +229,7 @@ async def refresh_hub_panel(interaction: discord.Interaction, payload: dict) -> 
                 title=new_emb.title or "🎮 Warframe Hub",
                 intro=new_emb.description or "",
                 fields=fields,
-                on_refresh=lambda i: refresh_hub_panel(i, payload),
                 guild_id=guild_id,
-                on_wishlist=_wishlist_modal_cb,
             )
             await refresh_edit_message(interaction, view=layout, panel_type="wf_hub", payload=payload)
             return True
@@ -355,46 +273,15 @@ def setup(bot, group=None):
         is_active, baro_data = baro_result
 
         if not baro_data and not alerts_data and not cycles_data:
-            async def on_retry(btn_interaction: discord.Interaction):
-                if not wf_retry_guard(btn_interaction, interaction.user.id):
-                    return await wf_retry_denied(btn_interaction)
-                await btn_interaction.response.defer()
-                br, ar, cr, fr, sr, ir, sp, arb, nw = await _fetch_hub_data(platform)
-                ia, bd = br
-                if not bd and not ar and not cr:
-                    return await btn_interaction.message.edit(
-                        embed=warframe_data_unavailable_embed(interaction.client),
-                        view=None,
-                    )
-                wishlist = None
-                if bd and ia:
-                    inv = bd.get("inventory") or bd.get("Inventory") or []
-                    wishlist = await get_baro_wishlist_overlap(guild_id, inv)
-                twitch = await get_twitch_streaming_line(guild_id) if guild_id else None
-                panel_ch = await _hub_cycle_panel_channel(guild_id) if guild_id else None
-                emb = build_hub_embed(
-                    baro_active=ia,
-                    baro_data=bd or {},
-                    alerts_data=ar or [],
-                    cycles_data=cr or {},
-                    fissures_data=fr or [],
-                    client=interaction.client,
-                    platform=platform,
-                    steel_path=sp,
-                    arbitration=arb,
-                    nightwave=nw,
-                    wishlist_line=wishlist,
-                    twitch_line=twitch,
-                    guild_id=guild_id,
-                    cycle_panel_channel_id=panel_ch,
-                )
-                view = _hub_view(platform, guild_id)
-                await btn_interaction.message.edit(embed=emb, view=view)
-
-            from core.wf_recovery import attach_notify_when_back
-            return await interaction.edit_original_response(
+            hub_payload = {"platform": platform, "guild_id": guild_id}
+            return await send_wf_retry_message(
+                interaction,
                 embed=warframe_data_unavailable_embed(interaction.client),
-                view=attach_notify_when_back(RetryView(on_retry)),
+                retry_type="wf_hub",
+                payload=hub_payload,
+                owner_user_id=interaction.user.id,
+                fetch_probe=lambda: _fetch_hub_data(platform),
+                edit=True,
             )
 
         wishlist_line = None
@@ -440,9 +327,7 @@ def setup(bot, group=None):
                     title=embed.title or "🎮 Warframe Hub",
                     intro=embed.description or "",
                     fields=fields,
-                    on_refresh=lambda i: refresh_hub_panel(i, hub_payload),
                     guild_id=guild_id,
-                    on_wishlist=_wishlist_modal_cb,
                 )
                 await interaction.edit_original_response(view=layout)
                 msg = await interaction.original_response()

@@ -530,6 +530,27 @@ class StatsDashboardView(discord.ui.View):
                 item.disabled = True
 
 
+async def refresh_mod_inbox_panel(interaction: discord.Interaction) -> bool:
+    """Refresh handler for `/mod inbox` panels."""
+    if not interaction.guild:
+        return False
+    from core.action_panel_views import mod_inbox_panel_view
+    from core.mod_inbox import build_mod_inbox_embed
+    from core.refresh_panels import refresh_edit_message
+
+    payload = {"guild_id": interaction.guild.id}
+    embed = await build_mod_inbox_embed(interaction.guild, client=interaction.client)
+    view = mod_inbox_panel_view(guild_id=interaction.guild.id)
+    await refresh_edit_message(
+        interaction,
+        embed=embed,
+        view=view,
+        panel_type="mod_inbox",
+        payload=payload,
+    )
+    return True
+
+
 def setup(bot, group=None):
     """Register the dashboard command."""
     command_decorator = (
@@ -592,10 +613,15 @@ def setup(bot, group=None):
                 "This command can only be used in a server.", ephemeral=True
             )
         await interaction.response.defer(ephemeral=True)
+        from core.action_panel_views import mod_inbox_panel_view
         from core.mod_inbox import build_mod_inbox_embed
+        from core.refresh_panels import register_refresh_panel
 
         embed = await build_mod_inbox_embed(interaction.guild, client=interaction.client)
-        await interaction.followup.send(embed=embed, ephemeral=True)
+        payload = {"guild_id": interaction.guild.id}
+        view = mod_inbox_panel_view(guild_id=interaction.guild.id)
+        msg = await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+        await register_refresh_panel(msg, "mod_inbox", payload)
 
     usage_decorator = (
         group.command(

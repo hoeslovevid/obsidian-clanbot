@@ -432,10 +432,12 @@ async def _refresh_clan_hq(interaction: discord.Interaction, payload: dict[str, 
     if not interaction.guild:
         return False
     user_id = int(payload.get("user_id") or interaction.user.id)
+    viewer = interaction.guild.get_member(user_id) or interaction.user
     embed = await build_clan_hq_embed(
         interaction.guild,
         client=interaction.client,
         user_id=user_id,
+        viewer=viewer if isinstance(viewer, discord.Member) else None,
     )
     view = clan_hq_panel_view(guild_id=interaction.guild.id, user_id=user_id)
     await refresh_edit_message(
@@ -469,6 +471,18 @@ async def _refresh_today(interaction: discord.Interaction, payload: dict[str, An
     return await refresh_today_panel(interaction)
 
 
+async def _refresh_claim_hub(interaction: discord.Interaction, payload: dict[str, Any]) -> bool:
+    from commands.economy.claim import refresh_claim_panel
+
+    return await refresh_claim_panel(interaction)
+
+
+async def _refresh_mod_inbox(interaction: discord.Interaction, payload: dict[str, Any]) -> bool:
+    from commands.moderation.dashboard import refresh_mod_inbox_panel
+
+    return await refresh_mod_inbox_panel(interaction)
+
+
 PANEL_HANDLERS: dict[str, PanelHandler] = {
     "wf_archon": _refresh_wf_archon,
     "wf_sortie": _refresh_wf_sortie,
@@ -488,6 +502,8 @@ PANEL_HANDLERS: dict[str, PanelHandler] = {
     "clan_hq": _refresh_clan_hq,
     "notifications": _refresh_notifications,
     "today": _refresh_today,
+    "claim_hub": _refresh_claim_hub,
+    "mod_inbox": _refresh_mod_inbox,
 }
 
 
