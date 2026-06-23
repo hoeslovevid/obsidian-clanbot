@@ -150,7 +150,7 @@ async def handle_wf_retry_button(
 
 
 class PersistentWfRetryView(ui.View):
-    """Startup-registered view for ``obsidian:wf_retry``."""
+    """Legacy add_view hook — retry is routed via ``component_handler`` only."""
 
     def __init__(self) -> None:
         super().__init__(timeout=None)

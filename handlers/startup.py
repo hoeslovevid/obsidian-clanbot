@@ -135,18 +135,8 @@ async def run_startup(bot: discord.Client) -> None:
         # Basic views
         bot.add_view(ComplaintPanel())
         bot.add_view(RSVPView())
-        try:
-            from core.refresh_panels import PersistentRefreshView
-
-            bot.add_view(PersistentRefreshView())
-        except Exception as e:
-            logger.debug(f"[ready] PersistentRefreshView registration skipped: {e}")
-        try:
-            from core.wf_retry_panels import PersistentWfRetryView
-
-            bot.add_view(PersistentWfRetryView())
-        except Exception as e:
-            logger.debug(f"[ready] PersistentWfRetryView registration skipped: {e}")
+        # obsidian:refresh / obsidian:wf_retry — routed only via component_handler
+        # (bot.add_view on those custom_ids double-dispatches with on_interaction → 40060).
 
         try:
             from core.refresh_panels import register_refresh_panel

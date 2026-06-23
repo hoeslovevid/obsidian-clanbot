@@ -645,7 +645,11 @@ async def handle_refresh_button(
 
 
 class PersistentRefreshView(ui.View):
-    """Single startup-registered view — routes every **Update data** click."""
+    """Legacy add_view hook — refresh is routed via ``component_handler`` only.
+
+    Do not ``bot.add_view()`` this class; pairing it with ``on_interaction`` routing
+    for the same ``custom_id`` causes error 40060 (double acknowledge).
+    """
 
     def __init__(self) -> None:
         super().__init__(timeout=None)
