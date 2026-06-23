@@ -139,4 +139,10 @@ def wf_retry_guard(interaction: discord.Interaction, owner_user_id: int) -> bool
 
 
 async def wf_retry_denied(interaction: discord.Interaction) -> None:
-    await interaction.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
+    try:
+        if interaction.response.is_done():
+            await interaction.followup.send(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
+        else:
+            await interaction.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
+    except (discord.HTTPException, discord.InteractionResponded):
+        pass

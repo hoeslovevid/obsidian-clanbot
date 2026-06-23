@@ -9,6 +9,8 @@ import discord  # type: ignore
 from discord import ui  # type: ignore
 
 from core.refresh_panels import (
+    _release_component,
+    _try_claim_component,
     get_refresh_panel,
     refresh_followup_ephemeral,
     register_refresh_panel,
@@ -82,58 +84,69 @@ async def handle_wf_retry_button(
     bot: discord.Client,
     interaction: discord.Interaction,
 ) -> None:
-    message = interaction.message
-    if not message:
-        await refresh_followup_ephemeral(
-            interaction,
-            "This retry button is no longer attached to a message.",
-        )
+    if not _try_claim_component(interaction.id):
         return
-
-    meta = await get_refresh_panel(message.id)
-    if not meta:
-        await refresh_followup_ephemeral(
-            interaction,
-            "This panel expired — run the Warframe command again.",
-        )
-        return
-
-    panel_type, payload = meta
-    if not panel_type.startswith("retry:"):
-        await refresh_followup_ephemeral(interaction, "Unknown retry panel.")
-        return
-
-    retry_type = panel_type[6:]
-    handler = RETRY_HANDLERS.get(retry_type)
-    if not handler:
-        await refresh_followup_ephemeral(interaction, "Retry handler missing — re-run the command.")
-        return
-
-    owner = int(payload.get("owner_user_id") or 0)
-    from core.wf_resolve import wf_retry_denied, wf_retry_guard
-
-    if owner and not wf_retry_guard(interaction, owner):
-        await wf_retry_denied(interaction)
-        return
-
-    if not interaction.response.is_done():
-        await interaction.response.defer()
 
     try:
-        ok = await handler(interaction, payload)
-        if not ok:
+        message = interaction.message
+        if not message:
+            await refresh_followup_ephemeral(
+                interaction,
+                "This retry button is no longer attached to a message.",
+            )
+            return
+
+        meta = await get_refresh_panel(message.id)
+        if not meta:
+            await refresh_followup_ephemeral(
+                interaction,
+                "This panel expired — run the Warframe command again.",
+            )
+            return
+
+        panel_type, payload = meta
+        if not panel_type.startswith("retry:"):
+            await refresh_followup_ephemeral(interaction, "Unknown retry panel.")
+            return
+
+        retry_type = panel_type[6:]
+        handler = RETRY_HANDLERS.get(retry_type)
+        if not handler:
+            await refresh_followup_ephemeral(interaction, "Retry handler missing — re-run the command.")
+            return
+
+        owner = int(payload.get("owner_user_id") or 0)
+        from core.wf_resolve import wf_retry_denied, wf_retry_guard
+
+        if owner and not wf_retry_guard(interaction, owner):
+            await wf_retry_denied(interaction)
+            return
+
+        if not interaction.response.is_done():
+            try:
+                await interaction.response.defer()
+            except (discord.InteractionResponded, discord.HTTPException) as exc:
+                if getattr(exc, "code", None) == 40060:
+                    return
+                raise
+
+        try:
+            ok = await handler(interaction, payload)
+            if not ok:
+                active = discord.ui.View.from_message(message) if message.components else None
+                if active:
+                    await reenable_message_view(interaction, active)
+        except Exception:
+            logger.exception("[wf_retry] type=%s message=%s", retry_type, message.id)
+            await refresh_followup_ephemeral(
+                interaction,
+                "Couldn't retry — try again in a moment or re-run the command.",
+            )
             active = discord.ui.View.from_message(message) if message.components else None
             if active:
                 await reenable_message_view(interaction, active)
-    except Exception:
-        logger.exception("[wf_retry] type=%s message=%s", retry_type, message.id)
-        await refresh_followup_ephemeral(
-            interaction,
-            "Couldn't retry — try again in a moment or re-run the command.",
-        )
-        active = discord.ui.View.from_message(message) if message.components else None
-        if active:
-            await reenable_message_view(interaction, active)
+    finally:
+        _release_component(interaction.id)
 
 
 class PersistentWfRetryView(ui.View):

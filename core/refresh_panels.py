@@ -18,6 +18,42 @@ REFRESH_CUSTOM_ID = "obsidian:refresh"
 
 PanelHandler = Callable[[discord.Interaction, dict[str, Any]], Awaitable[bool]]
 
+# Prevents double-handling when PersistentRefreshView and component_handler both route
+# the same click (the handler used to await message.edit before defer, opening a race).
+_refresh_claims: set[int] = set()
+
+
+def _try_claim_component(interaction_id: int) -> bool:
+    if interaction_id in _refresh_claims:
+        return False
+    _refresh_claims.add(interaction_id)
+    return True
+
+
+def _release_component(interaction_id: int) -> None:
+    _refresh_claims.discard(interaction_id)
+
+
+async def defer_component_interaction(interaction: discord.Interaction) -> bool:
+    """Claim and defer immediately. Returns False if already handled."""
+    if not _try_claim_component(interaction.id):
+        return False
+    try:
+        if interaction.response.is_done():
+            return True
+        try:
+            await interaction.response.defer()
+        except (discord.InteractionResponded, discord.HTTPException) as exc:
+            code = getattr(exc, "code", None)
+            if code == 40060 or isinstance(exc, discord.InteractionResponded):
+                _release_component(interaction.id)
+                return False
+            raise
+        return True
+    except Exception:
+        _release_component(interaction.id)
+        raise
+
 
 async def ensure_refresh_panel_table() -> None:
     async with aiosqlite.connect(DB_PATH) as db:
@@ -99,8 +135,11 @@ async def refresh_followup_ephemeral(
     embed: discord.Embed | None = None,
 ) -> None:
     try:
-        await interaction.followup.send(content=content, embed=embed, ephemeral=True)
-    except discord.HTTPException:
+        if interaction.response.is_done():
+            await interaction.followup.send(content=content, embed=embed, ephemeral=True)
+        else:
+            await interaction.response.send_message(content=content, embed=embed, ephemeral=True)
+    except (discord.HTTPException, discord.InteractionResponded):
         pass
 
 
@@ -514,93 +553,95 @@ async def handle_refresh_button(
     view: Optional[discord.ui.View] = None,
 ) -> None:
     """Defer, dispatch panel refresh, recover on failure."""
-    message = interaction.message
-    if not message:
-        if not interaction.response.is_done():
+    if not await defer_component_interaction(interaction):
+        return
+
+    try:
+        message = interaction.message
+        if not message:
             await refresh_followup_ephemeral(
                 interaction,
                 "This refresh button is no longer attached to a message.",
             )
-        return
+            return
 
-    active_view = view
-    if active_view is None and message.components:
+        active_view = view
+        if active_view is None and message.components:
+            try:
+                active_view = discord.ui.View.from_message(message)
+            except Exception:
+                active_view = None
+
+        if active_view:
+            for child in active_view.children:
+                child.disabled = True
+            try:
+                await message.edit(view=active_view)
+            except Exception:
+                pass
+
+        meta = await get_refresh_panel(message.id)
+        if not meta:
+            await refresh_followup_ephemeral(
+                interaction,
+                "This panel expired — run the command again for a fresh board.",
+            )
+            if active_view:
+                await reenable_message_view(interaction, active_view)
+            return
+
+        panel_type, payload = meta
+        handler = PANEL_HANDLERS.get(panel_type)
+        if not handler:
+            logger.warning("[refresh] unknown panel_type=%s message=%s", panel_type, message.id)
+            await refresh_followup_ephemeral(
+                interaction,
+                "This panel type is no longer supported — run the command again.",
+            )
+            if active_view:
+                await reenable_message_view(interaction, active_view)
+            return
+
         try:
-            active_view = discord.ui.View.from_message(message)
+            ok = await handler(interaction, payload)
+            if not ok and active_view:
+                await reenable_message_view(interaction, active_view)
+        except discord.InteractionResponded:
+            logger.debug("[refresh] double-respond panel=%s", panel_type)
+            await refresh_followup_ephemeral(
+                interaction,
+                "Couldn't refresh — try **Update data** again.",
+            )
+            if active_view:
+                await reenable_message_view(interaction, active_view)
+        except discord.NotFound:
+            await refresh_followup_ephemeral(
+                interaction,
+                "This message was deleted — run the command again.",
+            )
+        except discord.Forbidden:
+            await refresh_followup_ephemeral(
+                interaction,
+                "I can't update this message anymore (missing channel access). Run the command again.",
+            )
+        except discord.HTTPException as exc:
+            logger.debug("[refresh] edit failed panel=%s: %s", panel_type, exc)
+            await refresh_followup_ephemeral(
+                interaction,
+                "Couldn't refresh — try again in a moment.",
+            )
+            if active_view:
+                await reenable_message_view(interaction, active_view)
         except Exception:
-            active_view = None
-
-    if active_view:
-        for child in active_view.children:
-            child.disabled = True
-        try:
-            await message.edit(view=active_view)
-        except Exception:
-            pass
-
-    if not interaction.response.is_done():
-        await interaction.response.defer()
-
-    meta = await get_refresh_panel(message.id)
-    if not meta:
-        await refresh_followup_ephemeral(
-            interaction,
-            "This panel expired — run the command again for a fresh board.",
-        )
-        if active_view:
-            await reenable_message_view(interaction, active_view)
-        return
-
-    panel_type, payload = meta
-    handler = PANEL_HANDLERS.get(panel_type)
-    if not handler:
-        logger.warning("[refresh] unknown panel_type=%s message=%s", panel_type, message.id)
-        await refresh_followup_ephemeral(
-            interaction,
-            "This panel type is no longer supported — run the command again.",
-        )
-        if active_view:
-            await reenable_message_view(interaction, active_view)
-        return
-
-    try:
-        ok = await handler(interaction, payload)
-        if not ok and active_view:
-            await reenable_message_view(interaction, active_view)
-    except discord.InteractionResponded:
-        logger.debug("[refresh] double-respond panel=%s", panel_type)
-        await refresh_followup_ephemeral(
-            interaction,
-            "Couldn't refresh — try **Update data** again.",
-        )
-        if active_view:
-            await reenable_message_view(interaction, active_view)
-    except discord.NotFound:
-        await refresh_followup_ephemeral(
-            interaction,
-            "This message was deleted — run the command again.",
-        )
-    except discord.Forbidden:
-        await refresh_followup_ephemeral(
-            interaction,
-            "I can't update this message anymore (missing channel access). Run the command again.",
-        )
-    except discord.HTTPException as exc:
-        logger.debug("[refresh] edit failed panel=%s: %s", panel_type, exc)
-        await refresh_followup_ephemeral(
-            interaction,
-            "Couldn't refresh — try again in a moment.",
-        )
-        if active_view:
-            await reenable_message_view(interaction, active_view)
-    except Exception:
-        logger.exception("[refresh] panel=%s message=%s", panel_type, message.id)
-        await refresh_followup_ephemeral(
-            interaction,
-            "Something went wrong refreshing this panel — try again or re-run the command.",
-        )
-        if active_view:
-            await reenable_message_view(interaction, active_view)
+            logger.exception("[refresh] panel=%s message=%s", panel_type, message.id)
+            await refresh_followup_ephemeral(
+                interaction,
+                "Something went wrong refreshing this panel — try again or re-run the command.",
+            )
+            if active_view:
+                await reenable_message_view(interaction, active_view)
+    finally:
+        _release_component(interaction.id)
 
 
 class PersistentRefreshView(ui.View):
