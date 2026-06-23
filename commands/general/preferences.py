@@ -207,13 +207,11 @@ def setup(bot, group=None):
                 updated.append(f"**Quieter mode:** {'On' if enabled else 'Off'}")
 
         if daily_reminder:
-            from database import set_guild_setting
             await set_guild_setting(interaction.guild.id, f"user_daily_reminder:{interaction.user.id}", daily_reminder.value)
             state = "On" if daily_reminder.value == "1" else "Off"
             updated.append(f"**Daily streak reminder:** {state}")
 
         if levelup_dm:
-            from database import set_guild_setting
             await set_guild_setting(interaction.guild.id, f"user_levelup_dm:{interaction.user.id}", levelup_dm.value)
             state = "On (DM)" if levelup_dm.value == "1" else "Off (public)"
             updated.append(f"**Level-up notification:** {state}")
@@ -251,20 +249,17 @@ def setup(bot, group=None):
             updated.append(f"**Time format:** {'24-hour' if time_format.value == '24' else '12-hour'}")
 
         if investment_dm:
-            from database import set_guild_setting
             await set_guild_setting(interaction.guild.id, f"user_investment_dm:{interaction.user.id}", investment_dm.value)
             state = "On" if investment_dm.value == "1" else "Off"
             updated.append(f"**Investment maturity DM:** {state}")
 
         if typo_helper:
-            from database import set_guild_setting
             # Stored under user_typo_helper:{uid}; "0" = off, anything else = on (default).
             await set_guild_setting(interaction.guild.id, f"user_typo_helper:{interaction.user.id}", typo_helper.value)
             state = "On" if typo_helper.value == "1" else "Off"
             updated.append(f"**Typo helper:** {state}")
 
         if hide_leaderboards:
-            from database import set_guild_setting
             await set_guild_setting(
                 interaction.guild.id,
                 f"user_hide_leaderboards:{interaction.user.id}",
@@ -341,8 +336,6 @@ def setup(bot, group=None):
             lines.append("⚠️ Set both `digest_section` and `digest_state` together to change a digest section.")
 
         if weekly_recap:
-            from database import set_guild_setting
-
             await set_guild_setting(
                 interaction.guild.id,
                 f"user_weekly_recap:{interaction.user.id}",
