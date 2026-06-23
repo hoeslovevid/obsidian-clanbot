@@ -8,6 +8,7 @@ import aiosqlite
 import discord
 
 from core.utils import format_number, pluralize
+from core.schedule_bridge import gather_personal_schedule, schedule_field_block
 from database import DB_PATH
 
 
@@ -193,6 +194,11 @@ async def gather_today_data(
     except Exception:
         pass
 
+    try:
+        out["schedule"] = await gather_personal_schedule(guild_id, user_id)
+    except Exception:
+        out["schedule"] = {"events": [], "lfg_hosting": [], "lfg_joined": []}
+
     return out
 
 
@@ -237,15 +243,21 @@ def build_today_fields(data: dict[str, Any]) -> list[tuple[str, str, bool]]:
     if data["pet_needs_care"] and data["pet_line"]:
         fields.append(("🐾 Pet", data["pet_line"] + "\n`/pets feed` · `/pets play`", True))
 
-    if data["lfg_hosting"]:
+    schedule_block = schedule_field_block(
+        data.get("guild_id") or 0,
+        data.get("schedule") or {},
+    )
+    if schedule_block and data.get("guild_id"):
+        fields.append((schedule_block[0], schedule_block[1], False))
+    elif data["lfg_hosting"]:
         lines = [f"**{m}** (host, max {mx})" for _, m, mx in data["lfg_hosting"]]
         fields.append(("🤝 Your LFG", "\n".join(lines) + "\n`/lfg list`", False))
 
-    if data["lfg_joined"]:
+    if not schedule_block and data["lfg_joined"]:
         lines = [f"**{m}** (joined)" for _, m, _ in data["lfg_joined"]]
         fields.append(("🤝 Squads", "\n".join(lines), False))
 
-    if data["events_today"]:
+    if not schedule_block and data["events_today"]:
         lines = [f"**{t}** <t:{ts}:t>" for t, ts in data["events_today"]]
         fields.append(("📅 Events today", "\n".join(lines), False))
 

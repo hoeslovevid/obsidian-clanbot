@@ -20,6 +20,7 @@ async def build_today_embed(
 ) -> tuple[discord.Embed, discord.ui.View, dict]:
     """Build today embed, action view, and refresh payload."""
     data = await gather_today_data(guild.id, user.id, bot=client)
+    data["guild_id"] = guild.id
     fields = build_today_fields(data)
     footer = today_footer(data)
     body = f"Here's what matters today in **{guild.name}**."

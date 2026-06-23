@@ -4,9 +4,11 @@ from discord import app_commands
 from datetime import datetime, timezone
 import dateparser  # type: ignore
 
-from core.utils import obsidian_embed, warframe_data_unavailable_embed, BUTTON_ONLY_RUNNER_MSG
+from core.utils import obsidian_embed, warframe_data_unavailable_embed
 from api.warframe_api import fetch_duviri_circuit
-from views import RetryView
+from core.refresh_panels import register_refresh_panel
+from core.wf_retry_panels import send_wf_retry_message
+from views import RefreshView
 
 
 def format_time_remaining(expiry_str: str) -> str:
@@ -39,6 +41,56 @@ def format_time_remaining(expiry_str: str) -> str:
         return "Unknown"
 
 
+def build_duviri_embed(
+    data: dict,
+    client,
+    *,
+    guild: discord.Guild | None = None,
+) -> discord.Embed:
+    """Build Duviri Circuit embed from API payload."""
+    state = data.get("state", "Unknown")
+    expiry = data.get("expiry", "")
+    time_remaining = format_time_remaining(expiry) if expiry else "Unknown"
+    current_rotation = data.get("choices", [])
+
+    desc = f"**Status:** {state.title()}\n"
+    desc += f"**Time Remaining:** {time_remaining}\n\n"
+
+    if current_rotation:
+        desc += "**Current Rotation:**\n"
+        for i, choice in enumerate(current_rotation, 1):
+            choice_type = choice.get("category", "Unknown")
+            choice_name = choice.get("choices", [])
+
+            if choice_type == "warframe":
+                desc += f"**Warframe {i}:** {', '.join(choice_name) if choice_name else 'None'}\n"
+            elif choice_type == "weapon":
+                desc += f"**Weapon {i}:** {', '.join(choice_name) if choice_name else 'None'}\n"
+            else:
+                desc += f"**{choice_type.title()} {i}:** {', '.join(choice_name) if choice_name else 'None'}\n"
+    else:
+        desc += "No rotation data available."
+
+    embed = obsidian_embed(
+        "🌊 Duviri Circuit",
+        desc,
+        category="warframe",
+        thumbnail=guild.icon.url if guild and guild.icon else None,
+        footer="warframestat.us · Refreshes every 60s",
+        client=client,
+    )
+
+    if expiry:
+        try:
+            expiry_time = dateparser.parse(expiry, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
+            if expiry_time:
+                embed.timestamp = expiry_time
+        except Exception:
+            pass
+
+    return embed
+
+
 def setup(bot, group=None):
     """Register the duviri command."""
     
@@ -52,86 +104,17 @@ def setup(bot, group=None):
         data = await fetch_duviri_circuit()
 
         if not data:
-            async def on_retry(btn_interaction: discord.Interaction):
-                if btn_interaction.user.id != interaction.user.id:
-                    return await btn_interaction.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
-                await btn_interaction.response.defer()
-                new_data = await fetch_duviri_circuit()
-                if not new_data:
-                    return await btn_interaction.followup.send(
-                        "Duviri data still isn't loading. Try **Try again** again shortly.",
-                        ephemeral=True,
-                    )
-                state = new_data.get("state", "Unknown")
-                expiry = new_data.get("expiry", "")
-                time_remaining = format_time_remaining(expiry) if expiry else "Unknown"
-                current_rotation = new_data.get("choices", [])
-                desc = f"**Status:** {state.title()}\n**Time Remaining:** {time_remaining}\n\n"
-                if current_rotation:
-                    desc += "**Current Rotation:**\n"
-                    for i, choice in enumerate(current_rotation, 1):
-                        choice_type = choice.get("category", "Unknown")
-                        choice_name = choice.get("choices", [])
-                        if choice_type == "warframe":
-                            desc += f"**Warframe {i}:** {', '.join(choice_name) if choice_name else 'None'}\n"
-                        elif choice_type == "weapon":
-                            desc += f"**Weapon {i}:** {', '.join(choice_name) if choice_name else 'None'}\n"
-                        else:
-                            desc += f"**{choice_type.title()} {i}:** {', '.join(choice_name) if choice_name else 'None'}\n"
-                else:
-                    desc += "No rotation data available."
-                emb = obsidian_embed("🌊 Duviri Circuit", desc, category="warframe", footer="warframestat.us", client=interaction.client)
-                await btn_interaction.message.edit(embed=emb, view=None)
-
-            from core.wf_recovery import attach_notify_when_back
-
-            return await interaction.followup.send(
+            return await send_wf_retry_message(
+                interaction,
                 embed=warframe_data_unavailable_embed(interaction.client),
-                view=attach_notify_when_back(RetryView(on_retry)),
+                retry_type="wf_duviri",
+                payload={},
+                owner_user_id=interaction.user.id,
+                fetch_probe=fetch_duviri_circuit,
+                edit=False,
             )
         
-        # Extract circuit data
-        state = data.get("state", "Unknown")
-        expiry = data.get("expiry", "")
-        time_remaining = format_time_remaining(expiry) if expiry else "Unknown"
-        
-        # Get current rotation
-        current_rotation = data.get("choices", [])
-        
-        # Build description
-        desc = f"**Status:** {state.title()}\n"
-        desc += f"**Time Remaining:** {time_remaining}\n\n"
-        
-        if current_rotation:
-            desc += "**Current Rotation:**\n"
-            for i, choice in enumerate(current_rotation, 1):
-                choice_type = choice.get("category", "Unknown")
-                choice_name = choice.get("choices", [])
-                
-                if choice_type == "warframe":
-                    desc += f"**Warframe {i}:** {', '.join(choice_name) if choice_name else 'None'}\n"
-                elif choice_type == "weapon":
-                    desc += f"**Weapon {i}:** {', '.join(choice_name) if choice_name else 'None'}\n"
-                else:
-                    desc += f"**{choice_type.title()} {i}:** {', '.join(choice_name) if choice_name else 'None'}\n"
-        else:
-            desc += "No rotation data available."
-        
-        embed = obsidian_embed(
-            "🌊 Duviri Circuit",
-            desc,
-            category="warframe",
-            thumbnail=interaction.guild.icon.url if interaction.guild and interaction.guild.icon else None,
-            footer="warframestat.us · Refreshes every 60s",
-            client=interaction.client,
-        )
-        
-        if expiry:
-            try:
-                expiry_time = dateparser.parse(expiry, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
-                if expiry_time:
-                    embed.timestamp = expiry_time
-            except Exception:
-                pass
-        
-        await interaction.followup.send(embed=embed)
+        embed = build_duviri_embed(data, interaction.client, guild=interaction.guild)
+        view = RefreshView.panel("wf_duviri")
+        msg = await interaction.followup.send(embed=embed, view=view)
+        await register_refresh_panel(msg, "wf_duviri", {})

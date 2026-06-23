@@ -104,6 +104,18 @@ async def build_clan_hq_embed(
     elif streamers:
         live_hint = ", ".join(f"`{s}`" for s in streamers[:4])
         lines.append(f"📺 **Monitored streamers:** {live_hint} (offline)")
+
+    if user_id:
+        try:
+            from core.schedule_bridge import gather_personal_schedule, format_schedule_lines
+
+            schedule = await gather_personal_schedule(guild.id, user_id)
+            personal = format_schedule_lines(guild.id, schedule)
+            if personal:
+                lines.append("\n**Your next 24h:**\n" + "\n".join(personal[:5]))
+        except Exception:
+            pass
+
     lines.append("\n-# `/menu` · `/today` · `/notifications` · `/warframe hub`")
 
     if viewer and is_mod(viewer):

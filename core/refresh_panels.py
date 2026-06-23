@@ -393,12 +393,32 @@ async def _refresh_wf_status(interaction: discord.Interaction, payload: dict[str
 
 
 async def _refresh_wf_worth(interaction: discord.Interaction, payload: dict[str, Any]) -> bool:
-    from commands.warframe.world_state import build_worth_embed, refresh_worth_data
+    from commands.warframe.world_state import refresh_worth_data
     from views._core import RefreshView
 
     new_emb = await refresh_worth_data(interaction.client)
     view = RefreshView.panel("wf_worth")
     await refresh_edit_message(interaction, embed=new_emb, view=view, panel_type="wf_worth")
+    return True
+
+
+async def _refresh_wf_duviri(interaction: discord.Interaction, payload: dict[str, Any]) -> bool:
+    from api.warframe_api import fetch_duviri_circuit
+    from commands.warframe.duviri import build_duviri_embed
+    from core.cache_utils import invalidate
+    from views._core import RefreshView
+
+    invalidate("warframe:duviri")
+    data = await fetch_duviri_circuit()
+    if not data:
+        await refresh_followup_ephemeral(
+            interaction,
+            "Couldn't refresh Duviri data yet — try **Update data** again soon.",
+        )
+        return False
+    new_emb = build_duviri_embed(data, interaction.client, guild=interaction.guild)
+    view = RefreshView.panel("wf_duviri")
+    await refresh_edit_message(interaction, embed=new_emb, view=view, panel_type="wf_duviri")
     return True
 
 
@@ -532,6 +552,7 @@ PANEL_HANDLERS: dict[str, PanelHandler] = {
     "wf_daily_ops": _refresh_wf_daily_ops,
     "wf_status": _refresh_wf_status,
     "wf_worth": _refresh_wf_worth,
+    "wf_duviri": _refresh_wf_duviri,
     "wf_hub": _refresh_wf_hub,
     "wf_baro": _refresh_wf_baro,
     "wf_cycle_live": _refresh_wf_cycle_live,

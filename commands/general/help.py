@@ -626,7 +626,18 @@ def setup(bot, group=None):
         
         # Build initial embed — "Start here" mental model + full group list
         fav_line = ""
+        whats_new_blurb = ""
         if interaction.guild:
+            try:
+                from core.version_nudge import build_whats_new_blurb
+
+                whats_new_blurb = await build_whats_new_blurb(
+                    interaction.guild.id,
+                    interaction.user.id,
+                    surface="help",
+                )
+            except Exception:
+                pass
             try:
                 from commands.general.favorites import get_user_favorites
 
@@ -645,7 +656,8 @@ def setup(bot, group=None):
                 pass
 
         desc = (
-            fav_line
+            whats_new_blurb
+            + fav_line
             + "**8 member essentials** — start here:\n\n"
             "📋 **`/menu`** — quick picker · 🔍 **`/search`** — find commands\n"
             "✅ **`/status`** — bot health · 📝 **`/whatsnew`** — release notes\n"

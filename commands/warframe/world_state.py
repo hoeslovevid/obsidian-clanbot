@@ -307,19 +307,22 @@ def setup(bot, group=None):
             fetch_fissures(), fetch_invasions(), get_all_cycles(),
         )
         if not fissures and not invasions and not any((cycles or {}).values()):
-            async def on_retry(btn_interaction: discord.Interaction):
-                if btn_interaction.user.id != interaction.user.id:
-                    return await btn_interaction.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
-                await btn_interaction.response.defer()
-                new_emb = await build_worth_embed(interaction.client)
-                await btn_interaction.message.edit(embed=new_emb, view=None)
+            async def _worth_probe():
+                f, i, c = await asyncio.gather(
+                    fetch_fissures(), fetch_invasions(), get_all_cycles(),
+                )
+                return bool(f or i or any((c or {}).values()))
 
-            from views import RetryView
+            from core.wf_retry_panels import send_wf_retry_message
 
-            from core.wf_recovery import attach_notify_when_back
-            return await interaction.followup.send(
+            return await send_wf_retry_message(
+                interaction,
                 embed=warframe_data_unavailable_embed(interaction.client),
-                view=attach_notify_when_back(RetryView(on_retry)),
+                retry_type="wf_worth",
+                payload={},
+                owner_user_id=interaction.user.id,
+                fetch_probe=_worth_probe,
+                edit=False,
                 ephemeral=True,
             )
 

@@ -242,8 +242,6 @@ async def _handle_mod_action(interaction: discord.Interaction, action: str) -> b
         return True
 
     hints = {
-        "tickets": "Run **`/ticket list`** or check your ticket channel for open threads.",
-        "setup": "Run **`/admin setup_status`** for the full checklist.",
         "suggestions": "Run **`/community suggest_manage`** to review pending suggestions.",
         "dashboard": "Run **`/mod dashboard`** for the full officer board.",
     }
@@ -251,6 +249,30 @@ async def _handle_mod_action(interaction: discord.Interaction, action: str) -> b
         from commands.moderation.dashboard import refresh_mod_inbox_panel
 
         await refresh_mod_inbox_panel(interaction)
+        return True
+    if action == "tickets":
+        from core.mod_inbox import get_oldest_open_ticket
+
+        oldest = await get_oldest_open_ticket(interaction.guild.id)
+        if not oldest:
+            await interaction.response.send_message(
+                "No open tickets — inbox clear. 🎉",
+                ephemeral=True,
+            )
+            return True
+        tid, subject, ch_id = oldest
+        jump = f"https://discord.com/channels/{interaction.guild.id}/{ch_id}"
+        await interaction.response.send_message(
+            f"🎫 **Oldest open ticket:** `{tid}`\n**{subject[:120]}**\n[jump to channel]({jump})",
+            ephemeral=True,
+        )
+        return True
+    if action == "setup":
+        await interaction.response.defer(ephemeral=True)
+        from commands.general.setup_status import _build_setup_status_embed
+
+        emb = await _build_setup_status_embed(interaction.guild, interaction.client)
+        await interaction.followup.send(embed=emb, ephemeral=True)
         return True
     if action in hints:
         await interaction.response.send_message(hints[action], ephemeral=True)
@@ -311,7 +333,7 @@ def mod_inbox_panel_view(*, guild_id: int) -> discord.ui.View:
     row = ui.ActionRow()
     row.add_item(
         ui.Button(
-            label="Tickets",
+            label="Oldest ticket",
             style=discord.ButtonStyle.primary,
             emoji="🎫",
             custom_id="panel:mod:tickets",

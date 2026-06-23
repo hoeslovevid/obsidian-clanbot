@@ -61,7 +61,7 @@ DATABASE_URL = os.getenv("DATABASE_URL", "").strip() or None
 # Single source of truth for /about, /whatsnew, /status, release announce, and slash-command sync.
 # Set BOT_VERSION on Railway to match each production release; keep this code default in sync.
 # On release: bump BOT_VERSION here (and on Railway), then update CURRENT_RELEASE_* in core/changelog.py.
-BOT_VERSION = os.getenv("BOT_VERSION", "2.2.1")
+BOT_VERSION = os.getenv("BOT_VERSION", "2.2.2")
 BOT_CHANGELOG = os.getenv(
     "BOT_CHANGELOG",
     "v2.2.1 — persistent WF retry; claim/mod inbox panels; digest toggles; 48h LFG nudge.",

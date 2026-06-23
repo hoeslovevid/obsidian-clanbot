@@ -8,6 +8,7 @@ import discord
 
 from api.warframe_api import (
     fetch_alerts,
+    fetch_duviri_circuit,
     fetch_fissures,
     fetch_invasions,
     fetch_sortie,
@@ -314,6 +315,95 @@ async def retry_wf_cycles(interaction: discord.Interaction, payload: dict[str, A
     return await _edit_success(interaction, emb, panel_type="wf_cycles")
 
 
+async def retry_wf_worth(interaction: discord.Interaction, payload: dict[str, Any]) -> bool:
+    from commands.warframe.world_state import refresh_worth_data
+
+    emb = await refresh_worth_data(interaction.client)
+    return await _edit_success(interaction, emb, panel_type="wf_worth")
+
+
+async def retry_wf_duviri(interaction: discord.Interaction, payload: dict[str, Any]) -> bool:
+    from commands.warframe.duviri import build_duviri_embed
+    from core.wf_resolve import wf_invalidate
+
+    await wf_invalidate("warframe:duviri")
+    data = await fetch_duviri_circuit()
+    if not data:
+        await interaction.followup.send(
+            embed=warframe_data_unavailable_embed(interaction.client),
+            ephemeral=True,
+        )
+        return False
+    emb = build_duviri_embed(data, interaction.client, guild=interaction.guild)
+    return await _edit_success(interaction, emb, panel_type="wf_duviri")
+
+
+async def retry_trade_search(interaction: discord.Interaction, payload: dict[str, Any]) -> bool:
+    from datetime import datetime, timezone
+
+    from api.warframe_api import get_warframe_market_price, search_warframe_market_item
+    from commands.trading.trade_price import _build_trade_embed, _trade_price_view
+    from core.utils import error_embed
+
+    item = str(payload.get("item") or "")
+    platform = str(payload.get("platform") or "pc")
+    item_data = await search_warframe_market_item(item, platform)
+    if not item_data:
+        await interaction.followup.send(
+            embed=error_embed(
+                "Item Not Found",
+                f"Still can't find **{item}** on Warframe Market.",
+                client=interaction.client,
+            ),
+            ephemeral=True,
+        )
+        return False
+    item_url_name = item_data.get("url_name", "")
+    price_data = await get_warframe_market_price(item_url_name, platform)
+    if not price_data:
+        await interaction.followup.send(
+            embed=error_embed(
+                "Price Data Unavailable",
+                f"Found **{item_data.get('item_name', item)}** but prices won't load yet.",
+                client=interaction.client,
+            ),
+            ephemeral=True,
+        )
+        return False
+    emb = _build_trade_embed(
+        item_data,
+        price_data,
+        platform,
+        interaction.client,
+        author=interaction.user,
+        fetched_at=datetime.now(timezone.utc),
+    )
+    full_payload = {
+        "runner_id": int(payload.get("owner_user_id") or interaction.user.id),
+        "item_url_name": item_url_name,
+        "platform": platform,
+        "item_data": item_data,
+    }
+    market_url = f"https://warframe.market/items/{item_url_name}"
+    view = _trade_price_view(full_payload, market_url)
+    return await _edit_success(
+        interaction, emb, panel_type="trade_price", payload=full_payload, view=view,
+    )
+
+
+async def retry_trade_price(interaction: discord.Interaction, payload: dict[str, Any]) -> bool:
+    from datetime import datetime, timezone
+
+    from api.warframe_api import get_warframe_market_price
+    from commands.trading.trade_price import refresh_trade_price_panel
+
+    payload = {
+        **payload,
+        "runner_id": int(payload.get("owner_user_id") or payload.get("runner_id") or interaction.user.id),
+    }
+    return await refresh_trade_price_panel(interaction, payload)
+
+
 HANDLERS: dict[str, Any] = {
     "wf_hub": retry_wf_hub,
     "wf_status": retry_wf_status,
@@ -325,4 +415,8 @@ HANDLERS: dict[str, Any] = {
     "wf_baro": retry_wf_baro,
     "wf_world_state": retry_wf_world_state,
     "wf_cycles": retry_wf_cycles,
+    "wf_worth": retry_wf_worth,
+    "wf_duviri": retry_wf_duviri,
+    "trade_search": retry_trade_search,
+    "trade_price": retry_trade_price,
 }

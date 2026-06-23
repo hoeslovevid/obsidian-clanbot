@@ -6,7 +6,8 @@ from core.embed_footers import footer_for
 from core.embed_templates import embed_template
 from core.utils import obsidian_embed, error_embed, EMBED_COLORS, BUTTON_ONLY_RUNNER_MSG
 from api.warframe_api import search_warframe_market_item, get_warframe_market_price
-from views import RetryView, RefreshView
+from views import RefreshView
+from core.wf_retry_panels import send_wf_retry_message
 from core.cache_utils import invalidate
 from core.refresh_panels import refresh_edit_message, register_refresh_panel, runner_only
 
@@ -168,27 +169,19 @@ def setup(bot, group=None):
                 "Set the **WARFRAME_MARKET_PROXY** (or **HTTPS_PROXY**) environment variable to an HTTP(S) proxy URL to try to bypass this."
             )
 
-            async def on_retry_search(btn_interaction: discord.Interaction):
-                if btn_interaction.user.id != interaction.user.id:
-                    return await btn_interaction.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
-                await btn_interaction.response.defer()
-                new_item = await search_warframe_market_item(item, platform_val)
-                if not new_item:
-                    return await btn_interaction.followup.send("Still unable to find item. Try again later.", ephemeral=True)
-                new_price = await get_warframe_market_price(new_item.get("url_name", ""), platform_val)
-                if not new_price:
-                    return await btn_interaction.followup.send("Found item but could not fetch prices. Try again later.", ephemeral=True)
-                emb = _build_trade_embed(new_item, new_price, platform_val, interaction.client, author=interaction.user, fetched_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc))
-                await btn_interaction.message.edit(embed=emb, view=None)
-
-            return await interaction.followup.send(
+            return await send_wf_retry_message(
+                interaction,
                 embed=error_embed(
                     "Item Not Found",
                     f"Could not find '{item}' on Warframe Market. Please check the spelling and try again.{hint}",
                     action_hint="Search manually at warframe.market and copy the exact item name.",
                     client=interaction.client,
                 ),
-                view=RetryView(on_retry_search),
+                retry_type="trade_search",
+                payload={"item": item, "platform": platform_val},
+                owner_user_id=interaction.user.id,
+                fetch_probe=lambda: search_warframe_market_item(item, platform_val),
+                edit=False,
                 ephemeral=True,
             )
         
@@ -199,24 +192,23 @@ def setup(bot, group=None):
         price_data = await get_warframe_market_price(item_url_name, platform_val)
         
         if not price_data:
-            async def on_retry_price(btn_interaction: discord.Interaction):
-                if btn_interaction.user.id != interaction.user.id:
-                    return await btn_interaction.response.send_message(BUTTON_ONLY_RUNNER_MSG, ephemeral=True)
-                await btn_interaction.response.defer()
-                new_price = await get_warframe_market_price(item_url_name, platform_val)
-                if not new_price:
-                    return await btn_interaction.followup.send("Still unable to fetch prices. Try again later.", ephemeral=True)
-                emb = _build_trade_embed(item_data, new_price, platform_val, interaction.client, author=interaction.user, fetched_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc))
-                await btn_interaction.message.edit(embed=emb, view=None)
-
-            return await interaction.followup.send(
+            return await send_wf_retry_message(
+                interaction,
                 embed=error_embed(
                     "Price Data Unavailable",
                     f"Could not fetch price data for '{item_name}'. The item may not be tradeable or have no active listings.",
                     action_hint="Try again in a moment, or check warframe.market directly.",
                     client=interaction.client,
                 ),
-                view=RetryView(on_retry_price),
+                retry_type="trade_price",
+                payload={
+                    "item_url_name": item_url_name,
+                    "platform": platform_val,
+                    "item_data": item_data,
+                },
+                owner_user_id=interaction.user.id,
+                fetch_probe=lambda: get_warframe_market_price(item_url_name, platform_val),
+                edit=False,
                 ephemeral=True,
             )
         
