@@ -204,14 +204,17 @@ def setup(bot, group=None):
             posts = [p for p in posts if p[9] < p[2]]  # joined < max_players
 
         if not posts:
+            from core.lfg_list import LFGListEmptyView
+
             return await interaction.followup.send(
                 embed=empty_state_embed(
                     "🤝 No open LFG posts",
                     "Nobody is recruiting right now.",
-                    action_hint="Post your own with `/lfg` or check back later.",
+                    action_hint="Post your own with `/lfg` or pick a template below.",
                     category="community",
                     client=interaction.client,
                 ),
+                view=LFGListEmptyView(interaction.client),
                 ephemeral=True,
             )
 

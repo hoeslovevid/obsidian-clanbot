@@ -1117,25 +1117,6 @@ def setup(bot, group=None):
                 ephemeral=True,
             )
 
-        @group.command(name="list", description="Browse open LFG posts in this server.")
-        async def lfg_list(interaction: discord.Interaction):
-            if not interaction.guild:
-                return await interaction.response.send_message("Server only.", ephemeral=True)
-            from core.utils import feature_enabled, feature_off_embed
-
-            if not await feature_enabled(interaction.guild.id, "lfg"):
-                return await interaction.response.send_message(
-                    embed=feature_off_embed("LFG", client=interaction.client), ephemeral=True,
-                )
-            await interaction.response.defer(ephemeral=True)
-            from core.lfg_list import LFGListEmptyView, build_lfg_list_embed
-
-            embed = await build_lfg_list_embed(interaction.guild, client=interaction.client)
-            view = None
-            if embed.description and "No open squad posts" in embed.description:
-                view = LFGListEmptyView(bot)
-            await interaction.followup.send(embed=embed, view=view, ephemeral=True)
-
         @group.command(name="preset_save", description="Save an LFG template for one-tap reposting.")
         @app_commands.describe(
             name="Preset name (e.g. hydron)",
