@@ -280,6 +280,11 @@ async def _handle_mod_action(interaction: discord.Interaction, action: str) -> b
     return False
 
 
+def _add_panel_button(view: discord.ui.View, **kwargs) -> None:
+    """Add a button to a classic View (not Components V2 ActionRow)."""
+    view.add_item(ui.Button(**kwargs))
+
+
 def claim_panel_view(
     *,
     guild_id: int,
@@ -292,36 +297,30 @@ def claim_panel_view(
 
     payload = {"guild_id": guild_id, "user_id": user_id}
     view = RefreshView.panel("claim_hub", payload=payload, timeout=300)
-    row = ui.ActionRow()
     if bounty_ready:
-        row.add_item(
-            ui.Button(
-                label="Claim bounties",
-                style=discord.ButtonStyle.success,
-                emoji="🎯",
-                custom_id="panel:claim:bounties",
-            )
+        _add_panel_button(
+            view,
+            label="Claim bounties",
+            style=discord.ButtonStyle.success,
+            emoji="🎯",
+            custom_id="panel:claim:bounties",
         )
     if invest_ready:
-        row.add_item(
-            ui.Button(
-                label="Collect investment",
-                style=discord.ButtonStyle.primary,
-                emoji="📈",
-                custom_id="panel:claim:invest",
-            )
+        _add_panel_button(
+            view,
+            label="Collect investment",
+            style=discord.ButtonStyle.primary,
+            emoji="📈",
+            custom_id="panel:claim:invest",
         )
     if daily_ready:
-        row.add_item(
-            ui.Button(
-                label="Run daily",
-                style=discord.ButtonStyle.secondary,
-                emoji="🎁",
-                custom_id="panel:claim:daily",
-            )
+        _add_panel_button(
+            view,
+            label="Run daily",
+            style=discord.ButtonStyle.secondary,
+            emoji="🎁",
+            custom_id="panel:claim:daily",
         )
-    if row.children:
-        view.add_item(row)
     return view
 
 
@@ -330,40 +329,13 @@ def mod_inbox_panel_view(*, guild_id: int) -> discord.ui.View:
 
     payload = {"guild_id": guild_id}
     view = RefreshView.panel("mod_inbox", payload=payload, timeout=300)
-    row = ui.ActionRow()
-    row.add_item(
-        ui.Button(
-            label="Oldest ticket",
-            style=discord.ButtonStyle.primary,
-            emoji="🎫",
-            custom_id="panel:mod:tickets",
-        )
-    )
-    row.add_item(
-        ui.Button(
-            label="Setup status",
-            style=discord.ButtonStyle.secondary,
-            emoji="🧭",
-            custom_id="panel:mod:setup",
-        )
-    )
-    row.add_item(
-        ui.Button(
-            label="Suggestions",
-            style=discord.ButtonStyle.secondary,
-            emoji="💡",
-            custom_id="panel:mod:suggestions",
-        )
-    )
-    row.add_item(
-        ui.Button(
-            label="Dashboard",
-            style=discord.ButtonStyle.secondary,
-            emoji="🛡️",
-            custom_id="panel:mod:dashboard",
-        )
-    )
-    view.add_item(row)
+    for label, style, emoji, custom_id in (
+        ("Oldest ticket", discord.ButtonStyle.primary, "🎫", "panel:mod:tickets"),
+        ("Setup status", discord.ButtonStyle.secondary, "🧭", "panel:mod:setup"),
+        ("Suggestions", discord.ButtonStyle.secondary, "💡", "panel:mod:suggestions"),
+        ("Dashboard", discord.ButtonStyle.secondary, "🛡️", "panel:mod:dashboard"),
+    ):
+        _add_panel_button(view, label=label, style=style, emoji=emoji, custom_id=custom_id)
     return view
 
 
@@ -374,65 +346,21 @@ def notifications_panel_view(*, guild_id: int, user_id: int) -> discord.ui.View:
 
     payload = {"guild_id": guild_id, "user_id": user_id}
     view = RefreshView.panel("notifications", payload=payload, timeout=300)
-    row = ui.ActionRow()
-    row.add_item(
-        ui.Button(
-            label="Test DM ping",
-            style=discord.ButtonStyle.primary,
-            emoji="📨",
-            custom_id="panel:notifications:test_ping",
-        )
-    )
-    row.add_item(
-        ui.Button(
-            label="Toggle digest",
+    for label, style, emoji, custom_id in (
+        ("Test DM ping", discord.ButtonStyle.primary, "📨", "panel:notifications:test_ping"),
+        ("Toggle digest", discord.ButtonStyle.secondary, "📬", "panel:notifications:toggle_digest"),
+        ("WF notify", discord.ButtonStyle.secondary, "🔔", "panel:notifications:wfnotify"),
+        ("Price watches", discord.ButtonStyle.secondary, "💰", "panel:notifications:price_watch"),
+    ):
+        _add_panel_button(view, label=label, style=style, emoji=emoji, custom_id=custom_id)
+    for key, label, emoji in DIGEST_SECTIONS:
+        _add_panel_button(
+            view,
+            label=label[:12],
             style=discord.ButtonStyle.secondary,
-            emoji="📬",
-            custom_id="panel:notifications:toggle_digest",
+            emoji=emoji,
+            custom_id=f"panel:notifications:digest_{key}",
         )
-    )
-    row.add_item(
-        ui.Button(
-            label="WF notify",
-            style=discord.ButtonStyle.secondary,
-            emoji="🔔",
-            custom_id="panel:notifications:wfnotify",
-        )
-    )
-    view.add_item(row)
-    row2 = ui.ActionRow()
-    row2.add_item(
-        ui.Button(
-            label="Price watches",
-            style=discord.ButtonStyle.secondary,
-            emoji="💰",
-            custom_id="panel:notifications:price_watch",
-        )
-    )
-    view.add_item(row2)
-
-    digest_row = ui.ActionRow()
-    for key, label, emoji in DIGEST_SECTIONS[:3]:
-        digest_row.add_item(
-            ui.Button(
-                label=label[:12],
-                style=discord.ButtonStyle.secondary,
-                emoji=emoji,
-                custom_id=f"panel:notifications:digest_{key}",
-            )
-        )
-    view.add_item(digest_row)
-    digest_row2 = ui.ActionRow()
-    for key, label, emoji in DIGEST_SECTIONS[3:]:
-        digest_row2.add_item(
-            ui.Button(
-                label=label[:12],
-                style=discord.ButtonStyle.secondary,
-                emoji=emoji,
-                custom_id=f"panel:notifications:digest_{key}",
-            )
-        )
-    view.add_item(digest_row2)
     return view
 
 
@@ -441,40 +369,13 @@ def clan_hq_panel_view(*, guild_id: int, user_id: int) -> discord.ui.View:
 
     payload = {"guild_id": guild_id, "user_id": user_id}
     view = RefreshView.panel("clan_hq", payload=payload, timeout=None)
-    row = ui.ActionRow()
-    row.add_item(
-        ui.Button(
-            label="Open LFG",
-            style=discord.ButtonStyle.primary,
-            emoji="🤝",
-            custom_id="panel:hq:lfg",
-        )
-    )
-    row.add_item(
-        ui.Button(
-            label="Events",
-            style=discord.ButtonStyle.secondary,
-            emoji="📅",
-            custom_id="panel:hq:events",
-        )
-    )
-    row.add_item(
-        ui.Button(
-            label="Baro",
-            style=discord.ButtonStyle.secondary,
-            emoji="🛒",
-            custom_id="panel:hq:baro",
-        )
-    )
-    row.add_item(
-        ui.Button(
-            label="Alerts",
-            style=discord.ButtonStyle.secondary,
-            emoji="🔔",
-            custom_id="panel:hq:notifications",
-        )
-    )
-    view.add_item(row)
+    for label, style, emoji, custom_id in (
+        ("Open LFG", discord.ButtonStyle.primary, "🤝", "panel:hq:lfg"),
+        ("Events", discord.ButtonStyle.secondary, "📅", "panel:hq:events"),
+        ("Baro", discord.ButtonStyle.secondary, "🛒", "panel:hq:baro"),
+        ("Alerts", discord.ButtonStyle.secondary, "🔔", "panel:hq:notifications"),
+    ):
+        _add_panel_button(view, label=label, style=style, emoji=emoji, custom_id=custom_id)
     return view
 
 
@@ -489,40 +390,34 @@ def today_panel_view(
 
     payload = {"guild_id": guild_id, "user_id": user_id}
     view = RefreshView.panel("today", payload=payload, timeout=300)
-    row = ui.ActionRow()
     if show_daily:
-        row.add_item(
-            ui.Button(
-                label="Claim daily",
-                style=discord.ButtonStyle.success,
-                emoji="🎁",
-                custom_id="panel:today:daily",
-            )
+        _add_panel_button(
+            view,
+            label="Claim daily",
+            style=discord.ButtonStyle.success,
+            emoji="🎁",
+            custom_id="panel:today:daily",
         )
-    row.add_item(
-        ui.Button(
-            label="Claim hub",
-            style=discord.ButtonStyle.primary,
-            emoji="💰",
-            custom_id="panel:today:claim",
-        )
+    _add_panel_button(
+        view,
+        label="Claim hub",
+        style=discord.ButtonStyle.primary,
+        emoji="💰",
+        custom_id="panel:today:claim",
     )
     if show_baro:
-        row.add_item(
-            ui.Button(
-                label="Baro",
-                style=discord.ButtonStyle.secondary,
-                emoji="🛒",
-                custom_id="panel:today:baro",
-            )
-        )
-    row.add_item(
-        ui.Button(
-            label="Menu",
+        _add_panel_button(
+            view,
+            label="Baro",
             style=discord.ButtonStyle.secondary,
-            emoji="📋",
-            custom_id="panel:today:menu",
+            emoji="🛒",
+            custom_id="panel:today:baro",
         )
+    _add_panel_button(
+        view,
+        label="Menu",
+        style=discord.ButtonStyle.secondary,
+        emoji="📋",
+        custom_id="panel:today:menu",
     )
-    view.add_item(row)
     return view
