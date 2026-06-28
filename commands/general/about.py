@@ -3,6 +3,7 @@ import discord  # type: ignore
 from discord import app_commands  # type: ignore
 
 from core.embed_templates import embed_template
+from core.command_surface import discovery_12_block
 from core.changelog import get_latest_changelog_entry
 from core.config import BOT_WEBSITE, BOT_DEVELOPER, BOT_CHANGELOG
 from core.version_tracking import get_current_bot_version
@@ -30,8 +31,10 @@ def setup(bot, group=None):
         )
 
         desc = (
-            "A versatile Discord bot for community management with voice channels, "
-            "complaints, events, economy, moderation, and more."
+            "A Warframe-aware Discord bot for clans and communities — LFG, economy, "
+            "tickets, moderation, and live game feeds.\n\n"
+            "**Start here (Discovery 12):**\n"
+            + discovery_12_block()
         )
 
         features = (

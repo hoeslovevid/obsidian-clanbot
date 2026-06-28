@@ -6,6 +6,7 @@ from discord import app_commands  # type: ignore
 from typing import Optional, cast
 
 from core.command_search import MOD_ONLY_GROUPS, collect_command_entries, filter_entries_for_guild, search_commands
+from core.command_surface import essentials_help_block
 from core.command_tree import find_tree_group, tree_root_commands
 from core.embed_templates import help_breadcrumb
 from core.utils import obsidian_embed, is_mod, ECONOMY_ENABLED, COINS_PER_MESSAGE, COINS_DAILY_REWARD, MESSAGE_COOLDOWN_SECONDS, COINS_PER_MINUTE_VOICE, EMBED_COLORS
@@ -658,17 +659,14 @@ def setup(bot, group=None):
         desc = (
             whats_new_blurb
             + fav_line
-            + "**8 member essentials** — start here:\n\n"
-            "📋 **`/menu`** — quick picker · 🔍 **`/search`** — find commands\n"
-            "✅ **`/status`** — bot health · 📝 **`/whatsnew`** — release notes\n"
-            "👤 **`/profile`** · 🎁 **`/daily`** · 🎮 **`/warframe hub`** · 🎫 **`/ticket`**\n"
-            "\n**Explore by category** (dropdown below) — economy, warframe, community, tools, and more.\n"
+            + essentials_help_block()
+            + "\n\n**Explore by category** (dropdown below) — economy, warframe, community, tools, and more.\n"
             "\n**Preferences** — `/preferences` for platform, timezone, and achievement notify style.\n"
         )
         if is_user_mod:
             desc += (
                 "\n**Staff tools** — moderation & server ops:\n"
-                "🛡️ `/mod purge` · `/warn warn` · `/automod status` · `/admin dashboard` · `/admin console`\n"
+                "🛡️ `/mod purge` · `/warn warn` · `/automod status` · `/admin dashboard` · `/staff sync_commands`\n"
             )
 
         desc += "\n**All categories** (dropdown below):\n"
@@ -681,6 +679,7 @@ def setup(bot, group=None):
             "community": ("👥 Community", "Community features"),
             "trading": ("💼 Trading", "Trading commands"),
             "mod": ("🛡️ Moderation", "Moderation and server management"),
+            "staff": ("🔧 Staff", "Sync, webhooks, analytics utilities"),
             "giveaways": ("🎁 Giveaways", "Giveaway commands"),
             "updates": ("📝 Updates", "Update log commands"),
             "music": ("🎵 Music", "Music commands"),

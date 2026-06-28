@@ -61,10 +61,10 @@ DATABASE_URL = os.getenv("DATABASE_URL", "").strip() or None
 # Single source of truth for /about, /whatsnew, /status, release announce, and slash-command sync.
 # Set BOT_VERSION on Railway to match each production release; keep this code default in sync.
 # On release: bump BOT_VERSION here (and on Railway), then update CURRENT_RELEASE_* in core/changelog.py.
-BOT_VERSION = os.getenv("BOT_VERSION", "2.2.2")
+BOT_VERSION = os.getenv("BOT_VERSION", "2.3.0")
 BOT_CHANGELOG = os.getenv(
     "BOT_CHANGELOG",
-    "v2.2.1 — persistent WF retry; claim/mod inbox panels; digest toggles; 48h LFG nudge.",
+    "v2.3.0 — Discovery 12 surface; /staff group; legacy notify cleanup; lean guild defaults.",
 )
 
 # Presence rotation: default | menu | degraded | event
@@ -104,6 +104,11 @@ EVENT_REMINDER_LOOP_MINUTES = int(os.getenv("EVENT_REMINDER_LOOP_MINUTES", "1"))
 # --- Auto setup ---
 # Default false: do not auto-create channels without permission. Run /setup_obsidian to configure.
 AUTO_SETUP = os.getenv("AUTO_SETUP", "false").lower() in ("1", "true", "yes", "y", "on")
+
+# When true, new guild joins disable music/pets/gambling until mods opt in (/admin features).
+DEFAULT_LEAN_FEATURES = os.getenv("DEFAULT_LEAN_FEATURES", "true").lower() in (
+    "1", "true", "yes", "y", "on",
+)
 
 # --- Mention chat (hybrid: keywords + optional AI) ---
 OPENAI_API_KEY = (os.getenv("OPENAI_API_KEY") or "").strip() or None

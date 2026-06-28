@@ -7,6 +7,7 @@ import discord  # type: ignore
 from discord import app_commands, ui  # type: ignore
 
 from core.config import BOT_WEBSITE
+from core.command_surface import essentials_help_block
 from core.command_tree import find_tree_group
 from core.layout_v2 import ACCENT_DEFAULT, footer_display, make_container, v2_enabled
 from core.presence import website_host
@@ -28,17 +29,14 @@ class HelpHomeLayout(ui.LayoutView):
         super().__init__(timeout=300)
         self._on_browse = on_browse
 
-        lines = [
-            "## Command Reference",
-            "**8 essentials** — start here:",
-            "",
-            "📋 **`/menu`** · 🔍 **`/search`** · ✅ **`/status`** · 📝 **`/whatsnew`**",
-            "👤 **`/profile`** · 🎁 **`/daily`** · 🎮 **`/warframe hub`** · 🎫 **`/ticket`**",
-            "",
-            "Then **Browse categories** for everything else.",
-        ]
+        body = essentials_help_block().replace("**", "")
+        lines = body.split("\n")
+        if lines and lines[0].startswith("Discovery 12"):
+            lines[0] = "## " + lines[0]
+        lines.insert(0, "## Command Reference")
+
         if is_mod:
-            lines.append("**Staff tools:** `/admin dashboard` · `/mod purge` · `/automod status` · `/admin console`")
+            lines.append("**Staff:** `/admin dashboard` · `/mod purge` · `/staff sync_commands`")
         lines.append("")
         lines.append(footer_display("help"))
 
@@ -82,6 +80,7 @@ def _group_options(bot, is_mod: bool) -> list[discord.SelectOption]:
         "warn": ("Warnings", "Warn, templates, mod notes", "🛑"),
         "roletools": ("Role Tools", "Reaction roles, level roles", "🎭"),
         "admin": ("Admin", "Backups, dashboards, applications", "🗄️"),
+        "staff": ("Staff", "Sync, webhooks, analytics utilities", "🔧"),
         "giveaways": ("Giveaways", "Create and manage giveaways", "🎁"),
         "updates": ("Updates", "Update log and version management", "📝"),
         "music": ("Music", "Play music in voice channels", "🎵"),

@@ -9,7 +9,7 @@ from discord import app_commands  # type: ignore
 
 # Groups hidden from help/search for non-moderators.
 MOD_ONLY_GROUPS: frozenset[str] = frozenset(
-    {"mod", "automod", "warn", "roletools", "admin", "updates"}
+    {"mod", "automod", "warn", "roletools", "admin", "staff", "updates"}
 )
 
 # Longest-prefix wins. Maps command path prefixes to per-guild toggle keys in TOGGLEABLE_FEATURES.
@@ -135,6 +135,10 @@ async def filter_entries_for_guild(
         if feat and guild_id:
             if not await feature_enabled(int(guild_id), feat):
                 continue
+        from core.command_surface import should_hide_from_member_discovery
+
+        if should_hide_from_member_discovery(path, is_mod=is_mod):
+            continue
         out.append((path, desc))
     return out
 

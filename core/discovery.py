@@ -18,7 +18,7 @@ _ROLE_SUGGESTIONS: list[tuple[tuple[str, ...], str]] = [
     (("trader", "trade", "merchant"), "**Trader** — `/trade` · `/price_watch` · `/trading trade_price`"),
     (("mentor", "guide", "helper"), "**Mentor** — `/profile` · `/lfg` · `/community ticket`"),
     (("event", "organizer", "host"), "**Events** — `/events` · `/poll` · `/community suggest`"),
-    (("mod", "staff", "admin"), "**Staff** — `/mod dashboard` · `/admin setup_status`"),
+    (("mod", "staff", "admin"), "**Staff** — `/admin dashboard` · `/wfnotify configure` · `/staff sync_commands`"),
 ]
 
 

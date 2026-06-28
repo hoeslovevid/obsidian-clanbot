@@ -36,6 +36,10 @@ def load_all_commands(bot):
     )
     lfg_group = app_commands.Group(name="lfg", description="🤝 Warframe LFG: post and browse looking-for-group ads")
     events_group = app_commands.Group(name="events", description="📅 Server events: create, browse, and recurring schedules")
+    staff_group = app_commands.Group(
+        name="staff",
+        description="🔧 Staff utilities: sync, analytics, webhooks, mentorship (mods)",
+    )
 
     # NOTE: economy.pets/store/xp and warframe.notify are NOT added as subgroups any more —
     # they each became their own top-level group above to fit Discord's 8000-byte limit.
@@ -74,6 +78,20 @@ def load_all_commands(bot):
     bot.tree.add_command(wfnotify_group)
     bot.tree.add_command(lfg_group)
     bot.tree.add_command(events_group)
+    bot.tree.add_command(staff_group)
+
+    # Legacy per-type WF notify commands — removed from tree; use /wfnotify configure + /wfnotify setup.
+    LEGACY_NOTIFY_MODULES = frozenset({
+        "commands.warframe.baro_notify",
+        "commands.warframe.alerts_notify",
+        "commands.warframe.cycle_notify",
+        "commands.warframe.invasion_notify",
+        "commands.warframe.archon_notify",
+        "commands.warframe.warframe_event_notify",
+        "commands.warframe.forum_notify",
+        "commands.warframe.youtube_notify",
+        "commands.warframe.tennogen_notify",
+    })
 
     command_modules = [
         "commands.general.help",
@@ -316,14 +334,20 @@ def load_all_commands(bot):
         "commands.moderation.mod_kpi_setup": admin_group,
         "commands.moderation.feedback_setup": admin_group,
         "commands.moderation.health": tools_group,
-        "commands.general.welcome_recommend": admin_group,
+        "commands.general.welcome_recommend": staff_group,
         "commands.moderation.dashboard": admin_group,
-        "commands.moderation.mentorship": admin_group,
+        "commands.moderation.mentorship": staff_group,
         "commands.moderation.feature_toggle": admin_group,
         "commands.moderation.audit_log": admin_group,
         "commands.moderation.guild_branding": admin_group,
         "commands.moderation.inactive_role": tools_group,
         "commands.moderation.ticket_config": admin_group,
+        "commands.general.webhooks": staff_group,
+        "commands.general.sync_commands": staff_group,
+        "commands.general.trivia": staff_group,
+        "commands.general.activity_heatmap": staff_group,
+        "commands.general.cross_server": staff_group,
+        "commands.general.bot_status": community_group,
         "commands.suggestions.manage_suggestions": admin_group,
         "commands.applications.application_setup": admin_group,
         "commands.applications.manage_applications": admin_group,
@@ -347,11 +371,9 @@ def load_all_commands(bot):
         "commands.general.setup_obsidian": general_group,
         "commands.general.setup_docket": general_group,
         "commands.general.setup_status": admin_group,
-        "commands.general.sync_commands": general_group,
         "commands.general.welcome_setup": general_group,
         "commands.general.milestones": admin_group,           # Moved: general_group payload >8000 bytes
         "commands.general.achievements": tools_group,          # Moved: general_group at 25-cmd limit
-        "commands.general.webhooks": admin_group,             # Moved: general_group payload >8000 bytes
         "commands.general.rules": general_group,
         "commands.general.polls": general_group,
         "commands.general.reminder": tools_group,              # Moved: community at 25 limit, general full
@@ -362,16 +384,11 @@ def load_all_commands(bot):
         "commands.general.server_stats": tools_group,          # Moved: community at 25 limit
         "commands.general.profile": general_group,
         "commands.general.me": general_group,
-        "commands.general.bot_status": general_group,
-        # status → TOP_LEVEL_ONLY (/status); console → admin (mod hub; frees /general 25-cap)
         "commands.general.console": admin_group,
         "commands.general.badges": tools_group,                # Moved: community at 25 limit
         "commands.general.announcements": admin_group,        # Moved: general_group payload >8000 bytes
-        "commands.general.cross_server": tools_group,          # Moved: general_group at 25-cmd limit
         "commands.general.voice_leaderboard": tools_group,
-        "commands.general.coinflip": tools_group,              # Moved: community at 25 limit
-        "commands.general.activity_heatmap": tools_group,
-        "commands.general.trivia": tools_group,                # Moved: general_group at 25-cmd limit
+        "commands.general.coinflip": tools_group,
         "commands.general.my_stats": tools_group,
         "commands.general.phishing": tools_group,
         "commands.general.server_about": general_group,
@@ -425,6 +442,9 @@ def load_all_commands(bot):
     loaded_count = 0
     failed_modules = []
     for module_name in command_modules:
+        if module_name in LEGACY_NOTIFY_MODULES:
+            print(f"[commands] Skipped {module_name} (legacy notify — use /wfnotify configure)")
+            continue
         try:
             module = importlib.import_module(module_name)
             if hasattr(module, "setup"):

@@ -5,6 +5,7 @@ import discord
 from discord import app_commands
 
 from core.embed_templates import embed_template
+from core.command_surface import discovery_12_block
 from core.reply_helpers import reply_server_only
 
 
@@ -22,12 +23,10 @@ def setup(bot, group=None):
             "showcase",
             "👋 Welcome to Obsidian Bot",
             (
-                "**3-step quick start**\n"
-                "1. `/daily` — claim coins · 2. `/profile` — your stats · 3. `/baro` or `/lfg`\n\n"
-                "**Explore**\n"
-                "• `/menu` — shortcuts · `/search` — find commands\n"
-                "• `/preferences` — timezone, **quiet hours**, compact embeds, weekly recap\n"
-                "• `/wfnotify configure` — Warframe alert DMs · `/ticket` — staff help\n\n"
+                "**Discovery 12 — your starter commands:**\n\n"
+                + discovery_12_block()
+                + "\n\n**Tip:** `/menu` for shortcuts · `/search` for anything else · "
+                "`/preferences` for timezone & quiet hours\n\n"
                 "**Need humans?** `/feedback` for bot issues · `/ticket` for server support"
             ),
             category="community",
