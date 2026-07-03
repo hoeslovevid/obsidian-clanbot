@@ -1,11 +1,29 @@
 """Manage suggestions command for moderators."""
+import logging
+from typing import Optional
+
 import discord
 from discord import app_commands
-from datetime import datetime, timezone
 
 from core.utils import obsidian_embed, is_mod
 from database import DB_PATH, now_utc
 import aiosqlite
+
+logger = logging.getLogger(__name__)
+
+
+async def _fetch_suggestion_message(
+    interaction: discord.Interaction,
+    message_id: int,
+) -> discord.Message | None:
+    """Fetch a suggestion message from the interaction's text channel or thread."""
+    channel = interaction.channel
+    if not isinstance(channel, (discord.TextChannel, discord.Thread)):
+        return None
+    try:
+        return await channel.fetch_message(message_id)
+    except discord.NotFound:
+        return None
 
 
 class SuggestionView(discord.ui.View):
@@ -93,8 +111,8 @@ class SuggestionView(discord.ui.View):
         # Update the original message if it exists
         if message_id:
             try:
-                message = await interaction.channel.fetch_message(message_id)
-                if message.embeds:
+                message = await _fetch_suggestion_message(interaction, message_id)
+                if message and message.embeds:
                     embed = message.embeds[0]
                     
                     # Update status field
@@ -121,49 +139,42 @@ class SuggestionView(discord.ui.View):
                     
                     # Disable buttons
                     for item in self.children:
-                        item.disabled = True
+                        if isinstance(item, discord.ui.Button):
+                            item.disabled = True
                     
                     await message.edit(embed=embed, view=self)
-            except discord.NotFound:
-                pass
             except Exception as e:
-                import logging
-                logging.getLogger(__name__).error(f"Error updating suggestion message: {e}")
+                logger.error("Error updating suggestion message: %s", e)
 
         if status == "UNDER_REVIEW" and message_id and interaction.channel:
             try:
-                message = await interaction.channel.fetch_message(message_id)
-                thread_name = f"staff-{self.suggestion_id}"[:100]
-                existing = discord.utils.get(message.threads, name=thread_name)
-                if not existing:
-                    try:
-                        thread = await message.create_thread(
-                            name=thread_name,
-                            type=discord.ChannelType.private_thread,
-                            auto_archive_duration=10080,
-                            reason=f"Staff review for suggestion #{self.suggestion_id}",
-                        )
-                    except discord.HTTPException:
+                message = await _fetch_suggestion_message(interaction, message_id)
+                if not message:
+                    pass
+                else:
+                    thread_name = f"staff-{self.suggestion_id}"[:100]
+                    existing = message.thread if message.thread and message.thread.name == thread_name else None
+                    if not existing:
                         thread = await message.create_thread(
                             name=thread_name,
                             auto_archive_duration=10080,
                             reason=f"Staff review for suggestion #{self.suggestion_id}",
                         )
-                    await thread.add_user(interaction.user)
-                    if isinstance(interaction.user, discord.Member):
-                        from core.utils import get_mod_role
+                        await thread.add_user(interaction.user)
+                        if isinstance(interaction.user, discord.Member):
+                            from core.utils import get_mod_role
 
-                        mod_role = get_mod_role(interaction.guild)
-                        if mod_role:
-                            for mod in mod_role.members[:20]:
-                                try:
-                                    await thread.add_user(mod)
-                                except (discord.Forbidden, discord.HTTPException):
-                                    pass
-                    await thread.send(
-                        f"Staff thread for suggestion **#{self.suggestion_id}**.\n"
-                        f"Submitted by <@{user_id}>.\n\n{suggestion_text[:800]}"
-                    )
+                            mod_role = get_mod_role(interaction.guild)
+                            if mod_role:
+                                for mod in mod_role.members[:20]:
+                                    try:
+                                        await thread.add_user(mod)
+                                    except (discord.Forbidden, discord.HTTPException):
+                                        pass
+                        await thread.send(
+                            f"Staff thread for suggestion **#{self.suggestion_id}**.\n"
+                            f"Submitted by <@{user_id}>.\n\n{suggestion_text[:800]}"
+                        )
             except (discord.NotFound, discord.Forbidden, discord.HTTPException):
                 pass
         
@@ -192,8 +203,7 @@ class SuggestionView(discord.ui.View):
         except discord.Forbidden:
             pass
         except Exception as e:
-            import logging
-            logging.getLogger(__name__).error(f"Error DMing user about suggestion: {e}")
+            logger.error("Error DMing user about suggestion: %s", e)
         
         await interaction.followup.send(
             f"Suggestion #{self.suggestion_id} has been marked as {status_display}.",
@@ -229,8 +239,8 @@ def setup(bot, group=None):
     ])
     async def suggestions(
         interaction: discord.Interaction,
-        status: app_commands.Choice[str] = None,
-        category: app_commands.Choice[str] = None,
+        status: Optional[app_commands.Choice[str]] = None,
+        category: Optional[app_commands.Choice[str]] = None,
         limit: int = 10
     ):
         """View and manage suggestions."""
@@ -255,7 +265,7 @@ def setup(bot, group=None):
         
         # Get suggestions from database
         async with aiosqlite.connect(DB_PATH) as db:
-            params = [interaction.guild.id]
+            params: list[int | str] = [interaction.guild.id]
             where_clauses = ["guild_id=?"]
             if status_filter:
                 where_clauses.append("status=?")
@@ -273,7 +283,7 @@ def setup(bot, group=None):
                 LIMIT ?
             """, params)
             
-            rows = await cur.fetchall()
+            rows = list(await cur.fetchall())
         
         if not rows:
             status_text = f" with status '{status_filter}'" if status_filter else ""
