@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Optional
+from typing import Optional, cast
 
 import discord
 from discord import app_commands
@@ -39,6 +39,18 @@ logger = logging.getLogger(__name__)
 
 MUSIC_DJ_ROLE_KEY = "music_dj_role_id"
 MUSIC_CHANNEL_KEY = "music_channel_id"
+
+
+def _voice_client(guild: discord.Guild) -> discord.VoiceClient | None:
+    """Return guild voice client when it is a concrete VoiceClient (not VoiceProtocol)."""
+    vc = guild.voice_client
+    return vc if isinstance(vc, discord.VoiceClient) else None
+
+
+def _set_source_volume(vc: discord.VoiceClient, volume: float) -> None:
+    source = vc.source
+    if isinstance(source, discord.PCMVolumeTransformer):
+        source.volume = volume
 
 
 def _cmd_decorator(group, bot, name: str, description: str):
@@ -80,15 +92,16 @@ async def _channel_allowed(interaction: discord.Interaction) -> bool:
         return True
     if interaction.channel_id == locked_id:
         return True
-    vc = interaction.guild.voice_client
+    vc = _voice_client(interaction.guild)
     member = interaction.user
+    bot_channel = vc.channel if vc else None
     if (
         vc
-        and vc.channel
+        and isinstance(bot_channel, discord.abc.GuildChannel)
         and isinstance(member, discord.Member)
         and member.voice
         and member.voice.channel
-        and member.voice.channel.id == vc.channel.id
+        and member.voice.channel.id == bot_channel.id
     ):
         return True
     ch = interaction.guild.get_channel(locked_id)
@@ -215,7 +228,7 @@ class MusicPanelView(discord.ui.View):
             should_skip, msg, _, _ = await register_vote_skip(interaction.user)
             if not should_skip:
                 return await interaction.response.send_message(msg, ephemeral=True)
-        vc = guild.voice_client
+        vc = _voice_client(guild)
         if not vc or (not vc.is_playing() and not vc.is_paused()):
             return await interaction.response.send_message("Nothing is playing.", ephemeral=True)
         vc.stop()
@@ -226,7 +239,7 @@ class MusicPanelView(discord.ui.View):
         guild = await self._guild(interaction)
         if not guild:
             return
-        vc = guild.voice_client
+        vc = _voice_client(guild)
         if not vc:
             return await interaction.response.send_message("Not connected.", ephemeral=True)
         if vc.is_playing():
@@ -281,32 +294,40 @@ async def _start_playback(
     query: str,
 ) -> None:
     assert interaction.guild
-    st = get_state(interaction.guild.id)
+    assert isinstance(interaction.user, discord.Member)
+    guild = interaction.guild
+    guild_id = guild.id
+    client = interaction.client
+    st = get_state(guild_id)
     st.text_channel_id = interaction.channel.id if interaction.channel else st.text_channel_id
-    st.voice_channel_id = interaction.user.voice.channel.id  # type: ignore[union-attr]
+    member_voice = interaction.user.voice
+    assert member_voice and member_voice.channel
+    st.voice_channel_id = member_voice.channel.id
     st.current_track = track_info
     st.volume = st.volume or 0.5
 
-    voice_client = interaction.guild.voice_client
+    voice_client = _voice_client(guild)
     assert voice_client
 
     def _after(err):
         if err:
-            logger.warning("[music] playback error guild=%s: %s", interaction.guild.id, err)
+            logger.warning("[music] playback error guild=%s: %s", guild_id, err)
         asyncio.run_coroutine_threadsafe(
-            play_next_in_queue(interaction.guild.id, interaction.client),
-            interaction.client.loop,
+            play_next_in_queue(guild_id, client),
+            client.loop,
         )
 
     voice_client.play(player, after=_after)
-    if voice_client.source:
-        voice_client.source.volume = st.volume
+    _set_source_volume(voice_client, st.volume)
 
-    await persist_guild_state(interaction.guild.id, is_playing=True)
-    embed = build_now_playing_embed(interaction.guild, interaction.client)
-    view = MusicPanelView(interaction.guild.id)
-    msg = await interaction.followup.send(embed=embed, view=view)
-    await set_panel_message_id(interaction.guild.id, msg.id)
+    await persist_guild_state(guild_id, is_playing=True)
+    embed = build_now_playing_embed(guild, client)
+    view = MusicPanelView(guild_id)
+    msg = cast(
+        discord.WebhookMessage,
+        await interaction.followup.send(embed=embed, view=view),
+    )
+    await set_panel_message_id(guild_id, msg.id)
 
 
 def setup(bot: commands.Bot, group=None):
@@ -330,24 +351,28 @@ def setup(bot: commands.Bot, group=None):
 
         await interaction.response.defer()
         assert interaction.guild and isinstance(interaction.user, discord.Member)
-
-        voice_client = interaction.guild.voice_client
+        member_voice = interaction.user.voice
+        assert member_voice and member_voice.channel
+        voice_client = _voice_client(interaction.guild)
         if not voice_client:
             try:
-                voice_client = await interaction.user.voice.channel.connect()
+                voice_client = await member_voice.channel.connect()
             except Exception as exc:
                 return await interaction.followup.send(
                     embed=error_embed("Connection Failed", str(exc), client=interaction.client),
                 )
 
         try:
-            loading = await interaction.followup.send(
-                embed=embed_template(
-                    "showcase",
-                    "⏳ Loading…",
-                    f"Searching for: **{query}**",
-                    category="music",
-                    client=interaction.client,
+            loading = cast(
+                discord.WebhookMessage,
+                await interaction.followup.send(
+                    embed=embed_template(
+                        "showcase",
+                        "⏳ Loading…",
+                        f"Searching for: **{query}**",
+                        category="music",
+                        client=interaction.client,
+                    ),
                 ),
             )
 
@@ -445,7 +470,7 @@ def setup(bot: commands.Bot, group=None):
             return
         if not await _require_dj(interaction):
             return
-        vc = interaction.guild.voice_client  # type: ignore[union-attr]
+        vc = _voice_client(interaction.guild)  # type: ignore[arg-type]
         if not vc:
             return await interaction.response.send_message(
                 embed=error_embed("Not Playing", "The bot is not in a voice channel.", client=interaction.client),
@@ -462,7 +487,7 @@ def setup(bot: commands.Bot, group=None):
             return
         if not await _music_enabled(interaction):
             return
-        vc = interaction.guild.voice_client  # type: ignore[union-attr]
+        vc = _voice_client(interaction.guild)  # type: ignore[arg-type]
         if not vc or not vc.is_playing():
             return await interaction.response.send_message(
                 embed=error_embed("Not Playing", "Nothing is playing.", client=interaction.client),
@@ -480,7 +505,7 @@ def setup(bot: commands.Bot, group=None):
             return
         if not await _music_enabled(interaction):
             return
-        vc = interaction.guild.voice_client  # type: ignore[union-attr]
+        vc = _voice_client(interaction.guild)  # type: ignore[arg-type]
         if not vc or not vc.is_paused():
             return await interaction.response.send_message(
                 embed=error_embed("Not Paused", "Playback is not paused.", client=interaction.client),
@@ -509,7 +534,7 @@ def setup(bot: commands.Bot, group=None):
                 ),
                 ephemeral=True,
             )
-        vc = interaction.guild.voice_client  # type: ignore[union-attr]
+        vc = _voice_client(interaction.guild)  # type: ignore[arg-type]
         if not vc or (not vc.is_playing() and not vc.is_paused()):
             return await interaction.response.send_message(
                 embed=error_embed("Not Playing", "Nothing to skip.", client=interaction.client),
@@ -529,7 +554,7 @@ def setup(bot: commands.Bot, group=None):
         assert isinstance(interaction.user, discord.Member)
         should_skip, msg, votes, needed = await register_vote_skip(interaction.user)
         if should_skip:
-            vc = interaction.guild.voice_client  # type: ignore[union-attr]
+            vc = _voice_client(interaction.guild)  # type: ignore[arg-type]
             if vc:
                 vc.stop()
             await interaction.response.send_message(
@@ -563,7 +588,7 @@ def setup(bot: commands.Bot, group=None):
                 embed=error_embed("Invalid Volume", "Volume must be 0–100.", client=interaction.client),
                 ephemeral=True,
             )
-        vc = interaction.guild.voice_client  # type: ignore[union-attr]
+        vc = _voice_client(interaction.guild)  # type: ignore[arg-type]
         if not vc or not vc.source:
             return await interaction.response.send_message(
                 embed=error_embed("Not Playing", "Nothing is playing.", client=interaction.client),
@@ -571,7 +596,7 @@ def setup(bot: commands.Bot, group=None):
             )
         st = get_state(interaction.guild.id)  # type: ignore[union-attr]
         st.volume = volume / 100.0
-        vc.source.volume = st.volume
+        _set_source_volume(vc, st.volume)
         await persist_guild_state(interaction.guild.id, is_playing=True)  # type: ignore[union-attr]
         await interaction.response.send_message(
             embed=success_embed("Volume", f"Set to **{volume}%**.", client=interaction.client),
@@ -621,7 +646,8 @@ def setup(bot: commands.Bot, group=None):
                 ephemeral=True,
             )
         removed = st.queue.pop(position - 1)
-        await persist_guild_state(interaction.guild.id, is_playing=bool(interaction.guild.voice_client and interaction.guild.voice_client.is_playing()))  # type: ignore[union-attr]
+        play_vc = _voice_client(interaction.guild)  # type: ignore[arg-type]
+        await persist_guild_state(interaction.guild.id, is_playing=bool(play_vc and play_vc.is_playing()))  # type: ignore[union-attr]
         await interaction.response.send_message(
             embed=success_embed("Removed", f"Removed **{removed.get('title', 'track')}**.", client=interaction.client),
         )
@@ -637,9 +663,10 @@ def setup(bot: commands.Bot, group=None):
         st = get_state(interaction.guild.id)  # type: ignore[union-attr]
         count = len(st.queue)
         st.queue.clear()
+        play_vc = _voice_client(interaction.guild)  # type: ignore[arg-type]
         await persist_guild_state(
             interaction.guild.id,  # type: ignore[union-attr]
-            is_playing=bool(interaction.guild.voice_client and (interaction.guild.voice_client.is_playing() or interaction.guild.voice_client.is_paused())),  # type: ignore[union-attr]
+            is_playing=bool(play_vc and (play_vc.is_playing() or play_vc.is_paused())),
         )
         await interaction.response.send_message(
             embed=success_embed("Queue Cleared", f"Removed **{count}** track(s).", client=interaction.client),
