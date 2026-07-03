@@ -34,7 +34,7 @@ MUSIC_EVENT_SOUNDTRACK_KEY = "music_event_soundtrack_enabled"
 EVENT_VC_CHANNEL_KEY = "event_vc_channel_id"
 MUSIC_VC_BONUS_KEY = "music_vc_bonus_multiplier"
 
-yt_dlp.utils.bug_reports_message = lambda: ""  # pyright: ignore[reportAttributeAccessIssue]
+yt_dlp.utils.bug_reports_message = lambda *args, **kwargs: ""  # pyright: ignore[reportAttributeAccessIssue]
 
 ytdl_format_options = {
     "format": "bestaudio/best",

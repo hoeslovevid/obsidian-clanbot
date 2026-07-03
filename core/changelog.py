@@ -10,17 +10,25 @@ from __future__ import annotations
 from core.config import BOT_CHANGELOG, BOT_VERSION
 
 # Current release (version string comes from BOT_VERSION only).
-CURRENT_RELEASE_DATE = "2026-06-21"
+CURRENT_RELEASE_DATE = "2026-07-03"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Discovery 12** — `/start`, `/help`, and `/about` promote the lean public surface (menu, daily, baro, lfg, ticket, wfnotify configure, …)",
-    "**Staff group** — sync, webhooks, analytics, and cross-server tools moved to **`/staff`** to free headroom in `/admin`, `/general`, and `/tools`",
-    "**Legacy notify cleanup** — removed duplicate per-type notify slash commands; use **`/wfnotify configure`** (devstream channel via configure + **`/devstream_set`** for dates)",
-    "**Lean guild defaults** — new servers start with music, pets, and gambling off until mods opt in (`DEFAULT_LEAN_FEATURES`)",
-    "**Help/search** — de-emphasized duplicate paths (e.g. `/warframe baro`, `/economy daily`) hidden from member discovery",
+    "**Fix** — `/music play` works again with current yt-dlp (`bug_reports_message` shim accepts `before=` kwarg)",
+    "**Music** — `/music play` no longer requires DJ/mod; when no DJ role is set, control commands are open to everyone",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "2.3.0",
+        "date": "2026-06-21",
+        "changes": [
+            "**Discovery 12** — `/start`, `/help`, and `/about` promote the lean public surface (menu, daily, baro, lfg, ticket, wfnotify configure, …)",
+            "**Staff group** — sync, webhooks, analytics, and cross-server tools moved to **`/staff`** to free headroom in `/admin`, `/general`, and `/tools`",
+            "**Legacy notify cleanup** — removed duplicate per-type notify slash commands; use **`/wfnotify configure`** (devstream channel via configure + **`/devstream_set`** for dates)",
+            "**Lean guild defaults** — new servers start with music, pets, and gambling off until mods opt in (`DEFAULT_LEAN_FEATURES`)",
+            "**Help/search** — de-emphasized duplicate paths (e.g. `/warframe baro`, `/economy daily`) hidden from member discovery",
+        ],
+    },
     {
         "version": "2.2.2",
         "date": "2026-06-21",

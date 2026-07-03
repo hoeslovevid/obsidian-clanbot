@@ -111,7 +111,7 @@ async def _has_dj(member: discord.Member) -> bool:
         return True
     raw = await get_guild_setting(member.guild.id, MUSIC_DJ_ROLE_KEY)
     if not raw:
-        return False
+        return True
     try:
         role_id = int(raw)
     except ValueError:
@@ -333,8 +333,6 @@ def setup(bot: commands.Bot, group=None):
         if not await _require_voice(interaction):
             return
         if not await _temp_vc_allowed(interaction):
-            return
-        if not await _require_dj(interaction):
             return
 
         await interaction.response.defer()
