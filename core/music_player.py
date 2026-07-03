@@ -16,6 +16,11 @@ import discord  # type: ignore
 import yt_dlp  # type: ignore
 
 from database import DB_PATH, get_guild_setting
+from core.discord_typing import (
+    set_voice_source_volume,
+    voice_channel_from_vc,
+    voice_client as get_voice_client,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +34,7 @@ MUSIC_EVENT_SOUNDTRACK_KEY = "music_event_soundtrack_enabled"
 EVENT_VC_CHANNEL_KEY = "event_vc_channel_id"
 MUSIC_VC_BONUS_KEY = "music_vc_bonus_multiplier"
 
-yt_dlp.utils.bug_reports_message = lambda: ""
+yt_dlp.utils.bug_reports_message = lambda: ""  # pyright: ignore[reportAttributeAccessIssue]
 
 ytdl_format_options = {
     "format": "bestaudio/best",
@@ -52,6 +57,10 @@ ffmpeg_options = {
 }
 
 ytdl = yt_dlp.YoutubeDL(ytdl_format_options)
+
+
+def _voice_channel(vc: discord.VoiceClient | None) -> discord.VoiceChannel | None:
+    return voice_channel_from_vc(vc)
 
 
 def now_utc() -> datetime:
@@ -307,7 +316,7 @@ async def play_next_in_queue(guild_id: int, bot: discord.Client) -> None:
     guild = bot.get_guild(guild_id)
     if not guild:
         return
-    voice_client = guild.voice_client
+    voice_client = get_voice_client(guild)
     if not voice_client:
         await persist_guild_state(guild_id, is_playing=False)
         return
@@ -348,8 +357,7 @@ async def play_next_in_queue(guild_id: int, bot: discord.Client) -> None:
             asyncio.run_coroutine_threadsafe(play_next_in_queue(guild_id, bot), bot.loop)
 
         voice_client.play(player, after=_after)
-        if voice_client.source:
-            voice_client.source.volume = st.volume
+        set_voice_source_volume(voice_client, st.volume)
 
         await persist_guild_state(guild_id, is_playing=True)
         await update_now_playing_panel(guild, bot, announce=not await _quieter_announce(guild.id))
@@ -373,7 +381,7 @@ def build_now_playing_embed(guild: discord.Guild, client) -> discord.Embed:
 
     st = get_state(guild.id)
     track = st.current_track
-    voice = guild.voice_client
+    voice = get_voice_client(guild)
     paused = bool(voice and voice.is_paused())
     playing = bool(voice and voice.is_playing())
 
@@ -474,7 +482,7 @@ async def update_now_playing_panel(
         except (discord.NotFound, discord.Forbidden, discord.HTTPException):
             st.panel_message_id = None
 
-    if announce and channel and (guild.voice_client and (guild.voice_client.is_playing() or guild.voice_client.is_paused())):
+    if announce and channel and (get_voice_client(guild) and (get_voice_client(guild).is_playing() or get_voice_client(guild).is_paused())):
         try:
             if layout:
                 msg = await channel.send(view=layout)
@@ -497,10 +505,10 @@ async def get_vote_skip_ratio(guild_id: int) -> float:
 
 
 def listeners_in_vc(guild: discord.Guild) -> list[discord.Member]:
-    vc = guild.voice_client
-    if not vc or not vc.channel:
+    vch = _voice_channel(get_voice_client(guild))
+    if not vch:
         return []
-    return [m for m in vc.channel.members if not m.bot]
+    return [m for m in vch.members if not m.bot]
 
 
 async def register_vote_skip(member: discord.Member) -> tuple[bool, str, int, int]:
@@ -508,8 +516,10 @@ async def register_vote_skip(member: discord.Member) -> tuple[bool, str, int, in
     if not member.voice or not member.voice.channel:
         return False, "Join the bot's voice channel to vote.", 0, 0
     guild = member.guild
-    vc = guild.voice_client
-    if not vc or member.voice.channel.id != vc.channel.id:
+    vc = get_voice_client(guild)
+    vch = _voice_channel(vc)
+    member_ch = member.voice.channel if member.voice else None
+    if not vch or not isinstance(member_ch, discord.VoiceChannel) or member_ch.id != vch.id:
         return False, "Join the bot's voice channel to vote.", 0, 0
     if not vc.is_playing() and not vc.is_paused():
         return False, "Nothing is playing right now.", 0, 0
@@ -541,10 +551,11 @@ async def clear_guild_playback(
     st.queue.clear()
     st.current_track = None
     st.vote_skip_votes.clear()
-    if guild.voice_client:
-        guild.voice_client.stop()
+    vc = get_voice_client(guild)
+    if vc:
+        vc.stop()
         if disconnect:
-            await guild.voice_client.disconnect()
+            await vc.disconnect(force=True)
     await persist_guild_state(guild.id, is_playing=False)
     await update_now_playing_panel(guild, bot)
 
@@ -579,25 +590,26 @@ async def transfer_dj_control(guild_id: int, new_host_id: int) -> None:
 
 
 def guild_is_playing_music(guild: discord.Guild) -> bool:
-    vc = guild.voice_client
-    if not vc or not vc.channel:
+    vc = get_voice_client(guild)
+    if not vc or not _voice_channel(vc):
         return False
     return bool(vc.is_playing() or vc.is_paused())
 
 
 def format_guild_music_line(guild: discord.Guild) -> Optional[str]:
     """One-line status for hub/console embeds."""
-    vc = guild.voice_client
-    if not vc or not vc.channel or not guild_is_playing_music(guild):
+    vc = get_voice_client(guild)
+    vch = _voice_channel(vc)
+    if not vc or not vch or not guild_is_playing_music(guild):
         return None
     st = get_state(guild.id)
-    listeners = len([m for m in vc.channel.members if not m.bot])
+    listeners = len([m for m in vch.members if not m.bot])
     title = (st.current_track or {}).get("title", "Music")
     if len(title) > 48:
         title = title[:45] + "…"
     queue_n = len(st.queue)
     queue_hint = f" · **{queue_n}** queued" if queue_n else ""
-    return f"🎵 **{listeners}** listening in {vc.channel.mention} — _{title}_{queue_hint}"
+    return f"🎵 **{listeners}** listening in {vch.mention} — _{title}_{queue_hint}"
 
 
 def format_music_console_block(guild: discord.Guild) -> Optional[str]:
@@ -605,9 +617,8 @@ def format_music_console_block(guild: discord.Guild) -> Optional[str]:
     line = format_guild_music_line(guild)
     if not line:
         return None
-    st = get_state(guild.id)
-    vc = guild.voice_client
-    assert vc and vc.channel
+    vc = get_voice_client(guild)
+    assert vc and _voice_channel(vc)
     status = "Paused" if vc.is_paused() else "Playing"
     return f"**Music** — {status}\n{line}"
 
@@ -618,8 +629,9 @@ async def stop_if_in_channel(
     bot: discord.Client,
 ) -> None:
     """Stop playback and disconnect when a temp VC is deleted."""
-    vc = guild.voice_client
-    if not vc or not vc.channel or vc.channel.id != channel_id:
+    vc = get_voice_client(guild)
+    vch = _voice_channel(vc)
+    if not vc or not vch or vch.id != channel_id:
         return
     st = get_state(guild.id)
     if not (vc.is_playing() or vc.is_paused() or st.current_track or st.queue):
@@ -632,13 +644,17 @@ async def _ensure_voice(
     guild: discord.Guild,
     voice_channel: discord.VoiceChannel,
 ) -> discord.VoiceClient:
-    vc = guild.voice_client
-    if vc and vc.channel and vc.channel.id != voice_channel.id:
+    vc = get_voice_client(guild)
+    vch = _voice_channel(vc)
+    if vc and vch and vch.id != voice_channel.id:
         await vc.move_to(voice_channel)
         return vc
     if vc:
         return vc
-    return await voice_channel.connect()
+    connected = await voice_channel.connect()
+    if not isinstance(connected, discord.VoiceClient):
+        raise RuntimeError("Voice connect did not return VoiceClient")
+    return connected
 
 
 async def enqueue_query(
@@ -712,7 +728,7 @@ async def enqueue_query(
 
         voice_client.play(sub_player, after=_after)
         if voice_client.source:
-            voice_client.source.volume = st.volume
+            set_voice_source_volume(voice_client, st.volume)
         await persist_guild_state(guild.id, is_playing=True)
         await update_now_playing_panel(guild, bot, announce=announce)
         extra = f" (+{len(tracks) - 1} more queued)" if len(tracks) > 1 else ""
@@ -742,8 +758,8 @@ async def enqueue_query(
         asyncio.run_coroutine_threadsafe(play_next_in_queue(guild.id, bot), bot.loop)
 
     voice_client.play(player, after=_after_single)
-    if voice_client.source:
-        voice_client.source.volume = st.volume
+        if voice_client.source:
+            set_voice_source_volume(voice_client, st.volume)
     await persist_guild_state(guild.id, is_playing=True)
     await update_now_playing_panel(guild, bot, announce=announce)
     return True, f"Now playing **{track_info.get('title', 'track')}**."
@@ -773,8 +789,9 @@ async def try_start_event_soundtrack(
     except ValueError:
         return False
 
-    vc = guild.voice_client
-    if not vc or not vc.channel or vc.channel.id != event_vc_id:
+    vc = get_voice_client(guild)
+    vch = _voice_channel(vc)
+    if not vc or not vch or vch.id != event_vc_id:
         return False
 
     events_ch_raw = await get_guild_setting(guild.id, "events_channel_id")
@@ -785,7 +802,7 @@ async def try_start_event_soundtrack(
         bot,
         query,
         requested_by=guild.me.id if guild.me else 0,
-        voice_channel=vc.channel,
+        voice_channel=vch,
         text_channel_id=text_ch_id,
         announce=not await _quieter_announce(guild.id),
     )
@@ -803,11 +820,12 @@ async def music_auto_leave_tick(bot: discord.Client) -> None:
     threshold = MUSIC_AUTO_LEAVE_MINUTES * 60
     now = time.monotonic()
     for guild in bot.guilds:
-        vc = guild.voice_client
-        if not vc or not vc.channel:
+        vc = get_voice_client(guild)
+        vch = _voice_channel(vc)
+        if not vc or not vch:
             get_state(guild.id).vc_empty_since = None
             continue
-        humans = [m for m in vc.channel.members if not m.bot]
+        humans = [m for m in vch.members if not m.bot]
         st = get_state(guild.id)
         if humans:
             st.vc_empty_since = None

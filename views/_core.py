@@ -7,11 +7,22 @@ import discord  # type: ignore
 import aiosqlite  # type: ignore
 from typing import Optional, Callable, Awaitable, Any, Tuple
 
+from core.discord_typing import set_view_controls_disabled
 from core.utils import display_case_status, is_mod, obsidian_embed, render_bar, error_embed, success_embed
 from core.vc_permissions import can_manage_temp_vc
 from database import DB_PATH, now_utc, log_complaint_action
 
 logger = logging.getLogger(__name__)
+
+
+class PersistentView(discord.ui.View):
+    """View base that stores the message it is attached to (discord.py runtime attribute)."""
+    message: discord.Message | None = None
+
+
+def _set_item_disabled(item: discord.ui.Item, disabled: bool) -> None:
+    if isinstance(item, (discord.ui.Button, discord.ui.Select)):
+        item.disabled = disabled
 
 
 async def _interaction_followup_ephemeral(interaction: discord.Interaction, content: str) -> None:
@@ -29,7 +40,12 @@ async def refresh_followup(
     ephemeral: bool = True,
 ) -> None:
     """Send from a RefreshView callback (RefreshView already deferred the interaction)."""
-    await interaction.followup.send(content=content, embed=embed, ephemeral=ephemeral)
+    payload: dict[str, Any] = {"ephemeral": ephemeral}
+    if content is not None:
+        payload["content"] = content
+    if embed is not None:
+        payload["embed"] = embed
+    await interaction.followup.send(**payload)
 
 
 async def refresh_runner_only(interaction: discord.Interaction, message: str) -> None:
@@ -38,8 +54,7 @@ async def refresh_runner_only(interaction: discord.Interaction, message: str) ->
 
 
 async def _reenable_view_buttons(interaction: discord.Interaction, view: discord.ui.View) -> None:
-    for c in view.children:
-        c.disabled = False
+    set_view_controls_disabled(view, disabled=False)
     try:
         if interaction.message:
             await interaction.message.edit(view=view)
@@ -68,10 +83,10 @@ async def _update_giveaway_entry_embed(message: discord.Message, entry_count: in
     await safe_message_edit(message, embed=embed)
 
 
-class EmbedPaginator(discord.ui.View):
+class EmbedPaginator(PersistentView):
     """Reusable paginated embed view with Prev/Next buttons."""
 
-    def __init__(self, title: str, pages: list, *, color=None, client=None, timeout: float = 300, total_items: int = None, per_page: int = 15):
+    def __init__(self, title: str, pages: list, *, color=None, client=None, timeout: float = 300, total_items: Optional[int] = None, per_page: int = 15):
         super().__init__(timeout=timeout)
         self.title = title
         self.pages = pages
@@ -89,16 +104,16 @@ class EmbedPaginator(discord.ui.View):
         for c in self.children:
             cid = getattr(c, "custom_id", "")
             if cid == "paginator_first":
-                c.disabled = at_start or self.total_pages <= 2
+                _set_item_disabled(c, at_start or self.total_pages <= 2)
             elif cid == "paginator_prev":
-                c.disabled = at_start
+                _set_item_disabled(c, at_start)
             elif cid == "paginator_next":
-                c.disabled = at_end
+                _set_item_disabled(c, at_end)
             elif cid == "paginator_last":
-                c.disabled = at_end or self.total_pages <= 2
+                _set_item_disabled(c, at_end or self.total_pages <= 2)
             elif cid == "paginator_jump":
                 # Jumping only makes sense with 3+ pages.
-                c.disabled = self.total_pages <= 2
+                _set_item_disabled(c, self.total_pages <= 2)
 
     def _build_embed(self) -> discord.Embed:
         p = self.pages[self.page]
@@ -123,8 +138,7 @@ class EmbedPaginator(discord.ui.View):
         )
 
     async def on_timeout(self):
-        for c in self.children:
-            c.disabled = True
+        set_view_controls_disabled(self, disabled=True)
         try:
             if self.message:
                 emb = self._build_embed()
@@ -191,7 +205,7 @@ class _PageJumpModal(discord.ui.Modal, title="Jump to page"):
         )
 
 
-class UndoView(discord.ui.View):
+class UndoView(PersistentView):
     """A short-lived "Undo" button for reversible actions.
 
     ``undo_callback(interaction)`` performs the reversal and is responsible for
@@ -214,9 +228,7 @@ class UndoView(discord.ui.View):
         return True
 
     async def on_timeout(self):
-        for c in self.children:
-            if isinstance(c, discord.ui.Button):
-                c.disabled = True
+        set_view_controls_disabled(self, disabled=True)
         try:
             if self.message:
                 await self.message.edit(view=self)
@@ -231,9 +243,7 @@ class UndoView(discord.ui.View):
                 ephemeral=True,
             )
         self._used = True
-        for c in self.children:
-            if isinstance(c, discord.ui.Button):
-                c.disabled = True
+        set_view_controls_disabled(self, disabled=True)
         try:
             await self.undo_callback(interaction)
         except Exception:
@@ -243,7 +253,7 @@ class UndoView(discord.ui.View):
             )
 
 
-class RetryView(discord.ui.View):
+class RetryView(PersistentView):
     """View with Retry button for flaky operations (e.g. API failures)."""
 
     def __init__(self, retry_callback, *, timeout: float = 60):
@@ -251,8 +261,7 @@ class RetryView(discord.ui.View):
         self.retry_callback = retry_callback
 
     async def on_timeout(self):
-        for c in self.children:
-            c.disabled = True
+        set_view_controls_disabled(self, disabled=True)
         try:
             if self.message:
                 emb = self.message.embeds[0] if self.message.embeds else None
@@ -265,7 +274,7 @@ class RetryView(discord.ui.View):
     @discord.ui.button(label="Try again", style=discord.ButtonStyle.primary, emoji="🔄")
     async def retry_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         for c in self.children:
-            c.disabled = True
+            set_view_controls_disabled(self, disabled=True)
         try:
             await self.retry_callback(interaction)
         except discord.NotFound:
@@ -290,7 +299,7 @@ class RetryView(discord.ui.View):
             await _reenable_view_buttons(interaction, self)
 
 
-class RefreshView(discord.ui.View):
+class RefreshView(PersistentView):
     """View with Refresh button — routed via ``obsidian:refresh`` (survives restarts)."""
 
     def __init__(
@@ -331,8 +340,7 @@ class RefreshView(discord.ui.View):
         return cls(panel_type=panel_type, payload=payload, timeout=timeout)
 
     async def on_timeout(self):
-        for c in self.children:
-            c.disabled = True
+        set_view_controls_disabled(self, disabled=True)
         try:
             if self.message:
                 emb = self.message.embeds[0] if self.message.embeds else None
@@ -343,7 +351,7 @@ class RefreshView(discord.ui.View):
             pass
 
 
-class ConfirmView(discord.ui.View):
+class ConfirmView(PersistentView):
     """Reusable confirmation view with Confirm/Cancel buttons."""
 
     def __init__(self, callback: Callable[[discord.Interaction, bool], Awaitable[Any]], *, timeout: float = 60):
@@ -353,7 +361,7 @@ class ConfirmView(discord.ui.View):
     @discord.ui.button(label="Confirm", style=discord.ButtonStyle.danger)
     async def confirm_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         for c in self.children:
-            c.disabled = True
+            set_view_controls_disabled(self, disabled=True)
         try:
             await interaction.response.edit_message(view=self)
         except Exception:
@@ -363,7 +371,7 @@ class ConfirmView(discord.ui.View):
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
     async def cancel_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         for c in self.children:
-            c.disabled = True
+            set_view_controls_disabled(self, disabled=True)
         try:
             await interaction.response.edit_message(view=self)
         except Exception:
@@ -371,8 +379,7 @@ class ConfirmView(discord.ui.View):
         await self.callback_fn(interaction, False)
 
     async def on_timeout(self):
-        for c in self.children:
-            c.disabled = True
+        set_view_controls_disabled(self, disabled=True)
         try:
             if self.message:
                 await self.message.edit(
@@ -425,7 +432,9 @@ class SetLimitSelect(discord.ui.Select):
         )
         try:
             from bot import update_vc_panel_embed
-            await update_vc_panel_embed(interaction.guild, self.vc_id, force=True)
+
+            if interaction.guild:
+                await update_vc_panel_embed(interaction.guild, self.vc_id, force=True)
         except Exception:
             pass
 
@@ -580,7 +589,7 @@ class ComplaintModView(discord.ui.View):
             await db.commit()
 
         dm_ok = True
-        if dm_override:
+        if dm_override and interaction.guild:
             mod_name = interaction.user.display_name if isinstance(interaction.user, discord.Member) else None
             dm_ok = await self.dm_user(
                 interaction.guild,
@@ -774,7 +783,7 @@ class RSVPView(discord.ui.View):
             + (embed.description or "")
         )
         for item in self.children:
-            item.disabled = True
+            _set_item_disabled(item, True)
         await interaction.message.edit(embed=embed, view=self)
         await interaction.response.send_message(
             embed=success_embed("Event cancelled", "The event was cancelled and RSVPs cleared.", client=interaction.client),
@@ -797,7 +806,7 @@ class AutoModAppealStaffView(discord.ui.View):
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
             return await deny_mods_only(interaction)
         for c in self.children:
-            c.disabled = True
+            set_view_controls_disabled(self, disabled=True)
         try:
             from core.audit import log_audit
             bot_ref = getattr(interaction.client, "bot", interaction.client)
@@ -821,7 +830,7 @@ class AutoModAppealStaffView(discord.ui.View):
         if not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
             return await deny_mods_only(interaction)
         for c in self.children:
-            c.disabled = True
+            set_view_controls_disabled(self, disabled=True)
         try:
             from core.audit import log_audit
             bot_ref = getattr(interaction.client, "bot", interaction.client)
@@ -874,7 +883,7 @@ class AutoModAppealView(discord.ui.View):
     @discord.ui.button(label="Report false positive", emoji="🚩", style=discord.ButtonStyle.secondary)
     async def report_fp(self, interaction: discord.Interaction, button: discord.ui.Button):
         for c in self.children:
-            c.disabled = True
+            set_view_controls_disabled(self, disabled=True)
         guild = interaction.client.get_guild(self.guild_id)
         sent = False
         if guild and self.log_channel_id:
@@ -940,7 +949,7 @@ class TradingPostView(discord.ui.View):
         
         # Update embed
         embed = interaction.message.embeds[0]
-        embed.color = discord.Color.grey()
+        embed.color = discord.Color.light_grey()
         # Update status
         for i, field in enumerate(embed.fields):
             if field.name == "Status":
@@ -951,7 +960,7 @@ class TradingPostView(discord.ui.View):
         
         # Disable buttons
         for item in self.children:
-            item.disabled = True
+            _set_item_disabled(item, True)
         
         await interaction.message.edit(embed=embed, view=self)
         await interaction.followup.send("Listing marked as sold.", ephemeral=True)
@@ -1292,7 +1301,7 @@ class GiveawayView(discord.ui.View):
             cur = await db.execute("""
                 SELECT user_id, entered_at FROM giveaway_entries WHERE giveaway_id = ? ORDER BY entered_at ASC
             """, (self.giveaway_id,))
-            entries = await cur.fetchall()
+            entries = list(await cur.fetchall())
         total = len(entries)
         max_show = 25
         lines = []
@@ -1407,7 +1416,7 @@ class ApplicationManageView(discord.ui.View):
         
         # Disable buttons
         for item in self.children:
-            item.disabled = True
+            _set_item_disabled(item, True)
         
         await interaction.message.edit(embed=embed, view=self)
         

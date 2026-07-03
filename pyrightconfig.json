@@ -1,0 +1,28 @@
+{
+  "include": ["."],
+  "exclude": [
+    "**/__pycache__",
+    "**/.venv",
+    "**/venv",
+    "**/node_modules"
+  ],
+  "pythonVersion": "3.11",
+  "stubPath": "typings",
+  "typeCheckingMode": "basic",
+  "reportMissingTypeArgument": "none",
+  "reportUnknownMemberType": "none",
+  "reportUnknownVariableType": "none",
+  "reportUnknownArgumentType": "none",
+  "reportUnknownParameterType": "none",
+  "reportAny": "none",
+  "reportUnusedCallResult": "none",
+  "reportMissingParameterType": "none",
+  "reportUntypedFunctionDecorator": "none",
+  "reportUnannotatedClassAttribute": "none",
+  "reportImplicitStringConcatenation": "none",
+  "reportUnusedImport": "warning",
+  "reportDeprecated": "warning",
+  "reportImportCycles": "warning",
+  "reportOptionalMemberAccess": "warning",
+  "reportPrivateUsage": "warning"
+}

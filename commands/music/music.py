@@ -3,12 +3,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Optional, cast
+from typing import Optional
 
 import discord
 from discord import app_commands
 from discord.ext import commands
 
+from core.discord_typing import as_webhook_message, set_voice_source_volume, voice_client as _voice_client
 from core.embed_footers import footer_for
 from core.embed_templates import embed_template
 from core.music_player import (
@@ -39,18 +40,6 @@ logger = logging.getLogger(__name__)
 
 MUSIC_DJ_ROLE_KEY = "music_dj_role_id"
 MUSIC_CHANNEL_KEY = "music_channel_id"
-
-
-def _voice_client(guild: discord.Guild) -> discord.VoiceClient | None:
-    """Return guild voice client when it is a concrete VoiceClient (not VoiceProtocol)."""
-    vc = guild.voice_client
-    return vc if isinstance(vc, discord.VoiceClient) else None
-
-
-def _set_source_volume(vc: discord.VoiceClient, volume: float) -> None:
-    source = vc.source
-    if isinstance(source, discord.PCMVolumeTransformer):
-        source.volume = volume
 
 
 def _cmd_decorator(group, bot, name: str, description: str):
@@ -318,13 +307,12 @@ async def _start_playback(
         )
 
     voice_client.play(player, after=_after)
-    _set_source_volume(voice_client, st.volume)
+    set_voice_source_volume(voice_client, st.volume)
 
     await persist_guild_state(guild_id, is_playing=True)
     embed = build_now_playing_embed(guild, client)
     view = MusicPanelView(guild_id)
-    msg = cast(
-        discord.WebhookMessage,
+    msg = as_webhook_message(
         await interaction.followup.send(embed=embed, view=view),
     )
     await set_panel_message_id(guild_id, msg.id)
@@ -363,8 +351,7 @@ def setup(bot: commands.Bot, group=None):
                 )
 
         try:
-            loading = cast(
-                discord.WebhookMessage,
+            loading = as_webhook_message(
                 await interaction.followup.send(
                     embed=embed_template(
                         "showcase",
@@ -596,7 +583,7 @@ def setup(bot: commands.Bot, group=None):
             )
         st = get_state(interaction.guild.id)  # type: ignore[union-attr]
         st.volume = volume / 100.0
-        _set_source_volume(vc, st.volume)
+        set_voice_source_volume(vc, st.volume)
         await persist_guild_state(interaction.guild.id, is_playing=True)  # type: ignore[union-attr]
         await interaction.response.send_message(
             embed=success_embed("Volume", f"Set to **{volume}%**.", client=interaction.client),

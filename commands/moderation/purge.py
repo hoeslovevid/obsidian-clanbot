@@ -59,6 +59,7 @@ def setup(bot, group=None):
                 embed=error_embed("Invalid Context", "This command can only be used in text channels.", client=interaction.client),
                 ephemeral=True
             )
+        channel = interaction.channel
 
         # Parse amount
         amount_val = amount.value if hasattr(amount, "value") else str(amount)
@@ -86,7 +87,7 @@ def setup(bot, group=None):
                 )
 
         # Check bot permissions
-        if not interaction.channel.permissions_for(interaction.guild.me).manage_messages:
+        if not channel.permissions_for(interaction.guild.me).manage_messages:
             return await interaction.response.send_message(
                 embed=error_embed("Missing Permissions", "I need **Manage Messages** in this channel. Ask an admin to grant it.", client=interaction.client),
                 ephemeral=True,
@@ -99,7 +100,7 @@ def setup(bot, group=None):
             archive_note = " A transcript will be saved." if archive else ""
             embed = confirm_embed(
                 "⚠️ Confirm Purge",
-                f"Delete **{preview}** from {interaction.channel.mention}?{archive_note}\n\nThis cannot be undone.",
+                f"Delete **{preview}** from {channel.mention}?{archive_note}\n\nThis cannot be undone.",
                 footer_key="moderation_purge",
                 client=interaction.client,
             )
@@ -127,7 +128,7 @@ def setup(bot, group=None):
                     if amount_val.lower() == "all":
                         while True:
                             try:
-                                msgs = await interaction.channel.purge(limit=100, check=lambda m: not m.pinned)
+                                msgs = await channel.purge(limit=100, check=lambda m: not m.pinned)
                             except discord.HTTPException as e:
                                 if e.status == 429:
                                     retry_after = getattr(e, "retry_after", 1.5)
@@ -142,7 +143,7 @@ def setup(bot, group=None):
                     else:
                         for attempt in range(3):
                             try:
-                                deleted_msgs = await interaction.channel.purge(limit=int(amount_val), check=lambda m: not m.pinned)
+                                deleted_msgs = await channel.purge(limit=int(amount_val), check=lambda m: not m.pinned)
                                 break
                             except discord.HTTPException as e:
                                 if e.status == 429 and attempt < 2:
@@ -151,13 +152,13 @@ def setup(bot, group=None):
                                 raise
                     if archive and deleted_msgs:
                         transcript = _build_purge_transcript(deleted_msgs)
-                        fn = f"purge_{interaction.channel.name}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.txt"
+                        fn = f"purge_{channel.name}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.txt"
                         transcript_file = discord.File(io.BytesIO(transcript.encode("utf-8")), filename=fn)
                     deleted = len(deleted_msgs)
                     if deleted == 0:
                         await btn_interaction.followup.send("No messages were deleted. (Pinned messages are not deleted)", ephemeral=True)
                     else:
-                        summary = f"Deleted **{format_number(deleted)}** {pluralize(deleted, 'message')} from {interaction.channel.mention}." + (" Transcript attached." if transcript_file else "")
+                        summary = f"Deleted **{format_number(deleted)}** {pluralize(deleted, 'message')} from {channel.mention}." + (" Transcript attached." if transcript_file else "")
                         kwargs = {
                             "embed": obsidian_embed("Messages Purged", summary, color=discord.Color.green(), footer="See also: /mod warn, /mod data_retention", client=interaction.client),
                             "ephemeral": True,
@@ -167,7 +168,7 @@ def setup(bot, group=None):
                         await btn_interaction.followup.send(**kwargs)
                     try:
                         from core.audit import log_audit
-                        await log_audit(interaction.guild.id, "purge", interaction.user.id, details=f"{deleted} msgs in #{interaction.channel.name}", bot=interaction.client)
+                        await log_audit(interaction.guild.id, "purge", interaction.user.id, details=f"{deleted} msgs in #{channel.name}", bot=interaction.client)
                     except Exception:
                         pass
                 except discord.Forbidden:
@@ -213,7 +214,8 @@ def setup(bot, group=None):
                 embed=error_embed("Invalid Context", "Run this in a server text channel.", client=interaction.client),
                 ephemeral=True,
             )
-        if not interaction.channel.permissions_for(interaction.guild.me).manage_messages:
+        channel = interaction.channel
+        if not channel.permissions_for(interaction.guild.me).manage_messages:
             return await interaction.response.send_message(
                 embed=error_embed("Missing Permissions", "I need **Manage Messages** in this channel.", client=interaction.client),
                 ephemeral=True,
@@ -256,7 +258,7 @@ def setup(bot, group=None):
         # Scan and collect candidates BEFORE deleting so we can show a preview.
         matched: list[discord.Message] = []
         try:
-            async for m in interaction.channel.history(limit=int(limit)):
+            async for m in channel.history(limit=int(limit)):
                 if _matches(m):
                     matched.append(m)
         except discord.Forbidden:
@@ -295,7 +297,7 @@ def setup(bot, group=None):
             "⚠️ Confirm filtered purge",
             (
                 f"About to delete **{format_number(len(matched))}** "
-                f"{pluralize(len(matched), 'message')} from {interaction.channel.mention}.\n\n"
+                f"{pluralize(len(matched), 'message')} from {channel.mention}.\n\n"
                 + "\n".join(filt_lines)
                 + (
                     f"\n\n_{old_count} of these are >14 days old — will be deleted one-by-one "
@@ -321,7 +323,7 @@ def setup(bot, group=None):
             # Recollect from history to make sure we have fresh Message objects.
             to_delete: list[discord.Message] = []
             try:
-                async for m in interaction.channel.history(limit=max(int(limit), 100)):
+                async for m in channel.history(limit=max(int(limit), 100)):
                     if m.id in target_ids:
                         to_delete.append(m)
             except discord.Forbidden:
@@ -346,13 +348,13 @@ def setup(bot, group=None):
                         skipped += 1
                     continue
                 try:
-                    await interaction.channel.delete_messages(chunk)
+                    await channel.delete_messages(chunk)
                     deleted += len(chunk)
                 except discord.HTTPException as e:
                     if e.status == 429:
                         await asyncio.sleep(float(getattr(e, "retry_after", 1.5)))
                         try:
-                            await interaction.channel.delete_messages(chunk)
+                            await channel.delete_messages(chunk)
                             deleted += len(chunk)
                             continue
                         except Exception:
@@ -372,7 +374,7 @@ def setup(bot, group=None):
 
             summary = (
                 f"Deleted **{format_number(deleted)}** {pluralize(deleted, 'message')} "
-                f"in {interaction.channel.mention}."
+                f"in {channel.mention}."
             )
             if skipped:
                 summary += f"\nSkipped **{format_number(skipped)}** (couldn't bulk-delete or rate-limited)."
@@ -391,7 +393,7 @@ def setup(bot, group=None):
                 from core.audit import log_audit
                 await log_audit(
                     interaction.guild.id, "purge_filter", interaction.user.id,
-                    details=f"{deleted} matched / {skipped} skipped in #{interaction.channel.name}",
+                    details=f"{deleted} matched / {skipped} skipped in #{channel.name}",
                     bot=interaction.client,
                 )
             except Exception:
