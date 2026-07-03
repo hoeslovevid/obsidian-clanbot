@@ -9,6 +9,17 @@ from discord import app_commands
 T = TypeVar("T")
 
 
+def as_webhook_message(message: discord.WebhookMessage | None) -> discord.WebhookMessage:
+    """Narrow interaction followup.send() to WebhookMessage.
+
+    Application webhooks (including ``Interaction.followup``) always wait for the
+    message object, but discord.py types the return as optional.
+    """
+    if message is None:
+        raise RuntimeError("interaction followup.send returned no message")
+    return message
+
+
 def voice_client(guild: discord.Guild) -> discord.VoiceClient | None:
     """Return a concrete VoiceClient, not VoiceProtocol."""
     vc = guild.voice_client
