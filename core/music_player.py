@@ -758,8 +758,8 @@ async def enqueue_query(
         asyncio.run_coroutine_threadsafe(play_next_in_queue(guild.id, bot), bot.loop)
 
     voice_client.play(player, after=_after_single)
-        if voice_client.source:
-            set_voice_source_volume(voice_client, st.volume)
+    if voice_client.source:
+        set_voice_source_volume(voice_client, st.volume)
     await persist_guild_state(guild.id, is_playing=True)
     await update_now_playing_panel(guild, bot, announce=announce)
     return True, f"Now playing **{track_info.get('title', 'track')}**."
