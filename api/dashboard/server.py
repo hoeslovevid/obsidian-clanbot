@@ -27,6 +27,7 @@ from core.dashboard_data import (
     fetch_guild_dashboard_overview,
     fetch_guild_features,
     fetch_guild_inbox_summary,
+    fetch_guild_setup_health,
     list_manageable_guilds,
     set_guild_feature,
 )
@@ -103,6 +104,8 @@ async def handle_me(request: web.Request) -> web.Response:
         {
             "user_id": str(auth.user_id),
             "username": auth.username,
+            "display_name": auth.global_name or auth.username,
+            "avatar_url": auth.avatar_url,
             "guilds": guilds,
         }
     )
@@ -164,6 +167,14 @@ async def handle_guild_features_patch(request: web.Request) -> web.Response:
             content_type="application/json",
         )
     return _json(await fetch_guild_features(guild_id))
+
+
+async def handle_guild_setup(request: web.Request) -> web.Response:
+    bot: discord.Client = request.app["bot"]
+    guild_id = int(request.match_info["guild_id"])
+    auth = await authenticate(request, bot)
+    await require_guild_admin(request, bot, guild_id, auth)
+    return _json(await fetch_guild_setup_health(guild_id, bot))
 
 
 async def handle_contact(request: web.Request) -> web.Response:
@@ -259,6 +270,7 @@ def create_app(bot: discord.Client) -> web.Application:
     app.router.add_get("/api/guilds/{guild_id}/overview", handle_guild_overview)
     app.router.add_get("/api/guilds/{guild_id}/features", handle_guild_features_get)
     app.router.add_patch("/api/guilds/{guild_id}/features", handle_guild_features_patch)
+    app.router.add_get("/api/guilds/{guild_id}/setup", handle_guild_setup)
     app.router.add_route("*", "/api/contact", handle_contact)
     return app
 

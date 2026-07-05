@@ -23,6 +23,15 @@ class AuthContext:
     user_id: int
     is_service: bool
     username: Optional[str] = None
+    avatar_url: Optional[str] = None
+    global_name: Optional[str] = None
+
+
+def discord_avatar_url(user_id: int, avatar_hash: Optional[str]) -> str:
+    if avatar_hash:
+        ext = "gif" if str(avatar_hash).startswith("a_") else "png"
+        return f"https://cdn.discordapp.com/avatars/{user_id}/{avatar_hash}.{ext}?size=128"
+    return f"https://cdn.discordapp.com/embed/avatars/{(int(user_id) >> 22) % 6}.png"
 
 
 def _parse_bearer(request: web.Request) -> Optional[str]:
@@ -99,6 +108,8 @@ async def authenticate(request: web.Request, bot: discord.Client) -> AuthContext
         user_id=int(user["id"]),
         is_service=False,
         username=str(user.get("username") or ""),
+        global_name=str(user.get("global_name") or user.get("username") or ""),
+        avatar_url=discord_avatar_url(int(user["id"]), user.get("avatar")),
     )
 
 

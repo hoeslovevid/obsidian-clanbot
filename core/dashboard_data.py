@@ -332,3 +332,49 @@ async def list_manageable_guilds(
         )
     out.sort(key=lambda g: g["name"].lower())
     return out
+
+
+def _parse_setup_block(text: str) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for line in (text or "").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith("✅"):
+            status = "ok"
+            body = line[1:].strip()
+        elif line.startswith("⚠️"):
+            status = "warn"
+            body = line[1:].strip()
+        elif line.startswith("❌"):
+            status = "missing"
+            body = line[1:].strip()
+        else:
+            status = "unknown"
+            body = line
+        items.append({"status": status, "text": body})
+    return items
+
+
+async def fetch_guild_setup_health(guild_id: int, bot: discord.Client) -> dict[str, Any]:
+    """Structured setup status for the web dashboard."""
+    guild = bot.get_guild(guild_id)
+    if not guild:
+        return {"guild_id": guild_id, "error": "guild_not_found"}
+
+    from commands.general.setup_status import compute_setup_health
+
+    configured, total, core_block, wf_block, mod_block, extra_block = await compute_setup_health(guild)
+    pct = int(100 * configured / total) if total else 0
+    return {
+        "guild_id": guild_id,
+        "configured": configured,
+        "total": total,
+        "percent": pct,
+        "sections": [
+            {"id": "core", "title": "Core", "items": _parse_setup_block(core_block)},
+            {"id": "warframe", "title": "Warframe feeds", "items": _parse_setup_block(wf_block)},
+            {"id": "moderation", "title": "Moderation logs", "items": _parse_setup_block(mod_block)},
+            {"id": "community", "title": "Community", "items": _parse_setup_block(extra_block)},
+        ],
+    }
