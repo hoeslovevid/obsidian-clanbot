@@ -47,7 +47,16 @@
     var logo = document.createElement("a");
     logo.href = "/";
     logo.className = "nav-logo";
-    logo.textContent = "Obsidian Overseer";
+    var logoImg = document.createElement("img");
+    logoImg.src = "/assets/logo.png";
+    logoImg.alt = "";
+    logoImg.className = "nav-logo-img";
+    logoImg.width = 32;
+    logoImg.height = 32;
+    logo.appendChild(logoImg);
+    var logoText = document.createElement("span");
+    logoText.textContent = "Obsidian Overseer";
+    logo.appendChild(logoText);
     bindHomeLink(logo);
     var links = document.createElement("div");
     links.className = "nav-links";
