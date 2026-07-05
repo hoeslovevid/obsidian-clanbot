@@ -287,7 +287,7 @@ async def handle_guild_warframe(request: web.Request) -> web.Response:
     guild_id = int(request.match_info["guild_id"])
     auth = await authenticate(request, bot)
     await require_guild_admin(request, bot, guild_id, auth)
-    return _json(await fetch_warframe_snapshot())
+    return _json(await fetch_warframe_snapshot(guild_id, bot))
 
 
 async def handle_guild_analytics(request: web.Request) -> web.Response:

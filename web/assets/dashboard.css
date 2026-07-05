@@ -568,6 +568,82 @@ body.dash-body {
 .dash-cycle-card .state { font-size: 1.25rem; font-weight: 700; color: var(--accent-bright); }
 .dash-cycle-card .name { font-size: 0.85rem; color: var(--text-muted); margin-top: 4px; }
 
+.dash-wf-banner {
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: rgba(107, 207, 127, 0.08);
+  margin-bottom: 16px;
+  font-size: 0.88rem;
+}
+.dash-wf-banner-warn {
+  background: rgba(251, 191, 36, 0.08);
+  border-color: rgba(251, 191, 36, 0.35);
+  color: var(--warn);
+}
+.dash-wf-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.dash-wf-mission-list {
+  list-style: none;
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.dash-wf-mission-list li { font-size: 0.9rem; line-height: 1.45; }
+.dash-wf-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.dash-wf-mini-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.dash-wf-mini-card strong { font-size: 0.92rem; }
+.dash-wf-mini-card span { font-size: 0.85rem; }
+.dash-wf-compact-list {
+  list-style: none;
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.dash-wf-tier {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(212, 148, 60, 0.15);
+  color: var(--accent-bright);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.dash-wf-feed-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.dash-wf-feed-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+}
+.dash-wf-feed-card strong { display: block; font-size: 0.88rem; margin-bottom: 4px; }
+.dash-wf-feed-card span { font-size: 0.82rem; color: var(--text-muted); }
+.dash-wf-feed-missing { opacity: 0.75; border-style: dashed; }
+
 /* Charts (CSS bars) */
 .dash-chart-grid {
   display: grid;
@@ -693,4 +769,7 @@ body.dash-body {
   .dash-table { font-size: 0.82rem; }
   .dash-table th, .dash-table td { padding: 10px 8px; }
   .dash-form-grid { grid-template-columns: 1fr; }
+  .dash-wf-grid-2 { grid-template-columns: 1fr; }
+  .dash-wf-mini-grid { grid-template-columns: 1fr; }
+  .dash-wf-feed-grid { grid-template-columns: 1fr; }
 }

@@ -843,11 +843,45 @@
       node.innerHTML = '<p class="dash-meta">Loading Warframe data…</p>';
       return;
     }
-    var b = wf.baro || {};
+
+    var html = "";
+
+    if (wf.api) {
+      html +=
+        '<div class="dash-wf-banner' +
+        (wf.api.degraded ? " dash-wf-banner-warn" : "") +
+        '"><span>' +
+        escapeHtml(wf.api.status || "Warframe API") +
+        "</span></div>";
+    }
+
+    html += renderWfBaroPanel(wf.baro || {});
+    html += renderWfCyclesPanel(wf.cycles || []);
+    html += '<div class="dash-wf-grid-2">';
+    html += renderWfMissionPanel("🎯 Sortie", wf.sortie);
+    html += renderWfMissionPanel("👹 Archon hunt", wf.archon);
+    html += "</div>";
+    html += renderWfDailyOpsPanel(wf);
+    html += renderWfFissuresPanel(wf.fissures || []);
+    html += renderWfAlertsPanel(wf.alerts || []);
+    html += renderWfInvasionsPanel(wf.invasions || []);
+    html += renderWfFeedsPanel(wf.feeds || [], wf.devstream);
+    node.innerHTML = html;
+
+    var setupBtn = node.querySelector("[data-goto-tab='setup']");
+    if (setupBtn) {
+      setupBtn.addEventListener("click", function () {
+        setTab("setup");
+      });
+    }
+  }
+
+  function renderWfBaroPanel(b) {
     var html = '<div class="dash-panel"><h2>🛸 Baro Ki\'Teer</h2>';
     if (!b.available) {
-      html += '<p class="dash-meta">Could not load Baro data.</p></div>';
-    } else if (b.active) {
+      return html + '<p class="dash-meta">Could not load Baro data.</p></div>';
+    }
+    if (b.active) {
       html +=
         '<p><strong>' +
         escapeHtml(b.location) +
@@ -871,27 +905,210 @@
         });
         html += "</tbody></table></div>";
         if (b.inventory_count > b.inventory_preview.length) {
-          html += '<p class="dash-meta" style="margin-top:8px;">Showing ' + b.inventory_preview.length + " of " + b.inventory_count + " items · use /warframe baro in Discord for full list.</p>";
+          html +=
+            '<p class="dash-meta" style="margin-top:8px;">Showing ' +
+            b.inventory_preview.length +
+            " of " +
+            b.inventory_count +
+            " items · use /warframe baro in Discord for the full list.</p>";
         }
       }
-      html += "</div>";
     } else {
-      html += '<p class="dash-meta">Baro is not at a relay. Check back before the next arrival.</p></div>';
+      html += '<p class="dash-meta">Baro is not at a relay right now.';
+      if (b.activation) {
+        html += " Next visit in " + escapeHtml(timeUntil(b.activation)) + ".";
+      }
+      html += "</p>";
     }
+    return html + "</div>";
+  }
 
-    html += '<div class="dash-panel"><h2>🌍 Open-world cycles</h2><div class="dash-cycle-grid">';
-    (wf.cycles || []).forEach(function (c) {
+  function renderWfCyclesPanel(cycles) {
+    var html = '<div class="dash-panel"><h2>🌍 Open-world cycles</h2><div class="dash-cycle-grid">';
+    cycles.forEach(function (c) {
       html +=
         '<div class="dash-cycle-card"><div class="state">' +
         (c.label || "—") +
         '</div><div class="name">' +
         escapeHtml(c.name) +
         "</div>" +
-        (c.expiry ? '<div class="dash-meta" style="margin-top:6px;">' + escapeHtml(timeUntil(c.expiry)) + " left</div>" : "") +
+        (c.expiry
+          ? '<div class="dash-meta" style="margin-top:6px;">' + escapeHtml(timeUntil(c.expiry)) + " left</div>"
+          : "") +
         "</div>";
     });
-    html += "</div></div>";
-    node.innerHTML = html;
+    return html + "</div></div>";
+  }
+
+  function renderWfMissionPanel(title, data) {
+    var html = '<div class="dash-panel"><h2>' + title + "</h2>";
+    if (!data || !data.missions || !data.missions.length) {
+      return html + '<p class="dash-meta">No data available.</p></div>';
+    }
+    html +=
+      '<p class="dash-meta">' +
+      escapeHtml(data.boss || "") +
+      (data.faction ? " · " + escapeHtml(data.faction) : "") +
+      (data.expiry ? " · resets in " + escapeHtml(timeUntil(data.expiry)) : "") +
+      "</p><ul class=\"dash-wf-mission-list\">";
+    data.missions.forEach(function (m, idx) {
+      html +=
+        "<li><strong>" +
+        (idx + 1) +
+        ". " +
+        escapeHtml(m.node) +
+        "</strong> · " +
+        escapeHtml(m.mission_type) +
+        (m.modifier ? '<span class="dash-meta"> — ' + escapeHtml(m.modifier) + "</span>" : "") +
+        (m.boss ? '<span class="dash-meta"> · ' + escapeHtml(m.boss) + "</span>" : "") +
+        "</li>";
+    });
+    return html + "</ul></div>";
+  }
+
+  function renderWfDailyOpsPanel(wf) {
+    var cards = [];
+    if (wf.steel_path) {
+      cards.push(
+        "<div class=\"dash-wf-mini-card\"><strong>🔴 Steel Path</strong><span>" +
+          escapeHtml(wf.steel_path.reward || "?") +
+          "</span><span class=\"dash-meta\">" +
+          escapeHtml(timeUntil(wf.steel_path.expiry)) +
+          " left</span></div>"
+      );
+    }
+    if (wf.arbitration) {
+      var a = wf.arbitration;
+      cards.push(
+        '<div class="dash-wf-mini-card"><strong>⚔️ Arbitration</strong><span>' +
+          escapeHtml(a.node) +
+          " · " +
+          escapeHtml(a.type) +
+          "</span><span class=\"dash-meta\">" +
+          escapeHtml(a.enemy) +
+          " · " +
+          escapeHtml(timeUntil(a.expiry)) +
+          " left</span></div>"
+      );
+    }
+    if (wf.nightwave) {
+      var nw = wf.nightwave;
+      var lines = (nw.daily || []).slice(0, 3).concat((nw.weekly || []).slice(0, 2));
+      cards.push(
+        '<div class="dash-wf-mini-card dash-wf-mini-wide"><strong>🌙 Nightwave</strong>' +
+          (nw.season != null ? '<span class="dash-meta">Season ' + escapeHtml(String(nw.season)) + "</span>" : "") +
+          (lines.length
+            ? "<ul class=\"dash-wf-compact-list\">" +
+              lines
+                .map(function (line) {
+                  return "<li>" + escapeHtml(line) + "</li>";
+                })
+                .join("") +
+              "</ul>"
+            : '<span class="dash-meta">No challenge data</span>') +
+          "</div>"
+      );
+    }
+    if (!cards.length) {
+      return "";
+    }
+    return (
+      '<div class="dash-panel"><h2>📋 Daily ops</h2><div class="dash-wf-mini-grid">' +
+      cards.join("") +
+      "</div></div>"
+    );
+  }
+
+  function renderWfFissuresPanel(fissures) {
+    var html = '<div class="dash-panel"><h2>💎 Void fissures</h2>';
+    if (!fissures.length) {
+      return html + '<p class="dash-meta">No active fissures.</p></div>';
+    }
+    html +=
+      '<div class="dash-table-wrap"><table class="dash-table"><thead><tr><th>Tier</th><th>Node</th><th>Mission</th><th>Enemy</th><th>Expires</th></tr></thead><tbody>';
+    fissures.forEach(function (f) {
+      html +=
+        "<tr><td><span class=\"dash-wf-tier\">" +
+        escapeHtml(f.tier) +
+        (f.is_hard ? " SP" : "") +
+        (f.is_storm ? " ⚡" : "") +
+        "</span></td><td>" +
+        escapeHtml(f.node) +
+        "</td><td>" +
+        escapeHtml(f.mission_type) +
+        "</td><td>" +
+        escapeHtml(f.enemy) +
+        '</td><td class="dash-meta">' +
+        escapeHtml(timeUntil(f.expiry)) +
+        "</td></tr>";
+    });
+    return html + "</tbody></table></div></div>";
+  }
+
+  function renderWfAlertsPanel(alerts) {
+    var html = '<div class="dash-panel"><h2>🚨 Alerts</h2>';
+    if (!alerts.length) {
+      return html + '<p class="dash-meta">No active alerts.</p></div>';
+    }
+    html += '<ul class="dash-wf-mission-list">';
+    alerts.forEach(function (a) {
+      html +=
+        "<li><strong>" +
+        escapeHtml(a.node) +
+        "</strong> · " +
+        escapeHtml(a.mission_type) +
+        (a.rewards && a.rewards.length
+          ? '<span class="dash-meta"> — ' + escapeHtml(a.rewards.join(", ")) + "</span>"
+          : "") +
+        '<span class="dash-meta"> · ' +
+        escapeHtml(timeUntil(a.expiry)) +
+        " left</span></li>";
+    });
+    return html + "</ul></div>";
+  }
+
+  function renderWfInvasionsPanel(invasions) {
+    var html = '<div class="dash-panel"><h2>⚔️ Invasions</h2>';
+    if (!invasions.length) {
+      return html + '<p class="dash-meta">No active invasions.</p></div>';
+    }
+    html +=
+      '<div class="dash-table-wrap"><table class="dash-table"><thead><tr><th>Node</th><th>Attacker</th><th>Defender</th></tr></thead><tbody>';
+    invasions.forEach(function (inv) {
+      html +=
+        "<tr><td>" +
+        escapeHtml(inv.node) +
+        "</td><td>" +
+        escapeHtml((inv.attacker || []).join(", ") || "—") +
+        "</td><td>" +
+        escapeHtml((inv.defender || []).join(", ") || "—") +
+        "</td></tr>";
+    });
+    return html + "</tbody></table></div></div>";
+  }
+
+  function renderWfFeedsPanel(feeds, devstream) {
+    var html = '<div class="dash-panel"><h2>🔔 Notification feeds</h2>';
+    if (devstream && devstream.next_at) {
+      html +=
+        '<p class="dash-meta" style="margin-bottom:12px;">Next devstream in ' +
+        escapeHtml(timeUntil(devstream.next_at)) +
+        "</p>";
+    }
+    html += '<div class="dash-wf-feed-grid">';
+    feeds.forEach(function (f) {
+      html +=
+        '<div class="dash-wf-feed-card' +
+        (f.configured ? "" : " dash-wf-feed-missing") +
+        '"><strong>' +
+        escapeHtml(f.label) +
+        "</strong><span>" +
+        (f.configured ? "#" + escapeHtml(f.channel_name) : "Not configured") +
+        "</span></div>";
+    });
+    html +=
+      '</div><button type="button" class="dash-btn dash-btn-ghost dash-btn-sm" data-goto-tab="setup" style="margin-top:14px;">Configure feeds in Setup →</button></div>';
+    return html;
   }
 
   function renderBarChart(rows, labelKey, valueKey, maxBars) {

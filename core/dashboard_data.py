@@ -737,12 +737,221 @@ def _parse_iso_ts(raw: Optional[str]) -> Optional[str]:
     return str(raw)
 
 
-async def fetch_warframe_snapshot() -> dict[str, Any]:
-    """Baro + open-world cycles for the dashboard Warframe tab."""
-    from api.warframe_api import get_all_cycles, get_baro_status
+def _ws_label(raw: Any) -> str:
+    if not raw:
+        return "?"
+    text = str(raw).strip("/").split("/")[-1]
+    return text.replace("_", " ") or "?"
+
+
+def _reward_types(reward: Any) -> list[str]:
+    if not isinstance(reward, dict):
+        return []
+    items = reward.get("countedItems") or []
+    names: list[str] = []
+    for item in items[:4]:
+        if isinstance(item, dict):
+            names.append(_ws_label(item.get("type") or item.get("ItemType")))
+        elif item:
+            names.append(str(item))
+    return [n for n in names if n and n != "?"]
+
+
+def _serialize_sortie(data: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
+    if not data or not isinstance(data, dict):
+        return None
+    missions_raw = data.get("missions") or data.get("variants") or []
+    missions: list[dict[str, Any]] = []
+    for m in missions_raw[:3]:
+        if not isinstance(m, dict):
+            continue
+        missions.append(
+            {
+                "node": _ws_label(m.get("node")),
+                "mission_type": _ws_label(m.get("missionType") or m.get("mission_type")),
+                "modifier": _ws_label(m.get("modifier") or m.get("modifierType")),
+            }
+        )
+    return {
+        "boss": data.get("boss") or "Unknown",
+        "faction": data.get("faction") or "Unknown",
+        "expiry": data.get("expiry"),
+        "missions": missions,
+    }
+
+
+def _serialize_archon(data: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
+    if not data or not isinstance(data, dict):
+        return None
+    variants: list[dict[str, Any]] = []
+    for v in (data.get("variants") or [])[:3]:
+        if not isinstance(v, dict):
+            continue
+        variants.append(
+            {
+                "node": _ws_label(v.get("node")),
+                "mission_type": _ws_label(v.get("missionType") or v.get("mission_type")),
+                "boss": _ws_label(v.get("boss")) if v.get("boss") else None,
+            }
+        )
+    return {
+        "boss": data.get("boss") or "Archon Hunt",
+        "expiry": data.get("expiry"),
+        "missions": variants,
+    }
+
+
+def _serialize_fissures(rows: Any) -> list[dict[str, Any]]:
+    if not isinstance(rows, list):
+        return []
+    out: list[dict[str, Any]] = []
+    for f in rows[:16]:
+        if not isinstance(f, dict) or f.get("expired"):
+            continue
+        out.append(
+            {
+                "tier": f.get("tier") or "?",
+                "node": f.get("node") or "?",
+                "mission_type": f.get("missionType") or "?",
+                "enemy": f.get("enemy") or "?",
+                "expiry": f.get("expiry"),
+                "is_hard": bool(f.get("isHard")),
+                "is_storm": bool(f.get("isStorm")),
+            }
+        )
+    return out
+
+
+def _serialize_alerts(rows: Any) -> list[dict[str, Any]]:
+    if not isinstance(rows, list):
+        return []
+    out: list[dict[str, Any]] = []
+    for a in rows[:10]:
+        if not isinstance(a, dict) or a.get("expired"):
+            continue
+        mission = a.get("mission") if isinstance(a.get("mission"), dict) else {}
+        out.append(
+            {
+                "node": mission.get("node") or "?",
+                "mission_type": mission.get("type") or "?",
+                "rewards": (a.get("rewardTypes") or [])[:4],
+                "expiry": a.get("expiry"),
+            }
+        )
+    return out
+
+
+def _serialize_invasions(rows: Any) -> list[dict[str, Any]]:
+    if not isinstance(rows, list):
+        return []
+    out: list[dict[str, Any]] = []
+    for inv in rows[:8]:
+        if not isinstance(inv, dict) or inv.get("completed"):
+            continue
+        out.append(
+            {
+                "node": inv.get("node") or "?",
+                "attacker": _reward_types(inv.get("attackerReward")),
+                "defender": _reward_types(inv.get("defenderReward")),
+            }
+        )
+    return out
+
+
+def _serialize_nightwave(data: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
+    if not data or not isinstance(data, dict):
+        return None
+    daily = data.get("dailyChallenges") or []
+    weekly = data.get("weeklyChallenges") or []
+    active = data.get("activeChallenges") or []
+    if not daily and not weekly and isinstance(active, list):
+        daily = [c for c in active if c.get("isDaily")]
+        weekly = [c for c in active if not c.get("isDaily")]
+
+    def _title(c: Any) -> str:
+        if not isinstance(c, dict):
+            return str(c)[:80]
+        return str(c.get("title") or c.get("desc") or c)[:120]
+
+    return {
+        "season": data.get("season") or data.get("seasonTag"),
+        "daily": [_title(c) for c in (daily if isinstance(daily, list) else [])[:6]],
+        "weekly": [_title(c) for c in (weekly if isinstance(weekly, list) else [])[:4]],
+    }
+
+
+async def _serialize_guild_wf_feeds(guild_id: int, bot: discord.Client) -> list[dict[str, Any]]:
+    from database import get_configured_channel_id
+
+    guild = bot.get_guild(guild_id)
+    feeds: list[dict[str, Any]] = []
+    for key, label in (
+        ("alerts_notify_channel_id", "Alerts"),
+        ("forum_notify_channel_id", "Forum posts"),
+        ("youtube_notify_channel_id", "YouTube"),
+        ("devstream_notify_channel_id", "Devstreams"),
+    ):
+        ch_id = await get_configured_channel_id(guild_id, key)
+        ch = guild.get_channel(ch_id) if guild and ch_id else None
+        feeds.append(
+            {
+                "key": key,
+                "label": label,
+                "configured": bool(ch_id and ch),
+                "channel_name": getattr(ch, "name", None),
+            }
+        )
+    return feeds
+
+
+async def fetch_warframe_snapshot(guild_id: int, bot: discord.Client) -> dict[str, Any]:
+    """Warframe world-state snapshot for the dashboard Warframe tab."""
+    import asyncio
+
+    from api.warframe_api import (
+        calculate_next_devstream_date,
+        fetch_alerts,
+        fetch_arbitration,
+        fetch_archon_hunt_data,
+        fetch_fissures,
+        fetch_invasions,
+        fetch_nightwave,
+        fetch_sortie,
+        fetch_steel_path,
+        get_all_cycles,
+        get_baro_status,
+        warframe_api_health,
+    )
     from commands.warframe.baro import _parse_baro_item_name
 
-    is_active, baro_data = await get_baro_status()
+    baro_task = get_baro_status()
+    other_task = asyncio.gather(
+        get_all_cycles(),
+        fetch_sortie(),
+        fetch_fissures(),
+        fetch_alerts(),
+        fetch_invasions(),
+        fetch_arbitration(),
+        fetch_steel_path(),
+        fetch_nightwave(),
+        fetch_archon_hunt_data(),
+        calculate_next_devstream_date(),
+        return_exceptions=True,
+    )
+    is_active, baro_data = await baro_task
+    (
+        cycles_raw,
+        sortie_raw,
+        fissures_raw,
+        alerts_raw,
+        invasions_raw,
+        arbitration_raw,
+        steel_path_raw,
+        nightwave_raw,
+        archon_raw,
+        devstream_raw,
+    ) = await other_task
+
     baro: dict[str, Any] = {"active": False, "available": baro_data is not None}
     if baro_data:
         inventory = baro_data.get("inventory") or []
@@ -760,16 +969,16 @@ async def fetch_warframe_snapshot() -> dict[str, Any]:
                     "ducats": int(item.get("ducats") or item.get("ducatPrice") or 0),
                     "credits": int(item.get("credits") or item.get("creditPrice") or 0),
                 }
-                for item in inventory[:8]
+                for item in inventory[:12]
             ],
         }
 
-    cycles_raw = await get_all_cycles()
     cycles: list[dict[str, Any]] = []
     labels = {"cetus": "Cetus (Plains)", "vallis": "Orb Vallis", "cambion": "Cambion Drift"}
+    cycles_map = cycles_raw if isinstance(cycles_raw, dict) else {}
     for key, label in labels.items():
-        c = (cycles_raw or {}).get(key) if cycles_raw else None
-        if not c:
+        c = cycles_map.get(key)
+        if not c or not isinstance(c, dict):
             cycles.append({"id": key, "name": label, "state": "unknown"})
             continue
         is_day = c.get("isDay")
@@ -783,7 +992,45 @@ async def fetch_warframe_snapshot() -> dict[str, Any]:
             }
         )
 
-    return {"baro": baro, "cycles": cycles}
+    status_line, degraded = warframe_api_health()
+    devstream_at = None
+    if isinstance(devstream_raw, datetime):
+        devstream_at = devstream_raw.isoformat()
+
+    steel_path: Optional[dict[str, Any]] = None
+    if isinstance(steel_path_raw, dict):
+        reward = steel_path_raw.get("currentReward")
+        reward_name = reward.get("name") if isinstance(reward, dict) else str(reward or "?")
+        steel_path = {
+            "reward": reward_name,
+            "expiry": steel_path_raw.get("expiry"),
+        }
+
+    arbitration: Optional[dict[str, Any]] = None
+    if isinstance(arbitration_raw, dict):
+        arbitration = {
+            "node": arbitration_raw.get("node") or "?",
+            "type": arbitration_raw.get("type") or "?",
+            "enemy": arbitration_raw.get("enemy") or "?",
+            "expiry": arbitration_raw.get("expiry"),
+        }
+
+    return {
+        "guild_id": guild_id,
+        "api": {"status": status_line.replace("**", ""), "degraded": degraded},
+        "baro": baro,
+        "cycles": cycles,
+        "sortie": _serialize_sortie(sortie_raw if isinstance(sortie_raw, dict) else None),
+        "archon": _serialize_archon(archon_raw if isinstance(archon_raw, dict) else None),
+        "steel_path": steel_path,
+        "arbitration": arbitration,
+        "nightwave": _serialize_nightwave(nightwave_raw if isinstance(nightwave_raw, dict) else None),
+        "fissures": _serialize_fissures(fissures_raw),
+        "alerts": _serialize_alerts(alerts_raw),
+        "invasions": _serialize_invasions(invasions_raw),
+        "devstream": {"next_at": devstream_at},
+        "feeds": await _serialize_guild_wf_feeds(guild_id, bot),
+    }
 
 
 async def fetch_guild_analytics(guild_id: int, bot: discord.Client) -> dict[str, Any]:
