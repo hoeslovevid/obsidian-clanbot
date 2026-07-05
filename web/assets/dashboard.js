@@ -8,19 +8,9 @@
   var GUILD_KEY = "obsidian_dashboard_guild";
   var REFRESH_MS = 60000;
 
-  var FEATURE_META = {
-    pets: { label: "Pets", group: "Economy", desc: "Pet collection and care" },
-    gambling: { label: "Gambling", group: "Economy", desc: "Casino and betting" },
-    economy_passive: { label: "Passive economy", group: "Economy", desc: "Background coin/XP gains" },
-    lfg: { label: "LFG squads", group: "Community", desc: "Looking-for-group posts" },
-    polls: { label: "Polls", group: "Community", desc: "Server polls and votes" },
-    events: { label: "Events", group: "Community", desc: "RSVP events and reminders" },
-    trade: { label: "Trading", group: "Warframe", desc: "Market price lookup" },
-    notifications: { label: "WF notifications", group: "Warframe", desc: "Alert and feed pings" },
-    music: { label: "Music", group: "Voice", desc: "Voice channel playback" },
-  };
+  var FEATURE_META = {};
 
-  var GROUP_ORDER = ["Community", "Warframe", "Economy", "Voice"];
+  var GROUP_ORDER = [];
 
   var SETUP_SECTION_LABELS = {
     core: "Core channels",
@@ -546,38 +536,77 @@
   }
 
   function renderFeatures() {
-    var features = (state.features && state.features.features) || {};
+    var data = state.features || {};
+    var catalog = data.catalog || [];
+    var groups = data.groups || [];
+    if (!catalog.length && data.features) {
+      Object.keys(data.features).forEach(function (key) {
+        catalog.push({
+          id: key,
+          group: "Other",
+          label: key,
+          desc: "",
+          toggleable: true,
+          enabled: data.features[key],
+        });
+      });
+    }
+
+    catalog.forEach(function (item) {
+      FEATURE_META[item.id] = { label: item.label, group: item.group, desc: item.desc };
+    });
+    if (groups.length) GROUP_ORDER = groups;
+
     var byGroup = {};
-    Object.keys(features).forEach(function (key) {
-      var meta = FEATURE_META[key] || { label: key, group: "Other", desc: "" };
-      if (!byGroup[meta.group]) byGroup[meta.group] = [];
-      byGroup[meta.group].push({ key: key, meta: meta, on: features[key] });
+    catalog.forEach(function (item) {
+      var group = item.group || "Other";
+      if (!byGroup[group]) byGroup[group] = [];
+      byGroup[group].push(item);
     });
 
     var html = "";
-    GROUP_ORDER.concat(Object.keys(byGroup).filter(function (g) {
-      return GROUP_ORDER.indexOf(g) < 0;
-    })).forEach(function (group) {
+    GROUP_ORDER.concat(
+      Object.keys(byGroup).filter(function (g) {
+        return GROUP_ORDER.indexOf(g) < 0;
+      })
+    ).forEach(function (group) {
       if (!byGroup[group] || !byGroup[group].length) return;
-      html += '<div class="dash-feature-group"><h3>' + escapeHtml(group) + "</h3><div class=\"dash-feature-grid\">";
-      byGroup[group].forEach(function (f) {
+      html +=
+        '<div class="dash-feature-group"><h3>' +
+        escapeHtml(group) +
+        '</h3><div class="dash-feature-grid">';
+      byGroup[group].forEach(function (item) {
         html +=
-          '<div class="dash-feature-card"><div class="dash-feature-info"><strong>' +
-          escapeHtml(f.meta.label) +
+          '<div class="dash-feature-card' +
+          (item.toggleable ? "" : " dash-feature-card-static") +
+          '"><div class="dash-feature-info"><strong>' +
+          escapeHtml(item.label) +
           "</strong><span>" +
-          escapeHtml(f.meta.desc) +
-          '</span></div><label class="dash-switch" aria-label="Toggle ' +
-          escapeHtml(f.meta.label) +
-          '"><input type="checkbox" data-feature="' +
-          escapeHtml(f.key) +
-          '" ' +
-          (f.on ? "checked" : "") +
-          ' /><span class="dash-switch-slider"></span></label></div>';
+          escapeHtml(item.desc || "") +
+          "</span>";
+        if (item.hint) {
+          html += '<span class="dash-feature-hint">' + escapeHtml(item.hint) + "</span>";
+        }
+        html += "</div>";
+        if (item.toggleable) {
+          html +=
+            '<label class="dash-switch" aria-label="Toggle ' +
+            escapeHtml(item.label) +
+            '"><input type="checkbox" data-feature="' +
+            escapeHtml(item.id) +
+            '" ' +
+            (item.enabled ? "checked" : "") +
+            ' /><span class="dash-switch-slider"></span></label>';
+        } else {
+          html += '<span class="dash-badge dash-badge-ok">Included</span>';
+        }
+        html += "</div>";
       });
       html += "</div></div>";
     });
 
-    el("dash-features").innerHTML = html || '<p class="dash-meta">No features configured.</p>';
+    el("dash-features").innerHTML =
+      html || '<p class="dash-meta">No features configured.</p>';
 
     el("dash-features").querySelectorAll("input[data-feature]").forEach(function (input) {
       input.addEventListener("change", async function () {

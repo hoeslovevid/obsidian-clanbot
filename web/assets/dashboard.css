@@ -370,7 +370,15 @@ body.dash-body {
   border-radius: var(--radius-sm);
 }
 .dash-feature-info strong { display: block; font-size: 0.95rem; }
-.dash-feature-info span { font-size: 0.8rem; color: var(--text-muted); }
+.dash-feature-info span { font-size: 0.8rem; color: var(--text-muted); display: block; margin-top: 4px; }
+.dash-feature-hint {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 0.72rem;
+  color: var(--accent-bright, var(--accent));
+}
+.dash-feature-card-static { align-items: center; }
+.dash-feature-card-static .dash-badge { flex-shrink: 0; }
 
 /* Toggle switch */
 .dash-switch {

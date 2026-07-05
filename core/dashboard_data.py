@@ -225,11 +225,18 @@ async def fetch_guild_dashboard_overview(
 
 
 async def fetch_guild_features(guild_id: int) -> dict[str, Any]:
-    """Feature toggle states for a guild."""
-    features = {}
+    """Feature toggle states and full bot capability catalog for a guild."""
+    from core.feature_catalog import FEATURE_GROUP_ORDER, build_features_payload
+
+    toggle_states: dict[str, bool] = {}
     for name in TOGGLEABLE_FEATURES:
-        features[name] = await feature_enabled(guild_id, name)
-    return {"guild_id": guild_id, "features": features}
+        toggle_states[name] = await feature_enabled(guild_id, name)
+    return {
+        "guild_id": guild_id,
+        "features": toggle_states,
+        "catalog": build_features_payload(toggle_states),
+        "groups": list(FEATURE_GROUP_ORDER),
+    }
 
 
 async def set_guild_feature(guild_id: int, feature: str, enabled: bool) -> bool:
