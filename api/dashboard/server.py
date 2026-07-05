@@ -3,8 +3,11 @@ from __future__ import annotations
 
 import json
 import logging
+import time
+from datetime import datetime, timezone
 from typing import Any
 
+import aiohttp  # type: ignore
 import discord  # type: ignore
 from aiohttp import web  # type: ignore
 
@@ -12,6 +15,7 @@ from api.dashboard.auth import authenticate, require_guild_admin
 from core.config import (
     BOT_VERSION,
     BOT_WEBSITE,
+    CONTACT_WEBHOOK_URL,
     DASHBOARD_API_ENABLED,
     DASHBOARD_API_PORT,
     DASHBOARD_API_SECRET,
@@ -30,6 +34,8 @@ from core.dashboard_data import (
 logger = logging.getLogger(__name__)
 
 _runner: web.AppRunner | None = None
+_contact_last: dict[str, float] = {}
+_CONTACT_COOLDOWN_SEC = 60.0
 
 
 def _json(data: Any, *, status: int = 200) -> web.Response:
@@ -51,7 +57,7 @@ async def cors_middleware(request: web.Request, handler):
         o.rstrip("/") for o in DASHBOARD_CORS_ORIGINS
     }:
         resp.headers["Access-Control-Allow-Origin"] = origin
-        resp.headers["Access-Control-Allow-Methods"] = "GET, PATCH, OPTIONS"
+        resp.headers["Access-Control-Allow-Methods"] = "GET, PATCH, POST, OPTIONS"
         resp.headers["Access-Control-Allow-Headers"] = (
             "Authorization, Content-Type, X-Discord-User-Id"
         )
@@ -160,6 +166,88 @@ async def handle_guild_features_patch(request: web.Request) -> web.Response:
     return _json(await fetch_guild_features(guild_id))
 
 
+async def handle_contact(request: web.Request) -> web.Response:
+    """Public contact form — forwards to CONTACT_WEBHOOK_URL (rate-limited)."""
+    if request.method == "OPTIONS":
+        return web.Response(status=204)
+
+    ip = request.remote or "unknown"
+    now = time.monotonic()
+    last = _contact_last.get(ip, 0.0)
+    if now - last < _CONTACT_COOLDOWN_SEC:
+        raise web.HTTPTooManyRequests(
+            text='{"error":"rate_limited","message":"Please wait before sending another message."}',
+            content_type="application/json",
+        )
+
+    if not CONTACT_WEBHOOK_URL:
+        return _json(
+            {"error": "contact_disabled", "message": "Contact form is not configured on the bot."},
+            status=503,
+        )
+
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        raise web.HTTPBadRequest(
+            text='{"error":"invalid_json"}',
+            content_type="application/json",
+        )
+
+    message = str(body.get("message") or "").strip()
+    if not message:
+        raise web.HTTPBadRequest(
+            text='{"error":"missing_message"}',
+            content_type="application/json",
+        )
+    if len(message) > 2000:
+        raise web.HTTPBadRequest(
+            text='{"error":"message_too_long"}',
+            content_type="application/json",
+        )
+
+    name = str(body.get("name") or "").strip() or "—"
+    email = str(body.get("email") or "").strip() or "—"
+    preferred = str(body.get("preferred_response") or "Either").strip() or "Either"
+    discord_username = str(body.get("discord_username") or "").strip() or "—"
+
+    fields = [
+        {"name": "From", "value": name[:256], "inline": True},
+        {"name": "Email", "value": email[:256], "inline": True},
+        {"name": "Preferred response", "value": preferred[:256], "inline": True},
+        {"name": "Discord username", "value": discord_username[:256], "inline": True},
+        {"name": "Message", "value": message[:1024], "inline": False},
+    ]
+    if len(message) > 1024:
+        fields.append({"name": "(continued)", "value": message[1024:2048], "inline": False})
+
+    payload = {
+        "embeds": [
+            {
+                "title": "📩 New message from website",
+                "color": 0x8B7CF8,
+                "fields": fields,
+                "footer": {"text": "Obsidian Overseer contact form"},
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        ]
+    }
+
+    timeout = aiohttp.ClientTimeout(total=15)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        async with session.post(CONTACT_WEBHOOK_URL, json=payload) as resp:
+            if resp.status >= 400:
+                text = await resp.text()
+                logger.warning("[contact] webhook failed status=%s body=%s", resp.status, text[:200])
+                return _json(
+                    {"error": "webhook_failed", "message": "Could not deliver message."},
+                    status=502,
+                )
+
+    _contact_last[ip] = now
+    return _json({"ok": True})
+
+
 def create_app(bot: discord.Client) -> web.Application:
     app = web.Application(middlewares=[cors_middleware])
     app["bot"] = bot
@@ -171,6 +259,7 @@ def create_app(bot: discord.Client) -> web.Application:
     app.router.add_get("/api/guilds/{guild_id}/overview", handle_guild_overview)
     app.router.add_get("/api/guilds/{guild_id}/features", handle_guild_features_get)
     app.router.add_patch("/api/guilds/{guild_id}/features", handle_guild_features_patch)
+    app.router.add_route("*", "/api/contact", handle_contact)
     return app
 
 

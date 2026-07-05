@@ -61,10 +61,10 @@ DATABASE_URL = os.getenv("DATABASE_URL", "").strip() or None
 # Single source of truth for /about, /whatsnew, /status, release announce, and slash-command sync.
 # Set BOT_VERSION on Railway to match each production release; keep this code default in sync.
 # On release: bump BOT_VERSION here (and on Railway), then update CURRENT_RELEASE_* in core/changelog.py.
-BOT_VERSION = os.getenv("BOT_VERSION", "2.3.3")
+BOT_VERSION = os.getenv("BOT_VERSION", "2.3.4")
 BOT_CHANGELOG = os.getenv(
     "BOT_CHANGELOG",
-    "v2.3.3 — Web dashboard API; website monorepo (web/); see /whatsnew.",
+    "v2.3.4 — Website nav fix, dashboard page, contact via bot API; see /whatsnew.",
 )
 
 # Presence rotation: default | menu | degraded | event
@@ -143,3 +143,5 @@ else:
     DASHBOARD_CORS_ORIGINS = ()
 # Discord OAuth app client id (same app as the bot) — used in /api/auth docs only.
 DISCORD_CLIENT_ID = (os.getenv("DISCORD_CLIENT_ID") or "").strip() or None
+# Contact form → Discord channel (server-side only; used by POST /api/contact).
+CONTACT_WEBHOOK_URL = (os.getenv("CONTACT_WEBHOOK_URL") or "").strip() or None

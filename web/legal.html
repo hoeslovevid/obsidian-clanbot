@@ -4,10 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Legal — Obsidian Overseer</title>
-  <link rel="icon" type="image/png" href="assets/logo.png" />
+  <link rel="icon" type="image/png" href="/assets/logo.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/site-nav.css" />
   <style>
     :root {
       --bg: #06070a;
@@ -90,14 +91,7 @@
 </head>
 <body>
   <div class="container">
-    <nav>
-      <a href="index.html" class="nav-logo">Obsidian Overseer</a>
-      <div class="nav-links">
-        <a href="index.html#features">Features</a>
-        <a href="contact.html">Contact</a>
-        <a href="legal.html">Legal</a>
-      </div>
-    </nav>
+    <nav id="site-nav" data-active="legal"></nav>
 
     <h1 class="legal-page-title">Legal</h1>
     <div class="legal-nav">
@@ -150,7 +144,7 @@
       <p>We may update this Privacy Policy from time to time. We will post the updated policy on this page and update the “Last updated” date. Continued use of the Bot or our website after changes constitutes acceptance of the revised policy. We encourage you to review this page periodically.</p>
 
       <h3>10. Contact</h3>
-      <p>For privacy-related questions, requests, or complaints, contact the developer team via the Contact page (<a href="contact.html" style="color: var(--accent);">contact.html</a>).</p>
+      <p>For privacy-related questions, requests, or complaints, contact the developer team via the <a href="/contact.html" style="color: var(--accent);">Contact page</a>.</p>
     </section>
 
     <section class="legal-block" id="terms">
@@ -201,12 +195,14 @@
       <p>If any provision of these Terms is held invalid or unenforceable, the remaining provisions will remain in effect. Our failure to enforce any right or provision does not waive that right or provision. These Terms constitute the entire agreement between you and us regarding the Services and supersede any prior agreements. We may assign these Terms; you may not assign them without our consent.</p>
 
       <h3>13. Contact</h3>
-      <p>For questions about these Terms, contact the developer team via the Contact page (<a href="contact.html" style="color: var(--accent);">contact.html</a>).</p>
+      <p>For questions about these Terms, contact the developer team via the <a href="/contact.html" style="color: var(--accent);">Contact page</a>.</p>
     </section>
 
     <footer>
-      <p><a href="index.html">← Back to Obsidian Overseer</a></p>
+      <p><a href="/">← Back to Obsidian Overseer</a></p>
     </footer>
   </div>
+  <script src="/assets/config.js"></script>
+  <script src="/assets/site.js"></script>
 </body>
 </html>

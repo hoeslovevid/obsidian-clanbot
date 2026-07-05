@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mod Dashboard — Obsidian Overseer</title>
+  <link rel="icon" type="image/png" href="/assets/logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/site-nav.css" />
+  <style>
+    :root {
+      --bg: #06070a; --surface: #0f1115; --surface2: #161a20; --border: #2a2520;
+      --text: #f0ebe5; --text-muted: #9a8f82; --accent: #d4943c; --accent-bright: #e8a84a;
+      --discord-blurple: #5865F2; --radius: 14px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Outfit', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; min-height: 100vh; }
+    .container { max-width: 960px; margin: 0 auto; padding: 24px 20px 64px; }
+    nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 40px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+    .nav-logo { font-size: 1.25rem; font-weight: 700; color: var(--text); text-decoration: none; }
+    .nav-logo:hover { color: var(--accent); }
+    .nav-links { display: flex; flex-wrap: wrap; gap: 8px; }
+    .nav-links a { color: var(--text-muted); text-decoration: none; font-size: 0.95rem; font-weight: 500; padding: 8px 14px; border-radius: 999px; transition: color 0.2s, background 0.2s; }
+    .nav-links a:hover { color: var(--text); background: var(--surface); }
+    h1 { font-size: 1.75rem; margin-bottom: 8px; }
+    .intro { color: var(--text-muted); margin-bottom: 28px; max-width: 640px; }
+    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; margin-bottom: 20px; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 22px; border-radius: 999px; border: none; font: inherit; font-weight: 600; cursor: pointer; text-decoration: none; }
+    .btn-primary { background: var(--discord-blurple); color: #fff; }
+    .btn-primary:hover { filter: brightness(1.08); }
+    .btn-ghost { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 20px; }
+    select { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; font: inherit; min-width: 220px; }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 24px; }
+    .stat { background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; padding: 16px; text-align: center; }
+    .stat strong { display: block; font-size: 1.5rem; color: var(--accent-bright); }
+    .stat span { font-size: 0.85rem; color: var(--text-muted); }
+    h2 { font-size: 1.1rem; margin: 20px 0 10px; }
+    ul { padding-left: 20px; color: var(--text-muted); }
+    li { margin-bottom: 8px; }
+    li a { color: var(--accent); }
+    .feature-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
+    .feature-row:last-child { border-bottom: none; }
+    .muted { color: var(--text-muted); font-size: 0.9rem; }
+    #dash-loading { margin-top: 12px; color: var(--text-muted); }
+    footer { margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 0.85rem; }
+    footer a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <nav id="site-nav" data-active="dashboard"></nav>
+
+    <h1>Mod Dashboard</h1>
+    <p class="intro">Server overview for Discord administrators — open tickets, applications, and feature toggles. Requires bot API on Railway and Discord login.</p>
+
+    <div id="dash-login" class="panel" style="display:none;">
+      <p class="muted" style="margin-bottom:16px;">Sign in with Discord (administrator in a server where Obsidian Overseer is installed).</p>
+      <button type="button" class="btn btn-primary" id="dash-login-btn">Login with Discord</button>
+      <p id="dash-login-msg" class="muted" style="margin-top:12px;"></p>
+      <p class="muted" style="margin-top:16px;">Setup: enable <code>DASHBOARD_API_ENABLED</code> on Railway, set <code>BOT_API_URL</code> in <code>assets/config.js</code>, and add redirect URI <code>https://obsidianoverseer.com/dashboard.html</code> in the Discord Developer Portal.</p>
+    </div>
+
+    <div id="dash-panel" style="display:none;">
+      <div class="toolbar">
+        <span id="dash-user" class="muted"></span>
+        <select id="guild-select" aria-label="Select server"></select>
+        <button type="button" class="btn btn-ghost" id="dash-logout-btn">Log out</button>
+      </div>
+      <p id="dash-loading"></p>
+      <div id="dash-stats" class="stats"></div>
+      <div class="panel">
+        <h2>Open tickets</h2>
+        <ul id="dash-tickets"></ul>
+        <h2>Pending applications</h2>
+        <ul id="dash-apps"></ul>
+      </div>
+      <div class="panel">
+        <h2>Feature toggles</h2>
+        <div id="dash-features"></div>
+      </div>
+    </div>
+
+    <footer>
+      <p><a href="/">← Back to Obsidian Overseer</a></p>
+    </footer>
+  </div>
+  <script src="/assets/config.js"></script>
+  <script src="/assets/site.js"></script>
+  <script src="/assets/dashboard.js"></script>
+</body>
+</html>

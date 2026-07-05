@@ -12,13 +12,22 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-07-05"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Website monorepo** — `web/` from [obsidian-overseer-website](https://github.com/hoeslovevid/obsidian-overseer-website); GitHub Actions deploys Pages from `web/`",
-    "**Dashboard API** — optional HTTP API (`DASHBOARD_API_ENABLED`) for mod inbox, overview, and feature toggles; see `docs/DASHBOARD_API.md`",
-    "**Security** — contact webhook removed from committed HTML; rotate if the old website repo exposed it",
+    "**Website** — shared nav (Home, Features, Dashboard, Contact, Legal); root `/` URLs fix GitHub Pages routing; `404.html` fallback",
+    "**Dashboard page** — `/dashboard.html` with Discord login and mod overview when bot API is enabled",
+    "**Contact form** — posts to bot `POST /api/contact` (webhook on Railway); no secret in HTML",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "2.3.3",
+        "date": "2026-07-05",
+        "changes": [
+            "**Website monorepo** — `web/` from [obsidian-overseer-website](https://github.com/hoeslovevid/obsidian-overseer-website); GitHub Actions deploys Pages from `web/`",
+            "**Dashboard API** — optional HTTP API (`DASHBOARD_API_ENABLED`) for mod inbox, overview, and feature toggles; see `docs/DASHBOARD_API.md`",
+            "**Security** — contact webhook removed from committed HTML; rotate if the old website repo exposed it",
+        ],
+    },
     {
         "version": "2.3.2",
         "date": "2026-07-05",

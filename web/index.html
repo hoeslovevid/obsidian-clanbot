@@ -5,10 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Obsidian Overseer — Warframe Discord Bot</title>
   <meta name="description" content="The Warframe Discord bot for clans and communities. Baro, cycles, alerts, voice channels, economy, moderation, and more." />
-  <link rel="icon" type="image/png" href="assets/logo.png" />
+  <link rel="icon" type="image/png" href="/assets/logo.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/site-nav.css" />
   <style>
     :root {
       --bg: #06070a;
@@ -778,18 +779,11 @@
     <span class="bg-galaxy bg-galaxy-4"></span>
   </div>
   <div class="container">
-    <nav>
-      <a href="#" class="nav-logo">Obsidian Overseer</a>
-      <div class="nav-links">
-        <a href="#features">Features</a>
-        <a href="contact.html">Contact</a>
-        <a href="legal.html">Legal</a>
-      </div>
-    </nav>
+    <nav id="site-nav" data-active="home"></nav>
 
     <header class="hero">
       <span class="hero-badge">Warframe Discord Bot</span>
-      <img src="assets/logo.png" alt="Obsidian Overseer" class="hero-logo" />
+      <img src="/assets/logo.png" alt="Obsidian Overseer" class="hero-logo" />
       <h1>The Warframe bot for your clan and community.</h1>
       <p>Built for Warframe Discord servers: Baro, cycles, alerts, voice channels, economy, moderation, events, and more. Add Obsidian Overseer in one click.</p>
       <div class="invite-hero">
@@ -856,7 +850,7 @@
     <section class="contact-cta" style="padding: 40px 0 48px; text-align: center; border-top: 1px solid var(--border);">
       <h2 class="section-title">Need help or have feedback?</h2>
       <p class="section-subtitle contact-cta-intro">For support, questions, or suggestions, our team is here to help.</p>
-      <a href="contact.html" class="invite-btn" style="text-decoration: none;">Contact us</a>
+      <a href="/contact.html" class="invite-btn" style="text-decoration: none;">Contact us</a>
     </section>
 
     <section class="developer">
@@ -875,7 +869,7 @@
     </section>
 
     <footer>
-      <p>Obsidian Overseer — a Warframe Discord bot for clans and communities. Not affiliated with Discord or Warframe. <a href="legal.html#privacy">Privacy Policy</a> · <a href="legal.html#terms">Terms of Service</a></p>
+      <p>Obsidian Overseer — a Warframe Discord bot for clans and communities. Not affiliated with Discord or Warframe. <a href="/legal.html#privacy">Privacy Policy</a> · <a href="/legal.html#terms">Terms of Service</a></p>
     </footer>
   </div>
 
@@ -887,7 +881,7 @@
 
     // Developer card: name, avatar image, and optional Discord message link
     const DEVELOPER_NAME = 'Danger!';
-    const DEVELOPER_IMAGE = 'assets/developer.png';  // e.g. 'assets/developer.png' or full URL — leave empty for initial placeholder
+    const DEVELOPER_IMAGE = '/assets/developer.png';  // e.g. 'assets/developer.png' or full URL — leave empty for initial placeholder
     const DEVELOPER_DISCORD_LINK = 'https://discord.gg/cNchBqnhjy';  // Discord server invite — link shown on the Developer card
 
     // ——— Invite link ———
@@ -955,5 +949,7 @@
       document.addEventListener('mousemove', updateShine);
     })();
   </script>
+  <script src="/assets/config.js"></script>
+  <script src="/assets/site.js"></script>
 </body>
 </html>

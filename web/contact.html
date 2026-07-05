@@ -5,10 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Contact — Obsidian Overseer</title>
   <meta name="description" content="Get support or send feedback for Obsidian Overseer. Join our Discord or send a message." />
-  <link rel="icon" type="image/png" href="assets/logo.png" />
+  <link rel="icon" type="image/png" href="/assets/logo.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/site-nav.css" />
   <style>
     :root {
       --bg: #06070a;
@@ -136,14 +137,7 @@
 </head>
 <body>
   <div class="container">
-    <nav>
-      <a href="index.html" class="nav-logo">Obsidian Overseer</a>
-      <div class="nav-links">
-        <a href="index.html#features">Features</a>
-        <a href="contact.html">Contact</a>
-        <a href="legal.html">Legal</a>
-      </div>
-    </nav>
+    <nav id="site-nav" data-active="contact"></nav>
 
     <h1 class="contact-page-title">Support &amp; Contact</h1>
     <p class="contact-intro">For support, feedback, or inquiries about Obsidian Overseer, use one of the options below. We aim to respond within 24–48 hours.</p>
@@ -205,29 +199,26 @@
     </div>
 
     <footer>
-      <p><a href="index.html">← Back to Obsidian Overseer</a></p>
+      <p><a href="/">← Back to Obsidian Overseer</a></p>
     </footer>
   </div>
 
+  <script src="/assets/config.js"></script>
+  <script src="/assets/site.js"></script>
   <script>
-    // ——— Contact page config ———
-    var DISCORD_SERVER_INVITE = 'https://discord.gg/cNchBqnhjy';
-    var CONTACT_EMAIL = '';
-    // GitHub Pages: set your Discord webhook URL here. It will be visible in the repo/source — use a private channel and rotate if abused.
-    // GitHub Pages: set here only for testing — prefer Netlify + CONTACT_WEBHOOK_URL env (see web/README.md).
-    var CONTACT_WEBHOOK_URL = '';
-    var CONTACT_API = '/.netlify/functions/contact';
-
     (function() {
-      if (DISCORD_SERVER_INVITE && DISCORD_SERVER_INVITE.trim()) {
+      var cfg = window.OBSIDIAN_SITE || {};
+      var invite = cfg.DISCORD_SERVER_INVITE || '';
+      var email = cfg.CONTACT_EMAIL || '';
+      if (invite.trim()) {
         var el = document.getElementById('contact-discord');
-        el.href = DISCORD_SERVER_INVITE.trim();
+        el.href = invite.trim();
         el.style.display = 'inline-flex';
       }
-      if (CONTACT_EMAIL && CONTACT_EMAIL.trim()) {
-        var el = document.getElementById('contact-email');
-        el.href = 'mailto:' + CONTACT_EMAIL.trim();
-        el.style.display = 'inline-flex';
+      if (email.trim()) {
+        var mail = document.getElementById('contact-email');
+        mail.href = 'mailto:' + email.trim();
+        mail.style.display = 'inline-flex';
       }
     })();
 
@@ -299,66 +290,34 @@
           showMsg('Message must be 2000 characters or less.', true);
           return;
         }
-        var webhookUrl = (typeof CONTACT_WEBHOOK_URL === 'string' && CONTACT_WEBHOOK_URL.trim()) ? CONTACT_WEBHOOK_URL.trim() : '';
-        var apiUrl = (typeof CONTACT_API === 'string' && CONTACT_API.trim()) ? CONTACT_API.trim() : '';
-        if (!webhookUrl && !apiUrl) {
-          showMsg('This form is not configured. Please use Discord or email above.', true);
+        var botApiUrl = window.ObsidianSite && window.ObsidianSite.apiUrl('/api/contact');
+        if (!botApiUrl) {
+          showMsg('Contact form is not configured yet. Join our Discord above, or ask an admin to set BOT_API_URL and CONTACT_WEBHOOK_URL on Railway.', true);
           return;
         }
         submitBtn.disabled = true;
-        if (webhookUrl) {
-          var embed = {
-            title: '📩 New message from website',
-            color: 0x8b7cf8,
-            fields: [
-              { name: 'From', value: name || '—', inline: true },
-              { name: 'Email', value: email || '—', inline: true },
-              { name: 'Preferred response', value: preferred, inline: true },
-              { name: 'Discord username', value: discordUsername || '—', inline: true },
-              { name: 'Message', value: message.slice(0, 1024), inline: false },
-            ],
-            footer: { text: 'Obsidian Overseer contact form' },
-            timestamp: new Date().toISOString(),
-          };
-          if (message.length > 1024) {
-            embed.fields.push({ name: '(continued)', value: message.slice(1024, 2048), inline: false });
-          }
-          try {
-            var res = await fetch(webhookUrl, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ embeds: [embed] }),
-            });
-            if (res.ok) {
-              showMsg('Thank you. Your message has been sent and we\'ll get back to you as soon as we can.', false);
-              form.reset();
-            } else {
-              showMsg('Something went wrong. Please try again or use Discord/email above.', true);
-            }
-          } catch (err) {
-            showMsg('Unable to send. Check your connection and try again, or use Discord/email above.', true);
-          }
-          submitBtn.disabled = false;
-          return;
-        }
         try {
-          var res = await fetch(apiUrl, {
+          var res = await fetch(botApiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: name, email: email, preferred: preferred, discordUsername: discordUsername, message: message }),
+            body: JSON.stringify({
+              name: name,
+              email: email,
+              preferred_response: preferred,
+              discord_username: discordUsername,
+              message: message,
+            }),
           });
           var data = {};
           try { data = await res.json(); } catch (_) {}
           if (res.ok && data.ok) {
-            showMsg('Thank you. Your message has been sent and we’ll get back to you as soon as we can.', false);
+            showMsg('Thank you. Your message has been sent and we\'ll get back to you as soon as we can.', false);
             form.reset();
-          } else if (res.status === 503 || (data.error && data.error.indexOf('not configured') !== -1)) {
-            showMsg('Contact form is not set up on this server. Please use Discord or email above.', true);
           } else {
-            showMsg(data.error || 'Something went wrong. Please try again or use Discord/email above.', true);
+            showMsg(data.message || data.error || 'Something went wrong. Try Discord above.', true);
           }
         } catch (err) {
-          showMsg('Unable to send. Check your connection and try again, or use Discord/email above.', true);
+          showMsg('Unable to send. Check your connection or use Discord above.', true);
         }
         submitBtn.disabled = false;
       });
