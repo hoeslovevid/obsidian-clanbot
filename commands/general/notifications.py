@@ -25,7 +25,8 @@ def setup(bot, group=None):
             guild_id=interaction.guild.id,
             user_id=interaction.user.id,
         )
-        msg = await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        msg = await interaction.original_response()
         await register_refresh_panel(msg, "notifications", payload)
 
     if group is not None:

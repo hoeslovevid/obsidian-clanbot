@@ -10,14 +10,22 @@ from __future__ import annotations
 from core.config import BOT_CHANGELOG, BOT_VERSION
 
 # Current release (version string comes from BOT_VERSION only).
-CURRENT_RELEASE_DATE = "2026-07-03"
+CURRENT_RELEASE_DATE = "2026-07-05"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Fix** — `/music play` works again with current yt-dlp (`bug_reports_message` shim accepts `before=` kwarg)",
-    "**Music** — `/music play` no longer requires DJ/mod; when no DJ role is set, control commands are open to everyone",
+    "**Fix** — `/notifications` no longer crashes on open (use `original_response()` after discord.py 2.6 `send_message` change)",
+    "**Fix** — ephemeral refresh panels register using `guild_id` from payload when the message has no `.guild`",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "2.3.1",
+        "date": "2026-07-03",
+        "changes": [
+            "**Fix** — `/music play` works again with current yt-dlp (`bug_reports_message` shim accepts `before=` kwarg)",
+            "**Music** — `/music play` no longer requires DJ/mod; when no DJ role is set, control commands are open to everyone",
+        ],
+    },
     {
         "version": "2.3.0",
         "date": "2026-06-21",

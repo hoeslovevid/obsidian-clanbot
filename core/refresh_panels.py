@@ -78,7 +78,9 @@ async def register_refresh_panel(
     panel_type: str,
     payload: Optional[dict[str, Any]] = None,
 ) -> None:
-    if not message.guild:
+    payload = payload or {}
+    guild_id = message.guild.id if message.guild else payload.get("guild_id")
+    if not guild_id:
         return
     now = datetime.now(timezone.utc).isoformat()
     async with aiosqlite.connect(DB_PATH) as db:
@@ -89,11 +91,11 @@ async def register_refresh_panel(
             VALUES (?, ?, ?, ?, ?, ?)
             """,
             (
-                message.guild.id,
+                int(guild_id),
                 message.channel.id,
                 message.id,
                 panel_type,
-                json.dumps(payload or {}),
+                json.dumps(payload),
                 now,
             ),
         )
