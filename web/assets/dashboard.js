@@ -30,7 +30,7 @@
   async function startLogin() {
     var c = cfg();
     if (!c.DISCORD_CLIENT_ID) {
-      alert("DISCORD_CLIENT_ID is not set in assets/config.js");
+      alert("Dashboard sign-in is not available right now. Please try again later.");
       return;
     }
     var verifier = randomVerifier();
@@ -84,7 +84,7 @@
 
   async function apiFetch(path, options) {
     var url = window.ObsidianSite && window.ObsidianSite.apiUrl(path);
-    if (!url) throw new Error("Set BOT_API_URL in assets/config.js to your Railway bot URL.");
+    if (!url) throw new Error("Dashboard is temporarily unavailable. Please try again later.");
     options = options || {};
     options.headers = options.headers || {};
     options.headers.Authorization = "Bearer " + token();
@@ -207,44 +207,54 @@
       .replace(/"/g, "&quot;");
   }
 
+  function showLogin(message) {
+    hide("dash-panel");
+    show("dash-login");
+    el("dash-login-msg").textContent = message || "";
+  }
+
+  function showPanel(message) {
+    hide("dash-login");
+    show("dash-panel");
+    if (message) el("dash-loading").textContent = message;
+  }
+
   async function loadGuildData(guildId) {
     if (!guildId) return;
-    el("dash-loading").textContent = "Loading…";
+    showPanel("Loading…");
     try {
       var overview = await apiFetch("/api/guilds/" + guildId + "/overview");
       renderOverview(overview);
       var features = await apiFetch("/api/guilds/" + guildId + "/features");
       renderFeatures(features);
       el("dash-loading").textContent = "";
-      show("dash-panel");
     } catch (err) {
       el("dash-loading").textContent = err.message || String(err);
     }
   }
 
   async function initDashboard() {
+    showLogin("");
+
     var params = new URLSearchParams(window.location.search);
     var code = params.get("code");
     if (code) {
       try {
         await exchangeCode(code);
       } catch (err) {
-        el("dash-login-msg").textContent = err.message || String(err);
-        show("dash-login");
+        showLogin(err.message || String(err));
         return;
       }
     }
 
     if (!token()) {
-      show("dash-login");
-      hide("dash-panel");
       return;
     }
 
-    hide("dash-login");
+    showPanel("Loading your servers…");
     try {
       var me = await apiFetch("/api/me");
-      el("dash-user").textContent = me.username ? "Signed in" : "Signed in";
+      el("dash-user").textContent = me.username ? "Signed in as " + me.username : "Signed in";
       var select = el("guild-select");
       select.innerHTML = "";
       (me.guilds || []).forEach(function (g) {
@@ -258,13 +268,18 @@
           "No servers found where you are an admin and the bot is installed.";
         return;
       }
-      select.addEventListener("change", function () {
+      select.onchange = function () {
         loadGuildData(select.value);
-      });
+      };
       await loadGuildData(select.value);
     } catch (err) {
-      el("dash-loading").textContent = err.message || String(err);
-      if (String(err.message || "").indexOf("BOT_API_URL") >= 0) show("dash-login");
+      var msg = err.message || String(err);
+      if (msg.indexOf("temporarily unavailable") >= 0) {
+        sessionStorage.removeItem(TOKEN_KEY);
+        showLogin(msg);
+      } else {
+        showPanel(msg);
+      }
     }
   }
 

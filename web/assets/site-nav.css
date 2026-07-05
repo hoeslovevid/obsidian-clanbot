@@ -1,4 +1,4 @@
 .nav-links a.active {
-  color: var(--accent-bright);
+  color: var(--accent-bright, var(--accent));
   background: var(--surface2);
 }

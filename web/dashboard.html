@@ -54,13 +54,12 @@
     <nav id="site-nav" data-active="dashboard"></nav>
 
     <h1>Mod Dashboard</h1>
-    <p class="intro">Server overview for Discord administrators — open tickets, applications, and feature toggles. Requires bot API on Railway and Discord login.</p>
+    <p class="intro">Server overview for Discord administrators — open tickets, applications, and feature toggles.</p>
 
-    <div id="dash-login" class="panel" style="display:none;">
+    <div id="dash-login" class="panel">
       <p class="muted" style="margin-bottom:16px;">Sign in with Discord (administrator in a server where Obsidian Overseer is installed).</p>
       <button type="button" class="btn btn-primary" id="dash-login-btn">Login with Discord</button>
       <p id="dash-login-msg" class="muted" style="margin-top:12px;"></p>
-      <p class="muted" style="margin-top:16px;">Setup: enable <code>DASHBOARD_API_ENABLED</code> on Railway, set <code>BOT_API_URL</code> in <code>assets/config.js</code>, and add redirect URI <code>https://obsidianoverseer.com/dashboard.html</code> in the Discord Developer Portal.</p>
     </div>
 
     <div id="dash-panel" style="display:none;">
