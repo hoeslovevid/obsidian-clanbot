@@ -433,17 +433,34 @@
       padding: 56px 0 64px;
     }
 
+    .feature-groups {
+      display: flex;
+      flex-direction: column;
+      gap: 44px;
+    }
+
+    .feature-group-title {
+      font-size: 0.82rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-subtle);
+      margin-bottom: 16px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+
     .feature-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      gap: 20px;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 16px;
     }
 
     .feature-card {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 24px;
+      padding: 20px 22px;
       transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s, background 0.2s;
     }
 
@@ -455,22 +472,22 @@
     }
 
     .feature-card .icon {
-      font-size: 1.75rem;
-      margin-bottom: 14px;
+      font-size: 1.5rem;
+      margin-bottom: 10px;
       display: block;
     }
 
     .feature-card h3 {
-      font-size: 1.05rem;
+      font-size: 1rem;
       font-weight: 600;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
       color: var(--text);
     }
 
     .feature-card p {
-      font-size: 0.9rem;
+      font-size: 0.86rem;
       color: var(--text-muted);
-      line-height: 1.55;
+      line-height: 1.5;
     }
 
     /* ----- Contact ----- */
@@ -769,52 +786,219 @@
 
     <section class="features" id="features">
       <h2 class="section-title">What Obsidian Overseer can do</h2>
-      <p class="section-subtitle">Built for Warframe clans and communities—voice, economy, Baro &amp; cycles, alerts, moderation, and more.</p>
-      <div class="feature-grid">
-        <div class="feature-card">
-          <span class="icon">🎤</span>
-          <h3>Voice</h3>
-          <p>Join-to-create temporary voice channels, rename, limit, lock, and control panels.</p>
+      <p class="section-subtitle">Everything your Warframe clan needs — voice, tickets, Baro &amp; cycles, economy, moderation, music, and a mod dashboard. Toggle many modules per server.</p>
+
+      <div class="feature-groups">
+        <div class="feature-group">
+          <h3 class="feature-group-title">Core &amp; Voice</h3>
+          <div class="feature-grid">
+            <div class="feature-card">
+              <span class="icon">🎤</span>
+              <h3>Voice channels</h3>
+              <p>Join-to-create temp VCs, control panels, rename, limit, and lock.</p>
+            </div>
+            <div class="feature-card">
+              <span class="icon">📋</span>
+              <h3>Complaints &amp; docket</h3>
+              <p>Inheritor docket channel, case threading, and complaint logs.</p>
+            </div>
+          </div>
         </div>
-        <div class="feature-card">
-          <span class="icon">📋</span>
-          <h3>Complaints & Tickets</h3>
-          <p>File complaints with staff threading, support tickets, and suggestion channels.</p>
+
+        <div class="feature-group">
+          <h3 class="feature-group-title">Community</h3>
+          <div class="feature-grid">
+            <div class="feature-card">
+              <span class="icon">🎫</span>
+              <h3>Support tickets</h3>
+              <p>Ticket system with SLA tracking, transcripts, and staff inbox.</p>
+            </div>
+            <div class="feature-card">
+              <span class="icon">💡</span>
+              <h3>Suggestions</h3>
+              <p>Member suggestion posts with review workflow.</p>
+            </div>
+            <div class="feature-card">
+              <span class="icon">📝</span>
+              <h3>Applications</h3>
+              <p>Clan/application forms with approve/deny flow.</p>
+            </div>
+            <div class="feature-card">
+              <span class="icon">👥</span>
+              <h3>LFG squads</h3>
+              <p>Looking-for-group posts with fill tracking.</p>
+            </div>
+            <div class="feature-card">
+              <span class="icon">📊</span>
+              <h3>Polls</h3>
+              <p>Server polls with live result updates.</p>
+            </div>
+            <div class="feature-card">
+              <span class="icon">📅</span>
+              <h3>Events &amp; RSVP</h3>
+              <p>Scheduled events, natural-language times, and reminders.</p>
+            </div>
+            <div class="feature-card">
+              <span class="icon">🎁</span>
+              <h3>Giveaways</h3>
+              <p>Create giveaways with entry buttons and winner selection.</p>
+            </div>
+            <div class="feature-card">
+              <span class="icon">⏰</span>
+              <h3>Reminders</h3>
+              <p>Personal and server reminders with scheduling.</p>
+            </div>
+            <div class="feature-card">
+              <span class="icon">⭐</span>
+              <h3>Reputation</h3>
+              <p>Member rep scores and leaderboards.</p>
+            </div>
+            <div class="feature-card">
+              <span class="icon">📺</span>
+              <h3>Twitch notifications</h3>
+              <p>Stream go-live alerts for watched channels.</p>
+            </div>
+            <div class="feature-card">
+              <span class="icon">🌟</span>
+              <h3>Starboard</h3>
+              <p>Highlight popular messages in a dedicated channel.</p>
+            </div>
+          </div>
         </div>
-        <div class="feature-card">
-          <span class="icon">📅</span>
-          <h3>Events</h3>
-          <p>Create events with RSVP buttons, natural-language times, and reminders.</p>
+
+        <div class="feature-group">
+          <h3 class="feature-group-title">Warframe</h3>
+          <div class="feature-grid">
+            <div class="feature-card">
+              <span class="icon">🎮</span>
+              <h3>Baro, cycles &amp; missions</h3>
+              <p>Baro Ki'Teer, open-world cycles, sortie, fissures, and drop tables.</p>
+            </div>
+            <div class="feature-card">
+              <span class="icon">🔔</span>
+              <h3>WF alerts &amp; feeds</h3>
+              <p>Alert pings, forum, YouTube, and devstream notification feeds.</p>
+            </div>
+            <div class="feature-card">
+              <span class="icon">💼</span>
+              <h3>Trading &amp; market</h3>
+              <p>Trading post, market price lookup, and WM search.</p>
+            </div>
+            <div class="feature-card">
+              <span class="icon">🔗</span>
+              <h3>Account linking</h3>
+              <p>Link Discord to Warframe/Steam for playtime roles.</p>
+            </div>
+          </div>
         </div>
-        <div class="feature-card">
-          <span class="icon">💰</span>
-          <h3>Economy</h3>
-          <p>Coins, XP, levels, shop, pets, achievements, bounties, and leaderboards.</p>
+
+        <div class="feature-group">
+          <h3 class="feature-group-title">Economy</h3>
+          <div class="feature-grid">
+            <div class="feature-card">
+              <span class="icon">📈</span>
+              <h3>Passive economy</h3>
+              <p>Background coin and XP gains from activity.</p>
+            </div>
+            <div class="feature-card">
+              <span class="icon">💰</span>
+              <h3>Coins &amp; wallet</h3>
+              <p>Daily rewards, transfers, stash, and prestige.</p>
+            </div>
+            <div class="feature-card">
+              <span class="icon">🏆</span>
+              <h3>XP &amp; levels</h3>
+              <p>Activity XP, level-ups, and leaderboards.</p>
+            </div>
+            <div class="feature-card">
+              <span class="icon">🛒</span>
+              <h3>Shop</h3>
+              <p>Server shop items and purchases.</p>
+            </div>
+            <div class="feature-card">
+              <span class="icon">🐾</span>
+              <h3>Pets</h3>
+              <p>Pet collection, care, battles, and shop.</p>
+            </div>
+            <div class="feature-card">
+              <span class="icon">🎲</span>
+              <h3>Gambling</h3>
+              <p>Casino games and betting commands.</p>
+            </div>
+            <div class="feature-card">
+              <span class="icon">🎯</span>
+              <h3>Bounties &amp; achievements</h3>
+              <p>Weekly bounties, achievements, and profile badges.</p>
+            </div>
+          </div>
         </div>
-        <div class="feature-card">
-          <span class="icon">🛡️</span>
-          <h3>Moderation</h3>
-          <p>Purge, warn, automod, reaction roles, logging, starboard, and raid protection.</p>
+
+        <div class="feature-group">
+          <h3 class="feature-group-title">Moderation</h3>
+          <div class="feature-grid">
+            <div class="feature-card">
+              <span class="icon">🛡️</span>
+              <h3>Moderation tools</h3>
+              <p>Purge, snipe, lock, slowmode, and scheduled actions.</p>
+            </div>
+            <div class="feature-card">
+              <span class="icon">⚠️</span>
+              <h3>Warnings &amp; notes</h3>
+              <p>Warn members, templates, and mod notes.</p>
+            </div>
+            <div class="feature-card">
+              <span class="icon">🤖</span>
+              <h3>AutoMod</h3>
+              <p>Spam, caps, links, mentions, and raid protection.</p>
+            </div>
+            <div class="feature-card">
+              <span class="icon">📜</span>
+              <h3>Audit &amp; logging</h3>
+              <p>Mod audit log, bot errors, and ticket transcripts.</p>
+            </div>
+            <div class="feature-card">
+              <span class="icon">🏷️</span>
+              <h3>Role tools</h3>
+              <p>Reaction roles, level roles, and role menus.</p>
+            </div>
+          </div>
         </div>
-        <div class="feature-card">
-          <span class="icon">👥</span>
-          <h3>Community</h3>
-          <p>Applications, giveaways, reminders, reputation, polls, and Twitch notifications.</p>
+
+        <div class="feature-group">
+          <h3 class="feature-group-title">Music</h3>
+          <div class="feature-grid">
+            <div class="feature-card">
+              <span class="icon">🎵</span>
+              <h3>Music playback</h3>
+              <p>Play, pause, skip, and queue music in voice.</p>
+            </div>
+          </div>
         </div>
-        <div class="feature-card">
-          <span class="icon">🎮</span>
-          <h3>Warframe</h3>
-          <p>Baro, cycles, alerts, fissures, sortie, LFG, drop tables, link account, and notifications.</p>
-        </div>
-        <div class="feature-card">
-          <span class="icon">💼</span>
-          <h3>Trading</h3>
-          <p>Trading post, market price lookup, and Warframe market search.</p>
-        </div>
-        <div class="feature-card">
-          <span class="icon">🎵</span>
-          <h3>Music</h3>
-          <p>Play, pause, skip, and manage music in voice channels.</p>
+
+        <div class="feature-group">
+          <h3 class="feature-group-title">Admin &amp; Staff</h3>
+          <div class="feature-grid">
+            <div class="feature-card">
+              <span class="icon">⚙️</span>
+              <h3>Admin utilities</h3>
+              <p>Backups, KPIs, incident mode, and server dashboards.</p>
+            </div>
+            <div class="feature-card">
+              <span class="icon">🔧</span>
+              <h3>Staff tools</h3>
+              <p>Command sync, webhooks, and analytics utilities.</p>
+            </div>
+            <div class="feature-card">
+              <span class="icon">📣</span>
+              <h3>Update log</h3>
+              <p>Bot version announcements and changelog channel.</p>
+            </div>
+            <div class="feature-card">
+              <span class="icon">📊</span>
+              <h3>Mod dashboard</h3>
+              <p>Web dashboard for inbox, Warframe, analytics, setup, and giveaways.</p>
+            </div>
+          </div>
         </div>
       </div>
     </section>
