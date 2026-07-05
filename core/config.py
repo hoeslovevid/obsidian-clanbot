@@ -138,7 +138,15 @@ if _cors_raw:
         o.strip() for o in _cors_raw.split(",") if o.strip()
     )
 elif BOT_WEBSITE:
-    DASHBOARD_CORS_ORIGINS = (BOT_WEBSITE.rstrip("/"),)
+    _site = BOT_WEBSITE.rstrip("/")
+    _origins = {_site}
+    if "://" in _site:
+        _scheme, _host = _site.split("://", 1)
+        if _host.startswith("www."):
+            _origins.add(f"{_scheme}://{_host[4:]}")
+        else:
+            _origins.add(f"{_scheme}://www.{_host}")
+    DASHBOARD_CORS_ORIGINS = tuple(sorted(_origins))
 else:
     DASHBOARD_CORS_ORIGINS = ()
 # Discord OAuth app client id (same app as the bot) — used in /api/auth docs only.

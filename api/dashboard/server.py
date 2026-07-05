@@ -26,6 +26,7 @@ from core.dashboard_data import (
     create_guild_giveaway,
     end_guild_giveaway,
     fetch_bot_health,
+    fetch_bot_stats,
     fetch_guild_analytics,
     fetch_guild_audit_log,
     fetch_guild_dashboard_overview,
@@ -45,6 +46,9 @@ logger = logging.getLogger(__name__)
 _runner: web.AppRunner | None = None
 _contact_last: dict[str, float] = {}
 _CONTACT_COOLDOWN_SEC = 60.0
+_stats_cache: dict[str, Any] | None = None
+_stats_cache_at: float = 0.0
+_STATS_CACHE_SEC = 300.0
 
 
 def _json(data: Any, *, status: int = 200) -> web.Response:
@@ -79,6 +83,19 @@ async def handle_health(request: web.Request) -> web.Response:
     guild_id = request.query.get("guild_id")
     gid = int(guild_id) if guild_id and guild_id.isdigit() else None
     return _json(await fetch_bot_health(bot, gid))
+
+
+async def handle_stats(request: web.Request) -> web.Response:
+    """Lightweight public stats for the website (cached 5 min)."""
+    global _stats_cache, _stats_cache_at
+    bot: discord.Client = request.app["bot"]
+    now = time.monotonic()
+    if _stats_cache is None or now - _stats_cache_at >= _STATS_CACHE_SEC:
+        _stats_cache = await fetch_bot_stats(bot)
+        _stats_cache_at = now
+    resp = _json(_stats_cache)
+    resp.headers["Cache-Control"] = "public, max-age=300"
+    return resp
 
 
 async def handle_auth_info(request: web.Request) -> web.Response:
@@ -410,6 +427,7 @@ def create_app(bot: discord.Client) -> web.Application:
     app = web.Application(middlewares=[cors_middleware])
     app["bot"] = bot
     app.router.add_get("/api/health", handle_health)
+    app.router.add_get("/api/stats", handle_stats)
     app.router.add_get("/api/auth/info", handle_auth_info)
     app.router.add_get("/api/me", handle_me)
     app.router.add_get("/api/guilds", handle_guilds)

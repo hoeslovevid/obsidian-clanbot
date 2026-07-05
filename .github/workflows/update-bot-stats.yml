@@ -1,0 +1,73 @@
+# Refresh web/assets/bot-stats.json from the live bot API (hourly).
+# Pushing the updated file triggers the Pages deploy workflow.
+name: Update bot stats
+
+on:
+  schedule:
+    - cron: "15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bot-stats
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch bot stats
+        run: |
+          python3 <<'PY'
+          import json
+          import urllib.error
+          import urllib.request
+
+          out_path = "web/assets/bot-stats.json"
+          urls = [
+              "https://worker-production-39bd.up.railway.app/api/stats",
+              "https://worker-production-39bd.up.railway.app/api/health",
+          ]
+          data = None
+          for url in urls:
+              try:
+                  with urllib.request.urlopen(url, timeout=20) as resp:
+                      payload = json.load(resp)
+                  if payload.get("guild_count") is not None or payload.get("user_count") is not None:
+                      data = {
+                          "guild_count": payload.get("guild_count"),
+                          "user_count": payload.get("user_count"),
+                          "updated_at": payload.get("updated_at"),
+                      }
+                      break
+              except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError) as exc:
+                  print(f"skip {url}: {exc}")
+
+          if data is None:
+              raise SystemExit("Could not fetch bot stats from Railway")
+
+          with open(out_path, encoding="utf-8") as f:
+              existing = json.load(f)
+          if existing == data:
+              print("No change")
+              raise SystemExit(0)
+
+          with open(out_path, "w", encoding="utf-8") as f:
+              json.dump(data, f, indent=2)
+              f.write("\n")
+          print("Updated:", json.dumps(data))
+          PY
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add web/assets/bot-stats.json
+          git diff --staged --quiet && echo "Nothing to commit" && exit 0
+          git commit -m "Update live bot stats for website."
+          git push

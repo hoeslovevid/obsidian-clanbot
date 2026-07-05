@@ -1146,7 +1146,6 @@
   <script src="/assets/site.js"></script>
   <script>
     (function () {
-      var REFRESH_MS = 5 * 60 * 1000;
       function refreshStats() {
         if (!window.ObsidianSite || !window.ObsidianSite.loadPublicBotStats) return;
         window.ObsidianSite.loadPublicBotStats({
@@ -1156,7 +1155,6 @@
         });
       }
       refreshStats();
-      setInterval(refreshStats, REFRESH_MS);
     })();
   </script>
 </body>

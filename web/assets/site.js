@@ -87,32 +87,99 @@
     return Number(n).toLocaleString("en-US");
   }
 
-  function loadPublicBotStats(options) {
-    options = options || {};
+  function statsFromConfig() {
+    var cfg = window.OBSIDIAN_SITE || {};
+    var s = cfg.BOT_STATS;
+    if (!s || (s.guild_count == null && s.user_count == null)) return null;
+    return s;
+  }
+
+  function applyPublicStats(data, options) {
     var serversEl = options.serversEl;
     var usersEl = options.usersEl;
     var wrapEl = options.wrapEl;
-    var url = apiUrl("/api/health");
-    if (!url || !serversEl || !usersEl) return Promise.resolve(null);
+    if (!data) return false;
+    var applied = false;
+    if (serversEl) {
+      if (data.guild_count != null) {
+        serversEl.textContent = formatCount(data.guild_count);
+        applied = true;
+      }
+    }
+    if (usersEl) {
+      if (data.user_count != null) {
+        usersEl.textContent = formatCount(data.user_count);
+        applied = true;
+      }
+    }
+    if (wrapEl) wrapEl.classList.remove("loading");
+    return applied;
+  }
 
-    if (wrapEl) wrapEl.classList.add("loading");
+  function failPublicStats(options) {
+    applyPublicStats({ guild_count: null, user_count: null }, options);
+    if (options.serversEl) options.serversEl.textContent = "—";
+    if (options.usersEl) options.usersEl.textContent = "—";
+    if (options.wrapEl) options.wrapEl.classList.remove("loading");
+  }
+
+  function tryLiveBotStats(options) {
+    var url = apiUrl("/api/stats") || apiUrl("/api/health");
+    if (!url) return Promise.resolve(null);
+
+    var cacheKey = "obsidian_bot_stats_v1";
+    try {
+      var cached = sessionStorage.getItem(cacheKey);
+      if (cached) {
+        var parsed = JSON.parse(cached);
+        if (parsed && parsed.data && parsed.expires > Date.now()) {
+          applyPublicStats(parsed.data, options);
+          return Promise.resolve(parsed.data);
+        }
+      }
+    } catch (_) {}
 
     return fetch(url)
       .then(function (res) {
-        return res.json().catch(function () {
-          return {};
-        });
+        if (!res.ok) throw new Error("stats HTTP " + res.status);
+        return res.json();
       })
       .then(function (data) {
-        if (data.guild_count != null) serversEl.textContent = formatCount(data.guild_count);
-        if (data.user_count != null) usersEl.textContent = formatCount(data.user_count);
-        if (wrapEl) wrapEl.classList.remove("loading");
+        if (!applyPublicStats(data, options)) throw new Error("stats empty");
+        try {
+          sessionStorage.setItem(
+            cacheKey,
+            JSON.stringify({ data: data, expires: Date.now() + 5 * 60 * 1000 })
+          );
+        } catch (_) {}
         return data;
+      });
+  }
+
+  function loadPublicBotStats(options) {
+    options = options || {};
+    if (!options.serversEl || !options.usersEl) return Promise.resolve(null);
+    if (options.wrapEl) options.wrapEl.classList.add("loading");
+
+    var fromConfig = statsFromConfig();
+    if (fromConfig && applyPublicStats(fromConfig, options)) {
+      return Promise.resolve(fromConfig);
+    }
+
+    return fetch("/assets/bot-stats.json", { cache: "no-cache" })
+      .then(function (res) {
+        if (!res.ok) throw new Error("static stats missing");
+        return res.json();
+      })
+      .then(function (data) {
+        if (applyPublicStats(data, options)) return data;
+        return tryLiveBotStats(options);
       })
       .catch(function () {
-        serversEl.textContent = "—";
-        usersEl.textContent = "—";
-        if (wrapEl) wrapEl.classList.remove("loading");
+        return tryLiveBotStats(options);
+      })
+      .catch(function () {
+        failPublicStats(options);
         return null;
       });
   }

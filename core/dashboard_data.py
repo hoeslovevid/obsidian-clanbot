@@ -318,6 +318,17 @@ async def fetch_bot_health(bot: discord.Client, guild_id: Optional[int] = None) 
     return payload
 
 
+async def fetch_bot_stats(bot: discord.Client) -> dict[str, Any]:
+    """Public bot counts for the marketing site (servers + total members)."""
+    guild_count = len(bot.guilds)
+    user_count = sum((g.member_count or 0) for g in bot.guilds)
+    return {
+        "guild_count": guild_count,
+        "user_count": user_count,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 async def list_manageable_guilds(
     bot: discord.Client,
     user_id: int,
