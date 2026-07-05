@@ -82,9 +82,46 @@
     return base + (path.startsWith("/") ? path : "/" + path);
   }
 
+  function formatCount(n) {
+    if (n == null || isNaN(n)) return "—";
+    return Number(n).toLocaleString("en-US");
+  }
+
+  function loadPublicBotStats(options) {
+    options = options || {};
+    var serversEl = options.serversEl;
+    var usersEl = options.usersEl;
+    var wrapEl = options.wrapEl;
+    var url = apiUrl("/api/health");
+    if (!url || !serversEl || !usersEl) return Promise.resolve(null);
+
+    if (wrapEl) wrapEl.classList.add("loading");
+
+    return fetch(url)
+      .then(function (res) {
+        return res.json().catch(function () {
+          return {};
+        });
+      })
+      .then(function (data) {
+        if (data.guild_count != null) serversEl.textContent = formatCount(data.guild_count);
+        if (data.user_count != null) usersEl.textContent = formatCount(data.user_count);
+        if (wrapEl) wrapEl.classList.remove("loading");
+        return data;
+      })
+      .catch(function () {
+        serversEl.textContent = "—";
+        usersEl.textContent = "—";
+        if (wrapEl) wrapEl.classList.remove("loading");
+        return null;
+      });
+  }
+
   window.ObsidianSite = {
     renderNav: renderNav,
     apiUrl: apiUrl,
+    loadPublicBotStats: loadPublicBotStats,
+    formatCount: formatCount,
     config: function () {
       return window.OBSIDIAN_SITE || {};
     },

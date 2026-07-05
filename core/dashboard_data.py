@@ -290,11 +290,15 @@ async def fetch_bot_health(bot: discord.Client, guild_id: Optional[int] = None) 
 
     sync_scope = f"guild {GUILD_ID}" if COMMAND_SYNC_GUILD_ONLY and GUILD_ID else "global"
 
+    guild_count = len(bot.guilds)
+    user_count = sum((g.member_count or 0) for g in bot.guilds)
+
     payload: dict[str, Any] = {
         "version": BOT_VERSION,
         "discord_ready": bot.is_ready(),
         "latency_ms": latency_ms,
-        "guild_count": len(bot.guilds),
+        "guild_count": guild_count,
+        "user_count": user_count,
         "database": {"ok": db_ok, "latency_ms": db_ms, "error": db_err},
         "commands": {
             "groups": cmd_groups,
