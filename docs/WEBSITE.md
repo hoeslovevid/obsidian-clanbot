@@ -25,11 +25,12 @@ Shared nav is rendered by [`web/assets/site.js`](../web/assets/site.js) (Home, F
 
 ### Switch from standalone repo
 
-1. In **this** repo: Settings → Pages → **GitHub Actions** as source.
+1. In **this** repo: Settings → Pages → **GitHub Actions** as source (not “Deploy from branch / root”).
 2. Push `main` — workflow uploads `web/` as the Pages artifact.
-3. Confirm `obsidianoverseer.com` still resolves (same CNAME file).
-4. On the old [obsidian-overseer-website](https://github.com/hoeslovevid/obsidian-overseer-website) repo: disable Pages or archive the repo to avoid double deploys.
-5. **Rotate** the Discord contact webhook if it was committed in the old repo.
+3. **Do not** add `CNAME` at the repo root — only `web/CNAME` (root `CNAME` makes legacy Pages serve `README.md` instead of the site).
+4. Confirm `obsidianoverseer.com` still resolves (same CNAME file in `web/`).
+5. On the old [obsidian-overseer-website](https://github.com/hoeslovevid/obsidian-overseer-website) repo: disable Pages or archive the repo to avoid double deploys.
+6. **Rotate** the Discord contact webhook if it was committed in the old repo.
 
 ## Connect site ↔ bot
 
