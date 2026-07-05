@@ -23,17 +23,21 @@ from core.config import (
     DISCORD_CLIENT_ID,
 )
 from core.dashboard_data import (
+    create_guild_giveaway,
+    end_guild_giveaway,
     fetch_bot_health,
     fetch_guild_analytics,
     fetch_guild_audit_log,
     fetch_guild_dashboard_overview,
     fetch_guild_features,
+    fetch_guild_giveaways,
     fetch_guild_inbox_summary,
     fetch_guild_setup_health,
     fetch_warframe_snapshot,
     list_manageable_guilds,
     search_guild_dashboard,
     set_guild_feature,
+    update_guild_setup_fields,
 )
 
 logger = logging.getLogger(__name__)
@@ -178,7 +182,104 @@ async def handle_guild_setup(request: web.Request) -> web.Response:
     guild_id = int(request.match_info["guild_id"])
     auth = await authenticate(request, bot)
     await require_guild_admin(request, bot, guild_id, auth)
+
+    if request.method == "PATCH":
+        try:
+            body = await request.json()
+        except json.JSONDecodeError:
+            raise web.HTTPBadRequest(
+                text='{"error":"invalid_json"}',
+                content_type="application/json",
+            )
+        updates = body.get("updates") or body.get("fields") or []
+        if not isinstance(updates, list):
+            raise web.HTTPBadRequest(
+                text='{"error":"invalid_updates","message":"Body must include updates: []"}',
+                content_type="application/json",
+            )
+        return _json(await update_guild_setup_fields(guild_id, bot, updates))
+
     return _json(await fetch_guild_setup_health(guild_id, bot))
+
+
+async def handle_guild_giveaways(request: web.Request) -> web.Response:
+    bot: discord.Client = request.app["bot"]
+    guild_id = int(request.match_info["guild_id"])
+    auth = await authenticate(request, bot)
+    await require_guild_admin(request, bot, guild_id, auth)
+
+    if request.method == "GET":
+        return _json(await fetch_guild_giveaways(guild_id, bot))
+
+    if request.method != "POST":
+        raise web.HTTPMethodNotAllowed(request.method, ["GET", "POST"])
+
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        raise web.HTTPBadRequest(
+            text='{"error":"invalid_json"}',
+            content_type="application/json",
+        )
+
+    channel_id = body.get("channel_id")
+    prize = str(body.get("prize") or "").strip()
+    end_time_raw = body.get("end_time") or body.get("ends_at")
+    if not channel_id or not prize or not end_time_raw:
+        raise web.HTTPBadRequest(
+            text='{"error":"missing_fields","message":"channel_id, prize, and end_time are required"}',
+            content_type="application/json",
+        )
+    try:
+        channel_id_int = int(channel_id)
+    except (TypeError, ValueError):
+        raise web.HTTPBadRequest(
+            text='{"error":"invalid_channel_id"}',
+            content_type="application/json",
+        )
+
+    try:
+        end_time = datetime.fromisoformat(str(end_time_raw).replace("Z", "+00:00"))
+    except ValueError:
+        raise web.HTTPBadRequest(
+            text='{"error":"invalid_end_time","message":"Use ISO8601 datetime"}',
+            content_type="application/json",
+        )
+
+    winner_count = int(body.get("winner_count") or 1)
+    title = body.get("title")
+    description = body.get("description")
+    required_role_id = body.get("required_role_id")
+    min_level = body.get("min_level")
+    role_id = int(required_role_id) if required_role_id not in (None, "", "null") else None
+    min_lvl = int(min_level) if min_level not in (None, "", "null") else None
+
+    result = await create_guild_giveaway(
+        guild_id,
+        bot,
+        user_id=auth.user_id,
+        channel_id=channel_id_int,
+        prize=prize,
+        end_time=end_time,
+        winner_count=winner_count,
+        title=str(title).strip() if title else None,
+        description=str(description).strip() if description else None,
+        required_role_id=role_id,
+        min_level=min_lvl,
+    )
+    status = 200 if result.get("ok") else 400
+    return _json(result, status=status)
+
+
+async def handle_guild_giveaway_end(request: web.Request) -> web.Response:
+    bot: discord.Client = request.app["bot"]
+    guild_id = int(request.match_info["guild_id"])
+    giveaway_id = int(request.match_info["giveaway_id"])
+    auth = await authenticate(request, bot)
+    await require_guild_admin(request, bot, guild_id, auth)
+    result = await end_guild_giveaway(guild_id, bot, giveaway_id)
+    status = 200 if result.get("ok") else 400
+    return _json(result, status=status)
 
 
 async def handle_guild_warframe(request: web.Request) -> web.Response:
@@ -317,6 +418,13 @@ def create_app(bot: discord.Client) -> web.Application:
     app.router.add_get("/api/guilds/{guild_id}/features", handle_guild_features_get)
     app.router.add_patch("/api/guilds/{guild_id}/features", handle_guild_features_patch)
     app.router.add_get("/api/guilds/{guild_id}/setup", handle_guild_setup)
+    app.router.add_patch("/api/guilds/{guild_id}/setup", handle_guild_setup)
+    app.router.add_get("/api/guilds/{guild_id}/giveaways", handle_guild_giveaways)
+    app.router.add_post("/api/guilds/{guild_id}/giveaways", handle_guild_giveaways)
+    app.router.add_post(
+        "/api/guilds/{guild_id}/giveaways/{giveaway_id}/end",
+        handle_guild_giveaway_end,
+    )
     app.router.add_get("/api/guilds/{guild_id}/warframe", handle_guild_warframe)
     app.router.add_get("/api/guilds/{guild_id}/analytics", handle_guild_analytics)
     app.router.add_get("/api/guilds/{guild_id}/audit", handle_guild_audit)

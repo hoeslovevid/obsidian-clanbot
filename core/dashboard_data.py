@@ -366,6 +366,7 @@ async def fetch_guild_setup_health(guild_id: int, bot: discord.Client) -> dict[s
 
     configured, total, core_block, wf_block, mod_block, extra_block = await compute_setup_health(guild)
     pct = int(100 * configured / total) if total else 0
+    fields, options = await _build_setup_editor(guild)
     return {
         "guild_id": guild_id,
         "configured": configured,
@@ -377,6 +378,349 @@ async def fetch_guild_setup_health(guild_id: int, bot: discord.Client) -> dict[s
             {"id": "moderation", "title": "Moderation logs", "items": _parse_setup_block(mod_block)},
             {"id": "community", "title": "Community", "items": _parse_setup_block(extra_block)},
         ],
+        "fields": fields,
+        "options": options,
+    }
+
+
+_SETUP_FIELD_DEFS: list[dict[str, Any]] = [
+    {"key": "events_channel_id", "section": "core", "label": "Events (Ops Board)", "kind": "guild", "channel_type": "text"},
+    {"key": "xp_levelup_channel_id", "section": "core", "label": "Level-up announcements", "kind": "guild", "channel_type": "text"},
+    {"key": "create_vc_channel_id", "section": "core", "label": "Join-to-create voice", "kind": "guild", "channel_type": "text"},
+    {"key": "voice_panel_channel_id", "section": "core", "label": "Voice panel", "kind": "guild", "channel_type": "text"},
+    {"key": "complaints_channel_id", "section": "core", "label": "Inheritor docket", "kind": "guild", "channel_type": "text"},
+    {"key": "suggestions_channel_id", "section": "core", "label": "Suggestions", "kind": "guild", "channel_type": "text"},
+    {"key": "temp_vc_category_id", "section": "core", "label": "Temp VC category", "kind": "guild", "channel_type": "category"},
+    {"key": "changelog_channel_id", "section": "core", "label": "Changelog / updates", "kind": "guild", "channel_type": "text"},
+    {"key": "recap_channel_id", "section": "core", "label": "Weekly clan recap", "kind": "guild", "channel_type": "text"},
+    {"key": "alerts_notify_channel_id", "section": "warframe", "label": "Warframe alerts feed", "kind": "guild", "channel_type": "text"},
+    {"key": "forum_notify_channel_id", "section": "warframe", "label": "Warframe forum feed", "kind": "guild", "channel_type": "text"},
+    {"key": "youtube_notify_channel_id", "section": "warframe", "label": "Warframe YouTube feed", "kind": "guild", "channel_type": "text"},
+    {"key": "devstream_notify_channel_id", "section": "warframe", "label": "Warframe devstreams", "kind": "guild", "channel_type": "text"},
+    {"key": "audit", "section": "moderation", "label": "Mod audit log", "kind": "log", "log_type": "audit"},
+    {"key": "bot_error", "section": "moderation", "label": "Bot error log", "kind": "log", "log_type": "bot_error"},
+    {"key": "ticket_transcript", "section": "moderation", "label": "Ticket transcripts", "kind": "log", "log_type": "ticket_transcript"},
+]
+_SETUP_FIELD_BY_KEY = {f["key"]: f for f in _SETUP_FIELD_DEFS}
+
+
+async def _build_setup_editor(guild: discord.Guild) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    from database import get_configured_channel_id, get_log_channel_id
+
+    fields: list[dict[str, Any]] = []
+    for spec in _SETUP_FIELD_DEFS:
+        channel_id: Optional[int] = None
+        if spec["kind"] == "guild":
+            channel_id = await get_configured_channel_id(guild.id, spec["key"])
+        else:
+            channel_id = await get_log_channel_id(guild.id, spec["log_type"])
+        ch = guild.get_channel(channel_id) if channel_id else None
+        fields.append(
+            {
+                "key": spec["key"],
+                "section": spec["section"],
+                "label": spec["label"],
+                "kind": spec["kind"],
+                "channel_type": spec.get("channel_type"),
+                "channel_id": str(channel_id) if channel_id else None,
+                "channel_name": getattr(ch, "name", None),
+            }
+        )
+
+    text_channels = [
+        {"id": str(c.id), "name": c.name}
+        for c in sorted(guild.text_channels, key=lambda c: c.name.lower())
+    ]
+    categories = [
+        {"id": str(c.id), "name": c.name}
+        for c in sorted(guild.categories, key=lambda c: c.name.lower())
+    ]
+    roles = [
+        {"id": str(r.id), "name": r.name}
+        for r in guild.roles
+        if r.name != "@everyone" and not r.managed
+    ]
+    return fields, {"text_channels": text_channels, "categories": categories, "roles": roles}
+
+
+async def update_guild_setup_fields(
+    guild_id: int,
+    bot: discord.Client,
+    updates: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Apply channel setup changes from the dashboard."""
+    guild = bot.get_guild(guild_id)
+    if not guild:
+        return {"ok": False, "error": "guild_not_found"}
+
+    from database import set_guild_setting
+
+    errors: list[str] = []
+    for upd in updates:
+        key = str(upd.get("key") or "").strip()
+        spec = _SETUP_FIELD_BY_KEY.get(key)
+        if not spec:
+            errors.append(f"Unknown field: {key}")
+            continue
+
+        raw = upd.get("channel_id")
+        if raw in (None, "", "null", "none"):
+            channel_id: Optional[int] = None
+        else:
+            try:
+                channel_id = int(raw)
+            except (TypeError, ValueError):
+                errors.append(f"Invalid channel for {key}")
+                continue
+
+        if spec["kind"] == "guild":
+            if not channel_id:
+                await set_guild_setting(guild_id, key, "0")
+                continue
+            ch = guild.get_channel(channel_id)
+            if spec["channel_type"] == "category":
+                if not isinstance(ch, discord.CategoryChannel):
+                    errors.append(f"{spec['label']}: invalid category")
+                    continue
+            elif not isinstance(ch, discord.TextChannel):
+                errors.append(f"{spec['label']}: invalid text channel")
+                continue
+            await set_guild_setting(guild_id, key, str(channel_id))
+        else:
+            log_type = spec["log_type"]
+            async with aiosqlite.connect(DB_PATH) as db:
+                if not channel_id:
+                    await db.execute(
+                        "UPDATE log_channels SET enabled=0 WHERE guild_id=? AND log_type=?",
+                        (guild_id, log_type),
+                    )
+                else:
+                    ch = guild.get_channel(channel_id)
+                    if not isinstance(ch, discord.TextChannel):
+                        errors.append(f"{spec['label']}: invalid text channel")
+                        continue
+                    await db.execute(
+                        """
+                        INSERT OR REPLACE INTO log_channels (guild_id, log_type, channel_id, enabled)
+                        VALUES (?, ?, ?, 1)
+                        """,
+                        (guild_id, log_type, channel_id),
+                    )
+                await db.commit()
+
+    result = await fetch_guild_setup_health(guild_id, bot)
+    result["ok"] = not errors
+    if errors:
+        result["errors"] = errors
+    return result
+
+
+async def fetch_guild_giveaways(guild_id: int, bot: discord.Client) -> dict[str, Any]:
+    """Active and recently ended giveaways for the dashboard."""
+    guild = bot.get_guild(guild_id)
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            """
+            SELECT id, channel_id, message_id, title, prize, winner_count, end_time,
+                   ended, ended_at, required_role_id, min_level, description
+            FROM giveaways
+            WHERE guild_id=? AND ended=0
+            ORDER BY end_time ASC
+            """,
+            (guild_id,),
+        )
+        active_rows = await cur.fetchall()
+        cur = await db.execute(
+            """
+            SELECT id, channel_id, message_id, title, prize, winner_count, end_time, ended_at
+            FROM giveaways
+            WHERE guild_id=? AND ended=1
+            ORDER BY ended_at DESC
+            LIMIT 10
+            """,
+            (guild_id,),
+        )
+        ended_rows = await cur.fetchall()
+
+        entry_counts: dict[int, int] = {}
+        ids = [r[0] for r in active_rows]
+        if ids:
+            placeholders = ",".join("?" * len(ids))
+            cur = await db.execute(
+                f"SELECT giveaway_id, COUNT(*) FROM giveaway_entries WHERE giveaway_id IN ({placeholders}) GROUP BY giveaway_id",
+                ids,
+            )
+            for gid, count in await cur.fetchall():
+                entry_counts[int(gid)] = int(count)
+
+    def _row(row: tuple, *, ended: bool) -> dict[str, Any]:
+        gid, ch_id, msg_id, title, prize, winners, end_time = row[0], row[1], row[2], row[3], row[4], row[5], row[6]
+        item: dict[str, Any] = {
+            "id": gid,
+            "title": title,
+            "prize": prize,
+            "winner_count": winners,
+            "end_time": end_time,
+            "channel_id": str(ch_id),
+            "channel_name": getattr(guild.get_channel(ch_id), "name", None) if guild else None,
+            "message_id": str(msg_id),
+            "entry_count": entry_counts.get(gid, 0),
+            "jump_url": f"https://discord.com/channels/{guild_id}/{ch_id}/{msg_id}",
+        }
+        if ended:
+            item["ended_at"] = row[7] if len(row) > 7 else None
+        else:
+            if len(row) > 10:
+                item["required_role_id"] = str(row[9]) if row[9] else None
+                item["min_level"] = row[10]
+                item["description"] = row[11] or ""
+        return item
+
+    return {
+        "guild_id": guild_id,
+        "active": [_row(r, ended=False) for r in active_rows],
+        "recent": [_row(r, ended=True) for r in ended_rows],
+    }
+
+
+async def create_guild_giveaway(
+    guild_id: int,
+    bot: discord.Client,
+    *,
+    user_id: int,
+    channel_id: int,
+    prize: str,
+    end_time: datetime,
+    winner_count: int = 1,
+    title: Optional[str] = None,
+    description: Optional[str] = None,
+    required_role_id: Optional[int] = None,
+    min_level: Optional[int] = None,
+) -> dict[str, Any]:
+    """Create a giveaway from the dashboard (posts to Discord)."""
+    guild = bot.get_guild(guild_id)
+    if not guild:
+        return {"ok": False, "error": "guild_not_found"}
+
+    channel = guild.get_channel(channel_id)
+    if not isinstance(channel, discord.TextChannel):
+        return {"ok": False, "error": "invalid_channel"}
+
+    prize = (prize or "").strip()
+    if not prize:
+        return {"ok": False, "error": "prize_required"}
+    if winner_count < 1 or winner_count > 20:
+        return {"ok": False, "error": "invalid_winner_count"}
+    if end_time.tzinfo is None:
+        end_time = end_time.replace(tzinfo=timezone.utc)
+    if end_time <= datetime.now(timezone.utc):
+        return {"ok": False, "error": "end_time_must_be_future"}
+
+    giveaway_title = title or f"🎉 Giveaway: {prize}"
+    desc = f"**Prize:** {prize}\n**Winners:** {winner_count}\n"
+    desc += f"**Ends:** <t:{int(end_time.timestamp())}:R> (<t:{int(end_time.timestamp())}:F>)\n"
+    if description:
+        desc += f"\n{description}\n"
+    requirements = []
+    if required_role_id:
+        role = guild.get_role(required_role_id)
+        if role:
+            requirements.append(f"Required Role: {role.mention}")
+    if min_level:
+        requirements.append(f"Minimum Level: {min_level}")
+    if requirements:
+        desc += "\n**Requirements:**\n" + "\n".join(f"• {r}" for r in requirements)
+    desc += "\n\n**Entries:** 0"
+
+    from core.embed_footers import footer_for
+    from core.embed_templates import embed_template
+    from views import GiveawayView
+
+    embed = embed_template(
+        "showcase",
+        giveaway_title,
+        desc,
+        category="prestige",
+        footer=footer_for("community_giveaway") + f" · {winner_count} winner(s)",
+        client=bot,
+    )
+
+    try:
+        message = await channel.send(embed=embed, view=GiveawayView())
+    except discord.Forbidden:
+        return {"ok": False, "error": "missing_send_permission"}
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """
+            INSERT INTO giveaways (
+                guild_id, channel_id, message_id, title, description, prize,
+                winner_count, end_time, created_by, created_at, required_role_id, min_level
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                guild_id,
+                channel.id,
+                message.id,
+                giveaway_title,
+                description or "",
+                prize,
+                winner_count,
+                end_time.isoformat(),
+                user_id,
+                datetime.now(timezone.utc).isoformat(),
+                required_role_id,
+                min_level,
+            ),
+        )
+        await db.commit()
+        cur = await db.execute(
+            "SELECT id FROM giveaways WHERE guild_id=? AND message_id=?",
+            (guild_id, message.id),
+        )
+        row = await cur.fetchone()
+        giveaway_id = int(row[0]) if row else None
+
+    if giveaway_id:
+        view = GiveawayView(giveaway_id)
+        bot.add_view(view)
+        try:
+            await message.edit(view=view)
+        except Exception:
+            pass
+
+    return {
+        "ok": True,
+        "giveaway": {
+            "id": giveaway_id,
+            "jump_url": message.jump_url,
+            "end_time": end_time.isoformat(),
+        },
+    }
+
+
+async def end_guild_giveaway(guild_id: int, bot: discord.Client, giveaway_id: int) -> dict[str, Any]:
+    """End an active giveaway from the dashboard."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            "SELECT guild_id, ended FROM giveaways WHERE id=?",
+            (giveaway_id,),
+        )
+        row = await cur.fetchone()
+    if not row or int(row[0]) != guild_id:
+        return {"ok": False, "error": "giveaway_not_found"}
+    if row[1]:
+        return {"ok": False, "error": "already_ended"}
+
+    from commands.giveaways.giveaway_end import end_giveaway
+
+    success, message, winners = await end_giveaway(giveaway_id, bot, force=True)
+    guild = bot.get_guild(guild_id)
+    winner_names = [_member_label(guild, wid) for wid in winners] if guild else [str(w) for w in winners]
+    return {
+        "ok": success,
+        "message": message,
+        "winners": [{"user_id": w, "user_name": winner_names[i]} for i, w in enumerate(winners)],
     }
 
 

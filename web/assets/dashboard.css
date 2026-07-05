@@ -189,6 +189,8 @@ body.dash-body {
 .dash-btn-sm { padding: 8px 14px; font-size: 0.85rem; }
 .dash-btn-discord { background: var(--accent); color: #06070a; }
 .dash-btn-discord:hover { filter: brightness(1.1); }
+.dash-btn-danger { background: rgba(248, 113, 113, 0.15); color: var(--danger); border: 1px solid rgba(248, 113, 113, 0.35); }
+.dash-btn-danger:hover { background: rgba(248, 113, 113, 0.25); }
 
 /* Alerts */
 .dash-alerts { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
@@ -612,10 +614,75 @@ body.dash-body {
 .dash-audit-body strong { font-size: 0.92rem; }
 .dash-audit-meta { font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; }
 
+.dash-setup-editor {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+.dash-setup-editor h3 { margin-bottom: 14px; font-size: 1.05rem; }
+.dash-setup-editor h4 {
+  margin: 16px 0 10px;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.dash-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.dash-field-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.dash-field-wide { grid-column: 1 / -1; }
+.dash-field-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.dash-input,
+.dash-select,
+.dash-setup-editor select,
+.dash-form-grid select,
+.dash-form-grid input,
+.dash-form-grid textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  font: inherit;
+}
+.dash-input:focus,
+.dash-select:focus,
+.dash-form-grid select:focus,
+.dash-form-grid input:focus,
+.dash-form-grid textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.dash-field-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 8px;
+}
+.dash-table-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 @media (max-width: 640px) {
   .dash-topbar { flex-direction: column; align-items: stretch; }
   .dash-tabs { overflow-x: auto; flex-wrap: nowrap; }
   .dash-tab { white-space: nowrap; }
   .dash-table { font-size: 0.82rem; }
   .dash-table th, .dash-table td { padding: 10px 8px; }
+  .dash-form-grid { grid-template-columns: 1fr; }
 }

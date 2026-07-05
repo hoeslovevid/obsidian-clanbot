@@ -22,6 +22,115 @@
 
   var GROUP_ORDER = ["Community", "Warframe", "Economy", "Voice"];
 
+  var SETUP_SECTION_LABELS = {
+    core: "Core channels",
+    warframe: "Warframe feeds",
+    moderation: "Moderation logs",
+  };
+
+  function channelSelectOptions(field, options) {
+    var list =
+      field.channel_type === "category"
+        ? (options && options.categories) || []
+        : (options && options.text_channels) || [];
+    var html = '<option value="">— Not set —</option>';
+    list.forEach(function (c) {
+      html +=
+        '<option value="' +
+        escapeHtml(c.id) +
+        '"' +
+        (String(field.channel_id) === String(c.id) ? " selected" : "") +
+        ">#" +
+        escapeHtml(c.name) +
+        "</option>";
+    });
+    return html;
+  }
+
+  async function saveSetupFields() {
+    if (!state.guildId) return;
+    var updates = [];
+    el("dash-setup")
+      .querySelectorAll("select[data-setup-key]")
+      .forEach(function (sel) {
+        updates.push({
+          key: sel.getAttribute("data-setup-key"),
+          channel_id: sel.value || null,
+        });
+      });
+    try {
+      var data = await apiFetch("/api/guilds/" + state.guildId + "/setup", {
+        method: "PATCH",
+        body: JSON.stringify({ updates: updates }),
+      });
+      state.setup = data;
+      renderSetup();
+      if (data.errors && data.errors.length) {
+        toast(data.errors.join("; "), "error");
+      } else {
+        toast("Setup saved", "success");
+      }
+    } catch (err) {
+      toast(err.message || "Could not save setup", "error");
+    }
+  }
+
+  async function createGiveawayFromForm(form) {
+    if (!state.guildId) return;
+    var channelId = form.channel_id.value;
+    var prize = form.prize.value.trim();
+    var endLocal = form.end_time.value;
+    if (!channelId || !prize || !endLocal) {
+      toast("Channel, prize, and end time are required", "error");
+      return;
+    }
+    var payload = {
+      channel_id: channelId,
+      prize: prize,
+      end_time: new Date(endLocal).toISOString(),
+      winner_count: parseInt(form.winner_count.value, 10) || 1,
+      title: form.title.value.trim() || null,
+      description: form.description.value.trim() || null,
+      required_role_id: form.required_role_id.value || null,
+      min_level: form.min_level.value ? parseInt(form.min_level.value, 10) : null,
+    };
+    try {
+      var result = await apiFetch("/api/guilds/" + state.guildId + "/giveaways", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      if (!result.ok) {
+        toast(result.error || "Could not create giveaway", "error");
+        return;
+      }
+      toast("Giveaway created", "success");
+      form.reset();
+      state.giveaways = await apiFetch("/api/guilds/" + state.guildId + "/giveaways");
+      renderGiveaways();
+    } catch (err) {
+      toast(err.message || "Could not create giveaway", "error");
+    }
+  }
+
+  async function endGiveawayById(id) {
+    if (!state.guildId || !window.confirm("End this giveaway now and pick winners?")) return;
+    try {
+      var result = await apiFetch(
+        "/api/guilds/" + state.guildId + "/giveaways/" + id + "/end",
+        { method: "POST" }
+      );
+      if (!result.ok) {
+        toast(result.error || result.message || "Could not end giveaway", "error");
+        return;
+      }
+      toast(result.message || "Giveaway ended", "success");
+      state.giveaways = await apiFetch("/api/guilds/" + state.guildId + "/giveaways");
+      renderGiveaways();
+    } catch (err) {
+      toast(err.message || "Could not end giveaway", "error");
+    }
+  }
+
   var state = {
     me: null,
     overview: null,
@@ -31,6 +140,7 @@
     warframe: null,
     analytics: null,
     audit: null,
+    giveaways: null,
     guildId: null,
     refreshTimer: null,
     loading: false,
@@ -530,7 +640,123 @@
       html += "</ul></div>";
     });
 
+    var fields = setup.fields || [];
+    var options = setup.options || {};
+    if (fields.length) {
+      html += '<div class="dash-setup-editor"><h3>Edit channels</h3>';
+      ["core", "warframe", "moderation"].forEach(function (sectionId) {
+        var sectionFields = fields.filter(function (f) {
+          return f.section === sectionId;
+        });
+        if (!sectionFields.length) return;
+        html += '<div class="dash-setup-section"><h4>' + escapeHtml(SETUP_SECTION_LABELS[sectionId] || sectionId) + "</h4>";
+        sectionFields.forEach(function (field) {
+          html +=
+            '<label class="dash-field-row"><span class="dash-field-label">' +
+            escapeHtml(field.label) +
+            '</span><select class="dash-select" data-setup-key="' +
+            escapeHtml(field.key) +
+            '">' +
+            channelSelectOptions(field, options) +
+            "</select></label>";
+        });
+        html += "</div>";
+      });
+      html +=
+        '<div class="dash-field-actions"><button type="button" class="dash-btn dash-btn-primary" id="dash-setup-save">Save setup</button></div></div>';
+    }
+
     el("dash-setup").innerHTML = html;
+
+    var saveBtn = el("dash-setup-save");
+    if (saveBtn) {
+      saveBtn.addEventListener("click", saveSetupFields);
+    }
+  }
+
+  function renderGiveaways() {
+    var node = el("dash-giveaways");
+    if (!node) return;
+    var data = state.giveaways;
+    var options = (state.setup && state.setup.options) || {};
+    var channels = options.text_channels || [];
+    var roles = options.roles || [];
+
+    if (!data) {
+      node.innerHTML = '<p class="dash-meta">Loading giveaways…</p>';
+      return;
+    }
+
+    var channelOpts = '<option value="">Select channel…</option>';
+    channels.forEach(function (c) {
+      channelOpts += '<option value="' + escapeHtml(c.id) + '">#' + escapeHtml(c.name) + "</option>";
+    });
+    var roleOpts = '<option value="">Any role</option>';
+    roles.forEach(function (r) {
+      roleOpts += '<option value="' + escapeHtml(r.id) + '">' + escapeHtml(r.name) + "</option>";
+    });
+
+    var html =
+      '<div class="dash-panel"><h2>🎁 Create giveaway</h2>' +
+      '<form id="dash-giveaway-form" class="dash-form-grid">' +
+      '<label class="dash-field-row"><span class="dash-field-label">Channel</span><select class="dash-select" name="channel_id" required>' +
+      channelOpts +
+      '</select></label>' +
+      '<label class="dash-field-row"><span class="dash-field-label">Prize</span><input class="dash-input" name="prize" required placeholder="e.g. 1000 platinum" /></label>' +
+      '<label class="dash-field-row"><span class="dash-field-label">Ends</span><input class="dash-input" type="datetime-local" name="end_time" required /></label>' +
+      '<label class="dash-field-row"><span class="dash-field-label">Winners</span><input class="dash-input" type="number" name="winner_count" min="1" max="20" value="1" /></label>' +
+      '<label class="dash-field-row"><span class="dash-field-label">Title</span><input class="dash-input" name="title" placeholder="Optional title" /></label>' +
+      '<label class="dash-field-row dash-field-wide"><span class="dash-field-label">Description</span><textarea class="dash-input" name="description" rows="2" placeholder="Optional details"></textarea></label>' +
+      '<label class="dash-field-row"><span class="dash-field-label">Required role</span><select class="dash-select" name="required_role_id">' +
+      roleOpts +
+      '</select></label>' +
+      '<label class="dash-field-row"><span class="dash-field-label">Min level</span><input class="dash-input" type="number" name="min_level" min="1" placeholder="Optional" /></label>' +
+      '<div class="dash-field-actions dash-field-wide"><button type="submit" class="dash-btn dash-btn-primary">Create giveaway</button></div>' +
+      "</form></div>";
+
+    html += '<div class="dash-panel" style="margin-top:16px"><h2>Active giveaways</h2>';
+    if (!(data.active && data.active.length)) {
+      html += '<div class="dash-empty"><p>No active giveaways.</p></div>';
+    } else {
+      html += '<div class="dash-table-wrap"><table class="dash-table"><thead><tr><th>Prize</th><th>Channel</th><th>Entries</th><th>Ends</th><th></th></tr></thead><tbody>';
+      data.active.forEach(function (g) {
+        html +=
+          "<tr><td><strong>" +
+          escapeHtml(g.prize) +
+          '</strong><div class="dash-meta">' +
+          escapeHtml(g.title || "") +
+          '</div></td><td>#' +
+          escapeHtml(g.channel_name || g.channel_id) +
+          "</td><td>" +
+          (g.entry_count || 0) +
+          '</td><td><span class="dash-meta">' +
+          escapeHtml(timeUntil(g.end_time)) +
+          ' left</span></td><td class="dash-table-actions">' +
+          (g.jump_url
+            ? '<a href="' + escapeHtml(g.jump_url) + '" target="_blank" rel="noopener" class="dash-btn dash-btn-sm dash-btn-ghost">Open</a> '
+            : "") +
+          '<button type="button" class="dash-btn dash-btn-sm dash-btn-danger" data-end-giveaway="' +
+          g.id +
+          '">End</button></td></tr>';
+      });
+      html += "</tbody></table></div>";
+    }
+    html += "</div>";
+
+    node.innerHTML = html;
+
+    var form = el("dash-giveaway-form");
+    if (form) {
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        createGiveawayFromForm(form);
+      });
+    }
+    node.querySelectorAll("[data-end-giveaway]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        endGiveawayById(parseInt(btn.getAttribute("data-end-giveaway"), 10));
+      });
+    });
   }
 
   function timeUntil(iso) {
@@ -843,6 +1069,7 @@
     renderWarframe();
     renderAnalytics();
     renderAudit();
+    renderGiveaways();
 
     if (state.overview && state.overview.refreshed_at) {
       el("dash-refreshed").textContent = "Updated " + timeAgo(state.overview.refreshed_at);
@@ -854,7 +1081,7 @@
     el("dash-loading").style.display = on ? "block" : "none";
     el("dash-skeleton").style.display = on ? "block" : "none";
     if (on) {
-      ["dash-baro-mini", "dash-stats", "dash-attention", "dash-tickets", "dash-apps", "dash-mod-status", "dash-warnings", "dash-features", "dash-setup", "dash-warframe", "dash-analytics", "dash-audit"].forEach(function (id) {
+      ["dash-baro-mini", "dash-stats", "dash-attention", "dash-tickets", "dash-apps", "dash-mod-status", "dash-warnings", "dash-features", "dash-setup", "dash-warframe", "dash-analytics", "dash-audit", "dash-giveaways"].forEach(function (id) {
         var node = el(id);
         if (node) node.innerHTML = "";
       });
@@ -883,6 +1110,7 @@
         apiFetch("/api/guilds/" + guildId + "/warframe"),
         apiFetch("/api/guilds/" + guildId + "/analytics"),
         apiFetch("/api/guilds/" + guildId + "/audit?limit=50"),
+        apiFetch("/api/guilds/" + guildId + "/giveaways"),
       ]);
       state.overview = results[0];
       state.inbox = results[1];
@@ -891,6 +1119,7 @@
       state.warframe = results[4];
       state.analytics = results[5];
       state.audit = results[6];
+      state.giveaways = results[7];
       renderAll();
     } catch (err) {
       showError(err.message || String(err));
