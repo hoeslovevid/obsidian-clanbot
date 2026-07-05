@@ -3,7 +3,7 @@
  * Example: "https://obsidian-clanbot-production.up.railway.app"
  */
 window.OBSIDIAN_SITE = {
-  BOT_API_URL: "",
+  BOT_API_URL: "https://worker-production-39bd.up.railway.app",
   DISCORD_CLIENT_ID: "1460107752658440223",
   DISCORD_SERVER_INVITE: "https://discord.gg/cNchBqnhjy",
   CONTACT_EMAIL: "",

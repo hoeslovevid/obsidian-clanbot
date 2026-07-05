@@ -245,7 +245,6 @@ async def set_guild_feature(guild_id: int, feature: str, enabled: bool) -> bool:
 async def fetch_bot_health(bot: discord.Client, guild_id: Optional[int] = None) -> dict[str, Any]:
     """Bot health metrics (subset of ``/admin health``)."""
     from core.config import BOT_VERSION, COMMAND_SYNC_GUILD_ONLY, GUILD_ID
-    from core.command_sync import sync_scope_description
     from core.command_tree_stats import collect_command_tree_stats
     from core.error_handling import RECENT_ERRORS
 
@@ -265,6 +264,12 @@ async def fetch_bot_health(bot: discord.Client, guild_id: Optional[int] = None) 
 
     latency_ms = round(bot.latency * 1000) if bot.latency >= 0 else None
     cmd_stats = getattr(bot, "_command_tree_stats", None) or collect_command_tree_stats(bot)
+    if isinstance(cmd_stats, dict):
+        cmd_groups = int(cmd_stats.get("groups", 0))
+        cmd_subcommands = int(cmd_stats.get("subcommands", 0))
+    else:
+        cmd_groups = cmd_stats.groups
+        cmd_subcommands = cmd_stats.grouped_subcommands
     tasks_info = getattr(bot, "_background_tasks", {}) or {}
     running_tasks = sum(
         1 for t in tasks_info.values() if getattr(t, "is_running", lambda: False)()
@@ -276,6 +281,8 @@ async def fetch_bot_health(bot: discord.Client, guild_id: Optional[int] = None) 
     else:
         last_sync_iso = None
 
+    sync_scope = f"guild {GUILD_ID}" if COMMAND_SYNC_GUILD_ONLY and GUILD_ID else "global"
+
     payload: dict[str, Any] = {
         "version": BOT_VERSION,
         "discord_ready": bot.is_ready(),
@@ -283,9 +290,9 @@ async def fetch_bot_health(bot: discord.Client, guild_id: Optional[int] = None) 
         "guild_count": len(bot.guilds),
         "database": {"ok": db_ok, "latency_ms": db_ms, "error": db_err},
         "commands": {
-            "groups": cmd_stats.get("groups", 0),
-            "subcommands": cmd_stats.get("subcommands", 0),
-            "sync_scope": sync_scope_description(),
+            "groups": cmd_groups,
+            "subcommands": cmd_subcommands,
+            "sync_scope": sync_scope,
             "guild_only_sync": COMMAND_SYNC_GUILD_ONLY,
             "dev_guild_id": GUILD_ID or None,
             "last_sync_at": last_sync_iso,
