@@ -442,6 +442,8 @@ async def start_dashboard_server(bot: discord.Client) -> web.AppRunner | None:
         logger.warning(
             "[dashboard-api] DASHBOARD_API_SECRET is not set — only Discord OAuth tokens will work"
         )
+    # CORS preflight + parallel dashboard fetches otherwise flood Railway logs.
+    logging.getLogger("aiohttp.access").setLevel(logging.WARNING)
     app = create_app(bot)
     _runner = web.AppRunner(app)
     await _runner.setup()

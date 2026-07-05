@@ -132,10 +132,70 @@
     audit: null,
     giveaways: null,
     guildId: null,
+    activeTab: "overview",
     refreshTimer: null,
     loading: false,
     searchTimer: null,
   };
+
+  var TAB_FETCHERS = {
+    features: function (gid) {
+      return apiFetch("/api/guilds/" + gid + "/features");
+    },
+    setup: function (gid) {
+      return apiFetch("/api/guilds/" + gid + "/setup");
+    },
+    analytics: function (gid) {
+      return apiFetch("/api/guilds/" + gid + "/analytics");
+    },
+    audit: function (gid) {
+      return apiFetch("/api/guilds/" + gid + "/audit?limit=50");
+    },
+    giveaways: function (gid) {
+      return apiFetch("/api/guilds/" + gid + "/giveaways");
+    },
+  };
+
+  function clearGuildData() {
+    state.overview = null;
+    state.inbox = null;
+    state.features = null;
+    state.setup = null;
+    state.warframe = null;
+    state.analytics = null;
+    state.audit = null;
+    state.giveaways = null;
+  }
+
+  async function fetchCoreData(guildId) {
+    var results = await Promise.all([
+      apiFetch("/api/guilds/" + guildId + "/overview"),
+      apiFetch("/api/guilds/" + guildId + "/inbox"),
+      apiFetch("/api/guilds/" + guildId + "/warframe"),
+    ]);
+    state.overview = results[0];
+    state.inbox = results[1];
+    state.warframe = results[2];
+  }
+
+  async function fetchTabData(guildId, tab) {
+    if (!TAB_FETCHERS[tab]) return;
+    if (tab === "giveaways" && !state.setup) {
+      state.setup = await TAB_FETCHERS.setup(guildId);
+    }
+    var data = await TAB_FETCHERS[tab](guildId);
+    state[tab] = data;
+  }
+
+  async function ensureTabData(tab) {
+    if (!state.guildId || !tab) return;
+    if (["overview", "inbox", "moderation", "warframe"].indexOf(tab) >= 0) {
+      if (!state.overview) await fetchCoreData(state.guildId);
+      return;
+    }
+    if (state[tab]) return;
+    await fetchTabData(state.guildId, tab);
+  }
 
   function cfg() {
     return window.OBSIDIAN_SITE || {};
@@ -270,12 +330,21 @@
 
   /* ——— Tabs ——— */
   function setTab(name) {
+    state.activeTab = name;
     document.querySelectorAll(".dash-tab").forEach(function (btn) {
       btn.classList.toggle("active", btn.getAttribute("data-tab") === name);
     });
     document.querySelectorAll(".dash-tab-panel").forEach(function (panel) {
       panel.classList.toggle("active", panel.id === "tab-" + name);
     });
+    if (!state.guildId || state.loading) return;
+    ensureTabData(name)
+      .then(function () {
+        renderAll();
+      })
+      .catch(function (err) {
+        toast(err.message || String(err), "error");
+      });
   }
 
   function bindTabs() {
@@ -1348,24 +1417,26 @@
     if (!quiet) setLoading(true);
     showError("");
     try {
-      var results = await Promise.all([
-        apiFetch("/api/guilds/" + guildId + "/overview"),
-        apiFetch("/api/guilds/" + guildId + "/inbox"),
-        apiFetch("/api/guilds/" + guildId + "/features"),
-        apiFetch("/api/guilds/" + guildId + "/setup"),
-        apiFetch("/api/guilds/" + guildId + "/warframe"),
-        apiFetch("/api/guilds/" + guildId + "/analytics"),
-        apiFetch("/api/guilds/" + guildId + "/audit?limit=50"),
-        apiFetch("/api/guilds/" + guildId + "/giveaways"),
-      ]);
-      state.overview = results[0];
-      state.inbox = results[1];
-      state.features = results[2];
-      state.setup = results[3];
-      state.warframe = results[4];
-      state.analytics = results[5];
-      state.audit = results[6];
-      state.giveaways = results[7];
+      clearGuildData();
+      await fetchCoreData(guildId);
+      var tab = state.activeTab || "overview";
+      if (TAB_FETCHERS[tab]) await fetchTabData(guildId, tab);
+      renderAll();
+    } catch (err) {
+      showError(err.message || String(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function refreshGuildData(quiet) {
+    if (!state.guildId) return;
+    if (!quiet) setLoading(true);
+    showError("");
+    try {
+      await fetchCoreData(state.guildId);
+      var tab = state.activeTab || "overview";
+      if (TAB_FETCHERS[tab]) await fetchTabData(state.guildId, tab);
       renderAll();
     } catch (err) {
       showError(err.message || String(err));
@@ -1377,7 +1448,7 @@
   function startAutoRefresh() {
     if (state.refreshTimer) clearInterval(state.refreshTimer);
     state.refreshTimer = setInterval(function () {
-      if (state.guildId && !state.loading) loadGuildData(state.guildId, true);
+      if (state.guildId && !state.loading) refreshGuildData(true);
     }, REFRESH_MS);
   }
 
@@ -1459,12 +1530,12 @@
     el("dash-login-btn").addEventListener("click", startLogin);
     el("dash-logout-btn").addEventListener("click", logout);
     el("dash-refresh-btn").addEventListener("click", function () {
-      if (state.guildId) loadGuildData(state.guildId, false);
+      if (state.guildId) refreshGuildData(false);
     });
     document.addEventListener("keydown", function (e) {
       if (e.key === "r" || e.key === "R") {
         if (document.activeElement && document.activeElement.tagName === "INPUT") return;
-        if (state.guildId) loadGuildData(state.guildId, false);
+        if (state.guildId) refreshGuildData(false);
       }
     });
 
