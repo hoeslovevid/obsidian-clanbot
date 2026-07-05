@@ -20,20 +20,44 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: web
-
   deploy:
-    needs: build
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - id: deployment
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+
+      - name: Deploy to GitHub Pages
+        id: deployment
         uses: actions/deploy-pages@v4
+        continue-on-error: true
+
+      - name: Retry deploy (attempt 2)
+        if: steps.deployment.outcome == 'failure'
+        id: deployment2
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+
+      - name: Retry deploy (attempt 3)
+        if: steps.deployment.outcome == 'failure' && steps.deployment2.outcome == 'failure'
+        id: deployment3
+        uses: actions/deploy-pages@v4
+
+      - name: Fail if deploy did not succeed
+        if: >-
+          steps.deployment.outcome == 'failure' &&
+          steps.deployment2.outcome == 'failure' &&
+          steps.deployment3.outcome == 'failure'
+        run: |
+          echo "GitHub Pages deploy failed after 3 attempts."
+          exit 1
