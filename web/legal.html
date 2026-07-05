@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Legal — Obsidian Overseer</title>
+  <link rel="icon" type="image/png" href="assets/logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #06070a;
+      --bg-gradient: radial-gradient(ellipse 100% 80% at 50% 0%, rgba(15, 12, 20, 0.98) 0%, transparent 50%),
+                    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(212, 140, 60, 0.08), transparent);
+      --surface: #0f1115;
+      --border: #2a2520;
+      --text: #f0ebe5;
+      --text-muted: #9a8f82;
+      --accent: #d4943c;
+      --radius: 14px;
+      --radius-sm: 10px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Outfit', sans-serif;
+      background: var(--bg);
+      background-image: var(--bg-gradient);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+    .container { max-width: 720px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+    nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 0 24px;
+    }
+    .nav-logo {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text);
+      text-decoration: none;
+    }
+    .nav-logo:hover { color: var(--accent); }
+    .nav-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.95rem;
+      font-weight: 500;
+      padding: 8px 14px;
+      border-radius: var(--radius-sm);
+    }
+    .nav-links a:hover { color: var(--text); background: var(--surface); }
+    .legal-page-title { font-size: 1.75rem; font-weight: 700; margin-bottom: 32px; color: var(--text); }
+    .legal-block {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px 36px;
+      margin-bottom: 32px;
+    }
+    .legal-block h2 { font-size: 1.25rem; font-weight: 700; margin-bottom: 16px; color: var(--text); }
+    .legal-block h3 { font-size: 1rem; font-weight: 600; margin: 22px 0 8px; color: var(--text); }
+    .legal-block p, .legal-block ul { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 12px; }
+    .legal-block ul { padding-left: 22px; }
+    .legal-block li { margin-bottom: 4px; }
+    .legal-nav { margin-bottom: 24px; }
+    .legal-nav a {
+      display: inline-block;
+      margin-right: 16px;
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .legal-nav a:hover { text-decoration: underline; }
+    footer {
+      text-align: center;
+      padding: 28px 0 36px;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      border-top: 1px solid var(--border);
+      margin-top: 40px;
+    }
+    footer a { color: var(--accent); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <nav>
+      <a href="index.html" class="nav-logo">Obsidian Overseer</a>
+      <div class="nav-links">
+        <a href="index.html#features">Features</a>
+        <a href="contact.html">Contact</a>
+        <a href="legal.html">Legal</a>
+      </div>
+    </nav>
+
+    <h1 class="legal-page-title">Legal</h1>
+    <div class="legal-nav">
+      <a href="#privacy">Privacy Policy</a>
+      <a href="#terms">Terms of Service</a>
+    </div>
+
+    <section class="legal-block" id="privacy">
+      <h2>Privacy Policy</h2>
+      <p><strong>Effective date:</strong> February 2025. <strong>Last updated:</strong> February 2025.</p>
+
+      <h3>1. Introduction</h3>
+      <p>Obsidian Overseer (“<strong>Bot</strong>,” “<strong>we</strong>,” “<strong>us</strong>,” or “<strong>our</strong>”) is a Discord bot operated for community and server management. This Privacy Policy explains what information we collect, how we use it, how we protect it, and your choices regarding your data. By inviting or using the Bot, or by using our website, you agree to this policy. If you do not agree, please do not use the Bot or our services.</p>
+
+      <h3>2. Information We Collect and Process</h3>
+      <p>We collect and process information only as necessary to provide and improve the Bot’s features. This may include:</p>
+      <ul>
+        <li><strong>Discord identifiers:</strong> User IDs, server (guild) IDs, channel IDs, and role IDs, which Discord provides to bots when you use them or when the Bot is present in a server.</li>
+        <li><strong>Server and usage data:</strong> Configuration choices made by server administrators (e.g. channels, roles, moderation settings) and data generated through Bot features (e.g. economy balances, XP, achievements, event RSVPs, ticket and application content).</li>
+        <li><strong>Message and content data:</strong> Message content, metadata, or attachments only when a feature explicitly requires it (e.g. moderation logs, suggestions, tickets, complaints) and as configured by your server’s staff. We do not read or store message content for purposes other than providing the features you or your server enable.</li>
+        <li><strong>Website and contact form:</strong> If you use the contact form on our website, we receive the information you submit (e.g. name, email, message), which may be delivered to us via third-party services (e.g. Discord webhooks). We use this only to respond to you.</li>
+      </ul>
+      <p>We do not collect or store payment information. We do not knowingly collect personal data from children under 13; if you believe a child has provided us data, please contact us so we can delete it.</p>
+
+      <h3>3. Legal Basis and Purpose</h3>
+      <p>We process your data to:</p>
+      <ul>
+        <li>Provide, operate, and maintain the Bot and its features (e.g. slash commands, economy, events, moderation tools).</li>
+        <li>Respond to your inquiries and support requests.</li>
+        <li>Improve the Bot and fix issues, in accordance with this policy and applicable law.</li>
+      </ul>
+      <p>Our processing is based on your use of the Bot (performance of a service), your or your server administrator’s configuration choices (legitimate interests), and where required by law, your consent. We do not sell your personal information or use it for advertising purposes.</p>
+
+      <h3>4. Third Parties and Discord</h3>
+      <p>The Bot runs on and integrates with Discord. Any data you provide to or through Discord is also subject to <a href="https://discord.com/privacy" target="_blank" rel="noopener noreferrer" style="color: var(--accent);">Discord’s Privacy Policy</a>. We may use hosting or infrastructure providers to run the Bot and store data; such providers process data on our instructions and in line with this policy. We do not share your data with third parties for their marketing.</p>
+
+      <h3>5. Data Retention and Deletion</h3>
+      <p>We retain data for as long as the Bot is present in a server or as needed to provide features and comply with legal obligations. When the Bot is removed from a server, we may delete or anonymize data associated with that server in accordance with our internal procedures. You may request deletion of your personal data by contacting us (see Contact below); we will respond in accordance with applicable law (e.g. GDPR, CCPA). Leaving a server that uses the Bot may also result in your server-specific data no longer being used for that server.</p>
+
+      <h3>6. Security</h3>
+      <p>We take reasonable technical and organizational measures to protect your data against unauthorized access, loss, or misuse. No method of transmission or storage is 100% secure; we cannot guarantee absolute security.</p>
+
+      <h3>7. Your Rights</h3>
+      <p>Depending on your location, you may have the right to: access your data, correct inaccuracies, request deletion, restrict or object to certain processing, data portability, and to withdraw consent where processing is consent-based. You may also have the right to lodge a complaint with a supervisory authority. To exercise these rights, contact us via the Contact section on the main website. We will respond within a reasonable time as required by applicable law.</p>
+
+      <h3>8. International Transfers</h3>
+      <p>Data may be processed or stored in countries other than your own. We ensure appropriate safeguards are in place where required by law (e.g. standard contractual clauses or adequacy decisions).</p>
+
+      <h3>9. Changes to This Policy</h3>
+      <p>We may update this Privacy Policy from time to time. We will post the updated policy on this page and update the “Last updated” date. Continued use of the Bot or our website after changes constitutes acceptance of the revised policy. We encourage you to review this page periodically.</p>
+
+      <h3>10. Contact</h3>
+      <p>For privacy-related questions, requests, or complaints, contact the developer team via the Contact page (<a href="contact.html" style="color: var(--accent);">contact.html</a>).</p>
+    </section>
+
+    <section class="legal-block" id="terms">
+      <h2>Terms of Service</h2>
+      <p><strong>Effective date:</strong> February 2025. <strong>Last updated:</strong> February 2025.</p>
+
+      <h3>1. Agreement to Terms</h3>
+      <p>These Terms of Service (“<strong>Terms</strong>”) govern your access to and use of Obsidian Overseer (the “<strong>Bot</strong>”) and any related website or services (together, the “<strong>Services</strong>”) operated by the Bot’s developer(s) (“<strong>we</strong>,” “<strong>us</strong>,” or “<strong>our</strong>”). By inviting the Bot to a Discord server, using the Bot, or using our website, you agree to be bound by these Terms and by Discord’s <a href="https://discord.com/terms" target="_blank" rel="noopener noreferrer" style="color: var(--accent);">Terms of Service</a> and <a href="https://discord.com/developers/docs/legal" target="_blank" rel="noopener noreferrer" style="color: var(--accent);">Developer Policy</a>. If you are using the Services on behalf of a server or organization, you represent that you have authority to bind that server or organization. If you do not agree to these Terms, do not use the Services.</p>
+
+      <h3>2. Description of Services</h3>
+      <p>The Bot provides Discord server management and community features, including but not limited to: voice channel tools, economy and XP systems, events and reminders, moderation tools, applications and tickets, Warframe-related information (e.g. Baro, cycles, alerts), and other functionality as described on our website. We reserve the right to modify, suspend, or discontinue any part of the Services at any time, with or without notice.</p>
+
+      <h3>3. Eligibility and Account Responsibility</h3>
+      <p>You must be at least 13 years of age (or the minimum age required in your jurisdiction to use Discord) to use the Services. You are responsible for maintaining the security of your Discord account and for all activity that occurs through your use of the Bot in servers you administer. Server administrators are responsible for configuring the Bot appropriately and for the conduct of users in their server in relation to Bot features.</p>
+
+      <h3>4. Acceptable Use</h3>
+      <p>You agree not to use the Bot or our website to:</p>
+      <ul>
+        <li>Violate any applicable law, regulation, or Discord’s Terms of Service, Community Guidelines, or Developer Policy.</li>
+        <li>Harass, abuse, defame, threaten, or harm others, or to promote violence, discrimination, or illegal activity.</li>
+        <li>Spam, automate abuse (e.g. mass-inviting the Bot to servers for improper purposes), or attempt to gain unauthorized access to our systems, Discord’s systems, or other users’ data.</li>
+        <li>Use the Bot in a way that disrupts or overburdens our infrastructure or Discord’s services, or that could harm the Bot’s availability for other users.</li>
+      </ul>
+      <p>We reserve the right to remove the Bot from servers or to restrict access for users who violate these Terms or for any other reason we deem necessary to protect the Services or others. Server staff are responsible for their server’s use of moderation and other Bot features.</p>
+
+      <h3>5. Intellectual Property</h3>
+      <p>The Bot, our website, and their content (excluding user-generated content and Discord’s property) are owned by us or our licensors. You do not acquire any ownership rights by using the Services. You may not copy, modify, distribute, or create derivative works of the Bot or our website without our prior written consent. “Obsidian Overseer” and related branding are used for this project; we are not affiliated with Discord Inc. or Digital Extremes (Warframe).</p>
+
+      <h3>6. Disclaimer of Warranties</h3>
+      <p>THE SERVICES ARE PROVIDED “AS IS” AND “AS AVAILABLE” WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED. TO THE FULLEST EXTENT PERMITTED BY LAW, WE DISCLAIM ALL WARRANTIES, INCLUDING BUT NOT LIMITED TO IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. WE DO NOT GUARANTEE THAT THE BOT OR WEBSITE WILL BE UNINTERRUPTED, ERROR-FREE, OR FREE OF HARMFUL COMPONENTS.</p>
+
+      <h3>7. Limitation of Liability</h3>
+      <p>TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, WE (AND OUR DEVELOPERS, HOSTS, AND AFFILIATES) SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR FOR ANY LOSS OF PROFITS, DATA, GOODWILL, OR OTHER INTANGIBLE LOSSES, ARISING OUT OF OR RELATED TO YOUR USE OR INABILITY TO USE THE SERVICES. IN NO EVENT SHALL OUR TOTAL LIABILITY EXCEED THE GREATER OF ONE HUNDRED U.S. DOLLARS (USD $100) OR THE AMOUNT YOU PAID US, IF ANY, IN THE TWELVE (12) MONTHS PRECEDING THE CLAIM. SOME JURISDICTIONS DO NOT ALLOW THE EXCLUSION OR LIMITATION OF CERTAIN DAMAGES; IN SUCH JURISDICTIONS, OUR LIABILITY SHALL BE LIMITED TO THE MAXIMUM EXTENT PERMITTED BY LAW.</p>
+
+      <h3>8. Indemnification</h3>
+      <p>You agree to indemnify, defend, and hold harmless us and our developers, hosts, and affiliates from and against any claims, damages, losses, liabilities, and expenses (including reasonable attorneys’ fees) arising out of or related to your use of the Services, your violation of these Terms, or your violation of any third-party rights or applicable law.</p>
+
+      <h3>9. Termination</h3>
+      <p>You may stop using the Bot at any time by removing it from your Discord server(s). We may suspend or terminate your or any server’s access to the Bot at any time, with or without notice, for any reason, including violation of these Terms. Upon termination, your right to use the Services ceases. Sections that by their nature should survive (including disclaimers, limitation of liability, indemnification, and governing law) will survive termination.</p>
+
+      <h3>10. Governing Law and Disputes</h3>
+      <p>These Terms shall be governed by and construed in accordance with the laws of the United States and the state or jurisdiction in which the developer(s) reside, without regard to conflict-of-law principles. Any dispute arising out of or relating to these Terms or the Services shall be resolved in the courts of that jurisdiction, and you consent to the personal jurisdiction of such courts. Nothing in these Terms limits your right to bring a claim in your country of residence if required by applicable law.</p>
+
+      <h3>11. Changes to the Terms</h3>
+      <p>We may modify these Terms from time to time. We will post the updated Terms on this page and update the “Last updated” date. Material changes may be communicated via our website or Discord server when feasible. Your continued use of the Services after the effective date of changes constitutes acceptance of the revised Terms. If you do not agree, you must stop using the Bot and our website.</p>
+
+      <h3>12. General</h3>
+      <p>If any provision of these Terms is held invalid or unenforceable, the remaining provisions will remain in effect. Our failure to enforce any right or provision does not waive that right or provision. These Terms constitute the entire agreement between you and us regarding the Services and supersede any prior agreements. We may assign these Terms; you may not assign them without our consent.</p>
+
+      <h3>13. Contact</h3>
+      <p>For questions about these Terms, contact the developer team via the Contact page (<a href="contact.html" style="color: var(--accent);">contact.html</a>).</p>
+    </section>
+
+    <footer>
+      <p><a href="index.html">← Back to Obsidian Overseer</a></p>
+    </footer>
+  </div>
+</body>
+</html>

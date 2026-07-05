@@ -11,7 +11,8 @@ Keep the repo organized by **folder**, not loose files at the root. When adding 
 | Discord UI (views) | `views/` | buttons, panels |
 | Background loops | `tasks/` | scheduled checks |
 | Event / interaction handlers | `handlers/` | startup, modals, components |
-| HTTP / external APIs | `api/` | Warframe API client |
+| HTTP / external APIs | `api/` | Warframe API client, dashboard HTTP API |
+| Static website | `web/` | GitHub Pages site (obsidianoverseer.com) |
 | Database tables / queries | `database/` | schema, accessors |
 | Bot class & events | `bot/` | `bot/app.py` |
 | Secrets & ignore rules | `config/` | `.env`, `.gitignore` |
@@ -64,6 +65,7 @@ obsidian_clanbot/
 ├── tasks/
 ├── views/
 ├── api/
+├── web/                   # static site (GitHub Pages → obsidianoverseer.com)
 ├── config/                # .env, .gitignore (canonical)
 ├── data/                  # SQLite default path
 ├── deploy/                # requirements, Procfile, mise, nixpacks (canonical)

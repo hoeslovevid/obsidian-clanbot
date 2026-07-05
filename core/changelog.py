@@ -12,12 +12,21 @@ from core.config import BOT_CHANGELOG, BOT_VERSION
 # Current release (version string comes from BOT_VERSION only).
 CURRENT_RELEASE_DATE = "2026-07-05"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Fix** — `/notifications` no longer crashes on open (use `original_response()` after discord.py 2.6 `send_message` change)",
-    "**Fix** — ephemeral refresh panels register using `guild_id` from payload when the message has no `.guild`",
+    "**Website monorepo** — `web/` from [obsidian-overseer-website](https://github.com/hoeslovevid/obsidian-overseer-website); GitHub Actions deploys Pages from `web/`",
+    "**Dashboard API** — optional HTTP API (`DASHBOARD_API_ENABLED`) for mod inbox, overview, and feature toggles; see `docs/DASHBOARD_API.md`",
+    "**Security** — contact webhook removed from committed HTML; rotate if the old website repo exposed it",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "2.3.2",
+        "date": "2026-07-05",
+        "changes": [
+            "**Fix** — `/notifications` no longer crashes on open (use `original_response()` after discord.py 2.6 `send_message` change)",
+            "**Fix** — ephemeral refresh panels register using `guild_id` from payload when the message has no `.guild`",
+        ],
+    },
     {
         "version": "2.3.1",
         "date": "2026-07-03",

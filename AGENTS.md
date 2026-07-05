@@ -8,6 +8,7 @@ Use [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md) for the full map. Qui
 
 - Commands → `commands/<category>/`
 - Shared logic → `core/`
+- Website (static) → `web/`
 - Views / tasks / handlers / api / database → matching package
 - Bot orchestration → `bot/`
 - Env & gitignore → `config/`

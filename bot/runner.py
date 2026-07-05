@@ -57,6 +57,10 @@ async def run_bot(bot) -> None:
         else:
             logger.info("[startup] Bot version tracking table verified")
 
+    from api.dashboard.server import start_dashboard_server, stop_dashboard_server
+
+    dashboard_runner = await start_dashboard_server(bot)
+
     try:
         await bot.start(TOKEN)
     except discord.errors.PrivilegedIntentsRequired:
@@ -84,3 +88,5 @@ async def run_bot(bot) -> None:
     except Exception as e:
         print(f"\n[error] Bot crashed: {e}")
         raise
+    finally:
+        await stop_dashboard_server(dashboard_runner)

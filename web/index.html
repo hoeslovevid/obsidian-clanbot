@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Obsidian Overseer — Warframe Discord Bot</title>
+  <meta name="description" content="The Warframe Discord bot for clans and communities. Baro, cycles, alerts, voice channels, economy, moderation, and more." />
+  <link rel="icon" type="image/png" href="assets/logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #06070a;
+      --bg-gradient: radial-gradient(ellipse 100% 80% at 50% 0%, rgba(15, 12, 20, 0.98) 0%, transparent 50%),
+                    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(212, 140, 60, 0.08), transparent),
+                    radial-gradient(ellipse 60% 40% at 80% 60%, rgba(230, 149, 42, 0.04), transparent);
+      --surface: #0f1115;
+      --surface2: #161a20;
+      --surface-hover: #1c2028;
+      --border: #2a2520;
+      --border-focus: #3d352c;
+      --text: #f0ebe5;
+      --text-muted: #9a8f82;
+      --text-subtle: #6b6156;
+      --matrix-orange: rgba(230, 149, 42, 0.5);
+      --matrix-orange-dim: rgba(212, 140, 60, 0.15);
+      --accent: #d4943c;
+      --accent-bright: #e8a84a;
+      --accent-dim: #b87828;
+      --accent-glow: rgba(212, 148, 60, 0.35);
+      --discord-blurple: #5865F2;
+      --discord-blurple-hover: #4752c4;
+      --radius: 14px;
+      --radius-lg: 20px;
+      --radius-sm: 10px;
+      --shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+      --shadow-lg: 0 12px 48px rgba(0, 0, 0, 0.5);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: 'Outfit', sans-serif;
+      background: var(--bg);
+      background-image: var(--bg-gradient);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Ambient drifting orbs (subtle animated background) */
+    .bg-ambient {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      overflow: hidden;
+    }
+
+    .bg-orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(80px);
+      opacity: 0.35;
+    }
+
+    .bg-orb-1 {
+      width:  min(80vw, 600px);
+      height: min(80vw, 600px);
+      background: radial-gradient(circle, rgba(230, 149, 42, 0.25) 0%, transparent 70%);
+      top:  -20%;
+      left: -10%;
+      animation: drift-1 25s ease-in-out infinite;
+    }
+
+    .bg-orb-2 {
+      width:  min(60vw, 400px);
+      height: min(60vw, 400px);
+      background: radial-gradient(circle, rgba(212, 140, 60, 0.2) 0%, transparent 70%);
+      top:  40%;
+      right: -15%;
+      animation: drift-2 30s ease-in-out infinite;
+    }
+
+    .bg-orb-3 {
+      width:  min(50vw, 320px);
+      height: min(50vw, 320px);
+      background: radial-gradient(circle, rgba(232, 168, 74, 0.18) 0%, transparent 70%);
+      bottom: -10%;
+      left:  20%;
+      animation: drift-3 22s ease-in-out infinite;
+    }
+
+    @keyframes drift-1 {
+      0%, 100% { transform: translate(0, 0) scale(1); }
+      33%      { transform: translate(5%, 8%) scale(1.05); }
+      66%      { transform: translate(-4%, 4%) scale(0.98); }
+    }
+
+    @keyframes drift-2 {
+      0%, 100% { transform: translate(0, 0) scale(1); }
+      50%      { transform: translate(-8%, -5%) scale(1.08); }
+    }
+
+    @keyframes drift-3 {
+      0%, 100% { transform: translate(0, 0); }
+      25%      { transform: translate(6%, -6%); }
+      75%      { transform: translate(-5%, 3%); }
+    }
+
+    /* Little orange galaxies */
+    .bg-galaxy {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(25px);
+      opacity: 0.5;
+      pointer-events: none;
+    }
+
+    .bg-galaxy-1 {
+      width:  min(35vw, 220px);
+      height: min(18vw, 100px);
+      background: radial-gradient(ellipse 100% 100% at 50% 50%,
+        rgba(230, 149, 42, 0.35) 0%,
+        rgba(212, 140, 60, 0.15) 40%,
+        transparent 70%);
+      top:  15%;
+      right: 8%;
+      animation: galaxy-with-stars 180s linear infinite;
+    }
+
+    .bg-galaxy-2 {
+      width:  min(28vw, 180px);
+      height: min(14vw, 85px);
+      background: radial-gradient(ellipse 100% 100% at 50% 50%,
+        rgba(232, 168, 74, 0.3) 0%,
+        rgba(212, 140, 60, 0.12) 45%,
+        transparent 75%);
+      bottom: 25%;
+      left: 5%;
+      animation: galaxy-with-stars 180s linear infinite;
+    }
+
+    .bg-galaxy-3 {
+      width:  min(22vw, 140px);
+      height: min(12vw, 70px);
+      background: radial-gradient(ellipse 100% 100% at 50% 50%,
+        rgba(230, 149, 42, 0.28) 0%,
+        rgba(200, 120, 50, 0.1) 50%,
+        transparent 70%);
+      top:  55%;
+      left: 25%;
+      animation: galaxy-with-stars 180s linear infinite;
+    }
+
+    .bg-galaxy-4 {
+      width:  min(20vw, 130px);
+      height: min(18vw, 90px);
+      background: radial-gradient(ellipse 100% 100% at 50% 50%,
+        rgba(212, 140, 60, 0.25) 0%,
+        rgba(230, 149, 42, 0.08) 45%,
+        transparent 72%);
+      top:  8%;
+      left: 40%;
+      animation: galaxy-with-stars 180s linear infinite;
+    }
+
+    /* Same 180s cycle as starfield — galaxies drift right and down with the stars */
+    @keyframes galaxy-with-stars {
+      0%   { transform: translate(0, 0); }
+      100% { transform: translate(6%, 4%); }
+    }
+
+    /* Space-style background: starfield + depth */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        radial-gradient(ellipse 120% 100% at 50% 100%, rgba(18, 14, 22, 0.7) 0%, transparent 55%),
+        radial-gradient(1.5px 1.5px at 20px 30px, rgba(255, 255, 255, 0.38), transparent),
+        radial-gradient(1px 1px at 90px 120px, rgba(255, 255, 255, 0.32), transparent),
+        radial-gradient(1.5px 1.5px at 160px 40px, rgba(255, 255, 255, 0.28), transparent),
+        radial-gradient(1px 1px at 250px 180px, rgba(230, 200, 150, 0.24), transparent),
+        radial-gradient(1.5px 1.5px at 320px 80px, rgba(255, 255, 255, 0.32), transparent),
+        radial-gradient(1px 1px at 50px 200px, rgba(255, 255, 255, 0.26), transparent),
+        radial-gradient(1px 1px at 280px 250px, rgba(230, 200, 150, 0.2), transparent),
+        radial-gradient(1.5px 1.5px at 140px 160px, rgba(255, 255, 255, 0.28), transparent),
+        radial-gradient(1px 1px at 380px 30px, rgba(255, 255, 255, 0.22), transparent);
+      background-size:
+        100% 100%,
+        400px 300px,
+        400px 300px,
+        400px 300px,
+        400px 300px,
+        400px 300px,
+        400px 300px,
+        400px 300px,
+        400px 300px,
+        400px 300px;
+      background-position:
+        0 0,
+        0 0,
+        30px 10px,
+        80px 60px,
+        120px 90px,
+        200px 20px,
+        10px 150px,
+        150px 180px,
+        60px 100px,
+        250px 50px;
+      background-repeat: repeat;
+      pointer-events: none;
+      z-index: 0;
+      animation: stars-drift 180s linear infinite;
+    }
+
+    @keyframes stars-drift {
+      0% {
+        background-position:
+          0 0,
+          0 0,
+          30px 10px,
+          80px 60px,
+          120px 90px,
+          200px 20px,
+          10px 150px,
+          150px 180px,
+          60px 100px,
+          250px 50px;
+      }
+      100% {
+        background-position:
+          0 0,
+          -400px -300px,
+          -370px -290px,
+          -320px -240px,
+          -280px -210px,
+          -200px -280px,
+          -390px -150px,
+          -250px -120px,
+          -340px -200px,
+          -150px -250px;
+      }
+    }
+
+    /* Subtle vignette (optional depth) */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(ellipse 80% 70% at 50% 50%, transparent 40%, rgba(0, 0, 0, 0.25) 100%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 0 28px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ----- Nav ----- */
+    nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 0 24px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .nav-logo {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--text);
+      text-decoration: none;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .nav-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.95rem;
+      font-weight: 500;
+      padding: 8px 14px;
+      border-radius: var(--radius-sm);
+      transition: color 0.2s, background 0.2s;
+    }
+
+    .nav-links a:hover {
+      color: var(--text);
+      background: var(--surface2);
+    }
+
+    /* ----- Hero ----- */
+    .hero {
+      text-align: center;
+      padding: 48px 0 56px;
+    }
+
+    .hero-badge {
+      display: inline-block;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin-bottom: 16px;
+    }
+
+    .hero-logo {
+      display: block;
+      width: 120px;
+      height: 120px;
+      margin: 0 auto 20px;
+      object-fit: contain;
+    }
+
+    .hero h1 {
+      font-size: clamp(2.5rem, 6vw, 3.5rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.15;
+      margin-bottom: 16px;
+      background: linear-gradient(160deg, var(--text) 0%, var(--text) 40%, var(--accent-bright) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero p {
+      font-size: 1.2rem;
+      color: var(--text-muted);
+      max-width: 520px;
+      margin: 0 auto 36px;
+      font-weight: 500;
+    }
+
+    /* ----- Invite CTA (primary) ----- */
+    .invite-hero {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .invite-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 18px 36px;
+      font-family: inherit;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #fff;
+      background: linear-gradient(135deg, var(--discord-blurple) 0%, var(--discord-blurple-hover) 100%);
+      border: none;
+      border-radius: var(--radius);
+      cursor: pointer;
+      text-decoration: none;
+      box-shadow: 0 6px 28px rgba(88, 101, 242, 0.4);
+      transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s;
+    }
+
+    .invite-btn:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 10px 36px rgba(88, 101, 242, 0.45);
+    }
+
+    .invite-btn:active {
+      transform: translateY(-1px);
+    }
+
+    .invite-btn svg {
+      width: 26px;
+      height: 26px;
+      flex-shrink: 0;
+    }
+
+    .invite-note {
+      font-size: 0.9rem;
+      color: var(--text-subtle);
+    }
+
+    .invite-note em { font-style: normal; color: var(--text-muted); }
+
+    /* ----- Section headings ----- */
+    .section-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 24px;
+      color: var(--text);
+      letter-spacing: -0.02em;
+    }
+
+    .section-subtitle {
+      font-size: 1rem;
+      color: var(--text-muted);
+      margin-top: -12px;
+      margin-bottom: 24px;
+      max-width: 560px;
+    }
+    .contact-cta .contact-cta-intro {
+      margin-left: auto;
+      margin-right: auto;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    /* ----- Features ----- */
+    .features {
+      padding: 56px 0 64px;
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 20px;
+    }
+
+    .feature-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s, background 0.2s;
+    }
+
+    .feature-card:hover {
+      border-color: var(--border-focus);
+      background: var(--surface2);
+      box-shadow: var(--shadow);
+      transform: translateY(-2px);
+    }
+
+    .feature-card .icon {
+      font-size: 1.75rem;
+      margin-bottom: 14px;
+      display: block;
+    }
+
+    .feature-card h3 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+
+    .feature-card p {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      line-height: 1.55;
+    }
+
+    /* ----- Contact ----- */
+    .contact {
+      padding: 56px 0 64px;
+      border-top: 1px solid var(--border);
+    }
+
+    .contact-cards {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      justify-content: center;
+    }
+
+    .contact-card {
+      display: inline-flex;
+      align-items: center;
+      gap: 14px;
+      padding: 20px 28px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      text-decoration: none;
+      color: var(--text);
+      font-weight: 600;
+      font-size: 1rem;
+      transition: border-color 0.2s, background 0.2s, transform 0.2s, box-shadow 0.2s;
+    }
+
+    .contact-card:hover {
+      border-color: var(--accent);
+      background: var(--surface2);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    }
+
+    .contact-card svg {
+      width: 24px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+
+    .contact-card.discord svg { color: var(--discord-blurple); }
+    .contact-card.email svg { color: var(--accent); }
+
+    .contact-card span:first-of-type { margin-right: 4px; }
+    .contact-card small {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .contact-note {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 0.95rem;
+      color: var(--text-muted);
+    }
+
+    .contact-note code {
+      font-size: 0.85em;
+      padding: 2px 6px;
+      background: var(--surface2);
+      border-radius: 4px;
+      color: var(--text-subtle);
+    }
+
+    /* ----- Contact form ----- */
+    .contact-form-wrap {
+      max-width: 480px;
+      margin: 28px auto 0;
+      padding: 28px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+
+    .contact-form-wrap h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 20px;
+      color: var(--text);
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .form-group input,
+    .form-group textarea {
+      width: 100%;
+      padding: 12px 14px;
+      font-family: inherit;
+      font-size: 0.95rem;
+      color: var(--text);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      transition: border-color 0.2s;
+    }
+
+    .form-group input:focus,
+    .form-group textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .form-group textarea {
+      min-height: 120px;
+      resize: vertical;
+    }
+
+    .form-group label .optional {
+      font-weight: 400;
+      color: var(--text-subtle);
+    }
+
+    .form-submit {
+      width: 100%;
+      padding: 14px;
+      font-family: inherit;
+      font-size: 1rem;
+      font-weight: 600;
+      color: #fff;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dim) 100%);
+      border: none;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+
+    .form-submit:hover:not(:disabled) {
+      opacity: 0.95;
+    }
+
+    .form-submit:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .form-message {
+      margin-top: 14px;
+      padding: 12px 14px;
+      font-size: 0.9rem;
+      border-radius: var(--radius-sm);
+      display: none;
+    }
+
+    .form-message.success {
+      display: block;
+      background: rgba(107, 207, 127, 0.15);
+      border: 1px solid rgba(107, 207, 127, 0.4);
+      color: var(--success, #6bcf7f);
+    }
+
+    .form-message.error {
+      display: block;
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #f87171;
+    }
+
+    /* ----- Developer ----- */
+    .developer {
+      padding: 40px 0 56px;
+    }
+
+    .developer-card {
+      max-width: 320px;
+      margin: 0 auto;
+      padding: 28px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      text-align: center;
+    }
+
+    .developer-avatar {
+      width: 96px;
+      height: 96px;
+      margin: 0 auto 16px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid var(--border);
+      background: var(--surface2);
+    }
+
+    .developer-avatar.placeholder {
+      object-fit: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2.25rem;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    .developer-name {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 12px;
+    }
+
+    .developer-msg {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 20px;
+      font-family: inherit;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #fff;
+      background: var(--discord-blurple);
+      border: none;
+      border-radius: var(--radius-sm);
+      text-decoration: none;
+      transition: background 0.2s, transform 0.1s;
+    }
+
+    .developer-msg:hover {
+      background: var(--discord-blurple-hover);
+      transform: translateY(-1px);
+    }
+
+    .developer-msg svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    /* ----- Footer ----- */
+    footer {
+      text-align: center;
+      padding: 28px 0 36px;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      border-top: 1px solid var(--border);
+    }
+
+    footer a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    footer a:hover { text-decoration: underline; }
+
+    /* Reflective shine on bold text (follows mouse) */
+    .text-reflective {
+      --shine-x: -100%;
+      --shine-y: -100%;
+      background: radial-gradient(
+        circle 140px at var(--shine-x) var(--shine-y),
+        rgba(255, 255, 255, 0.5) 0%,
+        transparent 60%
+      ), var(--text);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .hero h1.text-reflective {
+      background: radial-gradient(
+        circle 140px at var(--shine-x) var(--shine-y),
+        rgba(255, 255, 255, 0.5) 0%,
+        transparent 60%
+      ), linear-gradient(160deg, var(--text) 0%, var(--text) 40%, var(--accent-bright) 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .hero-badge.text-reflective,
+    .nav-logo.text-reflective {
+      background: radial-gradient(
+        circle 100px at var(--shine-x) var(--shine-y),
+        rgba(255, 255, 255, 0.5) 0%,
+        transparent 55%
+      ), var(--accent);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-ambient" aria-hidden="true">
+    <span class="bg-orb bg-orb-1"></span>
+    <span class="bg-orb bg-orb-2"></span>
+    <span class="bg-orb bg-orb-3"></span>
+    <span class="bg-galaxy bg-galaxy-1"></span>
+    <span class="bg-galaxy bg-galaxy-2"></span>
+    <span class="bg-galaxy bg-galaxy-3"></span>
+    <span class="bg-galaxy bg-galaxy-4"></span>
+  </div>
+  <div class="container">
+    <nav>
+      <a href="#" class="nav-logo">Obsidian Overseer</a>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="contact.html">Contact</a>
+        <a href="legal.html">Legal</a>
+      </div>
+    </nav>
+
+    <header class="hero">
+      <span class="hero-badge">Warframe Discord Bot</span>
+      <img src="assets/logo.png" alt="Obsidian Overseer" class="hero-logo" />
+      <h1>The Warframe bot for your clan and community.</h1>
+      <p>Built for Warframe Discord servers: Baro, cycles, alerts, voice channels, economy, moderation, events, and more. Add Obsidian Overseer in one click.</p>
+      <div class="invite-hero">
+        <a id="invite-link" class="invite-btn" href="#" target="_blank" rel="noopener noreferrer">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
+          Add to Discord
+        </a>
+        <p class="invite-note">You need <em>Manage Server</em> permission to add the bot.</p>
+      </div>
+    </header>
+
+    <section class="features" id="features">
+      <h2 class="section-title">What Obsidian Overseer can do</h2>
+      <p class="section-subtitle">Built for Warframe clans and communities—voice, economy, Baro &amp; cycles, alerts, moderation, and more.</p>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <span class="icon">🎤</span>
+          <h3>Voice</h3>
+          <p>Join-to-create temporary voice channels, rename, limit, lock, and control panels.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon">📋</span>
+          <h3>Complaints & Tickets</h3>
+          <p>File complaints with staff threading, support tickets, and suggestion channels.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon">📅</span>
+          <h3>Events</h3>
+          <p>Create events with RSVP buttons, natural-language times, and reminders.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon">💰</span>
+          <h3>Economy</h3>
+          <p>Coins, XP, levels, shop, pets, achievements, bounties, and leaderboards.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon">🛡️</span>
+          <h3>Moderation</h3>
+          <p>Purge, warn, automod, reaction roles, logging, starboard, and raid protection.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon">👥</span>
+          <h3>Community</h3>
+          <p>Applications, giveaways, reminders, reputation, polls, and Twitch notifications.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon">🎮</span>
+          <h3>Warframe</h3>
+          <p>Baro, cycles, alerts, fissures, sortie, LFG, drop tables, link account, and notifications.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon">💼</span>
+          <h3>Trading</h3>
+          <p>Trading post, market price lookup, and Warframe market search.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon">🎵</span>
+          <h3>Music</h3>
+          <p>Play, pause, skip, and manage music in voice channels.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="contact-cta" style="padding: 40px 0 48px; text-align: center; border-top: 1px solid var(--border);">
+      <h2 class="section-title">Need help or have feedback?</h2>
+      <p class="section-subtitle contact-cta-intro">For support, questions, or suggestions, our team is here to help.</p>
+      <a href="contact.html" class="invite-btn" style="text-decoration: none;">Contact us</a>
+    </section>
+
+    <section class="developer">
+      <h2 class="section-title">Developer</h2>
+      <div class="developer-card">
+        <div id="developer-avatar-wrap" style="display: flex; justify-content: center;">
+          <img id="developer-avatar" class="developer-avatar" src="" alt="" style="display: none;" />
+          <div id="developer-avatar-placeholder" class="developer-avatar placeholder" style="display: none;"></div>
+        </div>
+        <p id="developer-name" class="developer-name">Danger!</p>
+        <a id="developer-msg-link" class="developer-msg" href="#" target="_blank" rel="noopener noreferrer" style="display: none;">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
+          Join our Discord
+        </a>
+      </div>
+    </section>
+
+    <footer>
+      <p>Obsidian Overseer — a Warframe Discord bot for clans and communities. Not affiliated with Discord or Warframe. <a href="legal.html#privacy">Privacy Policy</a> · <a href="legal.html#terms">Terms of Service</a></p>
+    </footer>
+  </div>
+
+  <script>
+    // ——— Config: set these for your bot and contact ———
+    const BOT_CLIENT_ID = '1460107752658440223';
+    const PERMISSIONS = '277025508160';
+    const SCOPE = 'bot%20applications.commands';
+
+    // Developer card: name, avatar image, and optional Discord message link
+    const DEVELOPER_NAME = 'Danger!';
+    const DEVELOPER_IMAGE = 'assets/developer.png';  // e.g. 'assets/developer.png' or full URL — leave empty for initial placeholder
+    const DEVELOPER_DISCORD_LINK = 'https://discord.gg/cNchBqnhjy';  // Discord server invite — link shown on the Developer card
+
+    // ——— Invite link ———
+    const inviteUrl = BOT_CLIENT_ID && BOT_CLIENT_ID !== 'YOUR_BOT_CLIENT_ID'
+      ? `https://discord.com/api/oauth2/authorize?client_id=${BOT_CLIENT_ID}&permissions=${PERMISSIONS}&scope=${SCOPE}`
+      : '#';
+
+    document.getElementById('invite-link').href = inviteUrl;
+    if (inviteUrl === '#') {
+      document.getElementById('invite-link').addEventListener('click', function(e) {
+        e.preventDefault();
+        alert('Please set BOT_CLIENT_ID in index.html to your bot\'s Application ID from the Discord Developer Portal.');
+      });
+    }
+
+    // ——— Developer card ———
+    (function() {
+      document.getElementById('developer-name').textContent = DEVELOPER_NAME || 'Developer';
+      var avatarImg = document.getElementById('developer-avatar');
+      var placeholder = document.getElementById('developer-avatar-placeholder');
+      if (DEVELOPER_IMAGE && DEVELOPER_IMAGE.trim()) {
+        avatarImg.src = DEVELOPER_IMAGE.trim();
+        avatarImg.alt = DEVELOPER_NAME + ' avatar';
+        avatarImg.style.display = 'block';
+        avatarImg.onerror = function() {
+          avatarImg.style.display = 'none';
+          placeholder.textContent = (DEVELOPER_NAME || 'D').charAt(0);
+          placeholder.style.display = 'flex';
+        };
+      } else {
+        placeholder.textContent = (DEVELOPER_NAME || 'D').charAt(0);
+        placeholder.style.display = 'flex';
+      }
+      var msgLink = document.getElementById('developer-msg-link');
+      if (DEVELOPER_DISCORD_LINK && DEVELOPER_DISCORD_LINK.trim()) {
+        msgLink.href = DEVELOPER_DISCORD_LINK.trim();
+        msgLink.style.display = 'inline-flex';
+      }
+    })();
+
+    // ——— Legal tabs ———
+    // ——— Reflective shine (follows mouse on bold text) ———
+    (function() {
+      var selector = 'h1, h2, h3, .section-title, .hero-badge, .nav-logo, b, strong';
+      var reflectiveEls = document.querySelectorAll(selector);
+      reflectiveEls.forEach(function(el) { el.classList.add('text-reflective'); });
+
+      function updateShine(e) {
+        var x = e.clientX;
+        var y = e.clientY;
+        reflectiveEls.forEach(function(el) {
+          var r = el.getBoundingClientRect();
+          if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
+            var pctX = ((x - r.left) / r.width) * 100;
+            var pctY = ((y - r.top) / r.height) * 100;
+            el.style.setProperty('--shine-x', pctX + '%');
+            el.style.setProperty('--shine-y', pctY + '%');
+          } else {
+            el.style.setProperty('--shine-x', '-100%');
+            el.style.setProperty('--shine-y', '-100%');
+          }
+        });
+      }
+
+      document.addEventListener('mousemove', updateShine);
+    })();
+  </script>
+</body>
+</html>

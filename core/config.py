@@ -61,10 +61,10 @@ DATABASE_URL = os.getenv("DATABASE_URL", "").strip() or None
 # Single source of truth for /about, /whatsnew, /status, release announce, and slash-command sync.
 # Set BOT_VERSION on Railway to match each production release; keep this code default in sync.
 # On release: bump BOT_VERSION here (and on Railway), then update CURRENT_RELEASE_* in core/changelog.py.
-BOT_VERSION = os.getenv("BOT_VERSION", "2.3.2")
+BOT_VERSION = os.getenv("BOT_VERSION", "2.3.3")
 BOT_CHANGELOG = os.getenv(
     "BOT_CHANGELOG",
-    "v2.3.2 — Fix /notifications panel registration (discord.py 2.6); see /whatsnew.",
+    "v2.3.3 — Web dashboard API; website monorepo (web/); see /whatsnew.",
 )
 
 # Presence rotation: default | menu | degraded | event
@@ -122,3 +122,24 @@ CYCLE_LIVE_UPDATE_MINUTES = os.getenv("CYCLE_LIVE_UPDATE_MINUTES", "5")
 EMBED_BANNER_URL = os.getenv("EMBED_BANNER_URL", "").strip() or None
 EMBED_LOGO_URL = os.getenv("EMBED_LOGO_URL", "").strip() or None
 GITHUB_RAW_REPO = os.getenv("GITHUB_RAW_REPO", "hoeslovevid/obsidian-clanbot").strip()
+
+# --- Web dashboard API (optional HTTP server for external site integration) ---
+DASHBOARD_API_ENABLED = os.getenv("DASHBOARD_API_ENABLED", "false").lower() in (
+    "1", "true", "yes", "y", "on",
+)
+# Railway sets PORT; fall back to DASHBOARD_API_PORT for local dev.
+DASHBOARD_API_PORT = int(os.getenv("PORT", os.getenv("DASHBOARD_API_PORT", "8080")) or "8080")
+# Shared secret for your website backend (never expose to the browser).
+DASHBOARD_API_SECRET = (os.getenv("DASHBOARD_API_SECRET") or "").strip() or None
+# Comma-separated origins for CORS (defaults to BOT_WEBSITE when set).
+_cors_raw = os.getenv("DASHBOARD_CORS_ORIGINS", "").strip()
+if _cors_raw:
+    DASHBOARD_CORS_ORIGINS: tuple[str, ...] = tuple(
+        o.strip() for o in _cors_raw.split(",") if o.strip()
+    )
+elif BOT_WEBSITE:
+    DASHBOARD_CORS_ORIGINS = (BOT_WEBSITE.rstrip("/"),)
+else:
+    DASHBOARD_CORS_ORIGINS = ()
+# Discord OAuth app client id (same app as the bot) — used in /api/auth docs only.
+DISCORD_CLIENT_ID = (os.getenv("DISCORD_CLIENT_ID") or "").strip() or None

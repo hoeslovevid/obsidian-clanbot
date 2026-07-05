@@ -1,0 +1,8 @@
+# Build and publish the site as static files (no build command needed).
+[build]
+  publish = "."
+  functions = "netlify/functions"
+
+# Optional: redirect SPA-style routes to index.html if you add client-side routing later.
+# [build.processing]
+#   skip_processing = false
