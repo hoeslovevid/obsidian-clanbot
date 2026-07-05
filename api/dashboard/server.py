@@ -24,11 +24,15 @@ from core.config import (
 )
 from core.dashboard_data import (
     fetch_bot_health,
+    fetch_guild_analytics,
+    fetch_guild_audit_log,
     fetch_guild_dashboard_overview,
     fetch_guild_features,
     fetch_guild_inbox_summary,
     fetch_guild_setup_health,
+    fetch_warframe_snapshot,
     list_manageable_guilds,
+    search_guild_dashboard,
     set_guild_feature,
 )
 
@@ -177,6 +181,48 @@ async def handle_guild_setup(request: web.Request) -> web.Response:
     return _json(await fetch_guild_setup_health(guild_id, bot))
 
 
+async def handle_guild_warframe(request: web.Request) -> web.Response:
+    bot: discord.Client = request.app["bot"]
+    guild_id = int(request.match_info["guild_id"])
+    auth = await authenticate(request, bot)
+    await require_guild_admin(request, bot, guild_id, auth)
+    return _json(await fetch_warframe_snapshot())
+
+
+async def handle_guild_analytics(request: web.Request) -> web.Response:
+    bot: discord.Client = request.app["bot"]
+    guild_id = int(request.match_info["guild_id"])
+    auth = await authenticate(request, bot)
+    await require_guild_admin(request, bot, guild_id, auth)
+    return _json(await fetch_guild_analytics(guild_id, bot))
+
+
+async def handle_guild_audit(request: web.Request) -> web.Response:
+    bot: discord.Client = request.app["bot"]
+    guild_id = int(request.match_info["guild_id"])
+    auth = await authenticate(request, bot)
+    await require_guild_admin(request, bot, guild_id, auth)
+    search = request.query.get("q") or request.query.get("search")
+    try:
+        limit = int(request.query.get("limit") or 50)
+    except ValueError:
+        limit = 50
+    return _json(await fetch_guild_audit_log(guild_id, bot, search=search, limit=limit))
+
+
+async def handle_guild_search(request: web.Request) -> web.Response:
+    bot: discord.Client = request.app["bot"]
+    guild_id = int(request.match_info["guild_id"])
+    auth = await authenticate(request, bot)
+    await require_guild_admin(request, bot, guild_id, auth)
+    q = request.query.get("q") or ""
+    try:
+        limit = int(request.query.get("limit") or 25)
+    except ValueError:
+        limit = 25
+    return _json(await search_guild_dashboard(guild_id, bot, q, limit=limit))
+
+
 async def handle_contact(request: web.Request) -> web.Response:
     """Public contact form — forwards to CONTACT_WEBHOOK_URL (rate-limited)."""
     if request.method == "OPTIONS":
@@ -271,6 +317,10 @@ def create_app(bot: discord.Client) -> web.Application:
     app.router.add_get("/api/guilds/{guild_id}/features", handle_guild_features_get)
     app.router.add_patch("/api/guilds/{guild_id}/features", handle_guild_features_patch)
     app.router.add_get("/api/guilds/{guild_id}/setup", handle_guild_setup)
+    app.router.add_get("/api/guilds/{guild_id}/warframe", handle_guild_warframe)
+    app.router.add_get("/api/guilds/{guild_id}/analytics", handle_guild_analytics)
+    app.router.add_get("/api/guilds/{guild_id}/audit", handle_guild_audit)
+    app.router.add_get("/api/guilds/{guild_id}/search", handle_guild_search)
     app.router.add_route("*", "/api/contact", handle_contact)
     return app
 

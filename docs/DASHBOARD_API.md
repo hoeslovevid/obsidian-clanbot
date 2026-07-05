@@ -65,8 +65,14 @@ Requires scopes: `identify`, `guilds`.
 | GET | `/api/guilds` | yes | Same guild list |
 | GET | `/api/guilds/{id}/inbox` | yes + admin | Ticket/app/LFG/suggestion counts |
 | GET | `/api/guilds/{id}/overview` | yes + admin | Full mod dashboard JSON |
+| GET | `/api/guilds/{id}/setup` | yes + admin | Setup health checklist (channels, roles, features) |
 | GET | `/api/guilds/{id}/features` | yes + admin | Feature toggle states |
 | PATCH | `/api/guilds/{id}/features` | yes + admin | `{"feature":"music","enabled":true}` |
+| GET | `/api/guilds/{id}/warframe` | yes + admin | Baro Ki'Teer status + open-world cycles |
+| GET | `/api/guilds/{id}/analytics` | yes + admin | Activity stats, daily command chart, economy volume |
+| GET | `/api/guilds/{id}/audit` | yes + admin | Moderation audit timeline; optional `?q=` filter, `?limit=` (max 100) |
+| GET | `/api/guilds/{id}/search` | yes + admin | Search open tickets, applications, warnings; `?q=` (min 2 chars) |
+| POST | `/api/contact` | none (rate-limited) | Public contact form → `CONTACT_WEBHOOK_URL` |
 
 ## Example: Next.js API route
 
@@ -123,6 +129,71 @@ DASHBOARD_API_SECRET=same_value_as_on_railway_bot_service
   "tickets": [{ "ticket_id": "T-001", "subject": "...", "jump_url": "https://discord.com/channels/..." }],
   "applications": [],
   "warnings": []
+}
+```
+
+## Response shape (warframe)
+
+```json
+{
+  "baro": {
+    "active": true,
+    "available": true,
+    "location": "Larunda Relay",
+    "expiry": "2026-07-06T18:00:00.000Z",
+    "inventory_count": 12,
+    "inventory_preview": [{ "name": "Primed Flow", "ducats": 350, "credits": 110000 }]
+  },
+  "cycles": [
+    { "id": "cetus", "name": "Cetus (Plains)", "state": "day", "label": "Day", "expiry": "..." }
+  ]
+}
+```
+
+## Response shape (analytics)
+
+```json
+{
+  "guild_id": 123,
+  "member_count": 450,
+  "active_users_7d": 42,
+  "commands_7d": 1280,
+  "economy_volume_7d": 95000,
+  "top_members": [{ "user_id": "...", "user_name": "Player", "weekly_score": 120 }],
+  "daily_activity": [{ "date": "2026-07-01", "commands": 95 }],
+  "counts": { "open_tickets": 3, "pending_apps": 1, "open_lfg": 2 }
+}
+```
+
+## Response shape (audit / search)
+
+Audit entries use a unified timeline:
+
+```json
+{
+  "guild_id": 123,
+  "entries": [
+    {
+      "id": "warn-123-2026-07-01T12:00:00",
+      "type": "warning",
+      "timestamp": "2026-07-01T12:00:00",
+      "actor_name": "ModName",
+      "target_name": "UserName",
+      "summary": "Spam in general"
+    }
+  ],
+  "total": 1
+}
+```
+
+Search returns cross-type hits:
+
+```json
+{
+  "query": "T-001",
+  "results": [
+    { "kind": "ticket", "id": "T-001", "title": "Help request", "subtitle": "UserName", "jump_url": "https://discord.com/channels/..." }
+  ]
 }
 ```
 

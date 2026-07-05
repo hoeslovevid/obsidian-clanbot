@@ -41,6 +41,10 @@
           <select id="guild-select" class="dash-guild-select" aria-label="Select server"></select>
         </div>
         <div class="dash-topbar-actions">
+          <div class="dash-search-wrap">
+            <input type="search" id="dash-search" class="dash-search" placeholder="Search tickets, apps, warnings…" aria-label="Search dashboard" autocomplete="off" />
+            <div id="dash-search-results" class="dash-search-results" hidden></div>
+          </div>
           <span id="dash-refreshed" class="dash-meta"></span>
           <button type="button" class="dash-btn dash-btn-ghost dash-btn-sm" id="dash-refresh-btn" title="Refresh (R)">↻ Refresh</button>
           <div class="dash-user-chip" id="dash-user-chip">
@@ -58,6 +62,9 @@
         <button type="button" class="dash-tab active" data-tab="overview" role="tab">Overview</button>
         <button type="button" class="dash-tab" data-tab="inbox" role="tab">Inbox</button>
         <button type="button" class="dash-tab" data-tab="moderation" role="tab">Moderation</button>
+        <button type="button" class="dash-tab" data-tab="warframe" role="tab">Warframe</button>
+        <button type="button" class="dash-tab" data-tab="analytics" role="tab">Analytics</button>
+        <button type="button" class="dash-tab" data-tab="audit" role="tab">Audit</button>
         <button type="button" class="dash-tab" data-tab="features" role="tab">Features</button>
         <button type="button" class="dash-tab" data-tab="setup" role="tab">Setup</button>
       </div>
@@ -74,6 +81,7 @@
       </div>
 
       <div id="tab-overview" class="dash-tab-panel active" role="tabpanel">
+        <div id="dash-baro-mini" class="dash-panel dash-baro-mini"></div>
         <div id="dash-stats" class="dash-stats"></div>
         <div class="dash-panel">
           <h2>⚡ Needs attention</h2>
@@ -100,6 +108,23 @@
         <div class="dash-panel">
           <h2>⚠️ Recent warnings</h2>
           <div id="dash-warnings"></div>
+        </div>
+      </div>
+
+      <div id="tab-warframe" class="dash-tab-panel" role="tabpanel">
+        <div id="dash-warframe"></div>
+      </div>
+
+      <div id="tab-analytics" class="dash-tab-panel" role="tabpanel">
+        <div id="dash-analytics"></div>
+      </div>
+
+      <div id="tab-audit" class="dash-tab-panel" role="tabpanel">
+        <div class="dash-panel">
+          <div class="dash-audit-toolbar">
+            <input type="search" id="dash-audit-filter" class="dash-search dash-search-inline" placeholder="Filter audit log…" aria-label="Filter audit log" />
+          </div>
+          <div id="dash-audit"></div>
         </div>
       </div>
 

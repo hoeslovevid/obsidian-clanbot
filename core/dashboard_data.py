@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import time
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
 import aiosqlite  # type: ignore
@@ -378,3 +378,349 @@ async def fetch_guild_setup_health(guild_id: int, bot: discord.Client) -> dict[s
             {"id": "community", "title": "Community", "items": _parse_setup_block(extra_block)},
         ],
     }
+
+
+def _parse_iso_ts(raw: Optional[str]) -> Optional[str]:
+    if not raw:
+        return None
+    return str(raw)
+
+
+async def fetch_warframe_snapshot() -> dict[str, Any]:
+    """Baro + open-world cycles for the dashboard Warframe tab."""
+    from api.warframe_api import get_all_cycles, get_baro_status
+    from commands.warframe.baro import _parse_baro_item_name
+
+    is_active, baro_data = await get_baro_status()
+    baro: dict[str, Any] = {"active": False, "available": baro_data is not None}
+    if baro_data:
+        inventory = baro_data.get("inventory") or []
+        baro = {
+            "active": bool(is_active),
+            "available": True,
+            "location": baro_data.get("location") or "Unknown",
+            "activation": baro_data.get("activation"),
+            "expiry": baro_data.get("expiry"),
+            "inventory_pending": bool(baro_data.get("_inventory_pending")) and not inventory,
+            "inventory_count": len(inventory),
+            "inventory_preview": [
+                {
+                    "name": _parse_baro_item_name(item),
+                    "ducats": int(item.get("ducats") or item.get("ducatPrice") or 0),
+                    "credits": int(item.get("credits") or item.get("creditPrice") or 0),
+                }
+                for item in inventory[:8]
+            ],
+        }
+
+    cycles_raw = await get_all_cycles()
+    cycles: list[dict[str, Any]] = []
+    labels = {"cetus": "Cetus (Plains)", "vallis": "Orb Vallis", "cambion": "Cambion Drift"}
+    for key, label in labels.items():
+        c = (cycles_raw or {}).get(key) if cycles_raw else None
+        if not c:
+            cycles.append({"id": key, "name": label, "state": "unknown"})
+            continue
+        is_day = c.get("isDay")
+        cycles.append(
+            {
+                "id": key,
+                "name": label,
+                "state": "day" if is_day else "night",
+                "label": "Day" if is_day else "Night",
+                "expiry": c.get("expiry"),
+            }
+        )
+
+    return {"baro": baro, "cycles": cycles}
+
+
+async def fetch_guild_analytics(guild_id: int, bot: discord.Client) -> dict[str, Any]:
+    """Guild activity and economy snapshot for charts."""
+    guild = bot.get_guild(guild_id)
+    since_7d = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    since_14d = (datetime.now(timezone.utc) - timedelta(days=14)).isoformat()
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            """
+            SELECT user_id, weekly_score, commands_used, events_attended, voice_minutes
+            FROM activity_stats
+            WHERE guild_id=? AND weekly_score > 0
+            ORDER BY weekly_score DESC, commands_used DESC
+            LIMIT 8
+            """,
+            (guild_id,),
+        )
+        top_rows = await cur.fetchall()
+
+        cur = await db.execute(
+            """
+            SELECT COUNT(DISTINCT user_id) FROM activity_log
+            WHERE guild_id=? AND activity_date >= ?
+            """,
+            (guild_id, since_7d),
+        )
+        active_users_7d = int((await cur.fetchone())[0] or 0)
+
+        cur = await db.execute(
+            """
+            SELECT COUNT(*) FROM activity_log
+            WHERE guild_id=? AND activity_type='command' AND activity_date >= ?
+            """,
+            (guild_id, since_7d),
+        )
+        commands_7d = int((await cur.fetchone())[0] or 0)
+
+        cur = await db.execute(
+            """
+            SELECT COALESCE(SUM(amount), 0) FROM economy_transactions
+            WHERE guild_id=? AND created_at >= ? AND amount > 0
+            """,
+            (guild_id, since_7d),
+        )
+        economy_volume_7d = int((await cur.fetchone())[0] or 0)
+
+        cur = await db.execute(
+            """
+            SELECT date(activity_date) AS d, COUNT(*) AS c
+            FROM activity_log
+            WHERE guild_id=? AND activity_type='command' AND activity_date >= ?
+            GROUP BY date(activity_date)
+            ORDER BY d ASC
+            """,
+            (guild_id, since_14d),
+        )
+        daily_rows = await cur.fetchall()
+
+        cur = await db.execute(
+            "SELECT COUNT(*) FROM tickets WHERE guild_id=? AND status='open'",
+            (guild_id,),
+        )
+        open_tickets = int((await cur.fetchone())[0] or 0)
+        cur = await db.execute(
+            "SELECT COUNT(*) FROM applications WHERE guild_id=? AND status='PENDING'",
+            (guild_id,),
+        )
+        pending_apps = int((await cur.fetchone())[0] or 0)
+        cur = await db.execute(
+            "SELECT COUNT(*) FROM lfg_posts WHERE guild_id=? AND status='OPEN'",
+            (guild_id,),
+        )
+        open_lfg = int((await cur.fetchone())[0] or 0)
+
+    top_members = [
+        {
+            "user_id": uid,
+            "user_name": _member_label(guild, uid),
+            "weekly_score": score,
+            "commands_used": cmds,
+            "events_attended": events,
+            "voice_minutes": voice,
+        }
+        for uid, score, cmds, events, voice in top_rows
+    ]
+
+    daily_activity = [{"date": str(d), "commands": int(c)} for d, c in daily_rows if d]
+
+    return {
+        "guild_id": guild_id,
+        "member_count": guild.member_count if guild else None,
+        "active_users_7d": active_users_7d,
+        "commands_7d": commands_7d,
+        "economy_volume_7d": economy_volume_7d,
+        "top_members": top_members,
+        "daily_activity": daily_activity,
+        "counts": {
+            "open_tickets": open_tickets,
+            "pending_apps": pending_apps,
+            "open_lfg": open_lfg,
+        },
+    }
+
+
+async def fetch_guild_audit_log(
+    guild_id: int,
+    bot: discord.Client,
+    *,
+    search: Optional[str] = None,
+    limit: int = 50,
+) -> dict[str, Any]:
+    """Unified moderation audit timeline."""
+    guild = bot.get_guild(guild_id)
+    limit = max(1, min(limit, 100))
+    entries: list[dict[str, Any]] = []
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            """
+            SELECT user_id, reason, moderator_id, created_at FROM warnings
+            WHERE guild_id=? ORDER BY created_at DESC LIMIT ?
+            """,
+            (guild_id, limit),
+        )
+        for uid, reason, mod_id, created in await cur.fetchall():
+            entries.append(
+                {
+                    "id": f"warn-{uid}-{created}",
+                    "type": "warning",
+                    "timestamp": _parse_iso_ts(created),
+                    "actor_id": mod_id,
+                    "actor_name": _member_label(guild, mod_id),
+                    "target_id": uid,
+                    "target_name": _member_label(guild, uid),
+                    "summary": reason or "Warning issued",
+                }
+            )
+
+        cur = await db.execute(
+            """
+            SELECT case_id, actor_id, action, note, created_at FROM complaint_actions
+            WHERE guild_id=? ORDER BY created_at DESC LIMIT ?
+            """,
+            (guild_id, limit),
+        )
+        for case_id, actor_id, action, note, created in await cur.fetchall():
+            entries.append(
+                {
+                    "id": f"complaint-{case_id}-{created}",
+                    "type": "complaint",
+                    "timestamp": _parse_iso_ts(created),
+                    "actor_id": actor_id,
+                    "actor_name": _member_label(guild, actor_id),
+                    "target_id": None,
+                    "target_name": case_id,
+                    "summary": f"{action}" + (f" — {note}" if note else ""),
+                }
+            )
+
+        cur = await db.execute(
+            """
+            SELECT ticket_id, subject, user_id, closed_by, closed_at FROM tickets
+            WHERE guild_id=? AND status='closed' AND closed_at IS NOT NULL
+            ORDER BY closed_at DESC LIMIT ?
+            """,
+            (guild_id, limit),
+        )
+        for ticket_id, subject, uid, closed_by, closed_at in await cur.fetchall():
+            entries.append(
+                {
+                    "id": f"ticket-close-{ticket_id}-{closed_at}",
+                    "type": "ticket_closed",
+                    "timestamp": _parse_iso_ts(closed_at),
+                    "actor_id": closed_by,
+                    "actor_name": _member_label(guild, closed_by or 0),
+                    "target_id": uid,
+                    "target_name": _member_label(guild, uid),
+                    "summary": f"Closed ticket {ticket_id}: {subject or '—'}",
+                }
+            )
+
+    entries.sort(key=lambda e: e.get("timestamp") or "", reverse=True)
+
+    if search:
+        q = search.strip().lower()
+        entries = [
+            e
+            for e in entries
+            if q in (e.get("summary") or "").lower()
+            or q in (e.get("actor_name") or "").lower()
+            or q in (e.get("target_name") or "").lower()
+            or q in str(e.get("type") or "").lower()
+        ]
+
+    return {"guild_id": guild_id, "entries": entries[:limit], "total": len(entries)}
+
+
+async def search_guild_dashboard(
+    guild_id: int,
+    bot: discord.Client,
+    query: str,
+    *,
+    limit: int = 25,
+) -> dict[str, Any]:
+    """Search tickets, applications, and warnings."""
+    guild = bot.get_guild(guild_id)
+    q = (query or "").strip()
+    if len(q) < 2:
+        return {"query": q, "results": []}
+    limit = max(1, min(limit, 50))
+    like = f"%{q}%"
+    results: list[dict[str, Any]] = []
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            """
+            SELECT ticket_id, subject, user_id, channel_id, status FROM tickets
+            WHERE guild_id=? AND status='open'
+              AND (ticket_id LIKE ? OR subject LIKE ?)
+            ORDER BY last_activity_at DESC LIMIT ?
+            """,
+            (guild_id, like, like, limit),
+        )
+        for ticket_id, subject, uid, channel_id, status in await cur.fetchall():
+            results.append(
+                {
+                    "kind": "ticket",
+                    "id": ticket_id,
+                    "title": subject or ticket_id,
+                    "subtitle": _member_label(guild, uid),
+                    "status": status,
+                    "jump_url": (
+                        f"https://discord.com/channels/{guild_id}/{channel_id}" if channel_id else None
+                    ),
+                }
+            )
+
+        if q.isdigit():
+            cur = await db.execute(
+                """
+                SELECT id, user_id, status FROM applications
+                WHERE guild_id=? AND id=? LIMIT 1
+                """,
+                (guild_id, int(q)),
+            )
+        else:
+            cur = await db.execute(
+                """
+                SELECT id, user_id, status FROM applications
+                WHERE guild_id=? AND status='PENDING'
+                ORDER BY created_at DESC LIMIT ?
+                """,
+                (guild_id, limit),
+            )
+        for app_id, uid, status in await cur.fetchall():
+            name = _member_label(guild, uid)
+            if q.isdigit() or q.lower() in name.lower():
+                results.append(
+                    {
+                        "kind": "application",
+                        "id": str(app_id),
+                        "title": f"Application #{app_id}",
+                        "subtitle": name,
+                        "status": status,
+                        "jump_url": None,
+                    }
+                )
+
+        cur = await db.execute(
+            """
+            SELECT user_id, reason, created_at FROM warnings
+            WHERE guild_id=? AND reason LIKE ?
+            ORDER BY created_at DESC LIMIT ?
+            """,
+            (guild_id, like, limit),
+        )
+        for uid, reason, created in await cur.fetchall():
+            results.append(
+                {
+                    "kind": "warning",
+                    "id": f"{uid}-{created}",
+                    "title": (reason or "Warning")[:80],
+                    "subtitle": _member_label(guild, uid),
+                    "status": "warning",
+                    "jump_url": None,
+                }
+            )
+
+    return {"query": q, "results": results[:limit]}

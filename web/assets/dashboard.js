@@ -28,9 +28,13 @@
     inbox: null,
     features: null,
     setup: null,
+    warframe: null,
+    analytics: null,
+    audit: null,
     guildId: null,
     refreshTimer: null,
     loading: false,
+    searchTimer: null,
   };
 
   function cfg() {
@@ -529,8 +533,305 @@
     el("dash-setup").innerHTML = html;
   }
 
+  function timeUntil(iso) {
+    if (!iso) return "—";
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    var sec = Math.floor((d.getTime() - Date.now()) / 1000);
+    if (sec <= 0) return "soon";
+    if (sec < 60) return sec + "s";
+    if (sec < 3600) return Math.floor(sec / 60) + "m";
+    if (sec < 86400) return Math.floor(sec / 3600) + "h";
+    return Math.floor(sec / 86400) + "d";
+  }
+
+  function renderBaroMini() {
+    var wf = state.warframe;
+    var node = el("dash-baro-mini");
+    if (!node || !wf || !wf.baro) {
+      if (node) node.innerHTML = "";
+      return;
+    }
+    var b = wf.baro;
+    if (!b.available) {
+      node.innerHTML =
+        '<div class="dash-baro-status"><h3>🛸 Baro Ki\'Teer</h3><p class="dash-meta">Warframe API unavailable — try Refresh.</p></div>';
+      return;
+    }
+    var status = b.active
+      ? "At <strong>" + escapeHtml(b.location) + "</strong> · leaves in " + escapeHtml(timeUntil(b.expiry))
+      : "Not at a relay right now";
+    var chips = (b.inventory_preview || [])
+      .slice(0, 4)
+      .map(function (i) {
+        return '<span class="dash-baro-chip">' + escapeHtml(i.name) + "</span>";
+      })
+      .join("");
+    node.innerHTML =
+      '<div class="dash-baro-status"><h3>🛸 Baro Ki\'Teer</h3><p class="dash-meta">' +
+      status +
+      (b.inventory_count ? " · <strong>" + b.inventory_count + "</strong> items" : "") +
+      '</p></div><div class="dash-baro-items">' +
+      (chips || '<span class="dash-meta">No stock listed</span>') +
+      '</div><button type="button" class="dash-btn dash-btn-ghost dash-btn-sm" data-goto-tab="warframe">View Warframe →</button>';
+    var btn = node.querySelector("[data-goto-tab]");
+    if (btn) btn.addEventListener("click", function () {
+      setTab(btn.getAttribute("data-goto-tab"));
+    });
+  }
+
+  function renderWarframe() {
+    var wf = state.warframe;
+    var node = el("dash-warframe");
+    if (!node) return;
+    if (!wf) {
+      node.innerHTML = '<p class="dash-meta">Loading Warframe data…</p>';
+      return;
+    }
+    var b = wf.baro || {};
+    var html = '<div class="dash-panel"><h2>🛸 Baro Ki\'Teer</h2>';
+    if (!b.available) {
+      html += '<p class="dash-meta">Could not load Baro data.</p></div>';
+    } else if (b.active) {
+      html +=
+        '<p><strong>' +
+        escapeHtml(b.location) +
+        "</strong> · Leaves in " +
+        escapeHtml(timeUntil(b.expiry)) +
+        "</p>";
+      if (b.inventory_pending) {
+        html += '<p class="dash-meta">Inventory still loading from the API…</p>';
+      }
+      if (b.inventory_preview && b.inventory_preview.length) {
+        html += '<div class="dash-table-wrap" style="margin-top:14px"><table class="dash-table"><thead><tr><th>Item</th><th>Ducats</th><th>Credits</th></tr></thead><tbody>';
+        b.inventory_preview.forEach(function (i) {
+          html +=
+            "<tr><td>" +
+            escapeHtml(i.name) +
+            "</td><td>" +
+            i.ducats +
+            "</td><td>" +
+            i.credits +
+            "</td></tr>";
+        });
+        html += "</tbody></table></div>";
+        if (b.inventory_count > b.inventory_preview.length) {
+          html += '<p class="dash-meta" style="margin-top:8px;">Showing ' + b.inventory_preview.length + " of " + b.inventory_count + " items · use /warframe baro in Discord for full list.</p>";
+        }
+      }
+      html += "</div>";
+    } else {
+      html += '<p class="dash-meta">Baro is not at a relay. Check back before the next arrival.</p></div>';
+    }
+
+    html += '<div class="dash-panel"><h2>🌍 Open-world cycles</h2><div class="dash-cycle-grid">';
+    (wf.cycles || []).forEach(function (c) {
+      html +=
+        '<div class="dash-cycle-card"><div class="state">' +
+        (c.label || "—") +
+        '</div><div class="name">' +
+        escapeHtml(c.name) +
+        "</div>" +
+        (c.expiry ? '<div class="dash-meta" style="margin-top:6px;">' + escapeHtml(timeUntil(c.expiry)) + " left</div>" : "") +
+        "</div>";
+    });
+    html += "</div></div>";
+    node.innerHTML = html;
+  }
+
+  function renderBarChart(rows, labelKey, valueKey, maxBars) {
+    if (!rows || !rows.length) {
+      return '<div class="dash-empty"><p>No data yet.</p></div>';
+    }
+    var max = Math.max.apply(
+      null,
+      rows.map(function (r) {
+        return r[valueKey] || 0;
+      }).concat([1])
+    );
+    return (
+      '<div class="dash-bar-chart">' +
+      rows.slice(0, maxBars || 8).map(function (r) {
+        var v = r[valueKey] || 0;
+        var pct = Math.round((v / max) * 100);
+        return (
+          '<div class="dash-bar-row"><span class="dash-bar-label" title="' +
+          escapeHtml(r[labelKey] || "") +
+          '">' +
+          escapeHtml(String(r[labelKey] || "").slice(0, 14)) +
+          '</span><div class="dash-bar-track"><div class="dash-bar-fill" style="width:' +
+          pct +
+          '%"></div></div><span class="dash-bar-value">' +
+          v +
+          "</span></div>"
+        );
+      }).join("") +
+      "</div>"
+    );
+  }
+
+  function renderAnalytics() {
+    var a = state.analytics;
+    var node = el("dash-analytics");
+    if (!node) return;
+    if (!a) {
+      node.innerHTML = '<p class="dash-meta">Loading analytics…</p>';
+      return;
+    }
+    var html =
+      '<div class="dash-metric-row">' +
+      '<div class="dash-metric"><strong>' +
+      (a.member_count != null ? a.member_count : "—") +
+      '</strong><span>Members</span></div>' +
+      '<div class="dash-metric"><strong>' +
+      (a.active_users_7d || 0) +
+      '</strong><span>Active (7d)</span></div>' +
+      '<div class="dash-metric"><strong>' +
+      (a.commands_7d || 0) +
+      '</strong><span>Commands (7d)</span></div>' +
+      '<div class="dash-metric"><strong>' +
+      (a.economy_volume_7d || 0).toLocaleString() +
+      '</strong><span>Coins earned (7d)</span></div>' +
+      "</div>";
+
+    html += '<div class="dash-chart-grid">';
+    html +=
+      '<div class="dash-panel"><div class="dash-chart-title">Daily commands (14d)</div>' +
+      renderBarChart(
+        (a.daily_activity || []).map(function (d) {
+          return { label: d.date.slice(5), value: d.commands };
+        }),
+        "label",
+        "value",
+        14
+      ) +
+      "</div>";
+    html +=
+      '<div class="dash-panel"><div class="dash-chart-title">Top members (weekly score)</div>' +
+      renderBarChart(
+        (a.top_members || []).map(function (m) {
+          return { label: m.user_name, value: m.weekly_score };
+        }),
+        "label",
+        "value",
+        8
+      ) +
+      "</div>";
+    html += "</div>";
+
+    var c = a.counts || {};
+    html +=
+      '<div class="dash-panel" style="margin-top:16px"><h2>Live counts</h2><ul class="dash-setup-list">' +
+      "<li>🎫 Open tickets: <strong>" +
+      (c.open_tickets || 0) +
+      "</strong></li>" +
+      "<li>📋 Pending applications: <strong>" +
+      (c.pending_apps || 0) +
+      "</strong></li>" +
+      "<li>👥 Open LFG: <strong>" +
+      (c.open_lfg || 0) +
+      "</strong></li></ul></div>";
+
+    node.innerHTML = html;
+  }
+
+  var AUDIT_ICONS = { warning: "⚠️", complaint: "⚖️", ticket_closed: "🎫" };
+
+  function renderAudit() {
+    var data = state.audit;
+    var node = el("dash-audit");
+    if (!node) return;
+    var entries = (data && data.entries) || [];
+    if (!entries.length) {
+      node.innerHTML = '<div class="dash-empty"><div class="dash-empty-icon">📜</div><p>No audit entries found.</p></div>';
+      return;
+    }
+    node.innerHTML =
+      '<ul class="dash-audit-list">' +
+      entries
+        .map(function (e) {
+          return (
+            '<li class="dash-audit-item"><div class="dash-audit-icon">' +
+            (AUDIT_ICONS[e.type] || "•") +
+            '</div><div class="dash-audit-body"><strong>' +
+            escapeHtml(e.summary || e.type) +
+            '</strong><div class="dash-audit-meta">' +
+            escapeHtml(e.actor_name || "System") +
+            (e.target_name ? " → " + escapeHtml(e.target_name) : "") +
+            " · " +
+            escapeHtml(timeAgo(e.timestamp)) +
+            "</div></div></li>"
+          );
+        })
+        .join("") +
+      "</ul>";
+  }
+
+  async function loadAudit(filter) {
+    if (!state.guildId) return;
+    try {
+      var q = filter ? "?q=" + encodeURIComponent(filter) + "&limit=50" : "?limit=50";
+      state.audit = await apiFetch("/api/guilds/" + state.guildId + "/audit" + q);
+      renderAudit();
+    } catch (err) {
+      el("dash-audit").innerHTML = '<p class="dash-meta">' + escapeHtml(err.message || "Failed to load audit") + "</p>";
+    }
+  }
+
+  function renderSearchResults(data) {
+    var box = el("dash-search-results");
+    if (!box) return;
+    var results = (data && data.results) || [];
+    if (!results.length) {
+      box.innerHTML = '<div class="dash-search-hit"><span>No results</span></div>';
+      box.hidden = false;
+      return;
+    }
+    box.innerHTML = results
+      .map(function (r, idx) {
+        return (
+          '<div class="dash-search-hit" data-idx="' +
+          idx +
+          '"><strong>' +
+          escapeHtml(r.title) +
+          '</strong><span>' +
+          escapeHtml(r.kind) +
+          " · " +
+          escapeHtml(r.subtitle || "") +
+          "</span></div>"
+        );
+      })
+      .join("");
+    box.hidden = false;
+    box.querySelectorAll(".dash-search-hit").forEach(function (hit) {
+      hit.addEventListener("click", function () {
+        var r = results[parseInt(hit.getAttribute("data-idx"), 10)];
+        if (r.jump_url) window.open(r.jump_url, "_blank", "noopener");
+        else if (r.kind === "ticket") setTab("inbox");
+        else if (r.kind === "application") setTab("inbox");
+        else if (r.kind === "warning") setTab("audit");
+        box.hidden = true;
+        el("dash-search").value = "";
+      });
+    });
+  }
+
+  async function runSearch(q) {
+    if (!state.guildId || q.length < 2) {
+      el("dash-search-results").hidden = true;
+      return;
+    }
+    try {
+      var data = await apiFetch("/api/guilds/" + state.guildId + "/search?q=" + encodeURIComponent(q));
+      renderSearchResults(data);
+    } catch (_) {
+      el("dash-search-results").hidden = true;
+    }
+  }
+
   function renderAll() {
     renderAlerts();
+    renderBaroMini();
     renderStats();
     renderAttention();
     renderTickets();
@@ -539,6 +840,9 @@
     renderWarnings();
     renderFeatures();
     renderSetup();
+    renderWarframe();
+    renderAnalytics();
+    renderAudit();
 
     if (state.overview && state.overview.refreshed_at) {
       el("dash-refreshed").textContent = "Updated " + timeAgo(state.overview.refreshed_at);
@@ -550,7 +854,7 @@
     el("dash-loading").style.display = on ? "block" : "none";
     el("dash-skeleton").style.display = on ? "block" : "none";
     if (on) {
-      ["dash-stats", "dash-attention", "dash-tickets", "dash-apps", "dash-mod-status", "dash-warnings", "dash-features", "dash-setup"].forEach(function (id) {
+      ["dash-baro-mini", "dash-stats", "dash-attention", "dash-tickets", "dash-apps", "dash-mod-status", "dash-warnings", "dash-features", "dash-setup", "dash-warframe", "dash-analytics", "dash-audit"].forEach(function (id) {
         var node = el(id);
         if (node) node.innerHTML = "";
       });
@@ -576,11 +880,17 @@
         apiFetch("/api/guilds/" + guildId + "/inbox"),
         apiFetch("/api/guilds/" + guildId + "/features"),
         apiFetch("/api/guilds/" + guildId + "/setup"),
+        apiFetch("/api/guilds/" + guildId + "/warframe"),
+        apiFetch("/api/guilds/" + guildId + "/analytics"),
+        apiFetch("/api/guilds/" + guildId + "/audit?limit=50"),
       ]);
       state.overview = results[0];
       state.inbox = results[1];
       state.features = results[2];
       state.setup = results[3];
+      state.warframe = results[4];
+      state.analytics = results[5];
+      state.audit = results[6];
       renderAll();
     } catch (err) {
       showError(err.message || String(err));
@@ -682,6 +992,35 @@
         if (state.guildId) loadGuildData(state.guildId, false);
       }
     });
+
+    var searchInput = el("dash-search");
+    if (searchInput) {
+      searchInput.addEventListener("input", function () {
+        clearTimeout(state.searchTimer);
+        var q = searchInput.value.trim();
+        state.searchTimer = setTimeout(function () {
+          runSearch(q);
+        }, 350);
+      });
+      searchInput.addEventListener("blur", function () {
+        setTimeout(function () {
+          var box = el("dash-search-results");
+          if (box) box.hidden = true;
+        }, 200);
+      });
+    }
+
+    var auditFilter = el("dash-audit-filter");
+    if (auditFilter) {
+      auditFilter.addEventListener("input", function () {
+        clearTimeout(state.searchTimer);
+        var q = auditFilter.value.trim();
+        state.searchTimer = setTimeout(function () {
+          loadAudit(q || null);
+        }, 400);
+      });
+    }
+
     initDashboard();
   });
 })();

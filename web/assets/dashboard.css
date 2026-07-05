@@ -490,6 +490,128 @@ body.dash-body {
 .dash-footer a { color: var(--accent); text-decoration: none; }
 .dash-footer a:hover { text-decoration: underline; }
 
+/* Search */
+.dash-search-wrap { position: relative; flex: 1; min-width: 180px; max-width: 320px; }
+.dash-search {
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.88rem;
+}
+.dash-search:focus { outline: none; border-color: var(--accent); }
+.dash-search-inline { border-radius: var(--radius-sm); max-width: 360px; }
+.dash-search-results {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  max-height: 320px;
+  overflow-y: auto;
+  z-index: 100;
+}
+.dash-search-hit {
+  display: block;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+}
+.dash-search-hit:hover { background: var(--surface2); }
+.dash-search-hit strong { display: block; font-size: 0.9rem; }
+.dash-search-hit span { font-size: 0.8rem; color: var(--text-muted); }
+
+/* Baro widget */
+.dash-baro-mini { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 16px 20px; }
+.dash-baro-status { flex: 1; min-width: 200px; }
+.dash-baro-status h3 { font-size: 1rem; margin-bottom: 4px; }
+.dash-baro-items { display: flex; flex-wrap: wrap; gap: 8px; }
+.dash-baro-chip {
+  padding: 6px 12px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.dash-cycle-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.dash-cycle-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  text-align: center;
+}
+.dash-cycle-card .state { font-size: 1.25rem; font-weight: 700; color: var(--accent-bright); }
+.dash-cycle-card .name { font-size: 0.85rem; color: var(--text-muted); margin-top: 4px; }
+
+/* Charts (CSS bars) */
+.dash-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+.dash-chart-title { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px; }
+.dash-bar-chart { display: flex; flex-direction: column; gap: 8px; }
+.dash-bar-row { display: flex; align-items: center; gap: 10px; font-size: 0.85rem; }
+.dash-bar-label { width: 100px; flex-shrink: 0; color: var(--text-muted); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-bar-track { flex: 1; height: 10px; background: var(--surface2); border-radius: 999px; overflow: hidden; }
+.dash-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent-dim), var(--accent-bright)); border-radius: 999px; min-width: 2px; }
+.dash-bar-value { width: 36px; text-align: right; color: var(--text-muted); font-size: 0.8rem; }
+.dash-metric-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.dash-metric {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  text-align: center;
+}
+.dash-metric strong { display: block; font-size: 1.4rem; color: var(--accent-bright); }
+.dash-metric span { font-size: 0.8rem; color: var(--text-muted); }
+
+/* Audit timeline */
+.dash-audit-toolbar { margin-bottom: 16px; }
+.dash-audit-list { list-style: none; }
+.dash-audit-item {
+  display: flex;
+  gap: 14px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+.dash-audit-item:last-child { border-bottom: none; }
+.dash-audit-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--surface2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 1rem;
+}
+.dash-audit-body { flex: 1; min-width: 0; }
+.dash-audit-body strong { font-size: 0.92rem; }
+.dash-audit-meta { font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; }
+
 @media (max-width: 640px) {
   .dash-topbar { flex-direction: column; align-items: stretch; }
   .dash-tabs { overflow-x: auto; flex-wrap: nowrap; }
