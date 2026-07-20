@@ -66,12 +66,8 @@ def _json(data: Any, *, status: int = 200) -> web.Response:
     )
 
 
-@web.middleware
-async def cors_middleware(request: web.Request, handler):
-    if request.method == "OPTIONS":
-        resp = web.Response(status=204)
-    else:
-        resp = await handler(request)
+def _apply_cors(request: web.Request, resp: web.StreamResponse) -> web.StreamResponse:
+    """Attach CORS headers to success and error responses (required for browser fetch)."""
     origin = (request.headers.get("Origin") or "").rstrip("/")
     allowed = {o.rstrip("/") for o in DASHBOARD_CORS_ORIGINS}
     if origin and origin in allowed:
@@ -83,6 +79,20 @@ async def cors_middleware(request: web.Request, handler):
         resp.headers["Access-Control-Max-Age"] = "86400"
         resp.headers["Vary"] = "Origin"
     return resp
+
+
+@web.middleware
+async def cors_middleware(request: web.Request, handler):
+    # OPTIONS must short-circuit; error responses must still get CORS or the
+    # browser reports a generic network failure and Railway looks "quiet".
+    if request.method == "OPTIONS":
+        return _apply_cors(request, web.Response(status=204))
+    try:
+        resp = await handler(request)
+    except web.HTTPException as exc:
+        _apply_cors(request, exc)
+        raise
+    return _apply_cors(request, resp)
 
 
 async def handle_ping(_request: web.Request) -> web.Response:

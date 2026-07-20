@@ -363,25 +363,33 @@
     if (!url) return "unconfigured";
     try {
       var res = await fetch(url, { cache: "no-store" });
+      // If we can read JSON, CORS is working for this origin.
+      var data = await res.json().catch(function () {
+        return null;
+      });
       if (res.status === 429) return "rate_limited";
-      if (res.ok) return "ok";
+      if (res.ok && data && data.ok) return "ok";
+      if (res.ok && data == null) return "cors_blocked";
       return "http_" + res.status;
     } catch (_) {
-      return "unreachable";
+      return "cors_blocked";
     }
   }
 
   function apiUnreachableMessage(probe) {
     if (probe === "rate_limited") {
-      return "Railway is rate-limiting the bot API (HTTP 429). In Railway → your bot service → Settings → Networking, generate a new public domain, put it in web/assets/config.js as BOT_API_URL, redeploy the site, and try again.";
+      return "Railway is rate-limiting the bot API (HTTP 429). Wait a minute and press Refresh, or regenerate the Railway public domain.";
     }
     if (probe === "unconfigured") {
       return "BOT_API_URL is missing in web/assets/config.js.";
     }
+    if (probe === "cors_blocked") {
+      return "Browser blocked the API response (CORS). Redeploy Railway from latest main so error responses include Access-Control-Allow-Origin for obsidianoverseer.com.";
+    }
     if (probe && probe.indexOf("http_") === 0) {
       return "Bot API returned " + probe.replace("http_", "") + ". Confirm DASHBOARD_API_ENABLED=true and redeploy on Railway.";
     }
-    return "Could not reach the bot API from the browser. Usually Railway edge rate-limiting or a stale public URL. Generate a new Railway domain, update BOT_API_URL in config.js, and redeploy both Railway + the website.";
+    return "Could not reach the bot API from the browser. Redeploy Railway from latest main, then hard-refresh the dashboard.";
   }
 
   async function apiFetch(path, options) {
@@ -1587,6 +1595,12 @@
     showApp();
     setLoading(true);
     try {
+      // Confirm cross-origin API access before loading guild data.
+      var probe = await probeBotApi();
+      if (probe !== "ok") {
+        throw new Error(apiUnreachableMessage(probe));
+      }
+
       state.me = await apiFetch("/api/me");
       renderUserChip(state.me);
 
@@ -1601,7 +1615,9 @@
 
       if (!state.me.guilds || !state.me.guilds.length) {
         setLoading(false);
-        showError("No servers found where you are an admin and the bot is installed.");
+        showError(
+          "No servers found where you have Administrator/Manage Server and Obsidian Overseer is installed. Invite the bot, then log out and back in."
+        );
         return;
       }
 
