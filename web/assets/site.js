@@ -10,6 +10,19 @@
     { id: "legal", label: "Legal", href: "/legal.html" },
   ];
 
+  function dashboardUrl() {
+    // Prefer the Railway-hosted dashboard (same-origin with the API) to avoid CORS.
+    try {
+      var cfg = window.OBSIDIAN_SITE || {};
+      var api = (cfg.BOT_API_URL || "").replace(/\/$/, "");
+      if (!api) return "/dashboard.html";
+      if (!/^https?:\/\//i.test(api)) api = "https://" + api;
+      return api + "/dashboard.html";
+    } catch (_) {
+      return "/dashboard.html";
+    }
+  }
+
   function isHomePage() {
     var path = window.location.pathname || "/";
     return path === "/" || path === "/index.html" || path.endsWith("/index.html");
@@ -79,12 +92,12 @@
     NAV_ITEMS.forEach(function (item) {
       var a = document.createElement("a");
       var href = item.href;
-      if (origin) {
-        if (item.id === "dashboard") {
-          href = "/dashboard.html";
-        } else if (href.charAt(0) === "/") {
-          href = origin + href;
-        }
+      if (item.id === "dashboard") {
+        // On the public site, send users to the Railway same-origin dashboard.
+        // On the API host, keep a local /dashboard.html link.
+        href = origin ? "/dashboard.html" : dashboardUrl();
+      } else if (origin && href.charAt(0) === "/") {
+        href = origin + href;
       }
       a.href = href;
       a.textContent = item.label;
@@ -221,6 +234,7 @@
   window.ObsidianSite = {
     renderNav: renderNav,
     apiUrl: apiUrl,
+    dashboardUrl: dashboardUrl,
     loadPublicBotStats: loadPublicBotStats,
     formatCount: formatCount,
     config: function () {

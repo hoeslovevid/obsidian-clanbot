@@ -5,6 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Mod Dashboard — Obsidian Overseer</title>
   <link rel="icon" type="image/png" href="/assets/logo.png" />
+  <!-- If opened on the public site, jump to the Railway same-origin dashboard (avoids CORS). -->
+  <script src="/assets/config.js"></script>
+  <script>
+    (function () {
+      try {
+        var cfg = window.OBSIDIAN_SITE || {};
+        var api = (cfg.BOT_API_URL || "").replace(/\/$/, "");
+        if (!api) return;
+        if (!/^https?:\/\//i.test(api)) api = "https://" + api;
+        var apiHost = new URL(api).host;
+        if (window.location.host !== apiHost) {
+          window.location.replace(api + "/dashboard.html" + window.location.search + window.location.hash);
+        }
+      } catch (_) {}
+    })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -157,7 +173,6 @@
 
   <div id="dash-toasts" class="dash-toast-wrap" aria-live="polite"></div>
 
-  <script src="/assets/config.js"></script>
   <script src="/assets/site.js"></script>
   <script src="/assets/dashboard.js"></script>
 </body>
