@@ -11,7 +11,12 @@ import aiohttp  # type: ignore
 import discord  # type: ignore
 from aiohttp import web  # type: ignore
 
-from api.dashboard.auth import authenticate, require_guild_admin
+from api.dashboard.auth import (
+    authenticate,
+    exchange_discord_oauth_code,
+    require_guild_admin,
+    _parse_bearer,
+)
 from core.config import (
     BOT_VERSION,
     BOT_WEBSITE,
@@ -21,6 +26,7 @@ from core.config import (
     DASHBOARD_API_SECRET,
     DASHBOARD_CORS_ORIGINS,
     DISCORD_CLIENT_ID,
+    DISCORD_CLIENT_SECRET,
 )
 from core.dashboard_data import (
     create_guild_giveaway,
@@ -36,6 +42,7 @@ from core.dashboard_data import (
     fetch_guild_setup_health,
     fetch_warframe_snapshot,
     list_manageable_guilds,
+    list_manageable_guilds_oauth,
     search_guild_dashboard,
     set_guild_feature,
     update_guild_setup_fields,
@@ -105,9 +112,11 @@ async def handle_auth_info(request: web.Request) -> web.Response:
             "oauth": {
                 "authorize_url": "https://discord.com/api/oauth2/authorize",
                 "token_url": "https://discord.com/api/oauth2/token",
+                "exchange_path": "/api/auth/token",
                 "user_me_path": "/api/me",
                 "client_id": DISCORD_CLIENT_ID,
                 "recommended_scopes": ["identify", "guilds"],
+                "server_exchange_configured": bool(DISCORD_CLIENT_ID and DISCORD_CLIENT_SECRET),
             },
             "service_auth": {
                 "header": "Authorization: Bearer <DASHBOARD_API_SECRET>",
@@ -121,10 +130,51 @@ async def handle_auth_info(request: web.Request) -> web.Response:
     )
 
 
+async def handle_auth_token(request: web.Request) -> web.Response:
+    """Exchange a Discord OAuth code for an access token (keeps client secret server-side)."""
+    if request.method == "OPTIONS":
+        return web.Response(status=204)
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        raise web.HTTPBadRequest(
+            text='{"error":"invalid_json"}',
+            content_type="application/json",
+        )
+    code = str(body.get("code") or "").strip()
+    redirect_uri = str(body.get("redirect_uri") or "").strip()
+    code_verifier = str(body.get("code_verifier") or "").strip()
+    if not code or not redirect_uri:
+        raise web.HTTPBadRequest(
+            text='{"error":"missing_fields","message":"code and redirect_uri are required"}',
+            content_type="application/json",
+        )
+    payload = await exchange_discord_oauth_code(
+        code=code,
+        redirect_uri=redirect_uri,
+        code_verifier=code_verifier,
+    )
+    return _json(
+        {
+            "access_token": payload.get("access_token"),
+            "token_type": payload.get("token_type") or "Bearer",
+            "expires_in": payload.get("expires_in"),
+            "scope": payload.get("scope"),
+        }
+    )
+
+
 async def handle_me(request: web.Request) -> web.Response:
     bot: discord.Client = request.app["bot"]
     auth = await authenticate(request, bot)
-    guilds = await list_manageable_guilds(bot, auth.user_id)
+    if auth.is_service:
+        guilds = await list_manageable_guilds(bot, auth.user_id)
+    else:
+        token = _parse_bearer(request) or ""
+        guilds = await list_manageable_guilds_oauth(bot, token)
+        if not guilds:
+            # Fallback when Discord guilds endpoint is unavailable.
+            guilds = await list_manageable_guilds(bot, auth.user_id)
     return _json(
         {
             "user_id": str(auth.user_id),
@@ -429,6 +479,7 @@ def create_app(bot: discord.Client) -> web.Application:
     app.router.add_get("/api/health", handle_health)
     app.router.add_get("/api/stats", handle_stats)
     app.router.add_get("/api/auth/info", handle_auth_info)
+    app.router.add_route("*", "/api/auth/token", handle_auth_token)
     app.router.add_get("/api/me", handle_me)
     app.router.add_get("/api/guilds", handle_guilds)
     app.router.add_get("/api/guilds/{guild_id}/inbox", handle_guild_inbox)

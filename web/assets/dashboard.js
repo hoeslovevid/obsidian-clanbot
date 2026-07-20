@@ -292,23 +292,70 @@
 
   async function exchangeCode(code) {
     var c = cfg();
-    var body = new URLSearchParams({
-      client_id: c.DISCORD_CLIENT_ID,
-      grant_type: "authorization_code",
-      code: code,
-      redirect_uri: window.location.origin + window.location.pathname,
-      code_verifier: sessionStorage.getItem("pkce_verifier") || "",
-    });
-    var res = await fetch("https://discord.com/api/oauth2/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: body.toString(),
-    });
-    if (!res.ok) throw new Error("OAuth token exchange failed");
-    var data = await res.json();
+    var redirectUri = window.location.origin + window.location.pathname;
+    var verifier = sessionStorage.getItem("pkce_verifier") || "";
+    var data = null;
+
+    // Prefer server-side exchange (keeps Discord client secret on Railway).
+    var botExchange = window.ObsidianSite && window.ObsidianSite.apiUrl("/api/auth/token");
+    if (botExchange) {
+      try {
+        var botRes = await fetch(botExchange, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            code: code,
+            redirect_uri: redirectUri,
+            code_verifier: verifier,
+          }),
+        });
+        var botData = await botRes.json().catch(function () {
+          return {};
+        });
+        if (botRes.ok && botData.access_token) {
+          data = botData;
+        } else if (botRes.status === 429) {
+          throw new Error(
+            "The bot API is temporarily rate-limited. Wait a minute and try logging in again."
+          );
+        }
+      } catch (err) {
+        if (err && String(err.message || "").indexOf("rate-limited") >= 0) throw err;
+      }
+    }
+
+    // Fallback: public-client PKCE directly with Discord (requires Public Client flag).
+    if (!data) {
+      var body = new URLSearchParams({
+        client_id: c.DISCORD_CLIENT_ID,
+        grant_type: "authorization_code",
+        code: code,
+        redirect_uri: redirectUri,
+        code_verifier: verifier,
+      });
+      var res = await fetch("https://discord.com/api/oauth2/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: body.toString(),
+      });
+      if (!res.ok) {
+        throw new Error(
+          "Discord login failed. Add DISCORD_CLIENT_SECRET on Railway, or enable Public Client in the Discord Developer Portal."
+        );
+      }
+      data = await res.json();
+    }
+
+    if (!data.access_token) throw new Error("Discord login failed — no access token returned.");
     sessionStorage.removeItem("pkce_verifier");
     sessionStorage.setItem(TOKEN_KEY, data.access_token);
     window.history.replaceState({}, document.title, window.location.pathname);
+  }
+
+  function sleep(ms) {
+    return new Promise(function (resolve) {
+      setTimeout(resolve, ms);
+    });
   }
 
   async function apiFetch(path, options) {
@@ -320,12 +367,45 @@
     if (options.body && !options.headers["Content-Type"]) {
       options.headers["Content-Type"] = "application/json";
     }
-    var res = await fetch(url, options);
-    var data = await res.json().catch(function () {
-      return {};
-    });
-    if (!res.ok) throw new Error(data.message || data.error || "API error " + res.status);
-    return data;
+
+    var attempts = 0;
+    var lastErr = null;
+    while (attempts < 3) {
+      attempts += 1;
+      var res;
+      try {
+        res = await fetch(url, options);
+      } catch (err) {
+        lastErr = new Error("Could not reach the bot API. Check your connection and Railway deploy.");
+        await sleep(400 * attempts);
+        continue;
+      }
+
+      var raw = await res.text();
+      var data = {};
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch (_) {
+        data = { message: raw && raw.slice(0, 160) };
+      }
+
+      if (res.status === 429) {
+        lastErr = new Error(
+          "Bot API is rate-limited right now. Wait a moment, then press Refresh."
+        );
+        await sleep(1000 * attempts);
+        continue;
+      }
+      if (res.status === 401) {
+        sessionStorage.removeItem(TOKEN_KEY);
+        throw new Error(data.message || "Session expired — please log in again.");
+      }
+      if (!res.ok) {
+        throw new Error(data.message || data.error || "API error " + res.status);
+      }
+      return data;
+    }
+    throw lastErr || new Error("API request failed");
   }
 
   /* ——— Tabs ——— */

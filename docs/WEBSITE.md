@@ -49,6 +49,20 @@ On Railway (or wherever the bot runs):
 |----------|---------|
 | `DASHBOARD_API_ENABLED=true` | Starts the HTTP API (contact + dashboard) |
 | `CONTACT_WEBHOOK_URL` | Discord webhook for contact form submissions |
+| `DASHBOARD_CORS_ORIGINS=https://obsidianoverseer.com` | Browser CORS for site → bot |
+| `DISCORD_CLIENT_ID` | Same as in config.js (OAuth) |
+| `DISCORD_CLIENT_SECRET` | Discord app client secret — required for reliable dashboard login |
+| `DASHBOARD_API_SECRET` | Optional; for backend/service auth only |
+
+In the [Discord Developer Portal](https://discord.com/developers/applications): add OAuth redirect URI:
+
+`https://obsidianoverseer.com/dashboard.html`
+
+Also copy **OAuth2 → Client Secret** into Railway as `DISCORD_CLIENT_SECRET`, then redeploy.
+
+See [DASHBOARD_API.md](DASHBOARD_API.md) for API endpoints and auth flow.
+
+Do not put webhooks or API secrets in `web/*.html`.
 
 ### Live server / user counts (home page)
 
@@ -60,15 +74,4 @@ GitHub Actions refreshes that file **hourly** (workflow **Update bot stats**) by
 
 Repo → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**
 
-Then run **Actions → Update bot stats → Run workflow**, or wait for the next hourly schedule. A successful run commits updated counts and redeploys Pages.
-| `DASHBOARD_CORS_ORIGINS=https://obsidianoverseer.com` | Browser CORS for site → bot |
-| `DISCORD_CLIENT_ID` | Same as in config.js (OAuth) |
-| `DASHBOARD_API_SECRET` | Optional; required for authenticated dashboard API calls from a backend proxy |
-
-In the [Discord Developer Portal](https://discord.com/developers/applications): add OAuth redirect URI:
-
-`https://obsidianoverseer.com/dashboard.html`
-
-See [DASHBOARD_API.md](DASHBOARD_API.md) for API endpoints and auth flow.
-
-Do not put webhooks or API secrets in `web/*.html`.
+Then run **Actions → Update bot stats → Run workflow**, or wait for the next hourly schedule.

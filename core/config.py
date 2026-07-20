@@ -151,5 +151,7 @@ else:
     DASHBOARD_CORS_ORIGINS = ()
 # Discord OAuth app client id (same app as the bot) — used in /api/auth docs only.
 DISCORD_CLIENT_ID = (os.getenv("DISCORD_CLIENT_ID") or "").strip() or None
+# Discord OAuth client secret — server-side token exchange for the dashboard login.
+DISCORD_CLIENT_SECRET = (os.getenv("DISCORD_CLIENT_SECRET") or "").strip() or None
 # Contact form → Discord channel (server-side only; used by POST /api/contact).
 CONTACT_WEBHOOK_URL = (os.getenv("CONTACT_WEBHOOK_URL") or "").strip() or None

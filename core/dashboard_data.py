@@ -329,11 +329,24 @@ async def fetch_bot_stats(bot: discord.Client) -> dict[str, Any]:
     }
 
 
+_MANAGE_GUILD = 1 << 5
+_ADMINISTRATOR = 1 << 3
+
+
+def _guild_payload(guild: discord.Guild) -> dict[str, Any]:
+    return {
+        "id": str(guild.id),
+        "name": guild.name,
+        "icon": guild.icon.url if guild.icon else None,
+        "member_count": guild.member_count,
+    }
+
+
 async def list_manageable_guilds(
     bot: discord.Client,
     user_id: int,
 ) -> list[dict[str, Any]]:
-    """Guilds where the user has administrator permission and the bot is present."""
+    """Guilds where the user can manage the server and the bot is present (member cache)."""
     out: list[dict[str, Any]] = []
     for guild in bot.guilds:
         member = guild.get_member(user_id)
@@ -342,16 +355,35 @@ async def list_manageable_guilds(
                 member = await guild.fetch_member(user_id)
             except (discord.NotFound, discord.Forbidden, discord.HTTPException):
                 continue
-        if not member.guild_permissions.administrator:
+        if not (
+            member.guild_permissions.administrator or member.guild_permissions.manage_guild
+        ):
             continue
-        out.append(
-            {
-                "id": str(guild.id),
-                "name": guild.name,
-                "icon": guild.icon.url if guild.icon else None,
-                "member_count": guild.member_count,
-            }
-        )
+        out.append(_guild_payload(guild))
+    out.sort(key=lambda g: g["name"].lower())
+    return out
+
+
+async def list_manageable_guilds_oauth(
+    bot: discord.Client,
+    user_token: str,
+) -> list[dict[str, Any]]:
+    """Intersect OAuth guild permissions with servers the bot is in (preferred path)."""
+    from api.dashboard.auth import fetch_user_guilds
+
+    out: list[dict[str, Any]] = []
+    for entry in await fetch_user_guilds(user_token):
+        try:
+            guild_id = int(entry.get("id") or 0)
+            perms = int(entry.get("permissions") or 0)
+        except (TypeError, ValueError):
+            continue
+        if not (perms & (_ADMINISTRATOR | _MANAGE_GUILD)):
+            continue
+        guild = bot.get_guild(guild_id)
+        if guild is None:
+            continue
+        out.append(_guild_payload(guild))
     out.sort(key=lambda g: g["name"].lower())
     return out
 
