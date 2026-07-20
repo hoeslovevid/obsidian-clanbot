@@ -66,13 +66,32 @@ def _json(data: Any, *, status: int = 200) -> web.Response:
     )
 
 
+def _cors_origin_allowed(origin: str) -> bool:
+    """Allow configured origins plus any obsidianoverseer.com / local dev host."""
+    if not origin:
+        return False
+    origin = origin.rstrip("/")
+    if origin in {o.rstrip("/") for o in DASHBOARD_CORS_ORIGINS}:
+        return True
+    try:
+        host = origin.split("://", 1)[-1].split("/")[0].split(":")[0].lower()
+    except Exception:
+        return False
+    if host in {"localhost", "127.0.0.1", "obsidianoverseer.com"}:
+        return True
+    if host.endswith(".obsidianoverseer.com"):
+        return True
+    if host.endswith(".github.io"):
+        return True
+    return False
+
+
 def _apply_cors(request: web.Request, resp: web.StreamResponse) -> web.StreamResponse:
     """Attach CORS headers to success and error responses (required for browser fetch)."""
-    origin = (request.headers.get("Origin") or "").rstrip("/")
-    allowed = {o.rstrip("/") for o in DASHBOARD_CORS_ORIGINS}
-    if origin and origin in allowed:
+    origin = (request.headers.get("Origin") or "").strip().rstrip("/")
+    if origin and _cors_origin_allowed(origin):
         resp.headers["Access-Control-Allow-Origin"] = origin
-        resp.headers["Access-Control-Allow-Methods"] = "GET, PATCH, POST, OPTIONS"
+        resp.headers["Access-Control-Allow-Methods"] = "GET, HEAD, PATCH, POST, OPTIONS"
         resp.headers["Access-Control-Allow-Headers"] = (
             "Authorization, Content-Type, X-Discord-User-Id"
         )
@@ -92,12 +111,36 @@ async def cors_middleware(request: web.Request, handler):
     except web.HTTPException as exc:
         _apply_cors(request, exc)
         raise
+    except Exception:
+        # Ensure unexpected 500s are still readable cross-origin.
+        err = web.HTTPInternalServerError(
+            text='{"error":"internal_error","message":"Internal server error"}',
+            content_type="application/json",
+        )
+        _apply_cors(request, err)
+        raise err from None
     return _apply_cors(request, resp)
 
 
-async def handle_ping(_request: web.Request) -> web.Response:
+async def handle_options(request: web.Request) -> web.Response:
+    """Explicit OPTIONS handler so preflight always matches a route."""
+    return _apply_cors(request, web.Response(status=204))
+
+
+async def handle_ping(request: web.Request) -> web.Response:
     """Tiny public probe for the website (avoids heavy health checks)."""
-    resp = _json({"ok": True, "service": "dashboard-api"})
+    origin = (request.headers.get("Origin") or "").strip()
+    resp = _json(
+        {
+            "ok": True,
+            "service": "dashboard-api",
+            "version": BOT_VERSION,
+            "cors": {
+                "origin": origin or None,
+                "allowed": _cors_origin_allowed(origin) if origin else None,
+            },
+        }
+    )
     resp.headers["Cache-Control"] = "no-store"
     return resp
 
@@ -493,6 +536,8 @@ async def handle_contact(request: web.Request) -> web.Response:
 def create_app(bot: discord.Client) -> web.Application:
     app = web.Application(middlewares=[cors_middleware])
     app["bot"] = bot
+    # Preflight for every API path (browser sends OPTIONS before Authorization GETs).
+    app.router.add_route("OPTIONS", "/api/{tail:.*}", handle_options)
     app.router.add_get("/api/ping", handle_ping)
     app.router.add_get("/api/health", handle_health)
     app.router.add_get("/api/stats", handle_stats)
@@ -537,6 +582,7 @@ async def start_dashboard_server(bot: discord.Client) -> web.AppRunner | None:
     site = web.TCPSite(_runner, "0.0.0.0", DASHBOARD_API_PORT)
     await site.start()
     logger.info("[dashboard-api] Listening on 0.0.0.0:%s", DASHBOARD_API_PORT)
+    logger.info("[dashboard-api] CORS origins: %s", ", ".join(DASHBOARD_CORS_ORIGINS))
     return _runner
 
 

@@ -360,36 +360,44 @@
 
   async function probeBotApi() {
     var url = window.ObsidianSite && window.ObsidianSite.apiUrl("/api/ping");
-    if (!url) return "unconfigured";
+    if (!url) return { status: "unconfigured" };
     try {
-      var res = await fetch(url, { cache: "no-store" });
-      // If we can read JSON, CORS is working for this origin.
+      var res = await fetch(url, { cache: "no-store", mode: "cors" });
+      var acao = res.headers.get("Access-Control-Allow-Origin");
       var data = await res.json().catch(function () {
         return null;
       });
-      if (res.status === 429) return "rate_limited";
-      if (res.ok && data && data.ok) return "ok";
-      if (res.ok && data == null) return "cors_blocked";
-      return "http_" + res.status;
-    } catch (_) {
-      return "cors_blocked";
+      if (res.status === 429) return { status: "rate_limited", acao: acao };
+      if (res.ok && data && data.ok) return { status: "ok", acao: acao, data: data };
+      if (res.ok && !data) return { status: "bad_json", acao: acao };
+      return { status: "http_" + res.status, acao: acao };
+    } catch (err) {
+      return { status: "cors_blocked", detail: String((err && err.message) || err) };
     }
   }
 
   function apiUnreachableMessage(probe) {
-    if (probe === "rate_limited") {
-      return "Railway is rate-limiting the bot API (HTTP 429). Wait a minute and press Refresh, or regenerate the Railway public domain.";
+    var status = typeof probe === "string" ? probe : (probe && probe.status) || "unreachable";
+    if (status === "rate_limited") {
+      return "Railway is rate-limiting the bot API (HTTP 429). Wait a minute and press Refresh.";
     }
-    if (probe === "unconfigured") {
+    if (status === "unconfigured") {
       return "BOT_API_URL is missing in web/assets/config.js.";
     }
-    if (probe === "cors_blocked") {
-      return "Browser blocked the API response (CORS). Redeploy Railway from latest main so error responses include Access-Control-Allow-Origin for obsidianoverseer.com.";
+    if (status === "cors_blocked") {
+      return (
+        "Browser blocked the API (CORS). Railway must be redeployed from latest main. " +
+        "After deploy, open https://obsidianoverseer.up.railway.app/api/ping — it should include \"cors\". " +
+        "Also set DASHBOARD_CORS_ORIGINS=https://obsidianoverseer.com on Railway if needed."
+      );
     }
-    if (probe && probe.indexOf("http_") === 0) {
-      return "Bot API returned " + probe.replace("http_", "") + ". Confirm DASHBOARD_API_ENABLED=true and redeploy on Railway.";
+    if (status === "bad_json") {
+      return "Bot API returned a non-JSON response. Confirm the Railway service is the Discord bot with DASHBOARD_API_ENABLED=true.";
     }
-    return "Could not reach the bot API from the browser. Redeploy Railway from latest main, then hard-refresh the dashboard.";
+    if (status.indexOf("http_") === 0) {
+      return "Bot API returned " + status.replace("http_", "") + ". Confirm DASHBOARD_API_ENABLED=true and redeploy on Railway.";
+    }
+    return "Could not reach the bot API from the browser. Redeploy Railway from latest main, then hard-refresh.";
   }
 
   async function apiFetch(path, options) {
@@ -1597,7 +1605,7 @@
     try {
       // Confirm cross-origin API access before loading guild data.
       var probe = await probeBotApi();
-      if (probe !== "ok") {
+      if (!probe || probe.status !== "ok") {
         throw new Error(apiUnreachableMessage(probe));
       }
 
