@@ -29,46 +29,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Fetch live bot stats into site bundle
+      - name: Refresh bot stats from Discord
         continue-on-error: true
+        env:
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
         run: |
-          python3 <<'PY'
-          import json
-          import urllib.error
-          import urllib.request
-
-          out_path = "web/assets/bot-stats.json"
-          urls = [
-              "https://worker-production-39bd.up.railway.app/api/stats",
-              "https://worker-production-39bd.up.railway.app/api/health",
-          ]
-          data = None
-          for url in urls:
-              try:
-                  with urllib.request.urlopen(url, timeout=20) as resp:
-                      payload = json.load(resp)
-                  if payload.get("guild_count") is not None or payload.get("user_count") is not None:
-                      data = {
-                          "guild_count": payload.get("guild_count"),
-                          "user_count": payload.get("user_count"),
-                          "updated_at": payload.get("updated_at"),
-                      }
-                      break
-              except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError):
-                  continue
-
-          if data is None:
-              try:
-                  with open(out_path, encoding="utf-8") as f:
-                      data = json.load(f)
-              except (OSError, json.JSONDecodeError):
-                  data = {"guild_count": None, "user_count": None, "updated_at": None}
-
-          with open(out_path, "w", encoding="utf-8") as f:
-              json.dump(data, f, indent=2)
-              f.write("\n")
-          print("bot-stats.json:", json.dumps(data))
-          PY
+          if [ -z "$DISCORD_TOKEN" ]; then
+            echo "DISCORD_TOKEN secret not set — keeping existing bot-stats.json"
+            exit 0
+          fi
+          python3 .github/scripts/fetch_bot_stats.py
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

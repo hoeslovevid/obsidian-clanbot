@@ -49,6 +49,18 @@ On Railway (or wherever the bot runs):
 |----------|---------|
 | `DASHBOARD_API_ENABLED=true` | Starts the HTTP API (contact + dashboard) |
 | `CONTACT_WEBHOOK_URL` | Discord webhook for contact form submissions |
+
+### Live server / user counts (home page)
+
+The home page “Servers / Users” counters read `web/assets/bot-stats.json`.
+
+GitHub Actions refreshes that file **hourly** (workflow **Update bot stats**) by calling the Discord API — not Railway — so it keeps working even if the public bot API is rate-limited.
+
+**Required once:** add a repository secret named `DISCORD_TOKEN` (same value as Railway’s `DISCORD_TOKEN`):
+
+Repo → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**
+
+Then run **Actions → Update bot stats → Run workflow**, or wait for the next hourly schedule. A successful run commits updated counts and redeploys Pages.
 | `DASHBOARD_CORS_ORIGINS=https://obsidianoverseer.com` | Browser CORS for site → bot |
 | `DISCORD_CLIENT_ID` | Same as in config.js (OAuth) |
 | `DASHBOARD_API_SECRET` | Optional; required for authenticated dashboard API calls from a backend proxy |

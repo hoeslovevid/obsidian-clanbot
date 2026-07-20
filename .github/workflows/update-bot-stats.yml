@@ -1,5 +1,6 @@
-# Refresh web/assets/bot-stats.json from the live bot API (hourly).
-# Pushing the updated file triggers the Pages deploy workflow.
+# Refresh web/assets/bot-stats.json from Discord (hourly).
+# Requires repo secret DISCORD_TOKEN (same bot token as Railway).
+# Pushing the JSON triggers Deploy website → GitHub Pages.
 name: Update bot stats
 
 on:
@@ -21,53 +22,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Fetch bot stats
-        run: |
-          python3 <<'PY'
-          import json
-          import urllib.error
-          import urllib.request
-
-          out_path = "web/assets/bot-stats.json"
-          urls = [
-              "https://worker-production-39bd.up.railway.app/api/stats",
-              "https://worker-production-39bd.up.railway.app/api/health",
-          ]
-          data = None
-          for url in urls:
-              try:
-                  with urllib.request.urlopen(url, timeout=20) as resp:
-                      payload = json.load(resp)
-                  if payload.get("guild_count") is not None or payload.get("user_count") is not None:
-                      data = {
-                          "guild_count": payload.get("guild_count"),
-                          "user_count": payload.get("user_count"),
-                          "updated_at": payload.get("updated_at"),
-                      }
-                      break
-              except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError) as exc:
-                  print(f"skip {url}: {exc}")
-
-          if data is None:
-              raise SystemExit("Could not fetch bot stats from Railway")
-
-          with open(out_path, encoding="utf-8") as f:
-              existing = json.load(f)
-          if existing == data:
-              print("No change")
-              raise SystemExit(0)
-
-          with open(out_path, "w", encoding="utf-8") as f:
-              json.dump(data, f, indent=2)
-              f.write("\n")
-          print("Updated:", json.dumps(data))
-          PY
+      - name: Fetch stats from Discord
+        env:
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+        run: python3 .github/scripts/fetch_bot_stats.py
 
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add web/assets/bot-stats.json
-          git diff --staged --quiet && echo "Nothing to commit" && exit 0
+          if git diff --staged --quiet; then
+            echo "Nothing to commit"
+            exit 0
+          fi
           git commit -m "Update live bot stats for website."
           git push
