@@ -72,16 +72,23 @@ async def cors_middleware(request: web.Request, handler):
         resp = web.Response(status=204)
     else:
         resp = await handler(request)
-    origin = request.headers.get("Origin")
-    if origin and DASHBOARD_CORS_ORIGINS and origin.rstrip("/") in {
-        o.rstrip("/") for o in DASHBOARD_CORS_ORIGINS
-    }:
+    origin = (request.headers.get("Origin") or "").rstrip("/")
+    allowed = {o.rstrip("/") for o in DASHBOARD_CORS_ORIGINS}
+    if origin and origin in allowed:
         resp.headers["Access-Control-Allow-Origin"] = origin
         resp.headers["Access-Control-Allow-Methods"] = "GET, PATCH, POST, OPTIONS"
         resp.headers["Access-Control-Allow-Headers"] = (
             "Authorization, Content-Type, X-Discord-User-Id"
         )
+        resp.headers["Access-Control-Max-Age"] = "86400"
         resp.headers["Vary"] = "Origin"
+    return resp
+
+
+async def handle_ping(_request: web.Request) -> web.Response:
+    """Tiny public probe for the website (avoids heavy health checks)."""
+    resp = _json({"ok": True, "service": "dashboard-api"})
+    resp.headers["Cache-Control"] = "no-store"
     return resp
 
 
@@ -476,6 +483,7 @@ async def handle_contact(request: web.Request) -> web.Response:
 def create_app(bot: discord.Client) -> web.Application:
     app = web.Application(middlewares=[cors_middleware])
     app["bot"] = bot
+    app.router.add_get("/api/ping", handle_ping)
     app.router.add_get("/api/health", handle_health)
     app.router.add_get("/api/stats", handle_stats)
     app.router.add_get("/api/auth/info", handle_auth_info)

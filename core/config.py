@@ -131,24 +131,24 @@ DASHBOARD_API_ENABLED = os.getenv("DASHBOARD_API_ENABLED", "false").lower() in (
 DASHBOARD_API_PORT = int(os.getenv("PORT", os.getenv("DASHBOARD_API_PORT", "8080")) or "8080")
 # Shared secret for your website backend (never expose to the browser).
 DASHBOARD_API_SECRET = (os.getenv("DASHBOARD_API_SECRET") or "").strip() or None
-# Comma-separated origins for CORS (defaults to BOT_WEBSITE when set).
+# Comma-separated origins for CORS (defaults to BOT_WEBSITE + production site).
 _cors_raw = os.getenv("DASHBOARD_CORS_ORIGINS", "").strip()
+_cors_origins: set[str] = {
+    "https://obsidianoverseer.com",
+    "https://www.obsidianoverseer.com",
+}
 if _cors_raw:
-    DASHBOARD_CORS_ORIGINS: tuple[str, ...] = tuple(
-        o.strip() for o in _cors_raw.split(",") if o.strip()
-    )
-elif BOT_WEBSITE:
+    _cors_origins.update(o.strip().rstrip("/") for o in _cors_raw.split(",") if o.strip())
+if BOT_WEBSITE:
     _site = BOT_WEBSITE.rstrip("/")
-    _origins = {_site}
+    _cors_origins.add(_site)
     if "://" in _site:
         _scheme, _host = _site.split("://", 1)
         if _host.startswith("www."):
-            _origins.add(f"{_scheme}://{_host[4:]}")
+            _cors_origins.add(f"{_scheme}://{_host[4:]}")
         else:
-            _origins.add(f"{_scheme}://www.{_host}")
-    DASHBOARD_CORS_ORIGINS = tuple(sorted(_origins))
-else:
-    DASHBOARD_CORS_ORIGINS = ()
+            _cors_origins.add(f"{_scheme}://www.{_host}")
+DASHBOARD_CORS_ORIGINS: tuple[str, ...] = tuple(sorted(_cors_origins))
 # Discord OAuth app client id (same app as the bot) — used in /api/auth docs only.
 DISCORD_CLIENT_ID = (os.getenv("DISCORD_CLIENT_ID") or "").strip() or None
 # Discord OAuth client secret — server-side token exchange for the dashboard login.

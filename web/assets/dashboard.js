@@ -358,6 +358,32 @@
     });
   }
 
+  async function probeBotApi() {
+    var url = window.ObsidianSite && window.ObsidianSite.apiUrl("/api/ping");
+    if (!url) return "unconfigured";
+    try {
+      var res = await fetch(url, { cache: "no-store" });
+      if (res.status === 429) return "rate_limited";
+      if (res.ok) return "ok";
+      return "http_" + res.status;
+    } catch (_) {
+      return "unreachable";
+    }
+  }
+
+  function apiUnreachableMessage(probe) {
+    if (probe === "rate_limited") {
+      return "Railway is rate-limiting the bot API (HTTP 429). In Railway → your bot service → Settings → Networking, generate a new public domain, put it in web/assets/config.js as BOT_API_URL, redeploy the site, and try again.";
+    }
+    if (probe === "unconfigured") {
+      return "BOT_API_URL is missing in web/assets/config.js.";
+    }
+    if (probe && probe.indexOf("http_") === 0) {
+      return "Bot API returned " + probe.replace("http_", "") + ". Confirm DASHBOARD_API_ENABLED=true and redeploy on Railway.";
+    }
+    return "Could not reach the bot API from the browser. Usually Railway edge rate-limiting or a stale public URL. Generate a new Railway domain, update BOT_API_URL in config.js, and redeploy both Railway + the website.";
+  }
+
   async function apiFetch(path, options) {
     var url = window.ObsidianSite && window.ObsidianSite.apiUrl(path);
     if (!url) throw new Error("Dashboard is temporarily unavailable. Please try again later.");
@@ -376,8 +402,9 @@
       try {
         res = await fetch(url, options);
       } catch (err) {
-        lastErr = new Error("Could not reach the bot API. Check your connection and Railway deploy.");
-        await sleep(400 * attempts);
+        var probe = await probeBotApi();
+        lastErr = new Error(apiUnreachableMessage(probe));
+        await sleep(500 * attempts);
         continue;
       }
 
@@ -390,10 +417,8 @@
       }
 
       if (res.status === 429) {
-        lastErr = new Error(
-          "Bot API is rate-limited right now. Wait a moment, then press Refresh."
-        );
-        await sleep(1000 * attempts);
+        lastErr = new Error(apiUnreachableMessage("rate_limited"));
+        await sleep(1200 * attempts);
         continue;
       }
       if (res.status === 401) {
