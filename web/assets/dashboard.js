@@ -359,10 +359,16 @@
   }
 
   async function probeBotApi() {
-    var url = window.ObsidianSite && window.ObsidianSite.apiUrl("/api/ping");
-    if (!url) return { status: "unconfigured" };
+    var base = window.ObsidianSite && window.ObsidianSite.apiUrl("/api/ping");
+    if (!base) return { status: "unconfigured" };
+    // Cache-bust so Railway/CDN cannot reuse a no-Origin cached response.
+    var url = base + (base.indexOf("?") >= 0 ? "&" : "?") + "_cb=" + Date.now();
     try {
-      var res = await fetch(url, { cache: "no-store", mode: "cors" });
+      var res = await fetch(url, {
+        cache: "no-store",
+        mode: "cors",
+        headers: { Accept: "application/json" },
+      });
       var acao = res.headers.get("Access-Control-Allow-Origin");
       var data = await res.json().catch(function () {
         return null;
@@ -385,10 +391,14 @@
       return "BOT_API_URL is missing in web/assets/config.js.";
     }
     if (status === "cors_blocked") {
+      var fallback =
+        ((window.OBSIDIAN_SITE && window.OBSIDIAN_SITE.BOT_API_URL) || "").replace(/\/$/, "") +
+        "/dashboard.html";
       return (
-        "Browser blocked the API (CORS). Railway must be redeployed from latest main. " +
-        "After deploy, open https://obsidianoverseer.up.railway.app/api/ping — it should include \"cors\". " +
-        "Also set DASHBOARD_CORS_ORIGINS=https://obsidianoverseer.com on Railway if needed."
+        "Browser blocked the API (CORS) from the main website. " +
+        "Use the same-origin dashboard instead: " +
+        fallback +
+        " — then log in there. (Also redeploy Railway so CDN cache/CORS headers refresh.)"
       );
     }
     if (status === "bad_json") {
@@ -404,8 +414,15 @@
     var url = window.ObsidianSite && window.ObsidianSite.apiUrl(path);
     if (!url) throw new Error("Dashboard is temporarily unavailable. Please try again later.");
     options = options || {};
+    var method = String(options.method || "GET").toUpperCase();
+    if (method === "GET" || method === "HEAD") {
+      url += (url.indexOf("?") >= 0 ? "&" : "?") + "_cb=" + Date.now();
+    }
     options.headers = options.headers || {};
     options.headers.Authorization = "Bearer " + token();
+    options.headers.Accept = options.headers.Accept || "application/json";
+    options.cache = "no-store";
+    options.mode = "cors";
     if (options.body && !options.headers["Content-Type"]) {
       options.headers["Content-Type"] = "application/json";
     }

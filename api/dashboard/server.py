@@ -17,6 +17,8 @@ from api.dashboard.auth import (
     require_guild_admin,
     _parse_bearer,
 )
+from pathlib import Path
+
 from core.config import (
     BOT_VERSION,
     BOT_WEBSITE,
@@ -27,6 +29,7 @@ from core.config import (
     DASHBOARD_CORS_ORIGINS,
     DISCORD_CLIENT_ID,
     DISCORD_CLIENT_SECRET,
+    PROJECT_ROOT,
 )
 from core.dashboard_data import (
     create_guild_giveaway,
@@ -56,6 +59,7 @@ _CONTACT_COOLDOWN_SEC = 60.0
 _stats_cache: dict[str, Any] | None = None
 _stats_cache_at: float = 0.0
 _STATS_CACHE_SEC = 300.0
+_WEB_ROOT = PROJECT_ROOT / "web"
 
 
 def _json(data: Any, *, status: int = 200) -> web.Response:
@@ -87,7 +91,13 @@ def _cors_origin_allowed(origin: str) -> bool:
 
 
 def _apply_cors(request: web.Request, resp: web.StreamResponse) -> web.StreamResponse:
-    """Attach CORS headers to success and error responses (required for browser fetch)."""
+    """Attach CORS + anti-cache headers (Railway edge can cache bare /api/ping without ACAO)."""
+    # Always prevent shared CDN caches from reusing a no-Origin response for browsers.
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Vary"] = "Origin"
+    resp.headers["Cross-Origin-Resource-Policy"] = "cross-origin"
+
     origin = (request.headers.get("Origin") or "").strip().rstrip("/")
     if origin and _cors_origin_allowed(origin):
         resp.headers["Access-Control-Allow-Origin"] = origin
@@ -96,7 +106,6 @@ def _apply_cors(request: web.Request, resp: web.StreamResponse) -> web.StreamRes
             "Authorization, Content-Type, X-Discord-User-Id"
         )
         resp.headers["Access-Control-Max-Age"] = "86400"
-        resp.headers["Vary"] = "Origin"
     return resp
 
 
@@ -127,10 +136,18 @@ async def handle_options(request: web.Request) -> web.Response:
     return _apply_cors(request, web.Response(status=204))
 
 
+async def handle_dashboard_page(_request: web.Request) -> web.FileResponse:
+    """Same-origin dashboard (avoids browser CORS when site↔API is blocked)."""
+    path = _WEB_ROOT / "dashboard.html"
+    if not path.is_file():
+        raise web.HTTPNotFound(text="dashboard.html not packaged in this deploy")
+    return web.FileResponse(path)
+
+
 async def handle_ping(request: web.Request) -> web.Response:
     """Tiny public probe for the website (avoids heavy health checks)."""
     origin = (request.headers.get("Origin") or "").strip()
-    resp = _json(
+    return _json(
         {
             "ok": True,
             "service": "dashboard-api",
@@ -138,11 +155,13 @@ async def handle_ping(request: web.Request) -> web.Response:
             "cors": {
                 "origin": origin or None,
                 "allowed": _cors_origin_allowed(origin) if origin else None,
+                "hint": (
+                    "origin is null for address-bar visits; dashboard fetch sends Origin "
+                    "and must receive Access-Control-Allow-Origin"
+                ),
             },
         }
     )
-    resp.headers["Cache-Control"] = "no-store"
-    return resp
 
 
 async def handle_health(request: web.Request) -> web.Response:
@@ -160,9 +179,7 @@ async def handle_stats(request: web.Request) -> web.Response:
     if _stats_cache is None or now - _stats_cache_at >= _STATS_CACHE_SEC:
         _stats_cache = await fetch_bot_stats(bot)
         _stats_cache_at = now
-    resp = _json(_stats_cache)
-    resp.headers["Cache-Control"] = "public, max-age=300"
-    return resp
+    return _json(_stats_cache)
 
 
 async def handle_auth_info(request: web.Request) -> web.Response:
@@ -538,6 +555,13 @@ def create_app(bot: discord.Client) -> web.Application:
     app["bot"] = bot
     # Preflight for every API path (browser sends OPTIONS before Authorization GETs).
     app.router.add_route("OPTIONS", "/api/{tail:.*}", handle_options)
+    if _WEB_ROOT.is_dir():
+        app.router.add_get("/dashboard", handle_dashboard_page)
+        app.router.add_get("/dashboard.html", handle_dashboard_page)
+        assets = _WEB_ROOT / "assets"
+        if assets.is_dir():
+            app.router.add_static("/assets/", path=str(assets), name="site-assets")
+        logger.info("[dashboard-api] Same-origin dashboard enabled from %s", _WEB_ROOT)
     app.router.add_get("/api/ping", handle_ping)
     app.router.add_get("/api/health", handle_health)
     app.router.add_get("/api/stats", handle_stats)

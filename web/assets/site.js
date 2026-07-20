@@ -40,12 +40,28 @@
     anchor.addEventListener("click", goHome);
   }
 
+  function siteOrigin() {
+    // When dashboard is served from the Railway API host, point nav back to the public site.
+    try {
+      var cfg = window.OBSIDIAN_SITE || {};
+      var apiBase = (cfg.BOT_API_URL || "").replace(/\/$/, "");
+      if (apiBase && typeof window !== "undefined" && window.location) {
+        var apiHost = new URL(apiBase).host;
+        if (window.location.host === apiHost) {
+          return "https://obsidianoverseer.com";
+        }
+      }
+    } catch (_) {}
+    return "";
+  }
+
   function renderNav() {
     var el = document.getElementById("site-nav");
     if (!el) return;
     var active = el.getAttribute("data-active") || "";
+    var origin = siteOrigin();
     var logo = document.createElement("a");
-    logo.href = "/";
+    logo.href = origin ? origin + "/" : "/";
     logo.className = "nav-logo";
     var logoImg = document.createElement("img");
     logoImg.src = "/assets/logo.png";
@@ -57,16 +73,24 @@
     var logoText = document.createElement("span");
     logoText.textContent = "Obsidian Overseer";
     logo.appendChild(logoText);
-    bindHomeLink(logo);
+    if (!origin) bindHomeLink(logo);
     var links = document.createElement("div");
     links.className = "nav-links";
     NAV_ITEMS.forEach(function (item) {
       var a = document.createElement("a");
-      a.href = item.href;
+      var href = item.href;
+      if (origin) {
+        if (item.id === "dashboard") {
+          href = "/dashboard.html";
+        } else if (href.charAt(0) === "/") {
+          href = origin + href;
+        }
+      }
+      a.href = href;
       a.textContent = item.label;
       if (item.id === active) a.className = "active";
-      if (item.id === "home") bindHomeLink(a);
-      if (item.id === "features") a.addEventListener("click", goFeatures);
+      if (!origin && item.id === "home") bindHomeLink(a);
+      if (!origin && item.id === "features") a.addEventListener("click", goFeatures);
       links.appendChild(a);
     });
     el.innerHTML = "";
@@ -79,6 +103,16 @@
     var base = (cfg.BOT_API_URL || "").replace(/\/$/, "");
     if (!base) return null;
     if (!/^https?:\/\//i.test(base)) base = "https://" + base;
+    // If the dashboard is opened on the Railway API host, use same-origin paths
+    // so browser CORS is not required.
+    try {
+      if (typeof window !== "undefined" && window.location && window.location.origin) {
+        var apiHost = new URL(base).host;
+        if (window.location.host === apiHost) {
+          return path.startsWith("/") ? path : "/" + path;
+        }
+      }
+    } catch (_) {}
     return base + (path.startsWith("/") ? path : "/" + path);
   }
 
