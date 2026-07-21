@@ -1,5 +1,5 @@
 /**
- * Public Warframe Market lookup — uses bot /api/wfm/* (CORS-safe proxy to WFM v2).
+ * Public Warframe Market lookup — catalog from Pages; live orders via WFM proxy.
  */
 (function () {
   var ITEMS_CACHE_KEY = "oo_wfm_items_v1";
@@ -28,9 +28,24 @@
       .replace(/"/g, "&quot;");
   }
 
-  function api(path) {
-    if (!window.ObsidianSite || typeof window.ObsidianSite.apiUrl !== "function") return null;
-    return window.ObsidianSite.apiUrl(path);
+  function wfmUrl(path) {
+    if (!window.ObsidianSite) return null;
+    if (typeof window.ObsidianSite.wfmProxyUrl === "function") {
+      return window.ObsidianSite.wfmProxyUrl(path);
+    }
+    if (typeof window.ObsidianSite.apiUrl === "function") {
+      return window.ObsidianSite.apiUrl(path);
+    }
+    return null;
+  }
+
+  function hasDedicatedProxy() {
+    try {
+      var c = (window.ObsidianSite && window.ObsidianSite.config && window.ObsidianSite.config()) || window.OBSIDIAN_SITE || {};
+      return !!(c.WFM_PROXY_URL && String(c.WFM_PROXY_URL).trim());
+    } catch (_) {
+      return false;
+    }
   }
 
   function setStatus(text, kind) {
@@ -100,7 +115,7 @@
       })
       .catch(function () {
         // Fallback: bot proxy (may be rate-limited or not redeployed yet)
-        var url = api("/api/wfm/items");
+        var url = wfmUrl("/api/wfm/items");
         if (!url) {
           setStatus("Could not load catalog — try again later", "error");
           return Promise.reject(new Error("no catalog"));
@@ -379,11 +394,15 @@
       renderDegraded(
         slug,
         platform,
-        "Live order proxy is busy or offline (" + msg + ")"
+        hasDedicatedProxy()
+          ? "Live order proxy is busy or offline (" + msg + ")"
+          : "Set WFM_PROXY_URL in config.js (see deploy/wfm-proxy/README.md) — " + msg
       );
     }
 
-    var url = api("/api/wfm/items/" + encodeURIComponent(slug) + "?platform=" + encodeURIComponent(platform));
+    var url = wfmUrl(
+      "/api/wfm/items/" + encodeURIComponent(slug) + "?platform=" + encodeURIComponent(platform)
+    );
     if (!url) {
       finishFail(new Error("API not configured"));
       return;

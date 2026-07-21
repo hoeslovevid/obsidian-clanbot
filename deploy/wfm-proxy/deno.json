@@ -1,0 +1,6 @@
+{
+  "deploy": {
+    "project": "obsidian-wfm",
+    "entrypoint": "main.ts"
+  }
+}

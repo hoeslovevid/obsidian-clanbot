@@ -1,0 +1,54 @@
+# Deploy the standalone WFM order proxy to Deno Deploy (*.deno.dev).
+# Does not require Cloudflare DNS on obsidianoverseer.com.
+name: Deploy WFM proxy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "deploy/wfm-proxy/**"
+      - ".github/workflows/deploy-wfm-proxy.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Require Deno token
+        id: check
+        env:
+          TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "DENO_DEPLOY_TOKEN is not set — skipping deploy. See deploy/wfm-proxy/README.md"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Deno
+        if: steps.check.outputs.skip != 'true'
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Deploy to Deno Deploy
+        if: steps.check.outputs.skip != 'true'
+        env:
+          DENO_DEPLOY_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
+        run: |
+          deno install -g -A jsr:@deno/deployctl@1.13.1
+          echo "$HOME/.deno/bin" >> "$GITHUB_PATH"
+          PROJECT="${{ secrets.DENO_PROJECT }}"
+          if [ -z "$PROJECT" ]; then PROJECT="obsidian-wfm"; fi
+          deployctl deploy \
+            --project="$PROJECT" \
+            --entrypoint=main.ts \
+            --token="$DENO_DEPLOY_TOKEN"
+        working-directory: deploy/wfm-proxy

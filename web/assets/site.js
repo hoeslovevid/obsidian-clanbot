@@ -337,6 +337,16 @@
     return base + (path.startsWith("/") ? path : "/" + path);
   }
 
+  /** Live Market orders host (Deno Deploy). Falls back to BOT_API_URL. */
+  function wfmProxyUrl(path) {
+    var base = (cfg().WFM_PROXY_URL || "").replace(/\/$/, "");
+    if (base) {
+      if (!/^https?:\/\//i.test(base)) base = "https://" + base;
+      return base + (path.startsWith("/") ? path : "/" + path);
+    }
+    return apiUrl(path);
+  }
+
   function formatCount(n) {
     if (n == null || isNaN(n)) return "—";
     return Number(n).toLocaleString("en-US");
@@ -555,6 +565,7 @@
     renderNav: renderNav,
     renderFooter: renderFooter,
     apiUrl: apiUrl,
+    wfmProxyUrl: wfmProxyUrl,
     dashboardUrl: dashboardUrl,
     inviteUrl: inviteUrl,
     loadPublicBotStats: loadPublicBotStats,
