@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
-"""Export core/changelog.py into web/assets/changelog.json for the website."""
+"""Export core/changelog.py into web/assets for the website.
+
+Writes:
+  - changelog.json — full release list for /changelog.html
+  - bot-status.json — version for the home-page status line (same-origin; no Railway)
+"""
 from __future__ import annotations
 
 import json
 import os
 import re
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -21,7 +27,8 @@ from core.changelog import (  # noqa: E402
 )
 from core.config import BOT_VERSION  # noqa: E402
 
-OUT = ROOT / "web" / "assets" / "changelog.json"
+OUT_CHANGELOG = ROOT / "web" / "assets" / "changelog.json"
+OUT_STATUS = ROOT / "web" / "assets" / "bot-status.json"
 MAX_HISTORY = 12
 
 
@@ -56,10 +63,27 @@ def main() -> None:
             }
         )
 
-    payload = {"version": BOT_VERSION, "entries": entries}
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-    print(f"Wrote {OUT} ({len(entries)} entries, version {BOT_VERSION})")
+    now = datetime.now(timezone.utc).isoformat()
+    OUT_CHANGELOG.parent.mkdir(parents=True, exist_ok=True)
+    OUT_CHANGELOG.write_text(
+        json.dumps({"version": BOT_VERSION, "entries": entries}, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    OUT_STATUS.write_text(
+        json.dumps(
+            {
+                "ok": True,
+                "version": BOT_VERSION,
+                "updated_at": now,
+                "source": "deploy",
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    print(f"Wrote {OUT_CHANGELOG} ({len(entries)} entries)")
+    print(f"Wrote {OUT_STATUS} (version {BOT_VERSION})")
 
 
 if __name__ == "__main__":

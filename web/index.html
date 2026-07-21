@@ -251,14 +251,14 @@
         if (stats.user_count != null) {
           parts.push(window.ObsidianSite.formatCount(stats.user_count) + " users");
         }
-        var statusBit = "";
         if (online === true) {
-          statusBit = '<span class="dot-online" aria-hidden="true"></span>Online';
+          var statusBit = '<span class="dot-online" aria-hidden="true"></span>Online';
           if (version) statusBit += " · v" + version;
-        } else if (online === false) {
-          statusBit = '<span class="dot-offline" aria-hidden="true"></span>Status unavailable';
+          parts.push(statusBit);
+        } else if (version) {
+          // Published version without live ping — still show version, not "unavailable".
+          parts.push("v" + version);
         }
-        if (statusBit) parts.push(statusBit);
         meta.innerHTML = parts.length ? parts.join(" · ") : "—";
         meta.classList.remove("loading");
       }
@@ -272,23 +272,16 @@
           renderMeta();
         });
 
-        var url = window.ObsidianSite.apiUrl("/api/ping");
-        if (url) {
-          fetch(url + (url.indexOf("?") >= 0 ? "&" : "?") + "_=" + Date.now(), { cache: "no-store" })
-            .then(function (r) { if (!r.ok) throw new Error(); return r.json(); })
-            .then(function (data) {
-              online = data.ok !== false;
-              version = data.version || null;
-              renderMeta();
-            })
-            .catch(function () {
-              online = false;
-              renderMeta();
-            });
-        } else {
-          online = false;
+        window.ObsidianSite.resolveBotStatus().then(function (status) {
+          if (status) {
+            online = !!status.online;
+            version = status.version || null;
+          } else {
+            online = false;
+            version = null;
+          }
           renderMeta();
-        }
+        });
       }
 
       var toggle = document.getElementById("features-toggle");

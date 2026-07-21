@@ -394,35 +394,109 @@
     if (!el) return;
     el.classList.remove("online", "offline");
     el.classList.add(online ? "online" : "offline");
-    var label = online ? "Bot online" : "Status unavailable";
-    if (online && version) label += " · v" + version;
+    var label;
+    if (online) {
+      label = "Bot online";
+      if (version) label += " · v" + version;
+    } else if (version) {
+      // Same-origin publish fallback — don't show a scary "unavailable" when Railway is blocked.
+      el.classList.remove("offline");
+      el.classList.add("online");
+      label = "v" + version;
+    } else {
+      label = "Status unavailable";
+    }
     el.innerHTML = '<span class="site-status-dot" aria-hidden="true"></span>' + label;
   }
 
-  function loadBotStatus(el) {
-    if (!el) return Promise.resolve(null);
+  function loadPublishedStatus() {
+    return fetch("/assets/bot-status.json", { cache: "no-cache" })
+      .then(function (res) {
+        if (!res.ok) throw new Error("bot-status missing");
+        return res.json();
+      })
+      .catch(function () {
+        return fetch("/assets/changelog.json", { cache: "no-cache" }).then(function (res) {
+          if (!res.ok) throw new Error("changelog missing");
+          return res.json();
+        });
+      })
+      .then(function (data) {
+        if (!data) return null;
+        return {
+          ok: data.ok !== false,
+          version: data.version || null,
+          source: data.source || "static",
+        };
+      })
+      .catch(function () {
+        return null;
+      });
+  }
+
+  function tryLivePing() {
     var url = apiUrl("/api/ping");
-    if (!url) {
-      setStatusEl(el, false);
-      return Promise.resolve(null);
-    }
+    if (!url) return Promise.resolve(null);
     return fetch(url + (url.indexOf("?") >= 0 ? "&" : "?") + "_=" + Date.now(), {
       cache: "no-store",
+      mode: "cors",
     })
       .then(function (res) {
         if (!res.ok) throw new Error("ping " + res.status);
+        var ct = (res.headers.get("content-type") || "").toLowerCase();
+        if (ct.indexOf("application/json") < 0) throw new Error("ping not json");
         return res.json();
       })
       .then(function (data) {
-        var version = data.version || data.bot_version || null;
-        var online = data.ok !== false && data.status !== "error";
-        setStatusEl(el, online, version);
-        return data;
+        if (!data || data.ok === false) throw new Error("ping unhealthy");
+        return {
+          ok: true,
+          version: data.version || data.bot_version || null,
+          live: true,
+        };
       })
       .catch(function () {
-        setStatusEl(el, false);
         return null;
       });
+  }
+
+  /**
+   * Resolve bot status for the site.
+   * Prefers live /api/ping when Railway allows it; otherwise uses same-origin
+   * bot-status.json / changelog.json so the marketing site never depends on CORS.
+   * Returns { online, version, live } or null.
+   */
+  function resolveBotStatus() {
+    return Promise.all([loadPublishedStatus(), tryLivePing()]).then(function (pair) {
+      var published = pair[0];
+      var live = pair[1];
+      if (live) {
+        return {
+          online: true,
+          version: live.version || (published && published.version) || null,
+          live: true,
+        };
+      }
+      if (published && published.version) {
+        return {
+          online: true,
+          version: published.version,
+          live: false,
+        };
+      }
+      return { online: false, version: null, live: false };
+    });
+  }
+
+  function loadBotStatus(el) {
+    return resolveBotStatus().then(function (status) {
+      if (!status) {
+        if (el) setStatusEl(el, false, null);
+        return null;
+      }
+      if (el) setStatusEl(el, status.online, status.version);
+      return status;
+    });
   }
 
   function initChrome() {
@@ -438,6 +512,7 @@
     inviteUrl: inviteUrl,
     loadPublicBotStats: loadPublicBotStats,
     loadBotStatus: loadBotStatus,
+    resolveBotStatus: resolveBotStatus,
     formatCount: formatCount,
     config: cfg,
   };
