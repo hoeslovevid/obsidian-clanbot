@@ -1,0 +1,8 @@
+# Separate Railway service for Market live orders (do not use the Discord bot service).
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+startCommand = "python server.py"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
