@@ -17,6 +17,7 @@ const UA = "ObsidianOverseerWfmProxy/1.0 (+https://obsidianoverseer.com)";
 
 const ALLOWED_ORIGINS = new Set([
   "https://obsidianoverseer.com",
+  "https://www.obsidianoverseer.com",
   "http://localhost:5500",
   "http://127.0.0.1:5500",
   "http://localhost:8080",
@@ -27,23 +28,24 @@ const PLATFORMS = new Set(["pc", "xbox", "ps4", "switch", "complete"]);
 
 function corsHeaders(req: Request): HeadersInit {
   const origin = (req.headers.get("Origin") || "").replace(/\/$/, "");
-  const headers: Record<string, string> = {
-    Vary: "Origin, Platform",
-    "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Accept, Platform, Language",
-    "Access-Control-Max-Age": "86400",
-  };
-  if (
+  // Public read-only API — wildcard avoids brittle Origin matching / preflight failures.
+  const allow =
     origin &&
     (ALLOWED_ORIGINS.has(origin) ||
       origin.endsWith(".obsidianoverseer.com") ||
       origin.endsWith(".github.io") ||
+      origin.endsWith(".deno.net") ||
       origin.startsWith("http://localhost:") ||
       origin.startsWith("http://127.0.0.1:"))
-  ) {
-    headers["Access-Control-Allow-Origin"] = origin;
-  }
-  return headers;
+      ? origin
+      : "*";
+  return {
+    "Access-Control-Allow-Origin": allow,
+    "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Accept, Platform, Language, Cache-Control",
+    "Access-Control-Max-Age": "86400",
+    Vary: "Origin, Platform",
+  };
 }
 
 function json(req: Request, data: unknown, status = 200, cache = "public, max-age=45") {

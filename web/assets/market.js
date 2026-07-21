@@ -29,11 +29,24 @@
   }
 
   function wfmUrl(path) {
-    if (!window.ObsidianSite) return null;
-    if (typeof window.ObsidianSite.wfmProxyUrl === "function") {
+    var base = "";
+    try {
+      var c =
+        (window.ObsidianSite && typeof window.ObsidianSite.config === "function"
+          ? window.ObsidianSite.config()
+          : null) ||
+        window.OBSIDIAN_SITE ||
+        {};
+      base = (c.WFM_PROXY_URL || "").replace(/\/$/, "");
+    } catch (_) {}
+    if (base) {
+      if (!/^https?:\/\//i.test(base)) base = "https://" + base;
+      return base + (path.startsWith("/") ? path : "/" + path);
+    }
+    if (window.ObsidianSite && typeof window.ObsidianSite.wfmProxyUrl === "function") {
       return window.ObsidianSite.wfmProxyUrl(path);
     }
-    if (typeof window.ObsidianSite.apiUrl === "function") {
+    if (window.ObsidianSite && typeof window.ObsidianSite.apiUrl === "function") {
       return window.ObsidianSite.apiUrl(path);
     }
     return null;
@@ -408,7 +421,7 @@
       return;
     }
 
-    fetch(url, { mode: "cors", cache: "no-cache" })
+    fetch(url, { mode: "cors", credentials: "omit", cache: "default" })
       .then(function (res) {
         if (res.status === 404) throw new Error("Item not found");
         if (!res.ok) throw new Error("HTTP " + res.status);
