@@ -935,22 +935,50 @@ async def fetch_events_data() -> Optional[List[Dict[str, Any]]]:
         return None
 
 
+_WFM_V2_BASE = "https://api.warframe.market/v2"
+_WFM_UA = "ObsidianOverseer/1.0 (+https://obsidianoverseer.com; market lookup)"
+_VALID_WFM_PLATFORMS = frozenset({"pc", "xbox", "ps4", "switch", "complete"})
+
+
+def _wfm_platform(platform: str) -> str:
+    p = (platform or "pc").strip().lower()
+    return p if p in _VALID_WFM_PLATFORMS else "pc"
+
+
+def _wfm_headers(platform: str = "pc") -> Dict[str, str]:
+    return {
+        "Language": "en",
+        "Accept": "application/json",
+        "Platform": _wfm_platform(platform),
+        "User-Agent": _WFM_UA,
+        "Origin": "https://warframe.market",
+        "Referer": "https://warframe.market/",
+    }
+
+
+def _wfm_i18n_en(raw: Dict[str, Any]) -> Dict[str, Any]:
+    i18n = raw.get("i18n")
+    if isinstance(i18n, dict):
+        en = i18n.get("en")
+        if isinstance(en, dict):
+            return en
+    en_direct = raw.get("en")
+    return en_direct if isinstance(en_direct, dict) else {}
+
+
 def _normalize_item_payload(raw: Dict[str, Any], fallback_url_name: str) -> Optional[Dict[str, Any]]:
-    """Extract item_name and url_name from API payload.item (handles different response shapes)."""
+    """Extract item_name and url_name from API payload.item (handles v1 + v2 shapes)."""
     if not raw:
         return None
-    # Direct fields (list-style response)
-    item_name = raw.get("item_name")
-    url_name = raw.get("url_name") or fallback_url_name
-    # Nested en (single-item response sometimes has item_name under en)
-    if not item_name and isinstance(raw.get("en"), dict):
-        item_name = raw["en"].get("item_name")
-    # items_in_set: use first entry for display name
+    en = _wfm_i18n_en(raw)
+    item_name = raw.get("item_name") or en.get("name") or en.get("item_name")
+    url_name = raw.get("url_name") or raw.get("slug") or fallback_url_name
     if not item_name and raw.get("items_in_set"):
         first = raw["items_in_set"][0] if raw["items_in_set"] else {}
-        item_name = first.get("en", {}).get("item_name") if isinstance(first.get("en"), dict) else first.get("item_name")
+        first_en = _wfm_i18n_en(first) if isinstance(first, dict) else {}
+        item_name = first_en.get("name") or first.get("item_name")
     if not item_name:
-        item_name = url_name.replace("_", " ").title()
+        item_name = str(url_name).replace("_", " ").title()
     return {"item_name": item_name, "url_name": url_name, **raw}
 
 
@@ -964,33 +992,123 @@ def _extract_items_list(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
     return []
 
 
-async def _fetch_warframe_market_items_list() -> List[Dict[str, Any]]:
-    """Fetch full Warframe Market items list. Cached for 5 minutes."""
-    from core.cache_utils import get_cached
+def _normalize_v2_list_item(raw: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Map a v2 /items entry to the flat shape Discord + the website expect."""
+    if not isinstance(raw, dict):
+        return None
+    slug = (raw.get("slug") or raw.get("url_name") or "").strip()
+    if not slug:
+        return None
+    en = _wfm_i18n_en(raw)
+    name = (en.get("name") or raw.get("item_name") or slug.replace("_", " ").title()).strip()
+    return {
+        "item_name": name,
+        "url_name": slug,
+        "slug": slug,
+        "thumb": en.get("thumb") or "",
+        "icon": en.get("icon") or "",
+        "tags": raw.get("tags") or [],
+        "ducats": raw.get("ducats"),
+        "id": raw.get("id"),
+    }
 
-    async def _fetch():
-        headers = {
-            "Language": "en",
-            "Accept": "application/json",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Origin": "https://warframe.market",
-            "Referer": "https://warframe.market/",
-        }
-        proxy = _market_proxy()
+
+async def _wfm_v2_get(path: str, *, platform: str = "pc") -> Optional[Dict[str, Any]]:
+    """GET a warframe.market v2 JSON endpoint. Returns parsed body or None."""
+    url = f"{_WFM_V2_BASE}/{path.lstrip('/')}"
+    proxy = _market_proxy()
+    try:
         async with aiohttp.ClientSession() as session:
             async with session.get(
-                "https://api.warframe.market/v1/items",
-                headers=headers,
-                timeout=aiohttp.ClientTimeout(total=20),
+                url,
+                headers=_wfm_headers(platform),
+                timeout=aiohttp.ClientTimeout(total=25),
                 proxy=proxy,
             ) as resp:
                 if resp.status != 200:
-                    return []
-                data = await resp.json()
-                payload = data.get("payload") or data
-                return _extract_items_list(payload) if isinstance(payload, dict) else []
+                    logger.warning("WFM v2 %s returned %s", path, resp.status)
+                    return None
+                data = await resp.json(content_type=None)
+                return data if isinstance(data, dict) else None
+    except Exception as e:
+        logger.error("WFM v2 GET %s failed: %s: %s", path, type(e).__name__, e)
+        return None
 
-    return await get_cached("warframe_market:items_list", 300, _fetch)
+
+async def _fetch_warframe_market_items_list() -> List[Dict[str, Any]]:
+    """Fetch full Warframe Market items list (v2). Cached for 10 minutes."""
+    from core.cache_utils import get_cached
+
+    async def _fetch():
+        data = await _wfm_v2_get("items")
+        if not data:
+            return []
+        raw_list = data.get("data")
+        if not isinstance(raw_list, list):
+            # Legacy v1 fallback shape
+            payload = data.get("payload") or data
+            raw_list = _extract_items_list(payload) if isinstance(payload, dict) else []
+        out: List[Dict[str, Any]] = []
+        for raw in raw_list:
+            norm = _normalize_v2_list_item(raw) if "slug" in (raw or {}) else None
+            if norm is None and isinstance(raw, dict):
+                # v1-style list entry
+                uname = raw.get("url_name") or ""
+                if not uname:
+                    continue
+                norm = {
+                    "item_name": raw.get("item_name") or uname.replace("_", " ").title(),
+                    "url_name": uname,
+                    "slug": uname,
+                    "thumb": raw.get("thumb") or "",
+                    "icon": raw.get("icon") or "",
+                    "tags": raw.get("tags") or [],
+                    "ducats": raw.get("ducats"),
+                    "id": raw.get("id"),
+                }
+            if norm:
+                out.append(norm)
+        return out
+
+    return await get_cached("warframe_market:items_list_v2", 600, _fetch)
+
+
+async def fetch_wfm_item_detail(slug: str, platform: str = "pc") -> Optional[Dict[str, Any]]:
+    """Fetch a single item from WFM v2. Cached 5 minutes."""
+    from core.cache_utils import get_cached
+
+    slug = (slug or "").strip().lower()
+    if not slug or not _re.fullmatch(r"[a-z0-9_]+", slug):
+        return None
+    platform = _wfm_platform(platform)
+
+    async def _fetch():
+        data = await _wfm_v2_get(f"items/{slug}", platform=platform)
+        if not data:
+            return None
+        raw = data.get("data")
+        return raw if isinstance(raw, dict) else None
+
+    return await get_cached(f"warframe_market:item_v2:{slug}:{platform}", 300, _fetch)
+
+
+async def fetch_wfm_orders(slug: str, platform: str = "pc") -> Optional[List[Dict[str, Any]]]:
+    """Fetch live orders for a slug from WFM v2. Cached 45 seconds."""
+    from core.cache_utils import get_cached
+
+    slug = (slug or "").strip().lower()
+    if not slug or not _re.fullmatch(r"[a-z0-9_]+", slug):
+        return None
+    platform = _wfm_platform(platform)
+
+    async def _fetch():
+        data = await _wfm_v2_get(f"orders/item/{slug}", platform=platform)
+        if not data:
+            return None
+        orders = data.get("data")
+        return orders if isinstance(orders, list) else []
+
+    return await get_cached(f"warframe_market:orders_v2:{slug}:{platform}", 45, _fetch)
 
 
 async def autocomplete_market_item_names(current: str, *, limit: int = 25) -> list[str]:
@@ -1047,57 +1165,25 @@ async def search_warframe_market_item(item_name: str, platform: str = "pc") -> O
                 _, best = scored[0]
                 return _normalize_item_payload(best, best.get("url_name", search_name))
 
-        # Fallback: direct GET by url_name variants
-        headers = {
-            "Language": "en",
-            "Accept": "application/json",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Origin": "https://warframe.market",
-            "Referer": "https://warframe.market/",
-        }
-        timeout = aiohttp.ClientTimeout(total=20)
-        proxy = _market_proxy()
-
-        async with aiohttp.ClientSession() as session:
-            def _url_variants() -> List[str]:
-                seen: set = set()
-                out: List[str] = []
-                candidates = [search_name]
-                if not search_name.endswith("_set"):
-                    candidates.append(search_name + "_set")
-                replaced = search_name.replace("_set", "").rstrip("_")
-                if replaced:
-                    candidates.append(replaced)
-                for s in ("_blueprint", "_receiver", "_barrel", "_chassis", "_neuroptics", "_systems"):
-                    if not search_name.endswith(s):
-                        candidates.append(search_name + s)
-                for cand in candidates:
-                    if cand not in seen:
-                        seen.add(cand)
-                        out.append(cand)
-                return out
-
-            for url_name in _url_variants():
-                if not url_name:
-                    continue
-                try:
-                    async with session.get(
-                        f"https://api.warframe.market/v1/items/{url_name}",
-                        headers=headers,
-                        timeout=timeout,
-                        proxy=proxy
-                    ) as response:
-                        if response.status == 200:
-                            data = await response.json()
-                            payload = data.get("payload", {})
-                            item = payload.get("item")
-                            if item:
-                                out = _normalize_item_payload(item, url_name)
-                                if out:
-                                    return out
-                except Exception:
-                    continue
-            return None
+        # Fallback: direct GET by slug variants (v2)
+        seen: set = set()
+        candidates = [search_name]
+        if not search_name.endswith("_set"):
+            candidates.append(search_name + "_set")
+        replaced = search_name.replace("_set", "").rstrip("_")
+        if replaced:
+            candidates.append(replaced)
+        for s in ("_blueprint", "_receiver", "_barrel", "_chassis", "_neuroptics", "_systems"):
+            if not search_name.endswith(s):
+                candidates.append(search_name + s)
+        for url_name in candidates:
+            if not url_name or url_name in seen:
+                continue
+            seen.add(url_name)
+            detail = await fetch_wfm_item_detail(url_name, platform=platform)
+            if detail:
+                return _normalize_item_payload(detail, url_name)
+        return None
     except Exception as e:
         logger.error(f"Error searching Warframe Market for {item_name}: {e}")
         return None
@@ -1349,72 +1435,52 @@ async def calculate_next_devstream_date() -> Optional[datetime]:
         return None
 
 
+def _order_type(order: Dict[str, Any]) -> str:
+    """Normalize v1 order_type / v2 type to buy|sell."""
+    t = (order.get("type") or order.get("order_type") or "").strip().lower()
+    return t if t in {"buy", "sell"} else ""
+
+
+def _user_status(order: Dict[str, Any]) -> str:
+    user = order.get("user") if isinstance(order.get("user"), dict) else {}
+    return str(user.get("status") or "").strip().lower()
+
+
 async def get_warframe_market_price(item_url_name: str, platform: str = "pc") -> Optional[Dict[str, Any]]:
     """
-    Get price statistics for an item from Warframe Market. Cached for 90 seconds per item/platform.
-    
-    Args:
-        item_url_name: The item's URL name (from search_warframe_market_item)
-        platform: Platform (pc, xbox, ps4, switch)
-    
-    Returns:
-        Price statistics dict with orders and stats, or None if error
+    Get price statistics for an item from Warframe Market (v2). Cached ~45s via orders helper.
+    Prefers online/ingame sellers for the headline low/high.
     """
-    from core.cache_utils import get_cached
+    platform = _wfm_platform(platform)
+    orders = await fetch_wfm_orders(item_url_name, platform=platform)
+    if orders is None:
+        return None
 
-    async def _fetch():
-        try:
-            proxy = _market_proxy()
-            async with aiohttp.ClientSession() as session:
-                wfm_headers = {
-                    "Language": "en",
-                    "Accept": "application/json",
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                    "Origin": "https://warframe.market",
-                    "Referer": "https://warframe.market/",
-                }
-                async with session.get(
-                    f"https://api.warframe.market/v1/items/{item_url_name}/orders",
-                    params={"platform": platform, "status": "ingame"},
-                    headers=wfm_headers,
-                    timeout=aiohttp.ClientTimeout(total=10),
-                    proxy=proxy
-                ) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        orders = data.get("payload", {}).get("orders", [])
-                        async with session.get(
-                            f"https://api.warframe.market/v1/items/{item_url_name}/statistics",
-                            params={"platform": platform},
-                            headers=wfm_headers,
-                            timeout=aiohttp.ClientTimeout(total=10),
-                            proxy=proxy
-                        ) as stats_response:
-                            stats_data = None
-                            if stats_response.status == 200:
-                                stats_data = await stats_response.json()
-                            sell_orders = [o for o in orders if o.get("order_type") == "sell" and o.get("user", {}).get("status") == "ingame"]
-                            buy_orders = [o for o in orders if o.get("order_type") == "buy" and o.get("user", {}).get("status") == "ingame"]
-                            sell_prices = sorted([o.get("platinum", 0) for o in sell_orders if o.get("platinum")])
-                            buy_prices = sorted([o.get("platinum", 0) for o in buy_orders if o.get("platinum")], reverse=True)
-                            result = {
-                                "item_url_name": item_url_name,
-                                "platform": platform,
-                                "sell_orders": sell_orders[:5],
-                                "buy_orders": buy_orders[:5],
-                                "lowest_sell": sell_prices[0] if sell_prices else None,
-                                "highest_buy": buy_prices[0] if buy_prices else None,
-                                "stats": stats_data.get("payload", {}).get("statistics_closed", {}).get("90days", [])[-1] if stats_data else None,
-                            }
-                            return result
-                    else:
-                        logger.warning(f"Warframe Market API returned status {response.status} for {item_url_name}")
-                        return None
-        except Exception as e:
-            logger.error("Error fetching Warframe Market price for %s: %s: %s", item_url_name, type(e).__name__, e, exc_info=True)
-            return None
+    def is_active(o: Dict[str, Any]) -> bool:
+        if o.get("visible") is False:
+            return False
+        return _user_status(o) in {"ingame", "online"}
 
-    return await get_cached(f"warframe_market:price:{item_url_name}:{platform}", 90, _fetch)
+    sell_orders = [o for o in orders if _order_type(o) == "sell" and is_active(o)]
+    buy_orders = [o for o in orders if _order_type(o) == "buy" and is_active(o)]
+    if not sell_orders and not buy_orders:
+        # Fall back to all visible orders when nobody is online
+        sell_orders = [o for o in orders if _order_type(o) == "sell" and o.get("visible") is not False]
+        buy_orders = [o for o in orders if _order_type(o) == "buy" and o.get("visible") is not False]
+
+    sell_orders = sorted(sell_orders, key=lambda o: o.get("platinum") or 10**9)
+    buy_orders = sorted(buy_orders, key=lambda o: -(o.get("platinum") or 0))
+    sell_prices = [o.get("platinum") for o in sell_orders if o.get("platinum")]
+    buy_prices = [o.get("platinum") for o in buy_orders if o.get("platinum")]
+    return {
+        "item_url_name": item_url_name,
+        "platform": platform,
+        "sell_orders": sell_orders[:5],
+        "buy_orders": buy_orders[:5],
+        "lowest_sell": sell_prices[0] if sell_prices else None,
+        "highest_buy": buy_prices[0] if buy_prices else None,
+        "stats": None,
+    }
 
 
 def wf_cache_age_seconds(url: str) -> Optional[float]:

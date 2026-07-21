@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Market — Obsidian Overseer</title>
+  <meta name="description" content="Read-only Warframe Market lookup — search items, see live buy/sell orders, and open warframe.market." />
+  <meta name="theme-color" content="#06070a" />
+  <link rel="canonical" href="https://obsidianoverseer.com/market.html" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://obsidianoverseer.com/market.html" />
+  <meta property="og:title" content="Market — Obsidian Overseer" />
+  <meta property="og:description" content="Search Warframe Market prices and orders. Read-only lookup — trade on warframe.market." />
+  <meta property="og:image" content="https://obsidianoverseer.com/assets/og.jpg" />
+  <link rel="icon" type="image/png" href="/assets/logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/site-nav.css" />
+  <link rel="stylesheet" href="/assets/site.css" />
+  <link rel="stylesheet" href="/assets/market.css" />
+</head>
+<body>
+  <div class="bg-ambient" aria-hidden="true"></div>
+  <div class="bg-grain" aria-hidden="true"></div>
+
+  <div class="page-wrap">
+    <nav id="site-nav" data-active="market"></nav>
+
+    <header class="mk-hero page-hero">
+      <span class="mk-eyebrow"><span class="pulse" aria-hidden="true"></span>Warframe Market · Lookup</span>
+      <h1>Market</h1>
+      <p class="mk-hero-lead">Search items, compare live buy and sell orders, then trade on warframe.market. Read-only — no accounts here.</p>
+    </header>
+
+    <form id="mk-form" class="mk-search" role="search" autocomplete="off">
+      <label class="mk-field mk-field-grow">
+        <span class="mk-label">Item</span>
+        <input
+          id="mk-query"
+          type="search"
+          name="q"
+          placeholder="Loki Prime Set, Arcane Energize…"
+          maxlength="80"
+          spellcheck="false"
+          aria-autocomplete="list"
+          aria-controls="mk-suggest"
+          aria-expanded="false"
+        />
+        <ul id="mk-suggest" class="mk-suggest" role="listbox" hidden></ul>
+      </label>
+      <label class="mk-field">
+        <span class="mk-label">Platform</span>
+        <select id="mk-platform" name="platform">
+          <option value="pc" selected>PC</option>
+          <option value="xbox">Xbox</option>
+          <option value="ps4">PlayStation</option>
+          <option value="switch">Switch</option>
+        </select>
+      </label>
+      <button type="submit" class="btn-primary mk-submit">Look up</button>
+    </form>
+
+    <div class="mk-toolbar">
+      <div id="mk-status" class="mk-status" aria-live="polite"><span class="dot" aria-hidden="true"></span>Load an item to see prices</div>
+      <button type="button" id="mk-refresh" class="btn-secondary" hidden>Refresh</button>
+    </div>
+
+    <div id="mk-root" class="mk-root" aria-busy="false">
+      <div class="mk-empty-state">
+        <p>Start typing an item name. Results come from warframe.market via our API — then open the official listing to whisper and trade.</p>
+      </div>
+    </div>
+
+    <div class="mk-cta-strip">
+      <p><strong>Want prices in Discord?</strong> Add Obsidian Overseer and ask about market commands in your server.</p>
+      <a id="mk-invite" class="btn-primary" href="#" target="_blank" rel="noopener noreferrer">Add to Discord</a>
+    </div>
+    <p class="mk-footnote">
+      Prices and orders from
+      <a href="https://warframe.market/" target="_blank" rel="noopener noreferrer">warframe.market</a>
+      (unofficial API). Not affiliated with Digital Extremes or warframe.market. Always verify before trading.
+    </p>
+
+    <footer id="site-footer"></footer>
+  </div>
+
+  <script src="/assets/config.js"></script>
+  <script src="/assets/site.js"></script>
+  <script src="/assets/market.js"></script>
+  <script>
+    (function () {
+      var a = document.getElementById("mk-invite");
+      if (a && window.ObsidianSite) a.href = window.ObsidianSite.inviteUrl();
+    })();
+  </script>
+</body>
+</html>

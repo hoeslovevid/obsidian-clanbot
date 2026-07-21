@@ -1,0 +1,457 @@
+/* Public Warframe Market lookup */
+
+.mk-hero {
+  padding: 12px 0 8px;
+  max-width: none;
+}
+
+.mk-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 5px 12px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent-bright);
+  background: rgba(232, 168, 74, 0.1);
+  border: 1px solid rgba(232, 168, 74, 0.25);
+  border-radius: 999px;
+}
+
+.mk-eyebrow .pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--live, #6bcf7f);
+  box-shadow: 0 0 0 0 rgba(107, 207, 127, 0.5);
+  animation: mk-pulse 2s ease-out infinite;
+}
+
+.mk-hero h1 {
+  font-family: var(--font-display);
+  font-size: clamp(1.9rem, 4.5vw, 2.5rem);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  margin-bottom: 10px;
+}
+
+.mk-hero-lead {
+  max-width: 48ch;
+  color: var(--text-muted);
+  font-size: 1.02rem;
+  margin-bottom: 8px;
+}
+
+.mk-search {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin: 20px 0 12px;
+}
+
+.mk-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+  min-width: 140px;
+}
+
+.mk-field-grow {
+  flex: 1 1 240px;
+}
+
+.mk-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.mk-field input,
+.mk-field select {
+  width: 100%;
+  padding: 12px 14px;
+  font: inherit;
+  font-size: 0.95rem;
+  color: var(--text);
+  background: rgba(15, 17, 21, 0.85);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.mk-field input:focus,
+.mk-field select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(232, 168, 74, 0.15);
+}
+
+.mk-submit {
+  align-self: flex-end;
+  white-space: nowrap;
+}
+
+.mk-suggest {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 50;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  max-height: 280px;
+  overflow: auto;
+  background: rgba(12, 14, 18, 0.98);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+}
+
+.mk-suggest li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.mk-suggest li:hover,
+.mk-suggest li[aria-selected="true"] {
+  background: rgba(232, 168, 74, 0.12);
+  color: var(--text);
+}
+
+.mk-suggest img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  border-radius: 4px;
+  background: var(--surface2);
+  flex-shrink: 0;
+}
+
+.mk-suggest .mk-tag {
+  margin-left: auto;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.mk-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 4px 0 18px;
+}
+
+.mk-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: rgba(15, 17, 21, 0.7);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.mk-status .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-subtle);
+}
+
+.mk-status.live .dot {
+  background: var(--live, #6bcf7f);
+  box-shadow: 0 0 0 0 rgba(107, 207, 127, 0.5);
+  animation: mk-pulse 2s ease-out infinite;
+}
+
+.mk-status.error .dot {
+  background: #f87171;
+}
+
+.mk-status.loading .dot {
+  background: var(--accent-bright);
+}
+
+.mk-root {
+  min-height: 180px;
+}
+
+.mk-empty-state {
+  padding: 28px 22px;
+  color: var(--text-muted);
+  background: rgba(15, 17, 21, 0.55);
+  border: 1px dashed var(--border);
+  border-radius: 16px;
+  max-width: 52ch;
+}
+
+.mk-card {
+  display: grid;
+  gap: 18px;
+}
+
+.mk-item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: flex-start;
+  padding: 20px;
+  background: rgba(15, 17, 21, 0.75);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+
+.mk-item-art {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  border-radius: 10px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+}
+
+.mk-item-body {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.mk-item-body h2 {
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0 0 8px;
+}
+
+.mk-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.mk-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.mk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.mk-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.mk-stat {
+  padding: 14px 16px;
+  background: rgba(15, 17, 21, 0.7);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.mk-stat strong {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-bright);
+  margin-bottom: 6px;
+}
+
+.mk-stat .mk-plat {
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.mk-stat span {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.8rem;
+  color: var(--text-subtle);
+}
+
+.mk-orders {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.mk-panel {
+  background: rgba(15, 17, 21, 0.7);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.mk-panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.mk-panel-head h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.mk-panel-head span {
+  font-size: 0.78rem;
+  color: var(--text-subtle);
+}
+
+.mk-table-wrap {
+  overflow-x: auto;
+}
+
+.mk-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+}
+
+.mk-table th,
+.mk-table td {
+  padding: 10px 14px;
+  text-align: left;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.mk-table th {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.mk-table tr:last-child td {
+  border-bottom: none;
+}
+
+.mk-table .mk-plat-cell {
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--accent-bright);
+  white-space: nowrap;
+}
+
+.mk-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: capitalize;
+  color: var(--text-muted);
+}
+
+.mk-status-pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-subtle);
+}
+
+.mk-status-pill.ingame::before {
+  background: #6bcf7f;
+}
+
+.mk-status-pill.online::before {
+  background: #60a5fa;
+}
+
+.mk-status-pill.offline::before {
+  background: #6b7280;
+}
+
+.mk-cta-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 28px 0 12px;
+  padding: 18px 20px;
+  background: rgba(232, 168, 74, 0.08);
+  border: 1px solid rgba(232, 168, 74, 0.22);
+  border-radius: 16px;
+}
+
+.mk-cta-strip p {
+  margin: 0;
+  color: var(--text-muted);
+  max-width: 48ch;
+  font-size: 0.95rem;
+}
+
+.mk-cta-strip code {
+  font-size: 0.85em;
+  color: var(--accent-bright);
+}
+
+.mk-footnote {
+  margin: 0 0 32px;
+  font-size: 0.8rem;
+  color: var(--text-subtle);
+}
+
+@keyframes mk-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(107, 207, 127, 0.55); }
+  70% { box-shadow: 0 0 0 8px rgba(107, 207, 127, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(107, 207, 127, 0); }
+}
+
+@media (max-width: 640px) {
+  .mk-submit {
+    width: 100%;
+  }
+
+  .mk-item {
+    padding: 16px;
+  }
+}

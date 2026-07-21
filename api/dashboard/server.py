@@ -31,6 +31,15 @@ from core.config import (
     DISCORD_CLIENT_SECRET,
     PROJECT_ROOT,
 )
+from api.warframe_api import (
+    _order_type,
+    _user_status,
+    _wfm_i18n_en,
+    _wfm_platform,
+    _fetch_warframe_market_items_list,
+    fetch_wfm_item_detail,
+    fetch_wfm_orders,
+)
 from core.dashboard_data import (
     create_guild_giveaway,
     end_guild_giveaway,
@@ -550,6 +559,119 @@ async def handle_contact(request: web.Request) -> web.Response:
     return _json({"ok": True})
 
 
+def _wfm_asset_url(path: str | None) -> str | None:
+    if not path:
+        return None
+    path = str(path).lstrip("/")
+    if path.startswith("http://") or path.startswith("https://"):
+        return path
+    return f"https://warframe.market/static/assets/{path}"
+
+
+def _slim_order(order: dict) -> dict:
+    user = order.get("user") if isinstance(order.get("user"), dict) else {}
+    return {
+        "type": _order_type(order),
+        "platinum": order.get("platinum"),
+        "quantity": order.get("quantity"),
+        "visible": order.get("visible", True),
+        "user": {
+            "ingameName": user.get("ingameName") or user.get("ingame_name") or "?",
+            "reputation": user.get("reputation"),
+            "status": _user_status(order) or "offline",
+            "platform": user.get("platform"),
+        },
+    }
+
+
+async def handle_wfm_items(request: web.Request) -> web.Response:
+    """Public catalog for the marketing-site market lookup (slimmed v2 list)."""
+    items = await _fetch_warframe_market_items_list()
+    slim = [
+        {
+            "slug": it.get("slug") or it.get("url_name"),
+            "name": it.get("item_name"),
+            "thumb": _wfm_asset_url(it.get("thumb")),
+            "tags": it.get("tags") or [],
+        }
+        for it in items
+        if it.get("slug") or it.get("url_name")
+    ]
+    return _json({"ok": True, "count": len(slim), "items": slim})
+
+
+async def handle_wfm_item(request: web.Request) -> web.Response:
+    """Public item detail + order summary for market.html."""
+    slug = (request.match_info.get("slug") or "").strip().lower()
+    platform = _wfm_platform(request.query.get("platform") or "pc")
+    if not slug:
+        return _json({"error": "bad_slug", "message": "Missing item slug."}, status=400)
+
+    item = await fetch_wfm_item_detail(slug, platform=platform)
+    if not item:
+        return _json({"error": "not_found", "message": "Item not found."}, status=404)
+
+    orders = await fetch_wfm_orders(slug, platform=platform) or []
+    visible = [o for o in orders if o.get("visible") is not False]
+    sells = [o for o in visible if _order_type(o) == "sell"]
+    buys = [o for o in visible if _order_type(o) == "buy"]
+
+    def active_first(rows: list[dict], *, reverse: bool = False) -> list[dict]:
+        def rank(o: dict) -> tuple:
+            st = _user_status(o)
+            online = 0 if st == "ingame" else (1 if st == "online" else 2)
+            plat = o.get("platinum") or 0
+            return (online, -plat if reverse else plat)
+
+        return sorted(rows, key=rank)
+
+    sells_sorted = active_first(sells, reverse=False)
+    buys_sorted = active_first(buys, reverse=True)
+
+    def headline(rows: list[dict], *, reverse: bool = False) -> int | None:
+        preferred = [o for o in rows if _user_status(o) in {"ingame", "online"}]
+        pool = preferred or rows
+        if not pool:
+            return None
+        prices = [o.get("platinum") for o in pool if o.get("platinum") is not None]
+        if not prices:
+            return None
+        return max(prices) if reverse else min(prices)
+
+    en = _wfm_i18n_en(item)
+    name = en.get("name") or slug.replace("_", " ").title()
+    return _json(
+        {
+            "ok": True,
+            "platform": platform,
+            "item": {
+                "slug": item.get("slug") or slug,
+                "name": name,
+                "thumb": _wfm_asset_url(en.get("thumb")),
+                "icon": _wfm_asset_url(en.get("icon")),
+                "tags": item.get("tags") or [],
+                "ducats": item.get("ducats"),
+                "tradingTax": item.get("tradingTax"),
+                "reqMasteryRank": item.get("reqMasteryRank"),
+                "tradable": item.get("tradable", True),
+                "setRoot": item.get("setRoot"),
+                "setParts": item.get("setParts") or [],
+                "marketUrl": f"https://warframe.market/items/{item.get('slug') or slug}",
+            },
+            "summary": {
+                "lowestSell": headline(sells_sorted, reverse=False),
+                "highestBuy": headline(buys_sorted, reverse=True),
+                "sellCount": len(sells),
+                "buyCount": len(buys),
+                "onlineSell": sum(1 for o in sells if _user_status(o) in {"ingame", "online"}),
+                "onlineBuy": sum(1 for o in buys if _user_status(o) in {"ingame", "online"}),
+            },
+            "sellOrders": [_slim_order(o) for o in sells_sorted[:40]],
+            "buyOrders": [_slim_order(o) for o in buys_sorted[:40]],
+        }
+    )
+
+
 def create_app(bot: discord.Client) -> web.Application:
     app = web.Application(middlewares=[cors_middleware])
     app["bot"] = bot
@@ -565,6 +687,8 @@ def create_app(bot: discord.Client) -> web.Application:
     app.router.add_get("/api/ping", handle_ping)
     app.router.add_get("/api/health", handle_health)
     app.router.add_get("/api/stats", handle_stats)
+    app.router.add_get("/api/wfm/items", handle_wfm_items)
+    app.router.add_get("/api/wfm/items/{slug}", handle_wfm_item)
     app.router.add_get("/api/auth/info", handle_auth_info)
     app.router.add_route("*", "/api/auth/token", handle_auth_token)
     app.router.add_get("/api/me", handle_me)

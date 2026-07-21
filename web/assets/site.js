@@ -6,6 +6,7 @@
     { id: "home", label: "Home", href: "/" },
     { id: "features", label: "Features", href: "/#features" },
     { id: "warframe", label: "World state", href: "/warframe.html" },
+    { id: "market", label: "Market", href: "/market.html" },
     { id: "dashboard", label: "Dashboard", href: "/dashboard.html" },
     { id: "contact", label: "Contact", href: "/contact.html" },
   ];
@@ -160,10 +161,11 @@
     var links = document.createElement("div");
     links.className = "site-nav-links";
 
-    // Home, Features, World state
+    // Home, Features, World state, Market
     links.appendChild(makeNavLink(NAV_PRIMARY[0], origin, active));
     links.appendChild(makeNavLink(NAV_PRIMARY[1], origin, active));
     links.appendChild(makeNavLink(NAV_PRIMARY[2], origin, active));
+    links.appendChild(makeNavLink(NAV_PRIMARY[3], origin, active));
 
     // Guides dropdown
     var details = document.createElement("details");
@@ -194,8 +196,8 @@
     links.appendChild(details);
 
     // Dashboard, Contact
-    links.appendChild(makeNavLink(NAV_PRIMARY[3], origin, active));
     links.appendChild(makeNavLink(NAV_PRIMARY[4], origin, active));
+    links.appendChild(makeNavLink(NAV_PRIMARY[5], origin, active));
 
     var cta = document.createElement("a");
     cta.href = inviteUrl();
@@ -256,6 +258,9 @@
       '<a href="' +
       prefix +
       '/warframe.html">World state</a>' +
+      '<a href="' +
+      prefix +
+      '/market.html">Market</a>' +
       '<a href="' +
       dash +
       '">Dashboard</a>' +
