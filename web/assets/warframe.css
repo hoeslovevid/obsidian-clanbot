@@ -528,11 +528,47 @@
 }
 
 /* Fissure chips by tier */
+.wf-fissure-group {
+  margin-top: 14px;
+}
+
+.wf-fissure-group:first-of-type {
+  margin-top: 8px;
+}
+
+.wf-fissure-tier {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.wf-fissure-tier .count {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-subtle);
+}
+
+.wf-fissure-tier.tier-lith { color: #c4b5a0; }
+.wf-fissure-tier.tier-meso { color: #9ec5e8; }
+.wf-fissure-tier.tier-neo { color: #8fd4a8; }
+.wf-fissure-tier.tier-axi { color: #e8a84a; }
+.wf-fissure-tier.tier-requiem { color: #f87171; }
+.wf-fissure-tier.tier-omnia { color: #c4a0e8; }
+
 .wf-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 6px;
+  margin-top: 0;
 }
 
 .wf-chip {

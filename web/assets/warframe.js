@@ -425,6 +425,28 @@
     return "";
   }
 
+  var TIER_ORDER = ["lith", "meso", "neo", "axi", "requiem", "omnia"];
+
+  function tierRank(tier) {
+    var t = String(tier || "").toLowerCase();
+    for (var i = 0; i < TIER_ORDER.length; i++) {
+      if (t.indexOf(TIER_ORDER[i]) >= 0) return i;
+    }
+    return TIER_ORDER.length;
+  }
+
+  function tierLabel(tier) {
+    var t = String(tier || "").trim();
+    if (!t) return "Other";
+    var lower = t.toLowerCase();
+    for (var i = 0; i < TIER_ORDER.length; i++) {
+      if (lower.indexOf(TIER_ORDER[i]) >= 0) {
+        return TIER_ORDER[i].charAt(0).toUpperCase() + TIER_ORDER[i].slice(1);
+      }
+    }
+    return t;
+  }
+
   function renderFissures(list) {
     var html =
       band("wf-void", "Void") +
@@ -437,24 +459,59 @@
       .filter(function (f) {
         return !f.expired;
       })
-      .slice(0, 16);
-    html += '<div class="wf-chips">';
-    active.forEach(function (f) {
-      var tier = f.tier || f.tierNum || "?";
-      html +=
-        '<span class="wf-chip ' +
-        tierClass(tier) +
-        '"><span class="tier">' +
-        esc(tier) +
-        "</span>" +
-        esc(f.node || "?") +
-        "<em>" +
-        esc(f.missionType || "") +
-        (f.isStorm ? " · Storm" : "") +
-        (f.isHard ? " · SP" : "") +
-        "</em></span>";
+      .slice();
+    active.sort(function (a, b) {
+      var ra = tierRank(a.tier || a.tierNum);
+      var rb = tierRank(b.tier || b.tierNum);
+      if (ra !== rb) return ra - rb;
+      var ea = parseTime(a.expiry) || 0;
+      var eb = parseTime(b.expiry) || 0;
+      return ea - eb;
     });
-    return html + "</div></section></div>";
+
+    var groups = [];
+    var currentKey = null;
+    var currentItems = null;
+    active.forEach(function (f) {
+      var label = tierLabel(f.tier || f.tierNum);
+      if (label !== currentKey) {
+        currentKey = label;
+        currentItems = [];
+        groups.push({ label: label, tier: f.tier || f.tierNum, items: currentItems });
+      }
+      currentItems.push(f);
+    });
+
+    groups.forEach(function (g) {
+      html +=
+        '<div class="wf-fissure-group">' +
+        '<h3 class="wf-fissure-tier ' +
+        esc(tierClass(g.tier)) +
+        '">' +
+        esc(g.label) +
+        ' <span class="count">' +
+        g.items.length +
+        "</span></h3>" +
+        '<div class="wf-chips">';
+      g.items.forEach(function (f) {
+        var tier = f.tier || f.tierNum || "?";
+        html +=
+          '<span class="wf-chip ' +
+          tierClass(tier) +
+          '"><span class="tier">' +
+          esc(tier) +
+          "</span>" +
+          esc(f.node || "?") +
+          "<em>" +
+          esc(f.missionType || "") +
+          (f.isStorm ? " · Storm" : "") +
+          (f.isHard ? " · SP" : "") +
+          (f.expiry ? " · " + timeUntil(f.expiry) : "") +
+          "</em></span>";
+      });
+      html += "</div></div>";
+    });
+    return html + "</section></div>";
   }
 
   function renderAlerts(list) {
