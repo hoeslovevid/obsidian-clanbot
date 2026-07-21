@@ -335,7 +335,10 @@
     if (!data) {
       return html + '<p class="wf-empty">No data.</p></section>';
     }
-    var missions = data.variants || data.missions || [];
+    var missions =
+      data.variants && data.variants.length
+        ? data.variants
+        : data.missions || [];
     html +=
       '<p class="meta">' +
       esc(data.boss || "") +
@@ -351,7 +354,7 @@
         "<li><strong>" +
         (idx + 1) +
         ". " +
-        esc(m.node || m.missionType || "?") +
+        esc(m.node || m.missionType || m.type || "?") +
         "</strong> · " +
         esc(m.missionType || m.type || "") +
         (m.modifier ? ' <span class="meta">— ' + esc(m.modifier) + "</span>" : "") +
