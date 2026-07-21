@@ -601,28 +601,6 @@ code,
   line-height: 1.5;
 }
 
-.feat-plain {
-  display: block;
-  padding: 16px 14px;
-  border-bottom: 1px solid var(--border);
-  border-right: 1px solid var(--border);
-}
-
-.feat-plain:nth-child(2n) {
-  border-right: none;
-}
-
-.feat-plain h3 {
-  font-size: 0.95rem;
-  font-weight: 700;
-  margin-bottom: 4px;
-}
-
-.feat-plain p {
-  font-size: 0.84rem;
-  color: var(--text-muted);
-}
-
 .features-toggle-wrap {
   text-align: center;
   margin-top: 22px;
@@ -646,15 +624,16 @@ code,
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--text-subtle);
-  margin-bottom: 8px;
+  margin-bottom: 0;
   padding-bottom: 8px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: none;
 }
 
 .feature-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0;
+  border-top: 1px solid var(--border);
 }
 
 /* Demo — Discord + dashboard hybrid */
@@ -1138,8 +1117,7 @@ code,
     grid-template-columns: 1fr;
   }
 
-  .feat,
-  .feat-plain {
+  .feat {
     border-right: none;
   }
 
