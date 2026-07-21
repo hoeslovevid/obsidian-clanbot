@@ -2,13 +2,14 @@
  * Shared navigation, footer, and URL helpers for obsidianoverseer.com
  */
 (function () {
-  var NAV_PRIMARY = [
-    { id: "home", label: "Home", href: "/" },
-    { id: "features", label: "Features", href: "/#features" },
+  var NAV_HOME = { id: "home", label: "Home", href: "/" };
+  var NAV_DASHBOARD = { id: "dashboard", label: "Dashboard", href: "/dashboard.html" };
+  var NAV_CONTACT = { id: "contact", label: "Contact", href: "/contact.html" };
+
+  var NAV_TOOLS = [
     { id: "warframe", label: "World state", href: "/warframe.html" },
     { id: "market", label: "Market", href: "/market.html" },
-    { id: "dashboard", label: "Dashboard", href: "/dashboard.html" },
-    { id: "contact", label: "Contact", href: "/contact.html" },
+    { id: "features", label: "Features", href: "/#features" },
   ];
 
   var NAV_GUIDES = [
@@ -17,6 +18,7 @@
     { id: "changelog", label: "Changelog", href: "/changelog.html" },
   ];
 
+  var TOOL_IDS = { warframe: 1, market: 1, features: 1 };
   var GUIDE_IDS = { setup: 1, faq: 1, changelog: 1 };
 
   function cfg() {
@@ -122,6 +124,39 @@
     return a;
   }
 
+  function makeNavDrop(label, items, origin, active, activeMap) {
+    var details = document.createElement("details");
+    details.className = "site-nav-drop" + (activeMap[active] ? " active" : "");
+    var summary = document.createElement("summary");
+    summary.textContent = label;
+    details.appendChild(summary);
+    var panel = document.createElement("div");
+    panel.className = "site-nav-drop-panel";
+    items.forEach(function (item) {
+      panel.appendChild(makeNavLink(item, origin, active));
+    });
+    details.appendChild(panel);
+    details.addEventListener("toggle", function () {
+      if (!details.open) return;
+      var nav = document.getElementById("site-nav");
+      if (nav) {
+        nav.querySelectorAll("details.site-nav-drop").forEach(function (other) {
+          if (other !== details) other.open = false;
+        });
+      }
+      function onDoc(e) {
+        if (!details.contains(e.target)) {
+          details.open = false;
+          document.removeEventListener("click", onDoc);
+        }
+      }
+      setTimeout(function () {
+        document.addEventListener("click", onDoc);
+      }, 0);
+    });
+    return details;
+  }
+
   function renderNav() {
     var el = document.getElementById("site-nav");
     if (!el) return;
@@ -161,43 +196,12 @@
     var links = document.createElement("div");
     links.className = "site-nav-links";
 
-    // Home, Features, World state, Market
-    links.appendChild(makeNavLink(NAV_PRIMARY[0], origin, active));
-    links.appendChild(makeNavLink(NAV_PRIMARY[1], origin, active));
-    links.appendChild(makeNavLink(NAV_PRIMARY[2], origin, active));
-    links.appendChild(makeNavLink(NAV_PRIMARY[3], origin, active));
-
-    // Guides dropdown
-    var details = document.createElement("details");
-    details.className = "site-nav-drop" + (GUIDE_IDS[active] ? " active" : "");
-    var summary = document.createElement("summary");
-    summary.textContent = "Guides";
-    details.appendChild(summary);
-    var panel = document.createElement("div");
-    panel.className = "site-nav-drop-panel";
-    NAV_GUIDES.forEach(function (item) {
-      var a = makeNavLink(item, origin, active);
-      panel.appendChild(a);
-    });
-    details.appendChild(panel);
-    details.addEventListener("toggle", function () {
-      if (details.open) {
-        function onDoc(e) {
-          if (!details.contains(e.target)) {
-            details.open = false;
-            document.removeEventListener("click", onDoc);
-          }
-        }
-        setTimeout(function () {
-          document.addEventListener("click", onDoc);
-        }, 0);
-      }
-    });
-    links.appendChild(details);
-
-    // Dashboard, Contact
-    links.appendChild(makeNavLink(NAV_PRIMARY[4], origin, active));
-    links.appendChild(makeNavLink(NAV_PRIMARY[5], origin, active));
+    // Home · Tools ▾ · Guides ▾ · Dashboard · Contact · CTA
+    links.appendChild(makeNavLink(NAV_HOME, origin, active));
+    links.appendChild(makeNavDrop("Tools", NAV_TOOLS, origin, active, TOOL_IDS));
+    links.appendChild(makeNavDrop("Guides", NAV_GUIDES, origin, active, GUIDE_IDS));
+    links.appendChild(makeNavLink(NAV_DASHBOARD, origin, active));
+    links.appendChild(makeNavLink(NAV_CONTACT, origin, active));
 
     var cta = document.createElement("a");
     cta.href = inviteUrl();

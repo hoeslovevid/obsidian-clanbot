@@ -107,7 +107,7 @@
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
-  min-width: 160px;
+  min-width: 168px;
   padding: 6px;
   background: #0e1014;
   border: 1px solid var(--border, #2a2520);
