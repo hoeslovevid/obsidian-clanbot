@@ -80,7 +80,7 @@
   font: inherit;
   font-size: 0.95rem;
   color: var(--text);
-  background: rgba(15, 17, 21, 0.85);
+  background: var(--panel-bg);
   border: 1px solid var(--border);
   border-radius: 12px;
   outline: none;
@@ -167,7 +167,7 @@
   font-size: 0.82rem;
   font-weight: 600;
   color: var(--text-muted);
-  background: rgba(15, 17, 21, 0.7);
+  background: var(--panel-bg);
   border: 1px solid var(--border);
   border-radius: 999px;
 }
@@ -200,7 +200,7 @@
 .mk-empty-state {
   padding: 28px 22px;
   color: var(--text-muted);
-  background: rgba(15, 17, 21, 0.55);
+  background: var(--panel-bg);
   border: 1px dashed var(--border);
   border-radius: 16px;
   max-width: 52ch;
@@ -217,7 +217,7 @@
   gap: 18px;
   align-items: flex-start;
   padding: 20px;
-  background: rgba(15, 17, 21, 0.75);
+  background: var(--panel-bg-strong);
   border: 1px solid var(--border);
   border-radius: 16px;
 }
@@ -279,7 +279,7 @@
 
 .mk-stat {
   padding: 14px 16px;
-  background: rgba(15, 17, 21, 0.7);
+  background: var(--panel-bg);
   border: 1px solid var(--border);
   border-radius: 14px;
 }
@@ -316,7 +316,7 @@
 }
 
 .mk-panel {
-  background: rgba(15, 17, 21, 0.7);
+  background: var(--panel-bg);
   border: 1px solid var(--border);
   border-radius: 16px;
   overflow: hidden;

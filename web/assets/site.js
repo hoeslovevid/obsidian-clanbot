@@ -20,9 +20,47 @@
 
   var TOOL_IDS = { warframe: 1, market: 1, features: 1 };
   var GUIDE_IDS = { setup: 1, faq: 1, changelog: 1 };
+  var THEME_KEY = "oo_theme";
 
   function cfg() {
     return window.OBSIDIAN_SITE || {};
+  }
+
+  function getTheme() {
+    var t = document.documentElement.getAttribute("data-theme");
+    return t === "light" ? "light" : "dark";
+  }
+
+  function applyTheme(theme) {
+    theme = theme === "light" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", theme);
+    try {
+      localStorage.setItem(THEME_KEY, theme);
+    } catch (_) {}
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) {
+      var styles = getComputedStyle(document.documentElement);
+      meta.setAttribute("content", (styles.getPropertyValue("--theme-meta") || "").trim() || (theme === "light" ? "#eef1f5" : "#06070a"));
+    }
+    document.querySelectorAll(".site-nav-theme").forEach(function (btn) {
+      syncThemeButton(btn, theme);
+    });
+  }
+
+  function syncThemeButton(btn, theme) {
+    if (!btn) return;
+    theme = theme || getTheme();
+    var next = theme === "light" ? "dark" : "light";
+    btn.setAttribute("aria-label", next === "light" ? "Switch to light mode" : "Switch to dark mode");
+    btn.setAttribute("title", next === "light" ? "Light mode" : "Dark mode");
+    btn.innerHTML =
+      theme === "light"
+        ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 14.5A8.5 8.5 0 1 1 9.5 3 7 7 0 0 0 21 14.5z"/></svg>'
+        : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+  }
+
+  function toggleTheme() {
+    applyTheme(getTheme() === "light" ? "dark" : "light");
   }
 
   function dashboardUrl() {
@@ -202,6 +240,15 @@
     links.appendChild(makeNavDrop("Guides", NAV_GUIDES, origin, active, GUIDE_IDS));
     links.appendChild(makeNavLink(NAV_DASHBOARD, origin, active));
     links.appendChild(makeNavLink(NAV_CONTACT, origin, active));
+
+    var themeBtn = document.createElement("button");
+    themeBtn.type = "button";
+    themeBtn.className = "site-nav-theme";
+    syncThemeButton(themeBtn, getTheme());
+    themeBtn.addEventListener("click", function () {
+      toggleTheme();
+    });
+    links.appendChild(themeBtn);
 
     var cta = document.createElement("a");
     cta.href = inviteUrl();
@@ -557,6 +604,21 @@
   }
 
   function initChrome() {
+    if (!document.documentElement.getAttribute("data-theme")) {
+      applyTheme(
+        (function () {
+          try {
+            var saved = localStorage.getItem(THEME_KEY);
+            if (saved === "light" || saved === "dark") return saved;
+          } catch (_) {}
+          return window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
+            ? "light"
+            : "dark";
+        })()
+      );
+    } else {
+      applyTheme(getTheme());
+    }
     renderNav();
     renderFooter();
   }
@@ -572,6 +634,9 @@
     loadBotStatus: loadBotStatus,
     resolveBotStatus: resolveBotStatus,
     formatCount: formatCount,
+    getTheme: getTheme,
+    setTheme: applyTheme,
+    toggleTheme: toggleTheme,
     config: cfg,
   };
 

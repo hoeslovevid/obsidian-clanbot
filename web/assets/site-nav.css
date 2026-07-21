@@ -9,9 +9,9 @@
   gap: 12px;
   margin: 0 -8px 8px;
   padding: 12px 8px;
-  background: rgba(6, 7, 10, 0.88);
+  background: var(--nav-bg, rgba(6, 7, 10, 0.88));
   backdrop-filter: blur(14px);
-  border-bottom: 1px solid rgba(42, 37, 32, 0.85);
+  border-bottom: 1px solid var(--border-soft, rgba(42, 37, 32, 0.85));
 }
 
 .site-nav-brand {
@@ -74,7 +74,7 @@
 .site-nav-links > a:hover,
 .site-nav-drop > summary:hover {
   color: var(--text, #f0ebe5);
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--hover-wash, rgba(255, 255, 255, 0.04));
 }
 
 .site-nav-links > a.active,
@@ -109,7 +109,7 @@
   left: 0;
   min-width: 168px;
   padding: 6px;
-  background: #0e1014;
+  background: var(--drop-bg, #0e1014);
   border: 1px solid var(--border, #2a2520);
   border-radius: 10px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
@@ -143,6 +143,33 @@
   font-weight: 700 !important;
 }
 
+.site-nav-theme {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  margin-left: 2px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--border, #2a2520);
+  border-radius: 10px;
+  color: var(--text-muted, #9a8f82);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.site-nav-theme:hover {
+  color: var(--accent-bright, #e8a84a);
+  border-color: var(--accent, #d4943c);
+  background: var(--hover-wash, rgba(255, 255, 255, 0.04));
+}
+
+.site-nav-theme svg {
+  width: 18px;
+  height: 18px;
+}
+
 .site-nav-cta:hover {
   filter: brightness(1.06);
   color: #06070a !important;
@@ -163,9 +190,14 @@
     align-items: stretch;
     gap: 2px;
     padding: 12px 16px 18px;
-    background: rgba(10, 12, 16, 0.98);
+    background: var(--drop-bg, rgba(10, 12, 16, 0.98));
     border-bottom: 1px solid var(--border, #2a2520);
-    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.25);
+  }
+
+  .site-nav-theme {
+    align-self: flex-start;
+    margin: 4px 0 0;
   }
 
   .site-nav.open .site-nav-links {
