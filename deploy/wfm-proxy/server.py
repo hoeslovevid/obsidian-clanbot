@@ -238,6 +238,7 @@ def create_app() -> web.Application:
 
 def main() -> None:
     port = int(os.environ.get("PORT") or os.environ.get("WFM_PROXY_PORT") or "8080")
+    print(f"[wfm-proxy] Listening on 0.0.0.0:{port}", flush=True)
     web.run_app(create_app(), host="0.0.0.0", port=port)
 
 

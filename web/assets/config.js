@@ -6,10 +6,8 @@ window.OBSIDIAN_SITE = {
   BOT_API_URL: "https://obsidianoverseer.up.railway.app",
   // Optional: full dashboard URL. Defaults to BOT_API_URL + /dashboard.html
   DASHBOARD_PUBLIC_URL: "https://obsidianoverseer.up.railway.app/dashboard.html",
-  // Live Market orders proxy — use a *separate* Railway service (see deploy/wfm-proxy/README.md).
-  // Do not use the Discord bot URL or broken *.deno.net hosts (ERR_SSL_PROTOCOL_ERROR on Windows).
-  // Example: "https://obsidian-wfm-proxy.up.railway.app"
-  WFM_PROXY_URL: "",
+  // Live Market orders proxy — separate Railway service (see deploy/wfm-proxy/README.md).
+  WFM_PROXY_URL: "https://obsidianclanbot-production.up.railway.app",
   DISCORD_CLIENT_ID: "1460107752658440223",
   DISCORD_PERMISSIONS: "277025508160",
   DISCORD_SCOPE: "bot applications.commands",

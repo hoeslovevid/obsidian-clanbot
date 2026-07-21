@@ -12,19 +12,23 @@ Prefer a **separate Railway service** (different URL from the Discord bot) for r
 
 ## Deploy on Railway (recommended)
 
-1. Railway → **New** → **GitHub Repo** → `obsidian-clanbot`
-2. Set **Root Directory** to `deploy/wfm-proxy`
-3. Generate a public domain (Settings → Networking → Generate Domain)
-4. Confirm start command is `python server.py` (from `railway.toml`)
-5. Copy the URL (e.g. `https://obsidian-wfm-proxy.up.railway.app`) into `web/assets/config.js`:
+1. Railway → **New** → **GitHub Repo** → `obsidian-clanbot`  
+   (or open the service whose domain is `obsidianclanbot-production.up.railway.app`)
+2. **Settings → Root Directory** = `deploy/wfm-proxy` (required)
+3. **Settings → Build** should use the Dockerfile in that folder
+4. **Settings → Deploy** start command: `python server.py`
+5. **Networking → Generate Domain** (you already have one)
+6. Check **Deployments → Logs** for `[wfm-proxy] Listening on 0.0.0.0:…`
+7. Test: `https://YOUR-DOMAIN.up.railway.app/api/ping` → `{"ok":true,"service":"wfm-proxy",...}`
+
+If you see **502 Application failed to respond**, Root Directory is almost always wrong
+(Railway is starting the Discord bot instead of this proxy).
+
+Then set in `web/assets/config.js`:
 
 ```js
-WFM_PROXY_URL: "https://YOUR-WFM-SERVICE.up.railway.app",
+WFM_PROXY_URL: "https://YOUR-DOMAIN.up.railway.app",
 ```
-
-6. Commit/push that config change (or ask the agent to).
-
-Do **not** point `WFM_PROXY_URL` at the Discord bot URL — that host was edge rate-limited.
 
 ## Endpoints
 
