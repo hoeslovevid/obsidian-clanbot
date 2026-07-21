@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FAQ — Obsidian Overseer</title>
+  <meta name="description" content="Frequently asked questions about Obsidian Overseer — invites, permissions, Warframe data, dashboard, and support." />
+  <meta name="theme-color" content="#06070a" />
+  <link rel="canonical" href="https://obsidianoverseer.com/faq.html" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://obsidianoverseer.com/faq.html" />
+  <meta property="og:title" content="FAQ — Obsidian Overseer" />
+  <meta property="og:description" content="Answers about inviting, configuring, and using Obsidian Overseer." />
+  <meta property="og:image" content="https://obsidianoverseer.com/assets/logo.png" />
+  <link rel="icon" type="image/png" href="/assets/logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/site-nav.css" />
+  <link rel="stylesheet" href="/assets/site.css" />
+  <style>
+    :root {
+      --bg: #06070a;
+      --bg-gradient: radial-gradient(ellipse 100% 80% at 50% 0%, rgba(15, 12, 20, 0.98) 0%, transparent 50%),
+                    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(212, 140, 60, 0.08), transparent);
+      --surface: #0f1115;
+      --border: #2a2520;
+      --text: #f0ebe5;
+      --text-muted: #9a8f82;
+      --text-subtle: #6b6156;
+      --accent: #d4943c;
+      --accent-bright: #e8a84a;
+      --radius: 14px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Outfit', sans-serif;
+      background: var(--bg);
+      background-image: var(--bg-gradient);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+    .bg-ambient { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+    .bg-orb { position: absolute; border-radius: 50%; filter: blur(80px); opacity: 0.3; }
+    .bg-orb-1 { width: 420px; height: 420px; background: radial-gradient(circle, rgba(230,149,42,0.25), transparent 70%); top: -10%; left: -8%; }
+    details.faq-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      margin-bottom: 12px;
+    }
+    details.faq-item summary {
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 1rem;
+      list-style: none;
+    }
+    details.faq-item summary::-webkit-details-marker { display: none; }
+    details.faq-item summary::after {
+      content: "+";
+      float: right;
+      color: var(--accent-bright);
+      font-weight: 700;
+    }
+    details.faq-item[open] summary::after { content: "–"; }
+    details.faq-item p {
+      margin-top: 12px;
+      color: var(--text-muted);
+      font-size: 0.92rem;
+      line-height: 1.6;
+    }
+    details.faq-item a { color: var(--accent-bright); }
+  </style>
+</head>
+<body>
+  <div class="bg-ambient" aria-hidden="true">
+    <div class="bg-orb bg-orb-1"></div>
+  </div>
+
+  <div class="page-wrap">
+    <nav id="site-nav" data-active="faq"></nav>
+
+    <header class="page-hero">
+      <h1>FAQ</h1>
+      <p>Quick answers about invites, permissions, Warframe data, and the dashboard.</p>
+    </header>
+
+    <details class="faq-item">
+      <summary>Is Obsidian Overseer free?</summary>
+      <p>Yes. Invite the bot and use the public feature set. Optional paid hosting is not required for normal clan use.</p>
+    </details>
+
+    <details class="faq-item">
+      <summary>What permissions do I need to add the bot?</summary>
+      <p>You need <strong>Manage Server</strong> on the Discord server. The invite link requests the bot scopes and permissions needed for slash commands, moderation helpers, and voice features.</p>
+    </details>
+
+    <details class="faq-item">
+      <summary>Slash commands are missing — what now?</summary>
+      <p>Wait a minute after invite, then try again. Staff can run a command sync if available. Re-inviting with the same link often refreshes command registration. Also confirm the bot role can see the channel you are typing in.</p>
+    </details>
+
+    <details class="faq-item">
+      <summary>Where does Warframe data come from?</summary>
+      <p>World-state features (Baro, cycles, sortie, fissures, and related feeds) use public Warframe world-state APIs. If a panel shows degraded status, the upstream API may be slow or unavailable — try again shortly.</p>
+    </details>
+
+    <details class="faq-item">
+      <summary>How do I turn modules on or off?</summary>
+      <p>Many modules can be toggled per server from staff tools or the <a id="faq-dashboard" href="/dashboard.html">mod dashboard</a> Features tab. New servers start lean so music, pets, and gambling stay off until you opt in.</p>
+    </details>
+
+    <details class="faq-item">
+      <summary>Why does the dashboard open on Railway?</summary>
+      <p>The dashboard talks to the live bot API. Hosting it on the same origin as the API avoids browser CORS issues. Bookmark <code>obsidianoverseer.up.railway.app/dashboard.html</code> or use Dashboard in the site nav.</p>
+    </details>
+
+    <details class="faq-item">
+      <summary>Who can use the mod dashboard?</summary>
+      <p>Sign in with Discord. You will see servers where you have <strong>Manage Server</strong> (and the bot is present). Members without that permission will not manage guild settings.</p>
+    </details>
+
+    <details class="faq-item">
+      <summary>Is this affiliated with Digital Extremes or Discord?</summary>
+      <p>No. Obsidian Overseer is a fan-made community bot and is not affiliated with Discord or Digital Extremes / Warframe.</p>
+    </details>
+
+    <details class="faq-item">
+      <summary>How do I get support?</summary>
+      <p>Join our Discord, open a ticket with <code>/ticket</code> on a configured server, or use the <a href="/contact.html">contact form</a>. Include your server name and steps to reproduce for bugs.</p>
+    </details>
+
+    <footer id="site-footer"></footer>
+  </div>
+
+  <script src="/assets/config.js"></script>
+  <script src="/assets/site.js"></script>
+  <script>
+    (function () {
+      var a = document.getElementById("faq-dashboard");
+      if (a && window.ObsidianSite) a.href = window.ObsidianSite.dashboardUrl();
+    })();
+  </script>
+</body>
+</html>

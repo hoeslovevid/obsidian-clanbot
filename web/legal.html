@@ -4,11 +4,20 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Legal — Obsidian Overseer</title>
+  <meta name="description" content="Privacy Policy and Terms of Service for Obsidian Overseer." />
+  <meta name="theme-color" content="#06070a" />
+  <link rel="canonical" href="https://obsidianoverseer.com/legal.html" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://obsidianoverseer.com/legal.html" />
+  <meta property="og:title" content="Legal — Obsidian Overseer" />
+  <meta property="og:description" content="Privacy Policy and Terms of Service for Obsidian Overseer." />
+  <meta property="og:image" content="https://obsidianoverseer.com/assets/logo.png" />
   <link rel="icon" type="image/png" href="/assets/logo.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/assets/site-nav.css" />
+  <link rel="stylesheet" href="/assets/site.css" />
   <style>
     :root {
       --bg: #06070a;
@@ -33,7 +42,7 @@
       min-height: 100vh;
     }
     .container { max-width: 720px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
-    nav {
+    nav:not(.site-nav) {
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -198,9 +207,7 @@
       <p>For questions about these Terms, contact the developer team via the <a href="/contact.html" style="color: var(--accent);">Contact page</a>.</p>
     </section>
 
-    <footer>
-      <p><a href="/">← Back to Obsidian Overseer</a></p>
-    </footer>
+    <footer id="site-footer"></footer>
   </div>
   <script src="/assets/config.js"></script>
   <script src="/assets/site.js"></script>

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Setup Guide — Obsidian Overseer</title>
+  <meta name="description" content="Invite Obsidian Overseer, configure channels and modules, and get your Warframe clan Discord ready." />
+  <meta name="theme-color" content="#06070a" />
+  <link rel="canonical" href="https://obsidianoverseer.com/setup.html" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://obsidianoverseer.com/setup.html" />
+  <meta property="og:title" content="Setup Guide — Obsidian Overseer" />
+  <meta property="og:description" content="Invite, configure, and run Obsidian Overseer for your clan." />
+  <meta property="og:image" content="https://obsidianoverseer.com/assets/logo.png" />
+  <link rel="icon" type="image/png" href="/assets/logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/site-nav.css" />
+  <link rel="stylesheet" href="/assets/site.css" />
+  <style>
+    :root {
+      --bg: #06070a;
+      --bg-gradient: radial-gradient(ellipse 100% 80% at 50% 0%, rgba(15, 12, 20, 0.98) 0%, transparent 50%),
+                    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(212, 140, 60, 0.08), transparent);
+      --surface: #0f1115;
+      --surface2: #161a20;
+      --border: #2a2520;
+      --text: #f0ebe5;
+      --text-muted: #9a8f82;
+      --text-subtle: #6b6156;
+      --accent: #d4943c;
+      --accent-bright: #e8a84a;
+      --radius: 14px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Outfit', sans-serif;
+      background: var(--bg);
+      background-image: var(--bg-gradient);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+    .bg-ambient { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+    .bg-orb { position: absolute; border-radius: 50%; filter: blur(80px); opacity: 0.3; }
+    .bg-orb-1 { width: 420px; height: 420px; background: radial-gradient(circle, rgba(230,149,42,0.25), transparent 70%); top: -10%; left: -8%; }
+    .bg-orb-2 { width: 320px; height: 320px; background: radial-gradient(circle, rgba(212,140,60,0.18), transparent 70%); bottom: 10%; right: -10%; }
+  </style>
+</head>
+<body>
+  <div class="bg-ambient" aria-hidden="true">
+    <div class="bg-orb bg-orb-1"></div>
+    <div class="bg-orb bg-orb-2"></div>
+  </div>
+
+  <div class="page-wrap">
+    <nav id="site-nav" data-active="setup"></nav>
+
+    <header class="page-hero">
+      <h1>Setup guide</h1>
+      <p>Get Obsidian Overseer running on your clan Discord in a few minutes.</p>
+      <div class="cta-row" style="justify-content: flex-start; margin-top: 18px;">
+        <a id="setup-invite" class="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="text-decoration:none;display:inline-flex;align-items:center;gap:8px;padding:12px 20px;font-weight:700;color:#06070a;background:linear-gradient(135deg,#e8a84a,#b87828);border-radius:14px;">Add to Discord</a>
+        <a id="setup-dashboard" class="btn-secondary" href="/dashboard.html">Open dashboard</a>
+      </div>
+    </header>
+
+    <article class="prose-block">
+      <h2>1. Invite the bot</h2>
+      <p>Use <strong>Add to Discord</strong> with a account that has <strong>Manage Server</strong>. Accept the permissions prompt so slash commands and moderation tools can work.</p>
+      <ul>
+        <li>Commands usually appear within a minute after invite.</li>
+        <li>If they are missing, try <code>/staff sync</code> (staff) or re-invite with the same link.</li>
+      </ul>
+    </article>
+
+    <article class="prose-block">
+      <h2>2. First commands</h2>
+      <ol>
+        <li>Run <code>/menu</code> — your hub for daily actions and help.</li>
+        <li>Run <code>/help</code> — search features and commands.</li>
+        <li>Run <code>/baro</code> — confirm Warframe world-state is healthy.</li>
+      </ol>
+    </article>
+
+    <article class="prose-block">
+      <h2>3. Wire Warframe notifications</h2>
+      <p>Pick channels for alerts and feeds, then configure notify:</p>
+      <ul>
+        <li><code>/wfnotify configure</code> — alerts, cycles, and related feeds</li>
+        <li>Optional: forum / YouTube / devstream channels as your clan prefers</li>
+      </ul>
+    </article>
+
+    <article class="prose-block">
+      <h2>4. Tickets, voice, and community</h2>
+      <ul>
+        <li>Set a ticket category / staff role so <code>/ticket</code> routes to mods.</li>
+        <li>Enable join-to-create voice if your clan uses temp VCs.</li>
+        <li>Turn on LFG, suggestions, or events when you are ready — many modules start lean and can be enabled later.</li>
+      </ul>
+    </article>
+
+    <article class="prose-block">
+      <h2>5. Mod dashboard</h2>
+      <p>Staff with Manage Server can open the <a id="setup-dashboard-inline" href="/dashboard.html">web dashboard</a> to review inbox, Warframe status, setup health, features, and giveaways without digging through Discord menus.</p>
+      <p>Sign in with Discord OAuth. Use the same browser session for the API host (Railway) so CORS is not an issue.</p>
+    </article>
+
+    <article class="prose-block">
+      <h2>Need help?</h2>
+      <p>See the <a href="/faq.html">FAQ</a>, join our <a id="setup-discord" href="https://discord.gg/bJscayQNK4">Discord</a>, or <a href="/contact.html">contact us</a>.</p>
+    </article>
+
+    <footer id="site-footer"></footer>
+  </div>
+
+  <script src="/assets/config.js"></script>
+  <script src="/assets/site.js"></script>
+  <script>
+    (function () {
+      var invite = document.getElementById("setup-invite");
+      var dash = document.getElementById("setup-dashboard");
+      var dashInline = document.getElementById("setup-dashboard-inline");
+      var discord = document.getElementById("setup-discord");
+      if (window.ObsidianSite) {
+        if (invite) invite.href = window.ObsidianSite.inviteUrl();
+        var d = window.ObsidianSite.dashboardUrl();
+        if (dash) dash.href = d;
+        if (dashInline) dashInline.href = d;
+        var cfg = window.ObsidianSite.config() || {};
+        if (discord && cfg.DISCORD_SERVER_INVITE) discord.href = cfg.DISCORD_SERVER_INVITE;
+      }
+    })();
+  </script>
+</body>
+</html>

@@ -4,7 +4,11 @@
  */
 window.OBSIDIAN_SITE = {
   BOT_API_URL: "https://obsidianoverseer.up.railway.app",
+  // Optional: full dashboard URL. Defaults to BOT_API_URL + /dashboard.html
+  DASHBOARD_PUBLIC_URL: "https://obsidianoverseer.up.railway.app/dashboard.html",
   DISCORD_CLIENT_ID: "1460107752658440223",
+  DISCORD_PERMISSIONS: "277025508160",
+  DISCORD_SCOPE: "bot applications.commands",
   DISCORD_SERVER_INVITE: "https://discord.gg/bJscayQNK4",
   CONTACT_EMAIL: "",
   // Optional manual override if live stats are unavailable: { guild_count: 12, user_count: 3400 }
