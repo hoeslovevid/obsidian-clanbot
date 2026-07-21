@@ -23,7 +23,7 @@
   --radius-lg: 18px;
   --site-max: 880px;
   --font: "Outfit", system-ui, sans-serif;
-  --font-display: "Syne", "Outfit", system-ui, sans-serif;
+  --font-display: "Space Grotesk", "Outfit", system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --ease: 0.2s ease;
 }
@@ -339,11 +339,12 @@ code,
 }
 
 .hero h1 {
-  font-family: var(--font-display);
-  font-size: clamp(2.1rem, 5.5vw, 3.1rem);
+  font-family: "Outfit", var(--font-display), system-ui, sans-serif;
+  font-size: clamp(1.95rem, 4.8vw, 2.75rem);
   font-weight: 800;
-  letter-spacing: -0.045em;
-  line-height: 1.05;
+  letter-spacing: -0.03em;
+  line-height: 1.12;
+  max-width: 14ch;
   margin: 0 auto 10px;
   background: linear-gradient(180deg, #fff8ee 0%, #e8a84a 140%);
   -webkit-background-clip: text;
