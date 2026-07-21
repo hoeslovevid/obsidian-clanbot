@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>World State — Obsidian Overseer</title>
+  <meta name="description" content="Live Warframe world state — Baro, cycles, sortie, archon, fissures, and more. No login required." />
+  <meta name="theme-color" content="#06070a" />
+  <link rel="canonical" href="https://obsidianoverseer.com/warframe.html" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://obsidianoverseer.com/warframe.html" />
+  <meta property="og:title" content="World State — Obsidian Overseer" />
+  <meta property="og:description" content="Live Warframe world state — Baro, cycles, sortie, and more." />
+  <meta property="og:image" content="https://obsidianoverseer.com/assets/og.jpg" />
+  <link rel="icon" type="image/png" href="/assets/logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/site-nav.css" />
+  <link rel="stylesheet" href="/assets/site.css" />
+  <link rel="stylesheet" href="/assets/warframe.css" />
+</head>
+<body>
+  <div class="bg-ambient" aria-hidden="true"></div>
+  <div class="bg-grain" aria-hidden="true"></div>
+
+  <div class="page-wrap">
+    <nav id="site-nav" data-active="warframe"></nav>
+
+    <header class="page-hero">
+      <h1>World state</h1>
+      <p>Live PC Warframe board — Baro, cycles, missions, and fissures. No dashboard login needed.</p>
+    </header>
+
+    <div class="wf-toolbar">
+      <div id="wf-status" class="wf-status" aria-live="polite"><span class="dot" aria-hidden="true"></span>Loading…</div>
+      <button type="button" id="wf-refresh" class="btn-secondary">Refresh</button>
+    </div>
+
+    <div id="wf-root" class="wf-grid" aria-busy="true"></div>
+
+    <p class="wf-footnote">
+      Data from the community <a href="https://docs.warframestat.us/" target="_blank" rel="noopener noreferrer">warframestat.us</a> API.
+      Want alerts in your server? <a id="wf-invite" href="#">Add Obsidian Overseer</a> and run <code>/baro</code> or <code>/wfnotify configure</code>.
+    </p>
+
+    <footer id="site-footer"></footer>
+  </div>
+
+  <script src="/assets/config.js"></script>
+  <script src="/assets/site.js"></script>
+  <script src="/assets/warframe.js"></script>
+  <script>
+    (function () {
+      var a = document.getElementById("wf-invite");
+      if (a && window.ObsidianSite) a.href = window.ObsidianSite.inviteUrl();
+    })();
+  </script>
+</body>
+</html>
