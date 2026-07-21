@@ -10,6 +10,7 @@ on:
       - "core/changelog.py"
       - "core/config.py"
       - ".github/scripts/export_changelog.py"
+      - ".github/scripts/export_wfm_items.py"
       - ".github/workflows/deploy-website.yml"
   workflow_dispatch:
 
@@ -48,6 +49,10 @@ jobs:
         env:
           DISCORD_TOKEN: changelog-export-placeholder
         run: python3 .github/scripts/export_changelog.py
+
+      - name: Export Warframe Market item catalog
+        continue-on-error: true
+        run: python3 .github/scripts/export_wfm_items.py
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

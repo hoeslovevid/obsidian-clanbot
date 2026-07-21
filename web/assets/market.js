@@ -81,28 +81,47 @@
       return Promise.resolve(items);
     }
 
-    var url = api("/api/wfm/items");
-    if (!url) {
-      setStatus("Bot API URL not configured", "error");
-      return Promise.reject(new Error("no api"));
-    }
-
     setStatus("Loading item catalog…", "loading");
-    return fetch(url, { mode: "cors", cache: "no-cache" })
+
+    // Prefer same-origin catalog (GitHub Pages) — avoids Railway rate limits / CORS.
+    return fetch("/assets/wfm-items.json", { cache: "no-cache" })
       .then(function (res) {
-        if (!res.ok) throw new Error("catalog " + res.status);
+        if (!res.ok) throw new Error("local catalog " + res.status);
         return res.json();
       })
       .then(function (data) {
-        items = (data && data.items) || [];
+        var list = (data && data.items) || [];
+        if (!list.length) throw new Error("empty catalog");
+        items = list;
         itemsReady = true;
         saveCachedItems(items);
         setStatus(items.length.toLocaleString("en-US") + " items ready", "live");
         return items;
       })
-      .catch(function (err) {
-        setStatus("Could not load catalog — try again later", "error");
-        throw err;
+      .catch(function () {
+        // Fallback: bot proxy (may be rate-limited or not redeployed yet)
+        var url = api("/api/wfm/items");
+        if (!url) {
+          setStatus("Could not load catalog — try again later", "error");
+          return Promise.reject(new Error("no catalog"));
+        }
+        return fetch(url, { mode: "cors", cache: "no-cache" })
+          .then(function (res) {
+            if (!res.ok) throw new Error("catalog " + res.status);
+            return res.json();
+          })
+          .then(function (data) {
+            items = (data && data.items) || [];
+            if (!items.length) throw new Error("empty catalog");
+            itemsReady = true;
+            saveCachedItems(items);
+            setStatus(items.length.toLocaleString("en-US") + " items ready", "live");
+            return items;
+          })
+          .catch(function (err) {
+            setStatus("Could not load catalog — try again later", "error");
+            throw err;
+          });
       });
   }
 
@@ -282,6 +301,47 @@
       "</div>";
   }
 
+  function findCatalogItem(slug) {
+    slug = String(slug || "").toLowerCase();
+    for (var i = 0; i < items.length; i++) {
+      if ((items[i].slug || "").toLowerCase() === slug) return items[i];
+    }
+    return null;
+  }
+
+  function renderDegraded(slug, platform, reason) {
+    var cat = findCatalogItem(slug) || {};
+    var name = cat.name || slug.replace(/_/g, " ");
+    var marketUrl = "https://warframe.market/items/" + encodeURIComponent(slug);
+    renderItem({
+      platform: platform || "pc",
+      item: {
+        slug: slug,
+        name: name,
+        thumb: cat.thumb,
+        tags: cat.tags || [],
+        marketUrl: marketUrl,
+      },
+      summary: {
+        lowestSell: null,
+        highestBuy: null,
+        sellCount: 0,
+        buyCount: 0,
+        onlineSell: 0,
+        onlineBuy: 0,
+      },
+      sellOrders: [],
+      buyOrders: [],
+    });
+    root.insertAdjacentHTML(
+      "beforeend",
+      '<p class="mk-footnote" style="margin-top:12px">' +
+        esc(reason || "Live orders unavailable") +
+        ' — open warframe.market for current prices, or try Refresh in a minute.</p>'
+    );
+    setStatus("Catalog only · open warframe.market for live orders", "error");
+  }
+
   function lookup(slug, platform) {
     slug = String(slug || "").trim().toLowerCase().replace(/\s+/g, "_");
     if (!slug) {
@@ -289,43 +349,54 @@
       return;
     }
     platform = platform || (platformEl && platformEl.value) || "pc";
-    var url = api("/api/wfm/items/" + encodeURIComponent(slug) + "?platform=" + encodeURIComponent(platform));
-    if (!url) {
-      setStatus("Bot API URL not configured", "error");
-      return;
-    }
-
     activeSlug = slug;
     if (refreshBtn) refreshBtn.hidden = false;
     root.setAttribute("aria-busy", "true");
     setStatus("Fetching orders…", "loading");
     hideSuggest();
 
+    function finishOk(data) {
+      renderItem(data);
+      setStatus("Live · " + ((data.item && data.item.name) || slug), "live");
+      root.setAttribute("aria-busy", "false");
+      try {
+        var params = new URLSearchParams();
+        params.set("item", slug);
+        if (platform && platform !== "pc") params.set("platform", platform);
+        history.replaceState(null, "", "?" + params.toString());
+      } catch (_) {}
+    }
+
+    function finishFail(err) {
+      root.setAttribute("aria-busy", "false");
+      var msg = err && err.message ? err.message : "Lookup failed";
+      if (msg === "Item not found" && !findCatalogItem(slug)) {
+        root.innerHTML =
+          '<div class="mk-empty-state"><p>Item not found. Try another name or open warframe.market directly.</p></div>';
+        setStatus("Lookup failed", "error");
+        return;
+      }
+      renderDegraded(
+        slug,
+        platform,
+        "Live order proxy is busy or offline (" + msg + ")"
+      );
+    }
+
+    var url = api("/api/wfm/items/" + encodeURIComponent(slug) + "?platform=" + encodeURIComponent(platform));
+    if (!url) {
+      finishFail(new Error("API not configured"));
+      return;
+    }
+
     fetch(url, { mode: "cors", cache: "no-cache" })
       .then(function (res) {
         if (res.status === 404) throw new Error("Item not found");
-        if (!res.ok) throw new Error("lookup " + res.status);
+        if (!res.ok) throw new Error("HTTP " + res.status);
         return res.json();
       })
-      .then(function (data) {
-        renderItem(data);
-        setStatus("Live · " + ((data.item && data.item.name) || slug), "live");
-        root.setAttribute("aria-busy", "false");
-        try {
-          var params = new URLSearchParams();
-          params.set("item", slug);
-          if (platform && platform !== "pc") params.set("platform", platform);
-          history.replaceState(null, "", "?" + params.toString());
-        } catch (_) {}
-      })
-      .catch(function (err) {
-        root.setAttribute("aria-busy", "false");
-        root.innerHTML =
-          '<div class="mk-empty-state"><p>' +
-          esc(err && err.message ? err.message : "Lookup failed") +
-          ". Try another name or open warframe.market directly.</p></div>";
-        setStatus("Lookup failed", "error");
-      });
+      .then(finishOk)
+      .catch(finishFail);
   }
 
   function resolveQueryToSlug(q) {

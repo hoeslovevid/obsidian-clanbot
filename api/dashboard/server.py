@@ -100,11 +100,19 @@ def _cors_origin_allowed(origin: str) -> bool:
 
 
 def _apply_cors(request: web.Request, resp: web.StreamResponse) -> web.StreamResponse:
-    """Attach CORS + anti-cache headers (Railway edge can cache bare /api/ping without ACAO)."""
-    # Always prevent shared CDN caches from reusing a no-Origin response for browsers.
-    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-    resp.headers["Pragma"] = "no-cache"
-    resp.headers["Vary"] = "Origin"
+    """Attach CORS + cache headers (Railway edge can cache bare /api/ping without ACAO)."""
+    path = request.path or ""
+    # WFM catalog/orders are public and safe to cache briefly (cuts Railway edge pressure).
+    if path.startswith("/api/wfm/"):
+        if path.rstrip("/") == "/api/wfm/items":
+            resp.headers["Cache-Control"] = "public, max-age=300"
+        else:
+            resp.headers["Cache-Control"] = "public, max-age=45"
+    else:
+        # Always prevent shared CDN caches from reusing a no-Origin response for browsers.
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
+    resp.headers["Vary"] = "Origin, Platform"
     resp.headers["Cross-Origin-Resource-Policy"] = "cross-origin"
 
     origin = (request.headers.get("Origin") or "").strip().rstrip("/")
