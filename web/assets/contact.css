@@ -41,49 +41,6 @@ body {
   overflow-x: hidden;
 }
 
-.bg-ambient {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  overflow: hidden;
-}
-
-.bg-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.35;
-}
-
-.bg-orb-1 {
-  width: min(80vw, 520px);
-  height: min(80vw, 520px);
-  background: radial-gradient(circle, rgba(230, 149, 42, 0.22) 0%, transparent 70%);
-  top: -15%;
-  left: -10%;
-  animation: contact-drift-1 25s ease-in-out infinite;
-}
-
-.bg-orb-2 {
-  width: min(55vw, 360px);
-  height: min(55vw, 360px);
-  background: radial-gradient(circle, rgba(88, 101, 242, 0.12) 0%, transparent 70%);
-  top: 35%;
-  right: -12%;
-  animation: contact-drift-2 28s ease-in-out infinite;
-}
-
-@keyframes contact-drift-1 {
-  0%, 100% { transform: translate(0, 0); }
-  50% { transform: translate(4%, 6%); }
-}
-
-@keyframes contact-drift-2 {
-  0%, 100% { transform: translate(0, 0); }
-  50% { transform: translate(-6%, -4%); }
-}
-
 .contact-wrap {
   max-width: 960px;
   margin: 0 auto;

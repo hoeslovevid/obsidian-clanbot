@@ -11,7 +11,7 @@
   <meta property="og:url" content="https://obsidianoverseer.com/legal.html" />
   <meta property="og:title" content="Legal — Obsidian Overseer" />
   <meta property="og:description" content="Privacy Policy and Terms of Service for Obsidian Overseer." />
-  <meta property="og:image" content="https://obsidianoverseer.com/assets/logo.png" />
+  <meta property="og:image" content="https://obsidianoverseer.com/assets/og.jpg" />
   <link rel="icon" type="image/png" href="/assets/logo.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -19,87 +19,33 @@
   <link rel="stylesheet" href="/assets/site-nav.css" />
   <link rel="stylesheet" href="/assets/site.css" />
   <style>
-    :root {
-      --bg: #06070a;
-      --bg-gradient: radial-gradient(ellipse 100% 80% at 50% 0%, rgba(15, 12, 20, 0.98) 0%, transparent 50%),
-                    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(212, 140, 60, 0.08), transparent);
-      --surface: #0f1115;
-      --border: #2a2520;
-      --text: #f0ebe5;
-      --text-muted: #9a8f82;
-      --accent: #d4943c;
-      --radius: 14px;
-      --radius-sm: 10px;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    html { scroll-behavior: smooth; }
-    body {
-      font-family: 'Outfit', sans-serif;
-      background: var(--bg);
-      background-image: var(--bg-gradient);
-      color: var(--text);
-      line-height: 1.6;
-      min-height: 100vh;
-    }
-    .container { max-width: 720px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
-    nav:not(.site-nav) {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 20px 0 24px;
-    }
-    .nav-logo {
-      font-size: 1.25rem;
-      font-weight: 700;
-      color: var(--text);
-      text-decoration: none;
-    }
-    .nav-logo:hover { color: var(--accent); }
-    .nav-links a {
-      color: var(--text-muted);
-      text-decoration: none;
-      font-size: 0.95rem;
-      font-weight: 500;
-      padding: 8px 14px;
-      border-radius: var(--radius-sm);
-    }
-    .nav-links a:hover { color: var(--text); background: var(--surface); }
-    .legal-page-title { font-size: 1.75rem; font-weight: 700; margin-bottom: 32px; color: var(--text); }
+    .page-wrap { max-width: 720px; }
+    .legal-page-title { font-size: 1.75rem; font-weight: 700; margin: 8px 0 24px; letter-spacing: -0.03em; }
     .legal-block {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 32px 36px;
-      margin-bottom: 32px;
+      border-top: 1px solid var(--border);
+      padding: 28px 0;
+      margin-bottom: 0;
     }
-    .legal-block h2 { font-size: 1.25rem; font-weight: 700; margin-bottom: 16px; color: var(--text); }
-    .legal-block h3 { font-size: 1rem; font-weight: 600; margin: 22px 0 8px; color: var(--text); }
+    .legal-block h2 { font-size: 1.2rem; font-weight: 700; margin-bottom: 14px; }
+    .legal-block h3 { font-size: 0.98rem; font-weight: 600; margin: 20px 0 8px; }
     .legal-block p, .legal-block ul { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 12px; }
     .legal-block ul { padding-left: 22px; }
     .legal-block li { margin-bottom: 4px; }
-    .legal-nav { margin-bottom: 24px; }
+    .legal-nav { margin-bottom: 8px; }
     .legal-nav a {
       display: inline-block;
       margin-right: 16px;
-      color: var(--accent);
+      color: var(--accent-bright);
       text-decoration: none;
-      font-weight: 500;
+      font-weight: 600;
+      font-size: 0.9rem;
     }
     .legal-nav a:hover { text-decoration: underline; }
-    footer {
-      text-align: center;
-      padding: 28px 0 36px;
-      color: var(--text-muted);
-      font-size: 0.9rem;
-      border-top: 1px solid var(--border);
-      margin-top: 40px;
-    }
-    footer a { color: var(--accent); text-decoration: none; }
-    footer a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
-  <div class="container">
+  <div class="bg-ambient" aria-hidden="true"></div>
+  <div class="page-wrap">
     <nav id="site-nav" data-active="legal"></nav>
 
     <h1 class="legal-page-title">Legal</h1>

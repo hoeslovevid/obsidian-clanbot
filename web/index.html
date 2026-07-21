@@ -4,905 +4,185 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Obsidian Overseer — Warframe Discord Bot</title>
-  <meta name="description" content="The Warframe Discord bot for clans and communities. Baro, cycles, alerts, voice channels, economy, moderation, and more." />
+  <meta name="description" content="Warframe world-state, clan tools, and a mod dashboard — free Discord bot for clans and communities." />
   <meta name="theme-color" content="#06070a" />
   <link rel="canonical" href="https://obsidianoverseer.com/" />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://obsidianoverseer.com/" />
-  <meta property="og:title" content="Obsidian Overseer — Warframe Discord Bot" />
-  <meta property="og:description" content="Baro, cycles, alerts, voice channels, economy, moderation, and a mod dashboard — built for Warframe clans." />
-  <meta property="og:image" content="https://obsidianoverseer.com/assets/logo.png" />
-  <meta name="twitter:card" content="summary" />
-  <meta name="twitter:title" content="Obsidian Overseer — Warframe Discord Bot" />
-  <meta name="twitter:description" content="The Warframe Discord bot for clans and communities." />
-  <meta name="twitter:image" content="https://obsidianoverseer.com/assets/logo.png" />
+  <meta property="og:title" content="Obsidian Overseer" />
+  <meta property="og:description" content="Warframe world-state, clan tools, and a mod dashboard for Discord." />
+  <meta property="og:image" content="https://obsidianoverseer.com/assets/og.jpg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Obsidian Overseer" />
+  <meta name="twitter:description" content="Warframe world-state, clan tools, and a mod dashboard for Discord." />
+  <meta name="twitter:image" content="https://obsidianoverseer.com/assets/og.jpg" />
   <link rel="icon" type="image/png" href="/assets/logo.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/assets/site-nav.css" />
   <link rel="stylesheet" href="/assets/site.css" />
-  <style>
-    :root {
-      --bg: #06070a;
-      --bg-gradient: radial-gradient(ellipse 100% 80% at 50% 0%, rgba(15, 12, 20, 0.98) 0%, transparent 50%),
-                    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(212, 140, 60, 0.08), transparent),
-                    radial-gradient(ellipse 60% 40% at 80% 60%, rgba(230, 149, 42, 0.04), transparent);
-      --surface: #0f1115;
-      --surface2: #161a20;
-      --surface-hover: #1c2028;
-      --border: #2a2520;
-      --border-focus: #3d352c;
-      --text: #f0ebe5;
-      --text-muted: #9a8f82;
-      --text-subtle: #6b6156;
-      --matrix-orange: rgba(230, 149, 42, 0.5);
-      --matrix-orange-dim: rgba(212, 140, 60, 0.15);
-      --accent: #d4943c;
-      --accent-bright: #e8a84a;
-      --accent-dim: #b87828;
-      --accent-glow: rgba(212, 148, 60, 0.35);
-      --discord-blurple: #5865F2;
-      --discord-blurple-hover: #4752c4;
-      --radius: 14px;
-      --radius-lg: 20px;
-      --radius-sm: 10px;
-      --shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
-      --shadow-lg: 0 12px 48px rgba(0, 0, 0, 0.5);
-    }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    html {
-      scroll-behavior: smooth;
-    }
-
-    body {
-      font-family: 'Outfit', sans-serif;
-      background: var(--bg);
-      background-image: var(--bg-gradient);
-      color: var(--text);
-      line-height: 1.6;
-      min-height: 100vh;
-      overflow-x: hidden;
-    }
-
-    /* Ambient drifting orbs (subtle animated background) */
-    .bg-ambient {
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      z-index: 0;
-      overflow: hidden;
-    }
-
-    .bg-orb {
-      position: absolute;
-      border-radius: 50%;
-      filter: blur(80px);
-      opacity: 0.35;
-    }
-
-    .bg-orb-1 {
-      width:  min(80vw, 600px);
-      height: min(80vw, 600px);
-      background: radial-gradient(circle, rgba(230, 149, 42, 0.25) 0%, transparent 70%);
-      top:  -20%;
-      left: -10%;
-      animation: drift-1 25s ease-in-out infinite;
-    }
-
-    .bg-orb-2 {
-      width:  min(60vw, 400px);
-      height: min(60vw, 400px);
-      background: radial-gradient(circle, rgba(212, 140, 60, 0.2) 0%, transparent 70%);
-      top:  40%;
-      right: -15%;
-      animation: drift-2 30s ease-in-out infinite;
-    }
-
-    .bg-orb-3 {
-      width:  min(50vw, 320px);
-      height: min(50vw, 320px);
-      background: radial-gradient(circle, rgba(232, 168, 74, 0.18) 0%, transparent 70%);
-      bottom: -10%;
-      left:  20%;
-      animation: drift-3 22s ease-in-out infinite;
-    }
-
-    @keyframes drift-1 {
-      0%, 100% { transform: translate(0, 0) scale(1); }
-      33%      { transform: translate(5%, 8%) scale(1.05); }
-      66%      { transform: translate(-4%, 4%) scale(0.98); }
-    }
-
-    @keyframes drift-2 {
-      0%, 100% { transform: translate(0, 0) scale(1); }
-      50%      { transform: translate(-8%, -5%) scale(1.08); }
-    }
-
-    @keyframes drift-3 {
-      0%, 100% { transform: translate(0, 0); }
-      25%      { transform: translate(6%, -6%); }
-      75%      { transform: translate(-5%, 3%); }
-    }
-
-    /* Little orange galaxies */
-    .bg-galaxy {
-      position: absolute;
-      border-radius: 50%;
-      filter: blur(25px);
-      opacity: 0.5;
-      pointer-events: none;
-    }
-
-    .bg-galaxy-1 {
-      width:  min(35vw, 220px);
-      height: min(18vw, 100px);
-      background: radial-gradient(ellipse 100% 100% at 50% 50%,
-        rgba(230, 149, 42, 0.35) 0%,
-        rgba(212, 140, 60, 0.15) 40%,
-        transparent 70%);
-      top:  15%;
-      right: 8%;
-      animation: galaxy-with-stars 180s linear infinite;
-    }
-
-    .bg-galaxy-2 {
-      width:  min(28vw, 180px);
-      height: min(14vw, 85px);
-      background: radial-gradient(ellipse 100% 100% at 50% 50%,
-        rgba(232, 168, 74, 0.3) 0%,
-        rgba(212, 140, 60, 0.12) 45%,
-        transparent 75%);
-      bottom: 25%;
-      left: 5%;
-      animation: galaxy-with-stars 180s linear infinite;
-    }
-
-    .bg-galaxy-3 {
-      width:  min(22vw, 140px);
-      height: min(12vw, 70px);
-      background: radial-gradient(ellipse 100% 100% at 50% 50%,
-        rgba(230, 149, 42, 0.28) 0%,
-        rgba(200, 120, 50, 0.1) 50%,
-        transparent 70%);
-      top:  55%;
-      left: 25%;
-      animation: galaxy-with-stars 180s linear infinite;
-    }
-
-    .bg-galaxy-4 {
-      width:  min(20vw, 130px);
-      height: min(18vw, 90px);
-      background: radial-gradient(ellipse 100% 100% at 50% 50%,
-        rgba(212, 140, 60, 0.25) 0%,
-        rgba(230, 149, 42, 0.08) 45%,
-        transparent 72%);
-      top:  8%;
-      left: 40%;
-      animation: galaxy-with-stars 180s linear infinite;
-    }
-
-    /* Same 180s cycle as starfield — galaxies drift right and down with the stars */
-    @keyframes galaxy-with-stars {
-      0%   { transform: translate(0, 0); }
-      100% { transform: translate(6%, 4%); }
-    }
-
-    /* Space-style background: starfield + depth */
-    body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background-image:
-        radial-gradient(ellipse 120% 100% at 50% 100%, rgba(18, 14, 22, 0.7) 0%, transparent 55%),
-        radial-gradient(1.5px 1.5px at 20px 30px, rgba(255, 255, 255, 0.38), transparent),
-        radial-gradient(1px 1px at 90px 120px, rgba(255, 255, 255, 0.32), transparent),
-        radial-gradient(1.5px 1.5px at 160px 40px, rgba(255, 255, 255, 0.28), transparent),
-        radial-gradient(1px 1px at 250px 180px, rgba(230, 200, 150, 0.24), transparent),
-        radial-gradient(1.5px 1.5px at 320px 80px, rgba(255, 255, 255, 0.32), transparent),
-        radial-gradient(1px 1px at 50px 200px, rgba(255, 255, 255, 0.26), transparent),
-        radial-gradient(1px 1px at 280px 250px, rgba(230, 200, 150, 0.2), transparent),
-        radial-gradient(1.5px 1.5px at 140px 160px, rgba(255, 255, 255, 0.28), transparent),
-        radial-gradient(1px 1px at 380px 30px, rgba(255, 255, 255, 0.22), transparent);
-      background-size:
-        100% 100%,
-        400px 300px,
-        400px 300px,
-        400px 300px,
-        400px 300px,
-        400px 300px,
-        400px 300px,
-        400px 300px,
-        400px 300px,
-        400px 300px;
-      background-position:
-        0 0,
-        0 0,
-        30px 10px,
-        80px 60px,
-        120px 90px,
-        200px 20px,
-        10px 150px,
-        150px 180px,
-        60px 100px,
-        250px 50px;
-      background-repeat: repeat;
-      pointer-events: none;
-      z-index: 0;
-      animation: stars-drift 180s linear infinite;
-    }
-
-    @keyframes stars-drift {
-      0% {
-        background-position:
-          0 0,
-          0 0,
-          30px 10px,
-          80px 60px,
-          120px 90px,
-          200px 20px,
-          10px 150px,
-          150px 180px,
-          60px 100px,
-          250px 50px;
-      }
-      100% {
-        background-position:
-          0 0,
-          -400px -300px,
-          -370px -290px,
-          -320px -240px,
-          -280px -210px,
-          -200px -280px,
-          -390px -150px,
-          -250px -120px,
-          -340px -200px,
-          -150px -250px;
-      }
-    }
-
-    /* Subtle vignette (optional depth) */
-    body::after {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background: radial-gradient(ellipse 80% 70% at 50% 50%, transparent 40%, rgba(0, 0, 0, 0.25) 100%);
-      pointer-events: none;
-      z-index: 0;
-    }
-
-    .container {
-      max-width: 960px;
-      margin: 0 auto;
-      padding: 0 28px;
-      position: relative;
-      z-index: 1;
-    }
-
-    /* Nav chrome comes from site-nav.css (.site-nav) */
-    nav:not(.site-nav) {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 20px 0 24px;
-      flex-wrap: wrap;
-      gap: 12px;
-    }
-
-    .nav-logo {
-      font-size: 1.25rem;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      color: var(--text);
-      text-decoration: none;
-    }
-
-    .nav-links {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-    }
-
-    .nav-links a {
-      color: var(--text-muted);
-      text-decoration: none;
-      font-size: 0.95rem;
-      font-weight: 500;
-      padding: 8px 14px;
-      border-radius: var(--radius-sm);
-      transition: color 0.2s, background 0.2s;
-    }
-
-    .nav-links a:hover {
-      color: var(--text);
-      background: var(--surface2);
-    }
-
-    /* ----- Hero ----- */
-    .hero {
-      text-align: center;
-      padding: 48px 0 56px;
-    }
-
-    .hero-badge {
-      display: inline-block;
-      font-size: 0.8rem;
-      font-weight: 600;
-      color: var(--accent);
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      margin-bottom: 16px;
-    }
-
-    .hero-logo {
-      display: block;
-      width: 120px;
-      height: 120px;
-      margin: 0 auto 20px;
-      object-fit: contain;
-    }
-
-    .hero h1 {
-      font-size: clamp(2.5rem, 6vw, 3.5rem);
-      font-weight: 800;
-      letter-spacing: -0.03em;
-      line-height: 1.15;
-      margin-bottom: 16px;
-      background: linear-gradient(160deg, var(--text) 0%, var(--text) 40%, var(--accent-bright) 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-
-    .hero p {
-      font-size: 1.2rem;
-      color: var(--text-muted);
-      max-width: 520px;
-      margin: 0 auto 36px;
-      font-weight: 500;
-    }
-
-    /* ----- Invite CTA (primary) ----- */
-    .invite-hero {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 14px;
-    }
-
-    .invite-btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 12px;
-      padding: 18px 36px;
-      font-family: inherit;
-      font-size: 1.15rem;
-      font-weight: 700;
-      color: #fff;
-      background: linear-gradient(135deg, var(--discord-blurple) 0%, var(--discord-blurple-hover) 100%);
-      border: none;
-      border-radius: var(--radius);
-      cursor: pointer;
-      text-decoration: none;
-      box-shadow: 0 6px 28px rgba(88, 101, 242, 0.4);
-      transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s;
-    }
-
-    .invite-btn:hover {
-      transform: translateY(-3px);
-      box-shadow: 0 10px 36px rgba(88, 101, 242, 0.45);
-    }
-
-    .invite-btn:active {
-      transform: translateY(-1px);
-    }
-
-    .invite-btn svg {
-      width: 26px;
-      height: 26px;
-      flex-shrink: 0;
-    }
-
-    .invite-note {
-      font-size: 0.9rem;
-      color: var(--text-subtle);
-    }
-
-    .invite-note em { font-style: normal; color: var(--text-muted); }
-
-    .invite-stats {
-      display: inline-flex;
-      align-items: center;
-      gap: 0;
-      margin-top: 4px;
-      padding: 10px 18px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      box-shadow: var(--shadow);
-    }
-
-    .invite-stat {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 2px;
-      min-width: 88px;
-      padding: 0 14px;
-    }
-
-    .invite-stat strong {
-      font-size: 1.15rem;
-      font-weight: 700;
-      color: var(--accent-bright);
-      letter-spacing: -0.02em;
-      font-variant-numeric: tabular-nums;
-    }
-
-    .invite-stat span {
-      font-size: 0.72rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: var(--text-subtle);
-    }
-
-    .invite-stat-divider {
-      width: 1px;
-      height: 32px;
-      background: var(--border);
-      flex-shrink: 0;
-    }
-
-    .invite-stats.loading strong {
-      color: var(--text-muted);
-      animation: invite-stat-pulse 1.2s ease-in-out infinite;
-    }
-
-    @keyframes invite-stat-pulse {
-      0%, 100% { opacity: 0.45; }
-      50% { opacity: 1; }
-    }
-
-    /* ----- Section headings ----- */
-    .section-title {
-      font-size: 1.5rem;
-      font-weight: 700;
-      margin-bottom: 24px;
-      color: var(--text);
-      letter-spacing: -0.02em;
-    }
-
-    .section-subtitle {
-      font-size: 1rem;
-      color: var(--text-muted);
-      margin-top: -12px;
-      margin-bottom: 24px;
-      max-width: 560px;
-    }
-    .contact-cta .contact-cta-intro {
-      margin-left: auto;
-      margin-right: auto;
-      margin-bottom: 20px;
-      text-align: center;
-    }
-
-    /* ----- Features ----- */
-    .features {
-      padding: 56px 0 64px;
-    }
-
-    .feature-groups {
-      display: flex;
-      flex-direction: column;
-      gap: 44px;
-    }
-
-    .feature-group-title {
-      font-size: 0.82rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--text-subtle);
-      margin-bottom: 16px;
-      padding-bottom: 10px;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .feature-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-      gap: 16px;
-    }
-
-    .feature-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 20px 22px;
-      transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s, background 0.2s;
-    }
-
-    .feature-card:hover {
-      border-color: var(--border-focus);
-      background: var(--surface2);
-      box-shadow: var(--shadow);
-      transform: translateY(-2px);
-    }
-
-    .feature-card .icon {
-      font-size: 1.5rem;
-      margin-bottom: 10px;
-      display: block;
-    }
-
-    .feature-card h3 {
-      font-size: 1rem;
-      font-weight: 600;
-      margin-bottom: 6px;
-      color: var(--text);
-    }
-
-    .feature-card p {
-      font-size: 0.86rem;
-      color: var(--text-muted);
-      line-height: 1.5;
-    }
-
-    /* ----- Contact ----- */
-    .contact {
-      padding: 56px 0 64px;
-      border-top: 1px solid var(--border);
-    }
-
-    .contact-cards {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 16px;
-      justify-content: center;
-    }
-
-    .contact-card {
-      display: inline-flex;
-      align-items: center;
-      gap: 14px;
-      padding: 20px 28px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      text-decoration: none;
-      color: var(--text);
-      font-weight: 600;
-      font-size: 1rem;
-      transition: border-color 0.2s, background 0.2s, transform 0.2s, box-shadow 0.2s;
-    }
-
-    .contact-card:hover {
-      border-color: var(--accent);
-      background: var(--surface2);
-      transform: translateY(-2px);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-    }
-
-    .contact-card svg {
-      width: 24px;
-      height: 24px;
-      flex-shrink: 0;
-    }
-
-    .contact-card.discord svg { color: var(--discord-blurple); }
-    .contact-card.email svg { color: var(--accent); }
-
-    .contact-card span:first-of-type { margin-right: 4px; }
-    .contact-card small {
-      display: block;
-      font-size: 0.8rem;
-      font-weight: 500;
-      color: var(--text-muted);
-      margin-top: 2px;
-    }
-
-    .contact-note {
-      text-align: center;
-      margin-top: 20px;
-      font-size: 0.95rem;
-      color: var(--text-muted);
-    }
-
-    .contact-note code {
-      font-size: 0.85em;
-      padding: 2px 6px;
-      background: var(--surface2);
-      border-radius: 4px;
-      color: var(--text-subtle);
-    }
-
-    /* ----- Contact form ----- */
-    .contact-form-wrap {
-      max-width: 480px;
-      margin: 28px auto 0;
-      padding: 28px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-    }
-
-    .contact-form-wrap h3 {
-      font-size: 1.1rem;
-      font-weight: 600;
-      margin-bottom: 20px;
-      color: var(--text);
-    }
-
-    .form-group {
-      margin-bottom: 16px;
-    }
-
-    .form-group label {
-      display: block;
-      font-size: 0.9rem;
-      font-weight: 500;
-      color: var(--text-muted);
-      margin-bottom: 6px;
-    }
-
-    .form-group input,
-    .form-group textarea {
-      width: 100%;
-      padding: 12px 14px;
-      font-family: inherit;
-      font-size: 0.95rem;
-      color: var(--text);
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      transition: border-color 0.2s;
-    }
-
-    .form-group input:focus,
-    .form-group textarea:focus {
-      outline: none;
-      border-color: var(--accent);
-    }
-
-    .form-group textarea {
-      min-height: 120px;
-      resize: vertical;
-    }
-
-    .form-group label .optional {
-      font-weight: 400;
-      color: var(--text-subtle);
-    }
-
-    .form-submit {
-      width: 100%;
-      padding: 14px;
-      font-family: inherit;
-      font-size: 1rem;
-      font-weight: 600;
-      color: #fff;
-      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dim) 100%);
-      border: none;
-      border-radius: var(--radius-sm);
-      cursor: pointer;
-      transition: opacity 0.2s, transform 0.1s;
-    }
-
-    .form-submit:hover:not(:disabled) {
-      opacity: 0.95;
-    }
-
-    .form-submit:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-
-    .form-message {
-      margin-top: 14px;
-      padding: 12px 14px;
-      font-size: 0.9rem;
-      border-radius: var(--radius-sm);
-      display: none;
-    }
-
-    .form-message.success {
-      display: block;
-      background: rgba(107, 207, 127, 0.15);
-      border: 1px solid rgba(107, 207, 127, 0.4);
-      color: var(--success, #6bcf7f);
-    }
-
-    .form-message.error {
-      display: block;
-      background: rgba(239, 68, 68, 0.1);
-      border: 1px solid rgba(239, 68, 68, 0.3);
-      color: #f87171;
-    }
-
-    /* ----- Developer ----- */
-    .developer {
-      padding: 40px 0 56px;
-    }
-
-    .developer-card {
-      display: block;
-      max-width: 320px;
-      margin: 0 auto;
-      padding: 28px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      text-align: center;
-      text-decoration: none;
-      color: inherit;
-      transition: border-color 0.2s, transform 0.15s;
-    }
-
-    .developer-card:hover {
-      border-color: var(--accent-dim);
-      transform: translateY(-2px);
-    }
-
-    .developer-avatar {
-      width: 96px;
-      height: 96px;
-      margin: 0 auto 16px;
-      border-radius: 50%;
-      object-fit: cover;
-      border: 2px solid var(--border);
-      background: var(--surface2);
-    }
-
-    .developer-avatar.placeholder {
-      object-fit: none;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 2.25rem;
-      font-weight: 700;
-      color: var(--accent);
-    }
-
-    .developer-name {
-      font-size: 1.25rem;
-      font-weight: 700;
-      color: var(--text);
-      margin-bottom: 12px;
-    }
-
-    .developer-msg {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      padding: 10px 20px;
-      font-family: inherit;
-      font-size: 0.95rem;
-      font-weight: 600;
-      color: #fff;
-      background: var(--discord-blurple);
-      border: none;
-      border-radius: var(--radius-sm);
-      text-decoration: none;
-      transition: background 0.2s, transform 0.1s;
-    }
-
-    .developer-card:hover .developer-msg {
-      background: var(--discord-blurple-hover);
-      transform: translateY(-1px);
-    }
-
-    .developer-msg svg {
-      width: 18px;
-      height: 18px;
-    }
-
-    /* ----- Footer ----- */
-    footer {
-      text-align: center;
-      padding: 28px 0 36px;
-      color: var(--text-muted);
-      font-size: 0.9rem;
-      border-top: 1px solid var(--border);
-    }
-
-    footer a {
-      color: var(--accent);
-      text-decoration: none;
-      font-weight: 500;
-    }
-
-    footer a:hover { text-decoration: underline; }
-  </style>
 </head>
 <body>
-  <div class="bg-ambient" aria-hidden="true">
-    <span class="bg-orb bg-orb-1"></span>
-    <span class="bg-orb bg-orb-2"></span>
-    <span class="bg-orb bg-orb-3"></span>
-    <span class="bg-galaxy bg-galaxy-1"></span>
-    <span class="bg-galaxy bg-galaxy-2"></span>
-    <span class="bg-galaxy bg-galaxy-3"></span>
-    <span class="bg-galaxy bg-galaxy-4"></span>
-  </div>
+  <div class="bg-ambient" aria-hidden="true"></div>
+
   <div class="container">
     <nav id="site-nav" data-active="home"></nav>
 
     <header class="hero">
-      <span class="hero-badge">Warframe Discord Bot</span>
-      <img src="/assets/logo.png" alt="Obsidian Overseer" class="hero-logo" />
-      <h1>The Warframe bot for your clan and community.</h1>
-      <p>Built for Warframe Discord servers: Baro, cycles, alerts, voice channels, economy, moderation, events, and more. Add Obsidian Overseer in one click.</p>
-      <div class="invite-hero">
-        <div class="cta-row">
-          <a id="invite-link" class="invite-btn" href="#" target="_blank" rel="noopener noreferrer">
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
-            Add to Discord
-          </a>
-          <a id="hero-dashboard-link" class="btn-secondary" href="/dashboard.html">Open dashboard</a>
-        </div>
-        <div class="invite-stats loading" id="invite-stats" aria-label="Live bot statistics">
-          <div class="invite-stat">
-            <strong id="stat-servers">…</strong>
-            <span>Servers</span>
-          </div>
-          <div class="invite-stat-divider" aria-hidden="true"></div>
-          <div class="invite-stat">
-            <strong id="stat-users">…</strong>
-            <span>Users</span>
-          </div>
-        </div>
-        <div id="bot-status" class="site-status" aria-live="polite"><span class="site-status-dot" aria-hidden="true"></span>Checking status…</div>
-        <p class="invite-note">You need <em>Manage Server</em> permission to add the bot.</p>
+      <img src="/assets/logo.png" alt="Obsidian Overseer" class="hero-logo" width="72" height="72" />
+      <h1>Obsidian Overseer</h1>
+      <p>Warframe world-state, clan tools, and a mod dashboard — built for Discord communities.</p>
+      <div class="cta-row">
+        <a id="invite-link" class="btn-primary" href="#" target="_blank" rel="noopener noreferrer">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
+          Add to Discord
+        </a>
+        <a id="hero-dashboard-link" class="btn-secondary" href="/dashboard.html">Dashboard</a>
       </div>
+      <p id="hero-meta" class="hero-meta loading" aria-live="polite">Loading…</p>
+      <p class="hero-note">Requires Manage Server to invite.</p>
     </header>
 
-    <div class="trust-strip" aria-label="Highlights">
-      <span class="trust-chip"><strong>Warframe-first</strong> world state</span>
-      <span class="trust-chip"><strong>Mod dashboard</strong> for staff</span>
-      <span class="trust-chip"><strong>Toggle</strong> modules per server</span>
-      <span class="trust-chip"><strong>Free</strong> to invite</span>
-    </div>
-
-    <section class="features" id="how-it-works" style="padding-top: 8px;">
+    <section class="section" id="how-it-works">
       <h2 class="section-title">How it works</h2>
-      <p class="section-subtitle">Three steps from invite to day-to-day clan ops.</p>
-      <div class="how-steps">
-        <div class="how-step">
-          <span class="how-step-num">1</span>
+      <p class="section-subtitle">Invite, configure, run your clan.</p>
+      <div class="how-list">
+        <div class="how-item">
+          <span class="num">01</span>
           <h3>Invite</h3>
-          <p>Add Obsidian Overseer with Manage Server. Slash commands sync automatically.</p>
+          <p>Add the bot with Manage Server. Slash commands sync automatically.</p>
         </div>
-        <div class="how-step">
-          <span class="how-step-num">2</span>
+        <div class="how-item">
+          <span class="num">02</span>
           <h3>Configure</h3>
-          <p>Run setup in Discord or use the web dashboard to pick channels, roles, and modules.</p>
+          <p>Pick channels and modules in Discord or the web dashboard.</p>
         </div>
-        <div class="how-step">
-          <span class="how-step-num">3</span>
+        <div class="how-item">
+          <span class="num">03</span>
           <h3>Command</h3>
-          <p>Use <code>/menu</code>, <code>/baro</code>, tickets, LFG, and more — tailored to your clan.</p>
+          <p>Use /menu, /baro, tickets, LFG, and the rest day to day.</p>
         </div>
       </div>
     </section>
 
-    <section class="features" id="demo" style="padding-top: 8px;">
-      <h2 class="section-title">Built for mods</h2>
-      <p class="section-subtitle">Inbox, Warframe world state, setup, and giveaways — one dashboard.</p>
-      <div class="demo-frame" aria-hidden="true">
+    <section class="section" id="features">
+      <h2 class="section-title">Features</h2>
+      <p class="section-subtitle">What your clan actually uses.</p>
+      <div class="feature-hero-grid">
+        <div class="feat">
+          <h3>Baro, cycles &amp; missions</h3>
+          <p>Baro Ki'Teer, open-world cycles, sortie, fissures, and drop tables.</p>
+        </div>
+        <div class="feat">
+          <h3>WF alerts &amp; feeds</h3>
+          <p>Alert pings, forum, YouTube, and devstream notification feeds.</p>
+        </div>
+        <div class="feat">
+          <h3>Voice channels</h3>
+          <p>Join-to-create temp VCs with rename, limit, and lock controls.</p>
+        </div>
+        <div class="feat">
+          <h3>Support tickets</h3>
+          <p>SLA tracking, transcripts, and a staff inbox.</p>
+        </div>
+        <div class="feat">
+          <h3>LFG squads</h3>
+          <p>Looking-for-group posts with fill tracking.</p>
+        </div>
+        <div class="feat">
+          <h3>Moderation</h3>
+          <p>Warnings, AutoMod, audit logs, and role tools.</p>
+        </div>
+        <div class="feat">
+          <h3>Economy</h3>
+          <p>Daily rewards, XP, shop, pets — modules you can toggle.</p>
+        </div>
+        <div class="feat">
+          <h3>Mod dashboard</h3>
+          <p>Inbox, Warframe, setup, analytics, and giveaways in one place.</p>
+        </div>
+      </div>
+      <div class="features-toggle-wrap">
+        <button type="button" id="features-toggle" class="btn-ghost">View all modules</button>
+      </div>
+
+      <div class="features-all" id="features-all" hidden>
+        <div class="feature-group">
+          <h3 class="feature-group-title">Core &amp; Voice</h3>
+          <div class="feature-grid">
+            <div class="feat"><h3>Voice channels</h3><p>Join-to-create temp VCs, control panels, rename, limit, and lock.</p></div>
+            <div class="feat"><h3>Complaints &amp; docket</h3><p>Inheritor docket channel, case threading, and complaint logs.</p></div>
+          </div>
+        </div>
+        <div class="feature-group">
+          <h3 class="feature-group-title">Community</h3>
+          <div class="feature-grid">
+            <div class="feat"><h3>Support tickets</h3><p>Ticket system with SLA tracking, transcripts, and staff inbox.</p></div>
+            <div class="feat"><h3>Suggestions</h3><p>Member suggestion posts with review workflow.</p></div>
+            <div class="feat"><h3>Applications</h3><p>Clan/application forms with approve/deny flow.</p></div>
+            <div class="feat"><h3>LFG squads</h3><p>Looking-for-group posts with fill tracking.</p></div>
+            <div class="feat"><h3>Polls</h3><p>Server polls with live result updates.</p></div>
+            <div class="feat"><h3>Events &amp; RSVP</h3><p>Scheduled events, natural-language times, and reminders.</p></div>
+            <div class="feat"><h3>Giveaways</h3><p>Entry buttons and winner selection.</p></div>
+            <div class="feat"><h3>Reminders</h3><p>Personal and server reminders with scheduling.</p></div>
+            <div class="feat"><h3>Reputation</h3><p>Member rep scores and leaderboards.</p></div>
+            <div class="feat"><h3>Twitch notifications</h3><p>Stream go-live alerts for watched channels.</p></div>
+            <div class="feat"><h3>Starboard</h3><p>Highlight popular messages in a dedicated channel.</p></div>
+          </div>
+        </div>
+        <div class="feature-group">
+          <h3 class="feature-group-title">Warframe</h3>
+          <div class="feature-grid">
+            <div class="feat"><h3>Baro, cycles &amp; missions</h3><p>Baro Ki'Teer, open-world cycles, sortie, fissures, and drop tables.</p></div>
+            <div class="feat"><h3>WF alerts &amp; feeds</h3><p>Alert pings, forum, YouTube, and devstream feeds.</p></div>
+            <div class="feat"><h3>Trading &amp; market</h3><p>Trading post, market price lookup, and WM search.</p></div>
+            <div class="feat"><h3>Account linking</h3><p>Link Discord to Warframe/Steam for playtime roles.</p></div>
+          </div>
+        </div>
+        <div class="feature-group">
+          <h3 class="feature-group-title">Economy</h3>
+          <div class="feature-grid">
+            <div class="feat"><h3>Passive economy</h3><p>Background coin and XP from activity.</p></div>
+            <div class="feat"><h3>Coins &amp; wallet</h3><p>Daily rewards, transfers, stash, and prestige.</p></div>
+            <div class="feat"><h3>XP &amp; levels</h3><p>Activity XP, level-ups, and leaderboards.</p></div>
+            <div class="feat"><h3>Shop</h3><p>Server shop items and purchases.</p></div>
+            <div class="feat"><h3>Pets</h3><p>Pet collection, care, battles, and shop.</p></div>
+            <div class="feat"><h3>Gambling</h3><p>Casino games and betting — opt-in.</p></div>
+            <div class="feat"><h3>Bounties &amp; achievements</h3><p>Weekly bounties, achievements, and badges.</p></div>
+          </div>
+        </div>
+        <div class="feature-group">
+          <h3 class="feature-group-title">Moderation</h3>
+          <div class="feature-grid">
+            <div class="feat"><h3>Moderation tools</h3><p>Purge, snipe, lock, slowmode, and scheduled actions.</p></div>
+            <div class="feat"><h3>Warnings &amp; notes</h3><p>Warn members, templates, and mod notes.</p></div>
+            <div class="feat"><h3>AutoMod</h3><p>Spam, caps, links, mentions, and raid protection.</p></div>
+            <div class="feat"><h3>Audit &amp; logging</h3><p>Mod audit log, bot errors, and ticket transcripts.</p></div>
+            <div class="feat"><h3>Role tools</h3><p>Reaction roles, level roles, and role menus.</p></div>
+          </div>
+        </div>
+        <div class="feature-group">
+          <h3 class="feature-group-title">Music &amp; Staff</h3>
+          <div class="feature-grid">
+            <div class="feat"><h3>Music playback</h3><p>Play, pause, skip, and queue in voice.</p></div>
+            <div class="feat"><h3>Admin utilities</h3><p>Backups, KPIs, incident mode, and dashboards.</p></div>
+            <div class="feat"><h3>Staff tools</h3><p>Command sync, webhooks, and analytics.</p></div>
+            <div class="feat"><h3>Update log</h3><p>Version announcements to a changelog channel.</p></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="demo">
+      <h2 class="section-title">Mod dashboard</h2>
+      <p class="section-subtitle">Inbox, Warframe, setup, and giveaways — one place for staff.</p>
+      <div class="demo-frame" role="img" aria-label="Dashboard preview">
         <div class="demo-chrome">
           <span class="demo-dot on"></span>
           <span class="demo-dot"></span>
           <span class="demo-dot"></span>
-          <span>obsidianoverseer · dashboard</span>
+          <span>dashboard · overview</span>
         </div>
         <div class="demo-body">
           <div class="demo-side">
@@ -913,16 +193,15 @@
             <span>Giveaways</span>
           </div>
           <div class="demo-main">
-            <div class="demo-card">
+            <div class="demo-row">
               <strong>Open tickets</strong>
               <p>3 waiting · oldest 2h ago</p>
-              <div class="demo-bar"><i></i></div>
             </div>
-            <div class="demo-card">
+            <div class="demo-row">
               <strong>Baro Ki'Teer</strong>
               <p>Arrives in 1d 4h · Iron Wake</p>
             </div>
-            <div class="demo-card">
+            <div class="demo-row">
               <strong>Setup health</strong>
               <p>Alerts channel set · WF feeds ready</p>
             </div>
@@ -931,388 +210,87 @@
       </div>
     </section>
 
-    <section class="features" id="features">
-      <h2 class="section-title">What Obsidian Overseer can do</h2>
-      <p class="section-subtitle">Everything your Warframe clan needs — voice, tickets, Baro &amp; cycles, economy, moderation, music, and a mod dashboard.</p>
-
-      <div class="feature-hero-grid">
-        <div class="feature-card">
-          <span class="icon">🎮</span>
-          <h3>Baro, cycles &amp; missions</h3>
-          <p>Baro Ki'Teer, open-world cycles, sortie, fissures, and drop tables.</p>
-        </div>
-        <div class="feature-card">
-          <span class="icon">🔔</span>
-          <h3>WF alerts &amp; feeds</h3>
-          <p>Alert pings, forum, YouTube, and devstream notification feeds.</p>
-        </div>
-        <div class="feature-card">
-          <span class="icon">🎤</span>
-          <h3>Voice channels</h3>
-          <p>Join-to-create temp VCs, control panels, rename, limit, and lock.</p>
-        </div>
-        <div class="feature-card">
-          <span class="icon">🎫</span>
-          <h3>Support tickets</h3>
-          <p>Ticket system with SLA tracking, transcripts, and staff inbox.</p>
-        </div>
-        <div class="feature-card">
-          <span class="icon">👥</span>
-          <h3>LFG squads</h3>
-          <p>Looking-for-group posts with fill tracking.</p>
-        </div>
-        <div class="feature-card">
-          <span class="icon">🛡️</span>
-          <h3>Moderation tools</h3>
-          <p>Purge, warnings, AutoMod, audit logs, and role tools.</p>
-        </div>
-        <div class="feature-card">
-          <span class="icon">💰</span>
-          <h3>Coins &amp; economy</h3>
-          <p>Daily rewards, XP, shop, pets, and optional gambling.</p>
-        </div>
-        <div class="feature-card">
-          <span class="icon">📊</span>
-          <h3>Mod dashboard</h3>
-          <p>Web dashboard for inbox, Warframe, analytics, setup, and giveaways.</p>
-        </div>
-      </div>
-
-      <div class="features-toggle-wrap">
-        <button type="button" id="features-toggle" class="btn-secondary">View all modules</button>
-      </div>
-
-      <div class="features-all" id="features-all" hidden>
-      <div class="feature-groups">
-        <div class="feature-group">
-          <h3 class="feature-group-title">Core &amp; Voice</h3>
-          <div class="feature-grid">
-            <div class="feature-card">
-              <span class="icon">🎤</span>
-              <h3>Voice channels</h3>
-              <p>Join-to-create temp VCs, control panels, rename, limit, and lock.</p>
-            </div>
-            <div class="feature-card">
-              <span class="icon">📋</span>
-              <h3>Complaints &amp; docket</h3>
-              <p>Inheritor docket channel, case threading, and complaint logs.</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="feature-group">
-          <h3 class="feature-group-title">Community</h3>
-          <div class="feature-grid">
-            <div class="feature-card">
-              <span class="icon">🎫</span>
-              <h3>Support tickets</h3>
-              <p>Ticket system with SLA tracking, transcripts, and staff inbox.</p>
-            </div>
-            <div class="feature-card">
-              <span class="icon">💡</span>
-              <h3>Suggestions</h3>
-              <p>Member suggestion posts with review workflow.</p>
-            </div>
-            <div class="feature-card">
-              <span class="icon">📝</span>
-              <h3>Applications</h3>
-              <p>Clan/application forms with approve/deny flow.</p>
-            </div>
-            <div class="feature-card">
-              <span class="icon">👥</span>
-              <h3>LFG squads</h3>
-              <p>Looking-for-group posts with fill tracking.</p>
-            </div>
-            <div class="feature-card">
-              <span class="icon">📊</span>
-              <h3>Polls</h3>
-              <p>Server polls with live result updates.</p>
-            </div>
-            <div class="feature-card">
-              <span class="icon">📅</span>
-              <h3>Events &amp; RSVP</h3>
-              <p>Scheduled events, natural-language times, and reminders.</p>
-            </div>
-            <div class="feature-card">
-              <span class="icon">🎁</span>
-              <h3>Giveaways</h3>
-              <p>Create giveaways with entry buttons and winner selection.</p>
-            </div>
-            <div class="feature-card">
-              <span class="icon">⏰</span>
-              <h3>Reminders</h3>
-              <p>Personal and server reminders with scheduling.</p>
-            </div>
-            <div class="feature-card">
-              <span class="icon">⭐</span>
-              <h3>Reputation</h3>
-              <p>Member rep scores and leaderboards.</p>
-            </div>
-            <div class="feature-card">
-              <span class="icon">📺</span>
-              <h3>Twitch notifications</h3>
-              <p>Stream go-live alerts for watched channels.</p>
-            </div>
-            <div class="feature-card">
-              <span class="icon">🌟</span>
-              <h3>Starboard</h3>
-              <p>Highlight popular messages in a dedicated channel.</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="feature-group">
-          <h3 class="feature-group-title">Warframe</h3>
-          <div class="feature-grid">
-            <div class="feature-card">
-              <span class="icon">🎮</span>
-              <h3>Baro, cycles &amp; missions</h3>
-              <p>Baro Ki'Teer, open-world cycles, sortie, fissures, and drop tables.</p>
-            </div>
-            <div class="feature-card">
-              <span class="icon">🔔</span>
-              <h3>WF alerts &amp; feeds</h3>
-              <p>Alert pings, forum, YouTube, and devstream notification feeds.</p>
-            </div>
-            <div class="feature-card">
-              <span class="icon">💼</span>
-              <h3>Trading &amp; market</h3>
-              <p>Trading post, market price lookup, and WM search.</p>
-            </div>
-            <div class="feature-card">
-              <span class="icon">🔗</span>
-              <h3>Account linking</h3>
-              <p>Link Discord to Warframe/Steam for playtime roles.</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="feature-group">
-          <h3 class="feature-group-title">Economy</h3>
-          <div class="feature-grid">
-            <div class="feature-card">
-              <span class="icon">📈</span>
-              <h3>Passive economy</h3>
-              <p>Background coin and XP gains from activity.</p>
-            </div>
-            <div class="feature-card">
-              <span class="icon">💰</span>
-              <h3>Coins &amp; wallet</h3>
-              <p>Daily rewards, transfers, stash, and prestige.</p>
-            </div>
-            <div class="feature-card">
-              <span class="icon">🏆</span>
-              <h3>XP &amp; levels</h3>
-              <p>Activity XP, level-ups, and leaderboards.</p>
-            </div>
-            <div class="feature-card">
-              <span class="icon">🛒</span>
-              <h3>Shop</h3>
-              <p>Server shop items and purchases.</p>
-            </div>
-            <div class="feature-card">
-              <span class="icon">🐾</span>
-              <h3>Pets</h3>
-              <p>Pet collection, care, battles, and shop.</p>
-            </div>
-            <div class="feature-card">
-              <span class="icon">🎲</span>
-              <h3>Gambling</h3>
-              <p>Casino games and betting commands.</p>
-            </div>
-            <div class="feature-card">
-              <span class="icon">🎯</span>
-              <h3>Bounties &amp; achievements</h3>
-              <p>Weekly bounties, achievements, and profile badges.</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="feature-group">
-          <h3 class="feature-group-title">Moderation</h3>
-          <div class="feature-grid">
-            <div class="feature-card">
-              <span class="icon">🛡️</span>
-              <h3>Moderation tools</h3>
-              <p>Purge, snipe, lock, slowmode, and scheduled actions.</p>
-            </div>
-            <div class="feature-card">
-              <span class="icon">⚠️</span>
-              <h3>Warnings &amp; notes</h3>
-              <p>Warn members, templates, and mod notes.</p>
-            </div>
-            <div class="feature-card">
-              <span class="icon">🤖</span>
-              <h3>AutoMod</h3>
-              <p>Spam, caps, links, mentions, and raid protection.</p>
-            </div>
-            <div class="feature-card">
-              <span class="icon">📜</span>
-              <h3>Audit &amp; logging</h3>
-              <p>Mod audit log, bot errors, and ticket transcripts.</p>
-            </div>
-            <div class="feature-card">
-              <span class="icon">🏷️</span>
-              <h3>Role tools</h3>
-              <p>Reaction roles, level roles, and role menus.</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="feature-group">
-          <h3 class="feature-group-title">Music</h3>
-          <div class="feature-grid">
-            <div class="feature-card">
-              <span class="icon">🎵</span>
-              <h3>Music playback</h3>
-              <p>Play, pause, skip, and queue music in voice.</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="feature-group">
-          <h3 class="feature-group-title">Admin &amp; Staff</h3>
-          <div class="feature-grid">
-            <div class="feature-card">
-              <span class="icon">⚙️</span>
-              <h3>Admin utilities</h3>
-              <p>Backups, KPIs, incident mode, and server dashboards.</p>
-            </div>
-            <div class="feature-card">
-              <span class="icon">🔧</span>
-              <h3>Staff tools</h3>
-              <p>Command sync, webhooks, and analytics utilities.</p>
-            </div>
-            <div class="feature-card">
-              <span class="icon">📣</span>
-              <h3>Update log</h3>
-              <p>Bot version announcements and changelog channel.</p>
-            </div>
-            <div class="feature-card">
-              <span class="icon">📊</span>
-              <h3>Mod dashboard</h3>
-              <p>Web dashboard for inbox, Warframe, analytics, setup, and giveaways.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-      </div>
-    </section>
-
-    <section class="features" id="commands">
-      <h2 class="section-title">Popular commands</h2>
-      <p class="section-subtitle">A few of the slash commands members and mods use every day.</p>
-      <div class="cmd-grid">
-        <div class="cmd-card"><code>/menu</code><p>Hub for help, daily, and common actions.</p></div>
-        <div class="cmd-card"><code>/baro</code><p>Baro inventory, arrival, and relics.</p></div>
-        <div class="cmd-card"><code>/lfg</code><p>Post a Looking-for-Group squad.</p></div>
-        <div class="cmd-card"><code>/ticket</code><p>Open a support ticket with staff.</p></div>
-        <div class="cmd-card"><code>/wfnotify configure</code><p>Wire Warframe alert channels.</p></div>
-        <div class="cmd-card"><code>/help</code><p>Search commands and feature guides.</p></div>
-      </div>
-    </section>
-
-    <section class="contact-cta" style="padding: 40px 0 48px; text-align: center; border-top: 1px solid var(--border);">
+    <section class="final-cta">
       <h2 class="section-title">Ready for your clan?</h2>
-      <p class="section-subtitle contact-cta-intro">Invite the bot, skim the setup guide, or ask us anything.</p>
+      <p class="section-subtitle">Invite the bot, or follow the setup guide.</p>
       <div class="cta-row">
-        <a id="invite-link-bottom" class="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="text-decoration: none;">Add to Discord</a>
-        <a href="/setup.html" class="btn-secondary">Setup guide</a>
-        <a href="/contact.html" class="btn-secondary">Contact</a>
+        <a id="invite-link-bottom" class="btn-primary" href="#" target="_blank" rel="noopener noreferrer">Add to Discord</a>
+        <a href="/setup.html">Setup guide</a>
+        <a href="/contact.html">Contact</a>
       </div>
-    </section>
-
-    <section class="developer">
-      <h2 class="section-title">Developer</h2>
-      <a id="developer-card-link" class="developer-card" href="https://discord.gg/bJscayQNK4" target="_blank" rel="noopener noreferrer">
-        <div id="developer-avatar-wrap" style="display: flex; justify-content: center;">
-          <img id="developer-avatar" class="developer-avatar" src="" alt="" style="display: none;" />
-          <div id="developer-avatar-placeholder" class="developer-avatar placeholder" style="display: none;"></div>
-        </div>
-        <p id="developer-name" class="developer-name">Danger!</p>
-        <span class="developer-msg">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
-          Join our Discord
-        </span>
-      </a>
     </section>
 
     <footer id="site-footer"></footer>
   </div>
 
-  <script>
-    // ——— Config: set these for your bot and contact ———
-    const BOT_CLIENT_ID = '1460107752658440223';
-    const PERMISSIONS = '277025508160';
-    const SCOPE = 'bot%20applications.commands';
-
-    // Developer card: name, avatar image, and optional Discord message link
-    const DEVELOPER_NAME = 'Danger!';
-    const DEVELOPER_IMAGE = '/assets/developer.png';  // e.g. 'assets/developer.png' or full URL — leave empty for initial placeholder
-    const DEVELOPER_DISCORD_LINK = 'https://discord.gg/bJscayQNK4';  // Discord server invite — link shown on the Developer card
-
-    // ——— Invite link ———
-    const inviteUrl = BOT_CLIENT_ID && BOT_CLIENT_ID !== 'YOUR_BOT_CLIENT_ID'
-      ? `https://discord.com/api/oauth2/authorize?client_id=${BOT_CLIENT_ID}&permissions=${PERMISSIONS}&scope=${SCOPE}`
-      : '#';
-
-    function bindInvite(el) {
-      if (!el) return;
-      el.href = inviteUrl;
-      if (inviteUrl === '#') {
-        el.addEventListener('click', function(e) {
-          e.preventDefault();
-          alert('Please set BOT_CLIENT_ID in index.html to your bot\'s Application ID from the Discord Developer Portal.');
-        });
-      }
-    }
-    bindInvite(document.getElementById('invite-link'));
-    bindInvite(document.getElementById('invite-link-bottom'));
-
-    // ——— Developer card ———
-    (function() {
-      document.getElementById('developer-name').textContent = DEVELOPER_NAME || 'Developer';
-      var avatarImg = document.getElementById('developer-avatar');
-      var placeholder = document.getElementById('developer-avatar-placeholder');
-      var cardLink = document.getElementById('developer-card-link');
-      if (cardLink && DEVELOPER_DISCORD_LINK && DEVELOPER_DISCORD_LINK.trim()) {
-        cardLink.href = DEVELOPER_DISCORD_LINK.trim();
-      }
-      if (DEVELOPER_IMAGE && DEVELOPER_IMAGE.trim()) {
-        avatarImg.src = DEVELOPER_IMAGE.trim();
-        avatarImg.alt = DEVELOPER_NAME + ' avatar';
-        avatarImg.style.display = 'block';
-        avatarImg.onerror = function() {
-          avatarImg.style.display = 'none';
-          placeholder.textContent = (DEVELOPER_NAME || 'D').charAt(0);
-          placeholder.style.display = 'flex';
-        };
-      } else {
-        placeholder.textContent = (DEVELOPER_NAME || 'D').charAt(0);
-        placeholder.style.display = 'flex';
-      }
-    })();
-  </script>
   <script src="/assets/config.js"></script>
   <script src="/assets/site.js"></script>
   <script>
     (function () {
-      function refreshStats() {
-        if (!window.ObsidianSite || !window.ObsidianSite.loadPublicBotStats) return;
-        window.ObsidianSite.loadPublicBotStats({
-          serversEl: document.getElementById("stat-servers"),
-          usersEl: document.getElementById("stat-users"),
-          wrapEl: document.getElementById("invite-stats"),
-        });
+      function bindInvite(el) {
+        if (!el || !window.ObsidianSite) return;
+        el.href = window.ObsidianSite.inviteUrl();
       }
-      refreshStats();
-      if (window.ObsidianSite && window.ObsidianSite.loadBotStatus) {
-        window.ObsidianSite.loadBotStatus(document.getElementById("bot-status"));
-      }
+      bindInvite(document.getElementById("invite-link"));
+      bindInvite(document.getElementById("invite-link-bottom"));
+
       var dash = document.getElementById("hero-dashboard-link");
-      if (dash && window.ObsidianSite && window.ObsidianSite.dashboardUrl) {
-        dash.href = window.ObsidianSite.dashboardUrl();
+      if (dash && window.ObsidianSite) dash.href = window.ObsidianSite.dashboardUrl();
+
+      var meta = document.getElementById("hero-meta");
+      var stats = { guild_count: null, user_count: null };
+      var version = null;
+      var online = null;
+
+      function renderMeta() {
+        if (!meta) return;
+        var parts = [];
+        if (stats.guild_count != null) {
+          parts.push(window.ObsidianSite.formatCount(stats.guild_count) + " servers");
+        }
+        if (stats.user_count != null) {
+          parts.push(window.ObsidianSite.formatCount(stats.user_count) + " users");
+        }
+        var statusBit = "";
+        if (online === true) {
+          statusBit = '<span class="dot-online" aria-hidden="true"></span>Online';
+          if (version) statusBit += " · v" + version;
+        } else if (online === false) {
+          statusBit = '<span class="dot-offline" aria-hidden="true"></span>Status unavailable';
+        }
+        if (statusBit) parts.push(statusBit);
+        meta.innerHTML = parts.length ? parts.join(" · ") : "—";
+        meta.classList.remove("loading");
       }
+
+      if (window.ObsidianSite) {
+        window.ObsidianSite.loadPublicBotStats({}).then(function (data) {
+          if (data) {
+            if (data.guild_count != null) stats.guild_count = data.guild_count;
+            if (data.user_count != null) stats.user_count = data.user_count;
+          }
+          renderMeta();
+        });
+
+        var url = window.ObsidianSite.apiUrl("/api/ping");
+        if (url) {
+          fetch(url + (url.indexOf("?") >= 0 ? "&" : "?") + "_=" + Date.now(), { cache: "no-store" })
+            .then(function (r) { if (!r.ok) throw new Error(); return r.json(); })
+            .then(function (data) {
+              online = data.ok !== false;
+              version = data.version || null;
+              renderMeta();
+            })
+            .catch(function () {
+              online = false;
+              renderMeta();
+            });
+        } else {
+          online = false;
+          renderMeta();
+        }
+      }
+
       var toggle = document.getElementById("features-toggle");
       var all = document.getElementById("features-all");
       if (toggle && all) {

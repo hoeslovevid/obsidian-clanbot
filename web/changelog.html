@@ -11,114 +11,81 @@
   <meta property="og:url" content="https://obsidianoverseer.com/changelog.html" />
   <meta property="og:title" content="Changelog — Obsidian Overseer" />
   <meta property="og:description" content="What is new in Obsidian Overseer." />
-  <meta property="og:image" content="https://obsidianoverseer.com/assets/logo.png" />
+  <meta property="og:image" content="https://obsidianoverseer.com/assets/og.jpg" />
   <link rel="icon" type="image/png" href="/assets/logo.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/assets/site-nav.css" />
   <link rel="stylesheet" href="/assets/site.css" />
-  <style>
-    :root {
-      --bg: #06070a;
-      --bg-gradient: radial-gradient(ellipse 100% 80% at 50% 0%, rgba(15, 12, 20, 0.98) 0%, transparent 50%),
-                    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(212, 140, 60, 0.08), transparent);
-      --surface: #0f1115;
-      --border: #2a2520;
-      --text: #f0ebe5;
-      --text-muted: #9a8f82;
-      --text-subtle: #6b6156;
-      --accent: #d4943c;
-      --accent-bright: #e8a84a;
-      --radius: 14px;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: 'Outfit', sans-serif;
-      background: var(--bg);
-      background-image: var(--bg-gradient);
-      color: var(--text);
-      line-height: 1.6;
-      min-height: 100vh;
-    }
-    .bg-ambient { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
-    .bg-orb { position: absolute; border-radius: 50%; filter: blur(80px); opacity: 0.3; }
-    .bg-orb-1 { width: 420px; height: 420px; background: radial-gradient(circle, rgba(230,149,42,0.25), transparent 70%); top: -10%; right: -8%; }
-    .changelog-entry ul { margin: 8px 0 0 1.1rem; }
-    .changelog-entry li { margin-bottom: 6px; color: var(--text-muted); font-size: 0.92rem; line-height: 1.55; }
-    .changelog-entry strong { color: var(--text); }
-    .note { font-size: 0.85rem; color: var(--text-subtle); margin-top: 8px; }
-  </style>
 </head>
 <body>
-  <div class="bg-ambient" aria-hidden="true">
-    <div class="bg-orb bg-orb-1"></div>
-  </div>
-
+  <div class="bg-ambient" aria-hidden="true"></div>
   <div class="page-wrap">
     <nav id="site-nav" data-active="changelog"></nav>
 
     <header class="page-hero">
       <h1>Changelog</h1>
-      <p>Highlights from recent releases. In Discord, use <code>/whatsnew</code> for the live bot summary.</p>
+      <p>Synced from the bot release notes. In Discord, use <code>/whatsnew</code> for the live summary.</p>
     </header>
 
-    <div class="prose-block">
-      <div class="changelog-entry">
-        <h2>2.3.4</h2>
-        <p class="meta">2026-07-05 · current</p>
-        <ul>
-          <li><strong>Website</strong> — shared nav (Home, Features, Dashboard, Contact, Legal); root <code>/</code> URLs fix GitHub Pages routing; <code>404.html</code> fallback</li>
-          <li><strong>Dashboard page</strong> — <code>/dashboard.html</code> with Discord login and mod overview when bot API is enabled</li>
-          <li><strong>Contact form</strong> — posts to bot <code>POST /api/contact</code> (webhook on Railway); no secret in HTML</li>
-        </ul>
-      </div>
-
-      <div class="changelog-entry">
-        <h2>2.3.3</h2>
-        <p class="meta">2026-07-05</p>
-        <ul>
-          <li><strong>Website monorepo</strong> — <code>web/</code> deploys to GitHub Pages</li>
-          <li><strong>Dashboard API</strong> — optional HTTP API for mod inbox, overview, and feature toggles</li>
-          <li><strong>Security</strong> — contact webhook removed from committed HTML</li>
-        </ul>
-      </div>
-
-      <div class="changelog-entry">
-        <h2>2.3.2</h2>
-        <p class="meta">2026-07-05</p>
-        <ul>
-          <li><strong>Fix</strong> — <code>/notifications</code> no longer crashes on open</li>
-          <li><strong>Fix</strong> — ephemeral refresh panels register using <code>guild_id</code> from payload when the message has no guild</li>
-        </ul>
-      </div>
-
-      <div class="changelog-entry">
-        <h2>2.3.1</h2>
-        <p class="meta">2026-07-03</p>
-        <ul>
-          <li><strong>Fix</strong> — <code>/music play</code> works again with current yt-dlp</li>
-          <li><strong>Music</strong> — play no longer requires DJ/mod when no DJ role is set</li>
-        </ul>
-      </div>
-
-      <div class="changelog-entry">
-        <h2>2.3.0</h2>
-        <p class="meta">2026-06-21</p>
-        <ul>
-          <li><strong>Discovery</strong> — lean public surface via <code>/start</code>, <code>/help</code>, and <code>/about</code></li>
-          <li><strong>Staff group</strong> — sync, webhooks, and analytics moved under <code>/staff</code></li>
-          <li><strong>Lean defaults</strong> — new servers start with music, pets, and gambling off until mods opt in</li>
-        </ul>
-      </div>
-
-      <p class="note">Full history also lives in the bot via <code>/whatsnew</code> and <code>/about</code>.</p>
+    <div id="changelog-root" class="prose-block">
+      <p style="color: var(--text-subtle);">Loading…</p>
     </div>
 
     <footer id="site-footer"></footer>
   </div>
-
   <script src="/assets/config.js"></script>
   <script src="/assets/site.js"></script>
+  <script>
+    (function () {
+      var root = document.getElementById("changelog-root");
+      if (!root) return;
+      fetch("/assets/changelog.json", { cache: "no-cache" })
+        .then(function (r) {
+          if (!r.ok) throw new Error("missing");
+          return r.json();
+        })
+        .then(function (data) {
+          var entries = (data && data.entries) || [];
+          if (!entries.length) {
+            root.innerHTML = "<p>No releases listed yet.</p>";
+            return;
+          }
+          root.innerHTML = entries
+            .map(function (e) {
+              var meta = (e.date || "") + (e.current ? " · current" : "");
+              var items = (e.changes || [])
+                .map(function (c) {
+                  return "<li>" + escapeHtml(c) + "</li>";
+                })
+                .join("");
+              return (
+                '<div class="changelog-entry"><h2>' +
+                escapeHtml(e.version || "") +
+                '</h2><p class="meta">' +
+                escapeHtml(meta) +
+                "</p><ul>" +
+                items +
+                "</ul></div>"
+              );
+            })
+            .join("") +
+            '<p class="meta" style="margin-top:8px;">Full history also lives in the bot via /whatsnew and /about.</p>';
+        })
+        .catch(function () {
+          root.innerHTML =
+            "<p>Could not load changelog. Try again later, or use <code>/whatsnew</code> in Discord.</p>";
+        });
+
+      function escapeHtml(s) {
+        return String(s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+    })();
+  </script>
 </body>
 </html>

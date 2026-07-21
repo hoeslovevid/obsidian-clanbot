@@ -32,35 +32,6 @@ body.dash-body {
   min-height: 100vh;
 }
 
-.bg-ambient {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  overflow: hidden;
-}
-.bg-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.3;
-}
-.bg-orb-1 {
-  width: 400px;
-  height: 400px;
-  background: rgba(212, 140, 60, 0.15);
-  top: -100px;
-  left: 50%;
-  transform: translateX(-50%);
-}
-.bg-orb-2 {
-  width: 300px;
-  height: 300px;
-  background: rgba(88, 101, 242, 0.08);
-  bottom: 10%;
-  right: -5%;
-}
-
 .dash-wrap {
   position: relative;
   z-index: 1;

@@ -5,23 +5,27 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Page not found — Obsidian Overseer</title>
   <link rel="icon" type="image/png" href="/assets/logo.png" />
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/site.css" />
   <style>
-    body { font-family: Outfit, sans-serif; background: #06070a; color: #f0ebe5; min-height: 100vh; display: flex; align-items: center; justify-content: center; text-align: center; padding: 24px; }
-    a { color: #d4943c; margin: 0 8px; }
+    body { display: flex; align-items: center; justify-content: center; text-align: center; padding: 24px; }
+    h1 { font-size: 2.5rem; font-weight: 800; letter-spacing: -0.04em; margin-bottom: 8px; }
+    p { color: var(--text-muted); }
+    .links { margin-top: 24px; display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; }
+    .links a { color: var(--accent-bright); font-weight: 600; text-decoration: none; }
+    .links a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
   <div>
     <h1>404</h1>
     <p>That page isn’t here.</p>
-    <p style="margin-top:20px;">
+    <div class="links">
       <a href="/">Home</a>
       <a href="/setup.html">Setup</a>
       <a href="/faq.html">FAQ</a>
       <a href="/contact.html">Contact</a>
-      <a href="/dashboard.html">Dashboard</a>
-    </p>
+    </div>
   </div>
 </body>
 </html>

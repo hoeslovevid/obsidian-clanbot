@@ -1,0 +1,137 @@
+{
+  "version": "2.3.4",
+  "entries": [
+    {
+      "version": "2.3.4",
+      "date": "2026-07-05",
+      "current": true,
+      "changes": [
+        "Website \u2014 shared nav (Home, Features, Dashboard, Contact, Legal); root / URLs fix GitHub Pages routing; 404.html fallback",
+        "Dashboard page \u2014 /dashboard.html with Discord login and mod overview when bot API is enabled",
+        "Contact form \u2014 posts to bot POST /api/contact (webhook on Railway); no secret in HTML"
+      ]
+    },
+    {
+      "version": "2.3.3",
+      "date": "2026-07-05",
+      "current": false,
+      "changes": [
+        "Website monorepo \u2014 web/ from obsidian-overseer-website; GitHub Actions deploys Pages from web/",
+        "Dashboard API \u2014 optional HTTP API (DASHBOARD_API_ENABLED) for mod inbox, overview, and feature toggles; see docs/DASHBOARD_API.md",
+        "Security \u2014 contact webhook removed from committed HTML; rotate if the old website repo exposed it"
+      ]
+    },
+    {
+      "version": "2.3.2",
+      "date": "2026-07-05",
+      "current": false,
+      "changes": [
+        "Fix \u2014 /notifications no longer crashes on open (use original_response() after discord.py 2.6 send_message change)",
+        "Fix \u2014 ephemeral refresh panels register using guild_id from payload when the message has no .guild"
+      ]
+    },
+    {
+      "version": "2.3.1",
+      "date": "2026-07-03",
+      "current": false,
+      "changes": [
+        "Fix \u2014 /music play works again with current yt-dlp (bug_reports_message shim accepts before= kwarg)",
+        "Music \u2014 /music play no longer requires DJ/mod; when no DJ role is set, control commands are open to everyone"
+      ]
+    },
+    {
+      "version": "2.3.0",
+      "date": "2026-06-21",
+      "current": false,
+      "changes": [
+        "Discovery 12 \u2014 /start, /help, and /about promote the lean public surface (menu, daily, baro, lfg, ticket, wfnotify configure, \u2026)",
+        "Staff group \u2014 sync, webhooks, analytics, and cross-server tools moved to /staff to free headroom in /admin, /general, and /tools",
+        "Legacy notify cleanup \u2014 removed duplicate per-type notify slash commands; use /wfnotify configure (devstream channel via configure + /devstream_set for dates)",
+        "Lean guild defaults \u2014 new servers start with music, pets, and gambling off until mods opt in (DEFAULT_LEAN_FEATURES)",
+        "Help/search \u2014 de-emphasized duplicate paths (e.g. /warframe baro, /economy daily) hidden from member discovery"
+      ]
+    },
+    {
+      "version": "2.2.2",
+      "date": "2026-06-21",
+      "current": false,
+      "changes": [
+        "QoL \u00b7 Retry \u2014 persistent Try again on trade price/search, Duviri, and /worth failures (restart-safe)",
+        "QoL \u00b7 Schedule \u2014 /today and /hq show RSVP events + LFG squads in the next 24h with jump links",
+        "QoL \u00b7 Mod inbox \u2014 SLA breach count, oldest-ticket jump, inline Setup status button",
+        "QoL \u00b7 Discovery \u2014 once-per-version What's new blurb on /menu and /help"
+      ]
+    },
+    {
+      "version": "2.2.1",
+      "date": "2026-06-21",
+      "current": false,
+      "changes": [
+        "Fix \u2014 Update data race (40060): defer-first dedupe; single-path obsidian:refresh / obsidian:wf_retry routing",
+        "QoL \u00b7 Warframe \u2014 persistent Try again on API failures (restart-safe); V2 hub hint/refresh buttons; degraded footers on status, Baro, archon, world state",
+        "QoL \u00b7 Panels \u2014 /claim refresh + action row; /mod inbox refresh + staff shortcuts; digest section toggles on /notifications",
+        "QoL \u00b7 HQ \u2014 mods see setup health line on /hq",
+        "QoL \u00b7 LFG \u2014 stale host DM nudge after 48h with Re-post button"
+      ]
+    },
+    {
+      "version": "2.1.5",
+      "date": "2026-06-21",
+      "current": false,
+      "changes": [
+        "Fix \u2014 Update data uses persistent obsidian:refresh routing + DB panel registry (works after bot restart)",
+        "Fix \u2014 unified defer \u2192 message.edit refresh path; buttons re-enable on failure; cycle panel empty-fetch feedback",
+        "Fix \u2014 V2 hub/wallet Refresh defers before slow API fetches"
+      ]
+    },
+    {
+      "version": "2.1.4",
+      "date": "2026-06-20",
+      "current": false,
+      "changes": [
+        "Fix \u00b7 Twitch \u2014 track last_stream_id so every go-live session alerts (not just the first); poll by user ID + login",
+        "Fix \u00b7 Twitch \u2014 reliable live/offline state parsing; token refresh on 401 during batch checks",
+        "QoL \u00b7 Twitch \u2014 showcase go-live embed with preview, category, viewers, tags, and Watch/Profile buttons"
+      ]
+    },
+    {
+      "version": "2.1.3",
+      "date": "2026-06-21",
+      "current": false,
+      "changes": [
+        "Fix \u2014 Baro Update data uses defer-if-needed (works with RefreshView + paginated BaroInventoryView)"
+      ]
+    },
+    {
+      "version": "2.1.2",
+      "date": "2026-06-21",
+      "current": false,
+      "changes": [
+        "Fix \u2014 Baro Update data / RefreshView no longer double-defers (InteractionResponded)",
+        "Fix \u2014 /help category buttons defer before building embed (Unknown interaction)",
+        "Fix \u2014 wallet/leaderboard/trade price refresh callbacks use followup after RefreshView defer"
+      ]
+    },
+    {
+      "version": "2.1.1",
+      "date": "2026-06-21",
+      "current": false,
+      "changes": [
+        "Fix \u2014 member journey loop creates member_join_log on startup (no more missing-table errors before first join)"
+      ]
+    },
+    {
+      "version": "2.1.0",
+      "date": "2026-06-20",
+      "current": false,
+      "changes": [
+        "QoL \u00b7 Discovery \u2014 channel-aware /menu, role-based suggestions, search pinned/recent, welcome card buttons",
+        "QoL \u00b7 Hub \u2014 /notifications unified alert panel; /hq clan dashboard (LFG, events, Baro, Twitch)",
+        "QoL \u00b7 Flow \u2014 post-command next-step hints on /daily, /claim, LFG, tickets; streak freeze messaging",
+        "QoL \u00b7 Staff \u2014 /mod inbox aggregate; suggestion staff threads on Under Review; expanded /admin setup_status",
+        "QoL \u00b7 UX \u2014 profile Compare button (context menu); LFG copy-invite + auto-archive thread on fill; expired-panel hints",
+        "Retention \u2014 7-day new-member DM journey (day 1/3/7)"
+      ]
+    }
+  ]
+}

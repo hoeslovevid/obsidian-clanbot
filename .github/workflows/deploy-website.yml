@@ -7,6 +7,9 @@ on:
     branches: [main]
     paths:
       - "web/**"
+      - "core/changelog.py"
+      - "core/config.py"
+      - ".github/scripts/export_changelog.py"
       - ".github/workflows/deploy-website.yml"
   workflow_dispatch:
 
@@ -39,6 +42,12 @@ jobs:
             exit 0
           fi
           python3 .github/scripts/fetch_bot_stats.py
+
+      - name: Export changelog for website
+        continue-on-error: true
+        env:
+          DISCORD_TOKEN: changelog-export-placeholder
+        run: python3 .github/scripts/export_changelog.py
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

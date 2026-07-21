@@ -11,6 +11,9 @@ window.OBSIDIAN_SITE = {
   DISCORD_SCOPE: "bot applications.commands",
   DISCORD_SERVER_INVITE: "https://discord.gg/bJscayQNK4",
   CONTACT_EMAIL: "",
+  BOT_DEVELOPER: "Danger!",
+  // When you point a custom domain at the dashboard (e.g. dash.obsidianoverseer.com),
+  // set DASHBOARD_PUBLIC_URL to that origin + /dashboard.html
   // Optional manual override if live stats are unavailable: { guild_count: 12, user_count: 3400 }
   BOT_STATS: null,
 };
