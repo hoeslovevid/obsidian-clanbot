@@ -1,0 +1,10 @@
+{
+  "baro": {
+    "label": "Baro Ki'Teer",
+    "line": "Next relay visit — check /baro in Discord"
+  },
+  "cycle": {
+    "label": "Open worlds",
+    "line": "Cetus · Fortuna · Duviri cycles live in-bot"
+  }
+}
