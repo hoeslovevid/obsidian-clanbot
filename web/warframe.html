@@ -27,10 +27,20 @@
   <div class="page-wrap">
     <nav id="site-nav" data-active="warframe"></nav>
 
-    <header class="page-hero">
+    <header class="wf-hero page-hero">
+      <span class="wf-eyebrow"><span class="pulse" aria-hidden="true"></span>PC · Live</span>
       <h1>World state</h1>
-      <p>Live PC Warframe board — Baro, cycles, missions, and fissures. No dashboard login needed.</p>
+      <p class="wf-hero-lead">Baro, open-world cycles, missions, and void fissures — a live board for your clan, no login.</p>
+      <div id="wf-teaser" class="wf-teaser" hidden></div>
     </header>
+
+    <nav class="wf-jump" aria-label="On this page">
+      <a href="#wf-trader">Trader</a>
+      <a href="#wf-cycles">Cycles</a>
+      <a href="#wf-missions">Missions</a>
+      <a href="#wf-void">Void</a>
+      <a href="#wf-invasions">Invasions</a>
+    </nav>
 
     <div class="wf-toolbar">
       <div id="wf-status" class="wf-status" aria-live="polite"><span class="dot" aria-hidden="true"></span>Loading…</div>
@@ -39,9 +49,12 @@
 
     <div id="wf-root" class="wf-grid" aria-busy="true"></div>
 
+    <div class="wf-cta-strip">
+      <p><strong>Want this in Discord?</strong> Add Obsidian Overseer and run <code>/baro</code> or <code>/wfnotify configure</code>.</p>
+      <a id="wf-invite" class="btn-primary" href="#" target="_blank" rel="noopener noreferrer">Add to Discord</a>
+    </div>
     <p class="wf-footnote">
-      Data from the community <a href="https://docs.warframestat.us/" target="_blank" rel="noopener noreferrer">warframestat.us</a> API.
-      Want alerts in your server? <a id="wf-invite" href="#">Add Obsidian Overseer</a> and run <code>/baro</code> or <code>/wfnotify configure</code>.
+      Data from the community <a href="https://docs.warframestat.us/" target="_blank" rel="noopener noreferrer">warframestat.us</a> API. Not affiliated with Digital Extremes.
     </p>
 
     <footer id="site-footer"></footer>
