@@ -6,9 +6,8 @@ window.OBSIDIAN_SITE = {
   BOT_API_URL: "https://obsidianoverseer.up.railway.app",
   // Optional: full dashboard URL. Defaults to BOT_API_URL + /dashboard.html
   DASHBOARD_PUBLIC_URL: "https://obsidianoverseer.up.railway.app/dashboard.html",
-  // Live Market orders proxy (Deno Deploy *.deno.dev). See deploy/wfm-proxy/README.md
-  // Example: "https://obsidian-wfm-xxxx.deno.dev"
-  WFM_PROXY_URL: "",
+  // Live Market orders proxy (Deno Deploy). See deploy/wfm-proxy/README.md
+  WFM_PROXY_URL: "https://obsidian-clanbot-hhcxbajv7ag1.hoeslovevid.deno.net",
   DISCORD_CLIENT_ID: "1460107752658440223",
   DISCORD_PERMISSIONS: "277025508160",
   DISCORD_SCOPE: "bot applications.commands",
