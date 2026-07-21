@@ -219,6 +219,7 @@
     if (!el) return;
     var origin = siteOrigin();
     var prefix = origin || "";
+    var logoSrc = (origin || "") + "/assets/logo.png";
     var dash = origin ? "/dashboard.html" : dashboardUrl();
     var invite = inviteUrl();
     var discord = cfg().DISCORD_SERVER_INVITE || "https://discord.gg/bJscayQNK4";
@@ -226,8 +227,23 @@
 
     el.className = "site-footer";
     el.innerHTML =
-      '<div class="site-footer-grid">' +
-      '<div><div class="site-footer-brand">Obsidian Overseer<span>Warframe Discord bot for clans and communities.</span></div></div>' +
+      '<div class="site-footer-inner">' +
+      '<div class="site-footer-top">' +
+      '<div class="site-footer-brand-block">' +
+      '<a class="site-footer-logo" href="' +
+      (prefix || "/") +
+      '">' +
+      '<img src="' +
+      logoSrc +
+      '" alt="" width="36" height="36" />' +
+      "<span>Obsidian Overseer</span>" +
+      "</a>" +
+      '<p class="site-footer-blurb">Warframe world-state and clan tools for Discord.</p>' +
+      '<a class="site-footer-cta" href="' +
+      invite +
+      '" target="_blank" rel="noopener noreferrer">Add to Discord</a>' +
+      "</div>" +
+      '<div class="site-footer-links">' +
       "<div><h4>Product</h4>" +
       '<a href="' +
       prefix +
@@ -238,9 +254,6 @@
       '<a href="' +
       dash +
       '">Dashboard</a>' +
-      '<a href="' +
-      invite +
-      '" target="_blank" rel="noopener noreferrer">Add to Discord</a>' +
       "</div>" +
       "<div><h4>Guides</h4>" +
       '<a href="' +
@@ -268,11 +281,31 @@
       '/legal.html#terms">Terms</a>' +
       "</div>" +
       "</div>" +
-      '<div class="site-footer-bottom">Built by ' +
+      "</div>" +
+      '<div class="site-footer-bottom">' +
+      '<div class="site-footer-meta">' +
+      '<img src="' +
+      logoSrc +
+      '" alt="" width="18" height="18" />' +
+      "<span>Built by " +
       developer +
-      ' · <a href="' +
+      "</span>" +
+      '<span class="site-footer-sep" aria-hidden="true">·</span>' +
+      '<a href="' +
       discord +
-      '" target="_blank" rel="noopener noreferrer">Join Discord</a><br />Not affiliated with Discord or Digital Extremes / Warframe.</div>';
+      '" target="_blank" rel="noopener noreferrer">Join Discord</a>' +
+      '<span class="site-footer-sep" aria-hidden="true">·</span>' +
+      '<a href="' +
+      prefix +
+      '/legal.html#privacy">Privacy</a>' +
+      '<span class="site-footer-sep" aria-hidden="true">·</span>' +
+      '<a href="' +
+      prefix +
+      '/legal.html#terms">Terms</a>' +
+      "</div>" +
+      '<p class="site-footer-legal">Not affiliated with Discord or Digital Extremes / Warframe.</p>' +
+      "</div>" +
+      "</div>";
   }
 
   function apiUrl(path) {
