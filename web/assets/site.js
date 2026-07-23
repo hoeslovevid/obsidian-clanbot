@@ -435,6 +435,15 @@
         nav.querySelectorAll("details.site-nav-drop").forEach(function (other) {
           if (other !== details) other.open = false;
         });
+        // Keep expanded Tools/Guides reachable inside the scrollable mobile menu
+        var links = nav.querySelector(".site-nav-links");
+        if (links && window.matchMedia && window.matchMedia("(max-width: 720px)").matches) {
+          setTimeout(function () {
+            try {
+              summary.scrollIntoView({ block: "nearest", behavior: "smooth" });
+            } catch (_) {}
+          }, 0);
+        }
       }
       function onDoc(e) {
         if (!details.contains(e.target)) {
