@@ -76,6 +76,8 @@ html[data-theme="light"] {
 
 html {
   scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(var(--accent-rgb), 0.55) var(--surface2);
 }
 
 body {
@@ -88,6 +90,47 @@ body {
   min-height: 100vh;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Themed scrollbars (Firefox + Chromium/Safari; limited on mobile OS chrome) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(var(--accent-rgb), 0.55) var(--surface2);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--surface2);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    180deg,
+    rgba(var(--accent-rgb), 0.75),
+    rgba(var(--accent-rgb), 0.45)
+  );
+  border-radius: 999px;
+  border: 2px solid var(--surface2);
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(
+    180deg,
+    var(--accent-bright),
+    var(--accent-dim)
+  );
+  border: 2px solid var(--surface2);
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: var(--surface2);
 }
 
 /* Atmosphere: wash + hex grid + grain + breathing orb */
