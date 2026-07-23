@@ -12,6 +12,7 @@
   <url><loc>https://obsidianoverseer.com/circuit.html</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
   <url><loc>https://obsidianoverseer.com/vault.html</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
   <url><loc>https://obsidianoverseer.com/rivens.html</loc><changefreq>weekly</changefreq><priority>0.75</priority></url>
+  <url><loc>https://obsidianoverseer.com/riven-grade.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
   <url><loc>https://obsidianoverseer.com/compare.html</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://obsidianoverseer.com/factions.html</loc><changefreq>monthly</changefreq><priority>0.65</priority></url>
   <url><loc>https://obsidianoverseer.com/incarnon.html</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>

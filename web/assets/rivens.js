@@ -124,7 +124,9 @@
         esc(dispositionText(w)) +
         '</td><td><a href="' +
         esc(marketUrl(w.name)) +
-        '">Market</a></td></tr>';
+        '">Market</a> · <a href="/riven-grade.html?weapon=' +
+        encodeURIComponent(w.name) +
+        '">Grade</a></td></tr>';
     });
     bodyEl.innerHTML = html;
     setStatus(true, list.length + " of " + weapons.length + " weapons");

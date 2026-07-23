@@ -7,6 +7,7 @@
       "current": true,
       "changes": [
         "Website — Ctrl/Cmd+K jump menu; Nightwave checklist; Baro shopping list; Steel Path rotation; ducat/plat helper; relic planner",
+        "Website — Riven grader (roll quality vs disposition + weekly PC trade averages)",
         "Website — Incarnon and Archon shard cheat sheets; privacy summary; richer 404; OBS size presets; PWA install (manifest + service worker)",
         "Website — New badges on home cards; command Copy buttons; Builds/LFG/Events polish; mobile world-state tweaks"
       ]

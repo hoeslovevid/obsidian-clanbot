@@ -19,6 +19,7 @@
     { id: "worth", label: "Ducat / plat", href: "/worth.html" },
     { section: "Lookup" },
     { id: "rivens", label: "Riven disposition", href: "/rivens.html" },
+    { id: "riven-grade", label: "Riven grader", href: "/riven-grade.html" },
     { id: "compare", label: "Compare items", href: "/compare.html" },
     { id: "factions", label: "Factions", href: "/factions.html" },
     { id: "incarnon", label: "Incarnon", href: "/incarnon.html" },
@@ -50,6 +51,7 @@
     warframe: 1, farm: 1, relics: 1, vault: 1, compare: 1, rivens: 1,
     factions: 1, builds: 1, market: 1, embeds: 1, status: 1, features: 1,
     nightwave: 1, baro: 1, circuit: 1, planner: 1, worth: 1, incarnon: 1, shards: 1,
+    "riven-grade": 1,
   };
   var GUIDE_IDS = {
     tenno: 1, dojo: 1, trading: 1, commands: 1, lfg: 1, events: 1,
@@ -58,6 +60,7 @@
   var THEME_KEY = "oo_theme";
   // Show "New" chips on home / jump menu until this date (ISO)
   var NEW_UNTIL = {
+    "riven-grade": "2026-08-20",
     nightwave: "2026-08-20",
     baro: "2026-08-20",
     circuit: "2026-08-20",
@@ -85,6 +88,7 @@
       [/^(plan|planner|farm plan)/, "/planner.html"],
       [/^(vault|varzia|prime vault)/, "/vault.html"],
       [/^(worth|ducat|melt|sell or)/, "/worth.html"],
+      [/^(riven grade|grade riven|grader)/, "/riven-grade.html"],
       [/^(riven|disposition)/, "/rivens.html"],
       [/^(market|plat|wfm|price)/, "/market.html"],
       [/^(compare)/, "/compare.html"],

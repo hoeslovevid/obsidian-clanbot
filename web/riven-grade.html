@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <script src="/assets/theme-boot.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Riven grader — Obsidian Overseer</title>
+  <meta name="description" content="Grade a Warframe Riven by weapon and stats — disposition ranges, roll quality, and weekly trade averages." />
+  <meta name="theme-color" content="#06070a" />
+  <link rel="canonical" href="https://obsidianoverseer.com/riven-grade.html" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://obsidianoverseer.com/riven-grade.html" />
+  <meta property="og:title" content="Riven grader — Obsidian Overseer" />
+  <meta property="og:description" content="Enter weapon and Riven stats to see roll quality vs max for that disposition." />
+  <meta property="og:image" content="https://obsidianoverseer.com/assets/og.jpg" />
+  <link rel="icon" type="image/png" href="/assets/logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://api.warframestat.us" crossorigin />
+  <link rel="preconnect" href="https://www-static.warframe.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/site-nav.css" />
+  <link rel="stylesheet" href="/assets/site.css" />
+  <link rel="stylesheet" href="/assets/tools.css" />
+</head>
+<body>
+  <div class="bg-ambient" aria-hidden="true"></div>
+  <div class="bg-grain" aria-hidden="true"></div>
+  <div class="page-wrap">
+    <nav id="site-nav" data-active="riven-grade"></nav>
+
+    <header class="tool-hero page-hero">
+      <span class="tool-eyebrow"><span class="pulse" aria-hidden="true"></span>Riven · Grade</span>
+      <h1>Riven grader</h1>
+      <p class="tool-lead">Pick a weapon, enter the stats as shown on the mod, and see roll quality vs the theoretical max for that disposition. Community heuristic — not trading advice.</p>
+    </header>
+
+    <form id="rg-form" class="tool-card" autocomplete="off">
+      <div class="tool-search" style="margin:0 0 12px">
+        <label class="tool-field tool-field-grow worth-field">
+          <span class="tool-label">Weapon</span>
+          <input id="rg-weapon" class="tool-input" type="search" placeholder="Torid, Kuva Bramma, Nikana Prime…" spellcheck="false" />
+          <ul id="rg-suggest" class="worth-suggest" hidden role="listbox"></ul>
+        </label>
+        <label class="tool-field">
+          <span class="tool-label">Rank</span>
+          <select id="rg-rank" class="tool-select">
+            <option value="8" selected>8 (max)</option>
+            <option value="7">7</option>
+            <option value="6">6</option>
+            <option value="5">5</option>
+            <option value="4">4</option>
+            <option value="3">3</option>
+            <option value="2">2</option>
+            <option value="1">1</option>
+            <option value="0">0</option>
+          </select>
+        </label>
+      </div>
+
+      <p id="rg-weapon-meta" class="tool-meta" style="margin-bottom:14px">Search a weapon to load disposition.</p>
+
+      <div class="rg-config">
+        <label class="tool-field">
+          <span class="tool-label">Positives</span>
+          <select id="rg-pos-count" class="tool-select">
+            <option value="2">2</option>
+            <option value="3" selected>3</option>
+          </select>
+        </label>
+        <label class="tool-toggle" style="margin:0">
+          <input type="checkbox" id="rg-has-neg" checked />
+          Has a negative
+        </label>
+      </div>
+
+      <div id="rg-stats" class="rg-stats"></div>
+
+      <div class="tool-actions" style="margin-top:16px">
+        <button type="submit" class="btn-primary">Grade riven</button>
+        <button type="button" id="rg-clear" class="btn-secondary">Clear</button>
+      </div>
+    </form>
+
+    <div class="tool-toolbar">
+      <div id="rg-status" class="tool-status" aria-live="polite"><span class="dot" aria-hidden="true"></span>Loading weapons…</div>
+    </div>
+
+    <div id="rg-result" hidden></div>
+
+    <article class="tool-prose" style="margin-top:20px">
+      <h2>How grading works</h2>
+      <p>Each Riven stat is <code>base × disposition (ω) × config weight × roll (90–110%)</code>. We back out the roll factor from your entered value and map it to a letter grade. Overall grade averages the positives.</p>
+      <p>Weekly plat averages come from Digital Extremes’ public trade snapshot (unrolled vs rerolled). Your exact roll will differ.</p>
+    </article>
+
+    <div class="tool-card tool-cta-strip">
+      <p>Need disposition only? See the <a href="/rivens.html">disposition table</a>. Trading? <a href="/market.html">Market</a>.</p>
+    </div>
+    <p class="tool-footnote">Base attribute tables from the community Warframe Wiki. Not affiliated with Digital Extremes.</p>
+
+    <footer id="site-footer"></footer>
+  </div>
+  <script src="/assets/config.js"></script>
+  <script src="/assets/site.js"></script>
+  <script src="/assets/riven-grade.js"></script>
+</body>
+</html>
