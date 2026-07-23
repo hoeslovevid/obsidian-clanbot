@@ -1,5 +1,5 @@
-var CACHE_NAME = "oo-shell-v1";
-var SHELL = ["/", "/assets/site-nav.css", "/assets/site.css", "/assets/tools.css", "/assets/config.js", "/assets/site.js", "/assets/logo.png"];
+var CACHE_NAME = "oo-shell-v2";
+var SHELL = ["/", "/assets/site-nav.css", "/assets/site.css", "/assets/tools.css", "/assets/config.js", "/assets/site.js", "/assets/logo-icon.png"];
 
 self.addEventListener("install", function (event) {
   event.waitUntil(caches.open(CACHE_NAME).then(function (cache) { return cache.addAll(SHELL); }).then(function () { return self.skipWaiting(); }));

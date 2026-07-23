@@ -329,10 +329,12 @@
     logo.href = origin ? origin + "/" : "/";
     logo.className = "site-nav-brand";
     var logoImg = document.createElement("img");
-    logoImg.src = (origin || "") + "/assets/logo.png";
-    logoImg.alt = "";
+    logoImg.src = (origin || "") + "/assets/logo-icon.png";
+    logoImg.alt = "Obsidian Overseer";
     logoImg.width = 28;
     logoImg.height = 28;
+    logoImg.decoding = "async";
+    logoImg.setAttribute("fetchpriority", "high");
     logo.appendChild(logoImg);
     var logoText = document.createElement("span");
     logoText.textContent = "Obsidian Overseer";
@@ -405,7 +407,7 @@
     if (!el) return;
     var origin = siteOrigin();
     var prefix = origin || "";
-    var logoSrc = (origin || "") + "/assets/logo.png";
+    var logoSrc = (origin || "") + "/assets/logo-icon.png";
     var dash = origin ? "/dashboard.html" : dashboardUrl();
     var invite = inviteUrl();
     var discord = cfg().DISCORD_SERVER_INVITE || "https://discord.gg/bJscayQNK4";
