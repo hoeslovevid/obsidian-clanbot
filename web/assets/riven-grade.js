@@ -344,6 +344,31 @@
     statsEl.innerHTML = html;
   }
 
+  function fillSlots(parsedSlots) {
+    if (!statsEl || !parsedSlots || !parsedSlots.length) return;
+    var pos = parsedSlots.filter(function (s) {
+      return s.polarity === "+" || (s.polarity == null && s.value >= 0);
+    });
+    var neg = parsedSlots.filter(function (s) {
+      return s.polarity === "-" || (s.polarity == null && s.value < 0);
+    });
+    if (posCountEl) posCountEl.value = String(pos.length >= 3 ? 3 : 2);
+    if (hasNegEl) hasNegEl.checked = neg.length > 0;
+    rebuildStatRows();
+    var posRows = statsEl.querySelectorAll('.rg-stat[data-role="pos"]');
+    var posVals = statsEl.querySelectorAll('.rg-val[data-role="pos"]');
+    pos.slice(0, posRows.length).forEach(function (slot, i) {
+      if (posRows[i]) posRows[i].value = slot.id;
+      if (posVals[i]) posVals[i].value = String(Math.abs(slot.value));
+    });
+    var negSel = statsEl.querySelector('.rg-stat[data-role="neg"]');
+    var negVal = statsEl.querySelector('.rg-val[data-role="neg"]');
+    if (neg.length && negSel && negVal) {
+      negSel.value = neg[0].id;
+      negVal.value = String(-Math.abs(neg[0].value));
+    }
+  }
+
   function findStat(id) {
     for (var i = 0; i < STATS.length; i++) if (STATS[i].id === id) return STATS[i];
     return null;
@@ -633,6 +658,379 @@
   }
 
   rebuildStatRows();
+
+  // ——— Screenshot OCR (Tesseract.js, in-browser) ———
+  var dropEl = document.getElementById("rg-drop");
+  var fileEl = document.getElementById("rg-file");
+  var previewEl = document.getElementById("rg-preview");
+  var ocrBtn = document.getElementById("rg-ocr-btn");
+  var ocrClearBtn = document.getElementById("rg-ocr-clear");
+  var ocrRawEl = document.getElementById("rg-ocr-raw");
+  var ocrImage = null;
+  var ocrObjectUrl = null;
+  var tesseractWorker = null;
+
+  var STAT_ALIASES = [
+    { id: "cc", re: /critical\s*chance|crit(?:ical)?\s*chance|crit\s*chance/i },
+    { id: "cd", re: /critical\s*damage|crit(?:ical)?\s*damage|crit\s*damage/i },
+    { id: "ms", re: /multi[\s-]*shot/i },
+    { id: "sc", re: /status\s*chance/i },
+    { id: "sd", re: /status\s*duration/i },
+    { id: "fr", re: /fire\s*rate|attack\s*speed/i },
+    { id: "d_corpus", re: /damage\s*(?:vs\.?|to)\s*corpus|(?:vs\.?|to)\s*corpus/i },
+    { id: "d_grineer", re: /damage\s*(?:vs\.?|to)\s*grineer|(?:vs\.?|to)\s*grineer/i },
+    { id: "d_infested", re: /damage\s*(?:vs\.?|to)\s*infested|(?:vs\.?|to)\s*infested/i },
+    { id: "damage", re: /\b(?:base\s+|melee\s+)?damage\b/i },
+    { id: "ammo", re: /ammo\s*maximum|maximum\s*ammo/i },
+    { id: "mag", re: /magazine\s*capacity|magazine/i },
+    { id: "reload", re: /reload\s*speed|reload/i },
+    { id: "projectile", re: /projectile\s*speed|flight\s*speed/i },
+    { id: "punch", re: /punch\s*through/i },
+    { id: "recoil", re: /weapon\s*recoil|\brecoil\b/i },
+    { id: "zoom", re: /\bzoom\b/i },
+    { id: "cold", re: /cold\s*damage|\bcold\b/i },
+    { id: "heat", re: /heat\s*damage|\bheat\b/i },
+    { id: "elec", re: /electric(?:ity)?\s*damage|\belectric/i },
+    { id: "toxin", re: /toxin\s*damage|\btoxin\b/i },
+    { id: "impact", re: /impact\s*damage|\bimpact\b/i },
+    { id: "puncture", re: /puncture\s*damage|\bpuncture\b/i },
+    { id: "slash", re: /slash\s*damage|\bslash\b/i },
+    { id: "range", re: /\brange\b/i },
+    { id: "combo_dur", re: /combo\s*duration/i },
+    { id: "initial_combo", re: /initial\s*combo/i },
+    { id: "finisher", re: /finisher\s*damage/i },
+    { id: "slide_cc", re: /slide\s*(?:attack\s*)?crit/i },
+    { id: "heavy_eff", re: /heavy\s*attack\s*efficiency/i },
+    { id: "combo_chance", re: /combo\s*count\s*chance|chance\s*to\s*gain\s*combo/i },
+  ];
+
+  function loadTesseractScript() {
+    if (window.Tesseract && window.Tesseract.createWorker) {
+      return Promise.resolve(window.Tesseract);
+    }
+    return new Promise(function (resolve, reject) {
+      var existing = document.querySelector('script[data-rg-tesseract]');
+      if (existing) {
+        existing.addEventListener("load", function () {
+          resolve(window.Tesseract);
+        });
+        existing.addEventListener("error", reject);
+        return;
+      }
+      var s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+      s.async = true;
+      s.setAttribute("data-rg-tesseract", "1");
+      s.onload = function () {
+        resolve(window.Tesseract);
+      };
+      s.onerror = function () {
+        reject(new Error("Could not load OCR library"));
+      };
+      document.head.appendChild(s);
+    });
+  }
+
+  function getOcrWorker(logger) {
+    return loadTesseractScript().then(function (T) {
+      if (tesseractWorker) return tesseractWorker;
+      return T.createWorker("eng", 1, {
+        logger: logger || function () {},
+        workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/worker.min.js",
+        corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@v5.0.0",
+      }).then(function (w) {
+        tesseractWorker = w;
+        return w;
+      });
+    });
+  }
+
+  function preprocessImage(fileOrBlob) {
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(fileOrBlob);
+      var img = new Image();
+      img.onload = function () {
+        try {
+          var scale = Math.min(2.5, Math.max(1.5, 1400 / Math.max(img.width, 1)));
+          var w = Math.round(img.width * scale);
+          var h = Math.round(img.height * scale);
+          var canvas = document.createElement("canvas");
+          canvas.width = w;
+          canvas.height = h;
+          var ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, w, h);
+          var data = ctx.getImageData(0, 0, w, h);
+          var px = data.data;
+          for (var i = 0; i < px.length; i += 4) {
+            var g = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+            // Boost contrast for Warframe UI text
+            g = (g - 128) * 1.45 + 128;
+            if (g < 0) g = 0;
+            if (g > 255) g = 255;
+            // Mild threshold toward B/W
+            g = g > 150 ? 255 : g < 90 ? 0 : g;
+            px[i] = px[i + 1] = px[i + 2] = g;
+          }
+          ctx.putImageData(data, 0, 0);
+          URL.revokeObjectURL(url);
+          canvas.toBlob(
+            function (blob) {
+              if (!blob) reject(new Error("Image preprocess failed"));
+              else resolve(blob);
+            },
+            "image/png"
+          );
+        } catch (err) {
+          URL.revokeObjectURL(url);
+          reject(err);
+        }
+      };
+      img.onerror = function () {
+        URL.revokeObjectURL(url);
+        reject(new Error("Could not read image"));
+      };
+      img.src = url;
+    });
+  }
+
+  function matchStatLabel(line) {
+    var s = String(line || "");
+    for (var i = 0; i < STAT_ALIASES.length; i++) {
+      if (STAT_ALIASES[i].re.test(s)) {
+        // Don't treat "Damage vs X" as plain Damage
+        if (STAT_ALIASES[i].id === "damage" && /vs\.?|to\s+(corpus|grineer|infested)/i.test(s)) continue;
+        return STAT_ALIASES[i].id;
+      }
+    }
+    return null;
+  }
+
+  function parseNumberToken(raw) {
+    if (!raw) return null;
+    var s = String(raw).replace(/,/g, ".").replace(/[^\d.\-]/g, "");
+    // Fix OCR doubling like 180..2
+    s = s.replace(/\.{2,}/g, ".");
+    var n = Number(s);
+    return isFinite(n) ? n : null;
+  }
+
+  function parseOcrText(text) {
+    var lines = String(text || "")
+      .split(/\r?\n/)
+      .map(function (l) {
+        return l.replace(/[|]/g, "I").replace(/\s+/g, " ").trim();
+      })
+      .filter(Boolean);
+
+    var slots = [];
+    var seen = {};
+
+    function addSlot(id, num, polarity) {
+      if (!id || seen[id] || num == null || !isFinite(num)) return;
+      seen[id] = true;
+      var pol = polarity === "-" ? "-" : "+";
+      slots.push({
+        id: id,
+        value: pol === "-" ? -Math.abs(num) : Math.abs(num),
+        polarity: pol,
+      });
+    }
+
+    lines.forEach(function (line) {
+      // +180.2% Critical Chance
+      var a = line.match(/^([+\-−–])\s*(\d+[.,]?\d*)\s*%?\s*x?\s+(.+)$/i);
+      if (a) {
+        var polA = a[1] === "+" ? "+" : "-";
+        addSlot(matchStatLabel(a[3]) || matchStatLabel(line), parseNumberToken(a[2]), polA);
+        return;
+      }
+      // Critical Chance +180.2%
+      var b = line.match(/^(.+?)\s+([+\-−–])\s*(\d+[.,]?\d*)\s*%?\s*x?\s*$/i);
+      if (b) {
+        var polB = b[2] === "+" ? "+" : "-";
+        addSlot(matchStatLabel(b[1]) || matchStatLabel(line), parseNumberToken(b[3]), polB);
+        return;
+      }
+      // Critical Chance 180.2% (assume positive if no sign)
+      var c = line.match(/^(.+?)\s+(\d+[.,]\d+|\d{2,})\s*%\s*$/i);
+      if (c && matchStatLabel(c[1])) {
+        addSlot(matchStatLabel(c[1]), parseNumberToken(c[2]), "+");
+      }
+    });
+
+    var rank = 8;
+    var full = lines.join("\n");
+    var rm = full.match(/\brank\s*[:=]?\s*(\d)\b/i) || full.match(/\b(\d)\s*\/\s*8\b/);
+    if (rm) rank = Math.min(8, Math.max(0, Number(rm[1])));
+
+    var weaponHit = null;
+    var bestScore = 0;
+    var blob = lines.join(" ").toLowerCase().replace(/[^a-z0-9\s']/g, " ");
+    for (var i = 0; i < weapons.length; i++) {
+      var name = String(weapons[i].name || "");
+      var nl = name.toLowerCase();
+      if (nl.length < 3) continue;
+      if (blob.indexOf(nl) >= 0) {
+        var score = nl.length + (blob.indexOf(nl) < 80 ? 15 : 0);
+        if (score > bestScore) {
+          bestScore = score;
+          weaponHit = weapons[i];
+        }
+      }
+    }
+    if (!weaponHit) {
+      for (var li = 0; li < Math.min(8, lines.length); li++) {
+        var cleaned = lines[li].replace(/riven/gi, "").replace(/mod/gi, "").trim();
+        var hits = searchWeapons(cleaned, 1);
+        if (hits.length && cleaned.toLowerCase().indexOf(String(hits[0].name).toLowerCase().slice(0, 4)) >= 0) {
+          weaponHit = hits[0];
+          break;
+        }
+      }
+    }
+
+    return { weapon: weaponHit, slots: slots, rank: rank, lines: lines };
+  }
+
+  function applyParsed(parsed) {
+    if (!parsed) return;
+    if (rankEl && parsed.rank != null) rankEl.value = String(parsed.rank);
+    if (parsed.weapon) selectWeapon(parsed.weapon);
+    else if (weaponEl && !selected) {
+      // leave weapon empty for user
+    }
+    if (parsed.slots && parsed.slots.length) fillSlots(parsed.slots);
+  }
+
+  function setOcrImage(file) {
+    if (!file || !/^image\//.test(file.type || "")) {
+      setStatus(false, "Please drop an image file");
+      return;
+    }
+    if (ocrObjectUrl) URL.revokeObjectURL(ocrObjectUrl);
+    ocrImage = file;
+    ocrObjectUrl = URL.createObjectURL(file);
+    if (previewEl) {
+      previewEl.src = ocrObjectUrl;
+      previewEl.hidden = false;
+    }
+    if (dropEl) dropEl.classList.add("has-image");
+    if (ocrBtn) ocrBtn.disabled = false;
+    if (ocrClearBtn) ocrClearBtn.disabled = false;
+    if (ocrRawEl) {
+      ocrRawEl.hidden = true;
+      ocrRawEl.textContent = "";
+    }
+    setStatus(true, "Image ready — click Read screenshot");
+  }
+
+  function clearOcrImage() {
+    ocrImage = null;
+    if (ocrObjectUrl) URL.revokeObjectURL(ocrObjectUrl);
+    ocrObjectUrl = null;
+    if (previewEl) {
+      previewEl.removeAttribute("src");
+      previewEl.hidden = true;
+    }
+    if (dropEl) dropEl.classList.remove("has-image");
+    if (ocrBtn) ocrBtn.disabled = true;
+    if (ocrClearBtn) ocrClearBtn.disabled = true;
+    if (ocrRawEl) {
+      ocrRawEl.hidden = true;
+      ocrRawEl.textContent = "";
+    }
+    if (fileEl) fileEl.value = "";
+  }
+
+  function runOcr() {
+    if (!ocrImage) {
+      setStatus(false, "Add a screenshot first");
+      return;
+    }
+    if (!weapons.length) {
+      setStatus(false, "Weapons still loading…");
+      return;
+    }
+    setStatus(true, "Preparing image…");
+    if (ocrBtn) ocrBtn.disabled = true;
+    preprocessImage(ocrImage)
+      .then(function (blob) {
+        setStatus(true, "Loading OCR (first run may take a moment)…");
+        return getOcrWorker(function (m) {
+          if (m && m.status === "recognizing text" && m.progress != null) {
+            setStatus(true, "Reading screenshot… " + Math.round(m.progress * 100) + "%");
+          }
+        }).then(function (worker) {
+          setStatus(true, "Reading screenshot…");
+          return worker.recognize(blob);
+        });
+      })
+      .then(function (ret) {
+        var text = (ret && ret.data && ret.data.text) || "";
+        if (ocrRawEl) {
+          ocrRawEl.textContent = text || "(no text detected)";
+          ocrRawEl.hidden = false;
+        }
+        var parsed = parseOcrText(text);
+        applyParsed(parsed);
+        var msg =
+          "OCR filled " +
+          (parsed.slots.length || 0) +
+          " stat" +
+          (parsed.slots.length === 1 ? "" : "s") +
+          (parsed.weapon ? " · " + parsed.weapon.name : " · set weapon manually") +
+          " — review, then Grade";
+        setStatus(parsed.slots.length > 0, msg);
+        if (ocrBtn) ocrBtn.disabled = false;
+      })
+      .catch(function (err) {
+        setStatus(false, (err && err.message) || "OCR failed");
+        if (ocrBtn) ocrBtn.disabled = false;
+      });
+  }
+
+  if (dropEl) {
+    dropEl.addEventListener("click", function () {
+      if (fileEl) fileEl.click();
+    });
+    dropEl.addEventListener("dragover", function (e) {
+      e.preventDefault();
+      dropEl.classList.add("dragover");
+    });
+    dropEl.addEventListener("dragleave", function () {
+      dropEl.classList.remove("dragover");
+    });
+    dropEl.addEventListener("drop", function (e) {
+      e.preventDefault();
+      dropEl.classList.remove("dragover");
+      var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (f) setOcrImage(f);
+    });
+  }
+
+  if (fileEl) {
+    fileEl.addEventListener("change", function () {
+      if (fileEl.files && fileEl.files[0]) setOcrImage(fileEl.files[0]);
+    });
+  }
+
+  if (ocrBtn) ocrBtn.addEventListener("click", runOcr);
+  if (ocrClearBtn) ocrClearBtn.addEventListener("click", clearOcrImage);
+
+  document.addEventListener("paste", function (e) {
+    var items = e.clipboardData && e.clipboardData.items;
+    if (!items) return;
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].type && items[i].type.indexOf("image") === 0) {
+        var f = items[i].getAsFile();
+        if (f) {
+          e.preventDefault();
+          setOcrImage(f);
+        }
+        break;
+      }
+    }
+  });
 
   Promise.all([loadWeapons(), loadWeekly()]).then(function () {
     setStatus(true, weapons.length + " weapons" + (weekly.length ? " · weekly trades loaded" : " · weekly trades offline"));

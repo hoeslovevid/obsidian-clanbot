@@ -32,8 +32,26 @@
     <header class="tool-hero page-hero">
       <span class="tool-eyebrow"><span class="pulse" aria-hidden="true"></span>Riven · Grade</span>
       <h1>Riven grader</h1>
-      <p class="tool-lead">Pick a weapon, enter the stats as shown on the mod, and see roll quality vs the theoretical max for that disposition. Community heuristic — not trading advice.</p>
+      <p class="tool-lead">Paste or upload a screenshot, confirm the stats, then grade vs the theoretical max for that disposition. Community heuristic — not trading advice.</p>
     </header>
+
+    <section class="tool-card rg-ocr" aria-labelledby="rg-ocr-title">
+      <h2 id="rg-ocr-title" style="font-family:var(--font-display);font-size:1.1rem;margin:0 0 8px">From screenshot</h2>
+      <p class="tool-meta" style="margin-bottom:12px">Runs OCR in your browser — images are not uploaded to our servers. Always review the filled fields before grading.</p>
+      <div id="rg-drop" class="rg-drop" tabindex="0" role="button" aria-label="Drop or paste a riven screenshot">
+        <input id="rg-file" type="file" accept="image/*" hidden />
+        <div class="rg-drop-inner">
+          <strong>Drop image here</strong>
+          <span>or click to browse · Ctrl+V to paste</span>
+        </div>
+        <img id="rg-preview" class="rg-preview" alt="" hidden />
+      </div>
+      <div class="tool-actions" style="margin-top:12px">
+        <button type="button" id="rg-ocr-btn" class="btn-primary" disabled>Read screenshot</button>
+        <button type="button" id="rg-ocr-clear" class="btn-secondary" disabled>Clear image</button>
+      </div>
+      <pre id="rg-ocr-raw" class="rg-ocr-raw" hidden></pre>
+    </section>
 
     <form id="rg-form" class="tool-card" autocomplete="off">
       <div class="tool-search" style="margin:0 0 12px">
@@ -91,6 +109,7 @@
     <article class="tool-prose" style="margin-top:20px">
       <h2>How grading works</h2>
       <p>Each Riven stat is <code>base × disposition (ω) × config weight × roll (90–110%)</code>. We back out the roll factor from your entered value and map it to a letter grade. Overall grade averages the positives.</p>
+      <p>Screenshot OCR uses Tesseract.js locally. Crop tightly around the mod card for best results, then fix any misreads in the form.</p>
       <p>Weekly plat averages come from Digital Extremes’ public trade snapshot (unrolled vs rerolled). Your exact roll will differ.</p>
     </article>
 
