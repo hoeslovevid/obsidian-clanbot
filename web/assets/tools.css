@@ -607,3 +607,48 @@
   gap: 14px;
   margin: 16px 0 28px;
 }
+
+.worth-field {
+  position: relative;
+}
+
+.worth-suggest {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 40;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  max-height: 280px;
+  overflow-y: auto;
+  background: var(--drop-bg, #0e1014);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+}
+
+.worth-suggest li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.worth-suggest li:hover {
+  background: rgba(212, 148, 60, 0.1);
+  color: var(--accent-bright);
+}
+
+.worth-suggest .mk-tag {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  white-space: nowrap;
+}

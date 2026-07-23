@@ -1,12 +1,51 @@
-<!DOCTYPE html><html lang="en"><head>
-  <meta charset="UTF-8" /><script src="/assets/theme-boot.js"></script><meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Ducat or Platinum — Obsidian Overseer</title><meta name="description" content="Compare a Prime part's ducat value with live Warframe Market platinum orders." /><meta name="theme-color" content="#06070a" />
-  <link rel="canonical" href="https://obsidianoverseer.com/worth.html" /><meta property="og:type" content="website" /><meta property="og:url" content="https://obsidianoverseer.com/worth.html" /><meta property="og:title" content="Ducat or Platinum — Obsidian Overseer" /><meta property="og:description" content="Decide whether to sell a Prime part or melt it for ducats." /><meta property="og:image" content="https://obsidianoverseer.com/assets/og.jpg" />
-  <link rel="icon" type="image/png" href="/assets/logo.png" /><link rel="preconnect" href="https://fonts.googleapis.com" /><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin /><link rel="preconnect" href="https://api.warframestat.us" crossorigin /><link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/assets/site-nav.css" /><link rel="stylesheet" href="/assets/site.css" /><link rel="stylesheet" href="/assets/tools.css" />
-</head><body><div class="bg-ambient" aria-hidden="true"></div><div class="bg-grain" aria-hidden="true"></div><div class="page-wrap">
-  <nav id="site-nav" data-active="worth"></nav><header class="tool-hero page-hero"><span class="tool-eyebrow"><span class="pulse" aria-hidden="true"></span>Prime parts · Value</span><h1>Ducat or platinum?</h1><p class="tool-lead">Compare a Prime part's ducat value with its cheapest visible sell order. The verdict is a rough heuristic, not trading advice.</p></header>
-  <form id="worth-form" class="tool-search" role="search"><label class="tool-field tool-field-grow"><span class="tool-label">Prime item or part</span><input id="worth-query" type="search" name="q" placeholder="Paris Prime String…" maxlength="80" /></label><button class="btn-primary" type="submit">Compare</button></form>
-  <div id="worth-status" class="tool-status" aria-live="polite"><span class="dot"></span>Enter a Prime item</div><main id="worth-root" aria-busy="false" style="margin-top:16px"></main>
-  <p class="tool-footnote">Market prices are live when the proxy is available. Always verify before trading.</p><footer id="site-footer"></footer>
-</div><script src="/assets/config.js"></script><script src="/assets/site.js"></script><script src="/assets/worth.js"></script></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <script src="/assets/theme-boot.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ducat or Platinum — Obsidian Overseer</title>
+  <meta name="description" content="Compare a Prime part's ducat value with live Warframe Market platinum orders." />
+  <meta name="theme-color" content="#06070a" />
+  <link rel="canonical" href="https://obsidianoverseer.com/worth.html" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://obsidianoverseer.com/worth.html" />
+  <meta property="og:title" content="Ducat or Platinum — Obsidian Overseer" />
+  <meta property="og:description" content="Decide whether to sell a Prime part or melt it for ducats." />
+  <meta property="og:image" content="https://obsidianoverseer.com/assets/og.jpg" />
+  <link rel="icon" type="image/png" href="/assets/logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/site-nav.css" />
+  <link rel="stylesheet" href="/assets/site.css" />
+  <link rel="stylesheet" href="/assets/tools.css" />
+</head>
+<body>
+  <div class="bg-ambient" aria-hidden="true"></div>
+  <div class="bg-grain" aria-hidden="true"></div>
+  <div class="page-wrap">
+    <nav id="site-nav" data-active="worth"></nav>
+    <header class="tool-hero page-hero">
+      <span class="tool-eyebrow"><span class="pulse" aria-hidden="true"></span>Prime parts · Value</span>
+      <h1>Ducat or platinum?</h1>
+      <p class="tool-lead">Compare a Prime part’s ducat value with its cheapest visible sell order. The verdict is a rough heuristic, not trading advice.</p>
+    </header>
+    <form id="worth-form" class="tool-search" role="search" autocomplete="off">
+      <label class="tool-field tool-field-grow worth-field">
+        <span class="tool-label">Prime item or part</span>
+        <input id="worth-query" class="tool-input" type="search" name="q" placeholder="Paris Prime String…" maxlength="80" spellcheck="false" />
+        <ul id="worth-suggest" class="worth-suggest" hidden role="listbox"></ul>
+      </label>
+      <button class="btn-primary" type="submit">Compare</button>
+    </form>
+    <div id="worth-status" class="tool-status" aria-live="polite"><span class="dot" aria-hidden="true"></span>Loading catalog…</div>
+    <main id="worth-root" aria-busy="false" style="margin-top:16px"></main>
+    <p class="tool-footnote">Uses the Warframe Market catalog and live order proxy. Always verify before trading. Not affiliated with Digital Extremes.</p>
+    <footer id="site-footer"></footer>
+  </div>
+  <script src="/assets/config.js"></script>
+  <script src="/assets/site.js"></script>
+  <script src="/assets/worth.js"></script>
+</body>
+</html>
