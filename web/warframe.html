@@ -35,6 +35,9 @@
       <div id="wf-teaser" class="wf-teaser" hidden></div>
     </header>
 
+    <div id="wf-stale" class="wf-stale" hidden role="status"></div>
+    <div id="wf-soon" class="wf-soon" hidden aria-live="polite"></div>
+
     <nav class="wf-jump" aria-label="On this page">
       <a href="#wf-trader">Trader</a>
       <a href="#wf-cycles">Cycles</a>
@@ -76,7 +79,8 @@
         <div id="wf-status" class="wf-status" aria-live="polite"><span class="dot" aria-hidden="true"></span>Loading…</div>
       </div>
       <div class="wf-toolbar-right">
-        <button type="button" id="wf-dense" class="btn-secondary" aria-pressed="false">Dense</button>
+        <button type="button" id="wf-dense" class="btn-secondary" aria-pressed="false" title="Compact layout">Dense</button>
+        <button type="button" id="wf-tv" class="btn-secondary" aria-pressed="false" title="Large TV / OBS layout">TV</button>
         <button type="button" id="wf-collapse-all" class="btn-secondary">Collapse</button>
         <button type="button" id="wf-refresh" class="btn-secondary">Refresh</button>
       </div>
@@ -93,7 +97,9 @@
     </div>
     <p class="wf-footnote">
       Data from the community <a href="https://docs.warframestat.us/" target="_blank" rel="noopener noreferrer">warframestat.us</a> API. Not affiliated with Digital Extremes.
-      Share links: <code>?platform=pc&amp;section=void&amp;lang=en</code>
+      Share: <code>?platform=pc&amp;section=void&amp;tiers=Lith,Axi&amp;mission=Survival</code>
+      · Embed: <code>?embed=1&amp;section=void</code>
+      · Pin sections with ★ · Star fissure nodes to watch
     </p>
 
     <footer id="site-footer"></footer>
