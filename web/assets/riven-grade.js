@@ -739,8 +739,15 @@
         workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/worker.min.js",
         corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@v5.0.0",
       }).then(function (w) {
-        tesseractWorker = w;
-        return w;
+        return w
+          .setParameters({
+            tessedit_pageseg_mode: "6",
+            preserve_interword_spaces: "1",
+          })
+          .then(function () {
+            tesseractWorker = w;
+            return w;
+          });
       });
     });
   }
@@ -751,24 +758,24 @@
       var img = new Image();
       img.onload = function () {
         try {
-          var scale = Math.min(2.5, Math.max(1.5, 1400 / Math.max(img.width, 1)));
+          // Upscale small screenshots; avoid crushing UI glyphs with hard B/W thresholds
+          var scale = Math.min(3, Math.max(2, 1600 / Math.max(img.width, 1)));
           var w = Math.round(img.width * scale);
           var h = Math.round(img.height * scale);
           var canvas = document.createElement("canvas");
           canvas.width = w;
           canvas.height = h;
           var ctx = canvas.getContext("2d");
+          ctx.imageSmoothingEnabled = true;
           ctx.drawImage(img, 0, 0, w, h);
           var data = ctx.getImageData(0, 0, w, h);
           var px = data.data;
           for (var i = 0; i < px.length; i += 4) {
             var g = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
-            // Boost contrast for Warframe UI text
-            g = (g - 128) * 1.45 + 128;
+            // Gentle contrast only — hard thresholds were wiping Warframe UI text
+            g = (g - 128) * 1.35 + 140;
             if (g < 0) g = 0;
             if (g > 255) g = 255;
-            // Mild threshold toward B/W
-            g = g > 150 ? 255 : g < 90 ? 0 : g;
             px[i] = px[i + 1] = px[i + 2] = g;
           }
           ctx.putImageData(data, 0, 0);
@@ -797,7 +804,6 @@
     var s = String(line || "");
     for (var i = 0; i < STAT_ALIASES.length; i++) {
       if (STAT_ALIASES[i].re.test(s)) {
-        // Don't treat "Damage vs X" as plain Damage
         if (STAT_ALIASES[i].id === "damage" && /vs\.?|to\s+(corpus|grineer|infested)/i.test(s)) continue;
         return STAT_ALIASES[i].id;
       }
@@ -805,58 +811,136 @@
     return null;
   }
 
+  function fixOcrDigits(raw) {
+    return String(raw || "")
+      .replace(/,/g, ".")
+      .replace(/[Oo]/g, "0")
+      .replace(/[Il|]/g, "1")
+      .replace(/[Ss]/g, "5")
+      .replace(/[^\d.\-]/g, "")
+      .replace(/\.{2,}/g, ".");
+  }
+
   function parseNumberToken(raw) {
     if (!raw) return null;
-    var s = String(raw).replace(/,/g, ".").replace(/[^\d.\-]/g, "");
-    // Fix OCR doubling like 180..2
-    s = s.replace(/\.{2,}/g, ".");
+    var s = fixOcrDigits(raw);
+    // "180 2" → "180.2" when OCR splits the decimal
+    if (/^\d+\s+\d{1,2}$/.test(String(raw).trim())) {
+      s = String(raw).trim().replace(/\s+/, ".");
+    }
     var n = Number(s);
     return isFinite(n) ? n : null;
   }
 
+  function normalizePolarity(ch) {
+    if (!ch) return "+";
+    ch = String(ch).charAt(0);
+    if (ch === "+" || ch === "t" || ch === "T") return "+"; // OCR often reads + as t
+    if (ch === "-" || ch === "−" || ch === "–" || ch === "—") return "-";
+    return "+";
+  }
+
+  function addSlot(slots, seen, id, num, polarity) {
+    if (!id || seen[id] || num == null || !isFinite(num)) return false;
+    seen[id] = true;
+    var pol = normalizePolarity(polarity);
+    slots.push({
+      id: id,
+      value: pol === "-" ? -Math.abs(num) : Math.abs(num),
+      polarity: pol,
+    });
+    return true;
+  }
+
   function parseOcrText(text) {
-    var lines = String(text || "")
+    var raw = String(text || "")
+      // Common OCR junk
+      .replace(/\u00a0/g, " ")
+      .replace(/[|]/g, "I");
+
+    var lines = raw
       .split(/\r?\n/)
       .map(function (l) {
-        return l.replace(/[|]/g, "I").replace(/\s+/g, " ").trim();
+        return l.replace(/\s+/g, " ").trim();
       })
       .filter(Boolean);
 
     var slots = [];
     var seen = {};
 
-    function addSlot(id, num, polarity) {
-      if (!id || seen[id] || num == null || !isFinite(num)) return;
-      seen[id] = true;
-      var pol = polarity === "-" ? "-" : "+";
-      slots.push({
-        id: id,
-        value: pol === "-" ? -Math.abs(num) : Math.abs(num),
-        polarity: pol,
-      });
-    }
-
-    lines.forEach(function (line) {
-      // +180.2% Critical Chance
-      var a = line.match(/^([+\-−–])\s*(\d+[.,]?\d*)\s*%?\s*x?\s+(.+)$/i);
+    function tryLine(line) {
+      if (!line) return;
+      // +180.2% Critical Chance   (space after % optional)
+      var a = line.match(/^([+\-−–tT])\s*(\d+[.,]?\d*|\d+\s+\d)\s*%?\s*x?\s*(.+)$/i);
       if (a) {
-        var polA = a[1] === "+" ? "+" : "-";
-        addSlot(matchStatLabel(a[3]) || matchStatLabel(line), parseNumberToken(a[2]), polA);
+        var idA = matchStatLabel(a[3]) || matchStatLabel(line);
+        if (idA) addSlot(slots, seen, idA, parseNumberToken(a[2]), a[1]);
         return;
       }
       // Critical Chance +180.2%
-      var b = line.match(/^(.+?)\s+([+\-−–])\s*(\d+[.,]?\d*)\s*%?\s*x?\s*$/i);
+      var b = line.match(/^(.+?)\s+([+\-−–tT])\s*(\d+[.,]?\d*|\d+\s+\d)\s*%?\s*x?\s*$/i);
       if (b) {
-        var polB = b[2] === "+" ? "+" : "-";
-        addSlot(matchStatLabel(b[1]) || matchStatLabel(line), parseNumberToken(b[3]), polB);
+        var idB = matchStatLabel(b[1]);
+        if (idB) addSlot(slots, seen, idB, parseNumberToken(b[3]), b[2]);
         return;
       }
-      // Critical Chance 180.2% (assume positive if no sign)
-      var c = line.match(/^(.+?)\s+(\d+[.,]\d+|\d{2,})\s*%\s*$/i);
-      if (c && matchStatLabel(c[1])) {
-        addSlot(matchStatLabel(c[1]), parseNumberToken(c[2]), "+");
+      // Critical Chance 180.2%  (no sign → positive)
+      var c = line.match(/^(.+?)\s+([+\-−–tT])?\s*(\d+[.,]\d+|\d{2,3})\s*%\s*$/i);
+      if (c) {
+        var idC = matchStatLabel(c[1]);
+        if (idC) addSlot(slots, seen, idC, parseNumberToken(c[3]), c[2] || "+");
+        return;
       }
-    });
+      // +2.7m Punch Through / +8.1s Combo Duration
+      var d = line.match(/^([+\-−–tT])\s*(\d+[.,]?\d*)\s*[ms]\s+(.+)$/i);
+      if (d) {
+        var idD = matchStatLabel(d[3]);
+        if (idD) addSlot(slots, seen, idD, parseNumberToken(d[2]), d[1]);
+      }
+    }
+
+    // Pass 1: each line alone
+    lines.forEach(tryLine);
+
+    // Pass 2: pair adjacent lines when OCR splits value / label
+    //   "+180.2%"  then  "Critical Chance"
+    //   "Critical Chance"  then  "+180.2%"
+    for (var i = 0; i < lines.length - 1; i++) {
+      var cur = lines[i];
+      var next = lines[i + 1];
+      var numLine = cur.match(/^([+\-−–tT])?\s*(\d+[.,]?\d*|\d+\s+\d)\s*%?\s*x?\s*$/i);
+      var numNext = next.match(/^([+\-−–tT])?\s*(\d+[.,]?\d*|\d+\s+\d)\s*%?\s*x?\s*$/i);
+      var labelCur = matchStatLabel(cur);
+      var labelNext = matchStatLabel(next);
+      if (numLine && labelNext && !/\d/.test(next.replace(/%/g, ""))) {
+        addSlot(slots, seen, labelNext, parseNumberToken(numLine[2]), numLine[1] || "+");
+      } else if (labelCur && numNext && !/\d/.test(cur.replace(/%/g, ""))) {
+        addSlot(slots, seen, labelCur, parseNumberToken(numNext[2]), numNext[1] || "+");
+      }
+    }
+
+    // Pass 3: flatten text — catch stats OCR mashed onto one line or wrapped oddly
+    var flat = lines.join("  ");
+    var labelAlts = STAT_ALIASES.map(function (a) {
+      return a.re.source;
+    }).join("|");
+    var globalRe = new RegExp(
+      "([+\\-−–tT])\\s*(\\d+[.,]?\\d*|\\d+\\s+\\d)\\s*%?\\s*x?\\s*(" + labelAlts + ")",
+      "gi"
+    );
+    var gm;
+    while ((gm = globalRe.exec(flat)) !== null) {
+      var gid = matchStatLabel(gm[3]);
+      addSlot(slots, seen, gid, parseNumberToken(gm[2]), gm[1]);
+    }
+    // label then number on flat text
+    var globalRe2 = new RegExp(
+      "(" + labelAlts + ")\\s*([+\\-−–tT])\\s*(\\d+[.,]?\\d*|\\d+\\s+\\d)\\s*%?",
+      "gi"
+    );
+    while ((gm = globalRe2.exec(flat)) !== null) {
+      addSlot(slots, seen, matchStatLabel(gm[1]), parseNumberToken(gm[3]), gm[2]);
+    }
 
     var rank = 8;
     var full = lines.join("\n");
@@ -866,15 +950,15 @@
     var weaponHit = null;
     var bestScore = 0;
     var blob = lines.join(" ").toLowerCase().replace(/[^a-z0-9\s']/g, " ");
-    for (var i = 0; i < weapons.length; i++) {
-      var name = String(weapons[i].name || "");
+    for (var wi = 0; wi < weapons.length; wi++) {
+      var name = String(weapons[wi].name || "");
       var nl = name.toLowerCase();
       if (nl.length < 3) continue;
       if (blob.indexOf(nl) >= 0) {
         var score = nl.length + (blob.indexOf(nl) < 80 ? 15 : 0);
         if (score > bestScore) {
           bestScore = score;
-          weaponHit = weapons[i];
+          weaponHit = weapons[wi];
         }
       }
     }
@@ -942,6 +1026,32 @@
     if (fileEl) fileEl.value = "";
   }
 
+  function mergeParsed(a, b) {
+    var out = {
+      weapon: (a && a.weapon) || (b && b.weapon) || null,
+      rank: (a && a.rank) || (b && b.rank) || 8,
+      slots: [],
+      lines: [].concat((a && a.lines) || [], (b && b.lines) || []),
+    };
+    var seen = {};
+    function eat(list) {
+      (list || []).forEach(function (s) {
+        if (!s || !s.id || seen[s.id]) return;
+        seen[s.id] = true;
+        out.slots.push(s);
+      });
+    }
+    // Prefer the pass that found more stats
+    if ((a && a.slots && a.slots.length) >= (b && b.slots && b.slots.length)) {
+      eat(a && a.slots);
+      eat(b && b.slots);
+    } else {
+      eat(b && b.slots);
+      eat(a && a.slots);
+    }
+    return out;
+  }
+
   function runOcr() {
     if (!ocrImage) {
       setStatus(false, "Add a screenshot first");
@@ -953,25 +1063,27 @@
     }
     setStatus(true, "Preparing image…");
     if (ocrBtn) ocrBtn.disabled = true;
-    preprocessImage(ocrImage)
-      .then(function (blob) {
-        setStatus(true, "Loading OCR (first run may take a moment)…");
-        return getOcrWorker(function (m) {
-          if (m && m.status === "recognizing text" && m.progress != null) {
-            setStatus(true, "Reading screenshot… " + Math.round(m.progress * 100) + "%");
-          }
-        }).then(function (worker) {
-          setStatus(true, "Reading screenshot…");
-          return worker.recognize(blob);
+    getOcrWorker(function (m) {
+      if (m && m.status === "recognizing text" && m.progress != null) {
+        setStatus(true, "Reading screenshot… " + Math.round(m.progress * 100) + "%");
+      }
+    })
+      .then(function (worker) {
+        setStatus(true, "Reading screenshot…");
+        // Run OCR on both original and contrast-boosted copies, then merge stats
+        return preprocessImage(ocrImage).then(function (pre) {
+          return Promise.all([worker.recognize(ocrImage), worker.recognize(pre)]);
         });
       })
-      .then(function (ret) {
-        var text = (ret && ret.data && ret.data.text) || "";
+      .then(function (rets) {
+        var textA = (rets[0] && rets[0].data && rets[0].data.text) || "";
+        var textB = (rets[1] && rets[1].data && rets[1].data.text) || "";
+        var combined = textA + "\n---\n" + textB;
         if (ocrRawEl) {
-          ocrRawEl.textContent = text || "(no text detected)";
+          ocrRawEl.textContent = combined || "(no text detected)";
           ocrRawEl.hidden = false;
         }
-        var parsed = parseOcrText(text);
+        var parsed = mergeParsed(parseOcrText(textA), parseOcrText(textB));
         applyParsed(parsed);
         var msg =
           "OCR filled " +
