@@ -10,15 +10,35 @@ from __future__ import annotations
 from core.config import BOT_CHANGELOG, BOT_VERSION
 
 # Current release (version string comes from BOT_VERSION only).
-CURRENT_RELEASE_DATE = "2026-07-05"
+CURRENT_RELEASE_DATE = "2026-07-23"
 CURRENT_RELEASE_CHANGES: list[str] = [
-    "**Website** — shared nav (Home, Features, Dashboard, Contact, Legal); root `/` URLs fix GitHub Pages routing; `404.html` fallback",
-    "**Dashboard page** — `/dashboard.html` with Discord login and mod overview when bot API is enabled",
-    "**Contact form** — posts to bot `POST /api/contact` (webhook on Railway); no secret in HTML",
+    "**`/wftools`** — Nightwave, ducats vs plat, riven disposition, relic rewards, and Prime vault/Varzia (website toolkit in Discord)",
+    "**Deep-links** — Baro, daily ops, help, and related embeds now open the matching tool pages on the site",
+    "**Setup** — Dashboard and `/general setup` can create channels and let you name them first (needs Manage Channels)",
+    "**Website** — Mobile nav logo uses a small icon (no more multi‑MB PNG stall); PWA / favicon assets updated",
 ]
 
 # Older releases (newest first). Include ``version`` for each archived release.
 CHANGELOG_HISTORY: list[dict] = [
+    {
+        "version": "2.4.0",
+        "date": "2026-07-23",
+        "changes": [
+            "**Website** — Ctrl/Cmd+K jump menu; Nightwave checklist; Baro shopping list; Steel Path rotation; ducat/plat helper; relic planner",
+            "**Website** — Riven grader (roll quality vs disposition + weekly PC trade averages)",
+            "**Website** — Incarnon and Archon shard cheat sheets; privacy summary; richer 404; OBS size presets; PWA install",
+            "**Website** — New badges on home cards; command Copy buttons; Builds/LFG/Events polish; mobile world-state tweaks",
+        ],
+    },
+    {
+        "version": "2.3.4",
+        "date": "2026-07-05",
+        "changes": [
+            "**Website** — shared nav (Home, Features, Dashboard, Contact, Legal); root `/` URLs fix GitHub Pages routing; `404.html` fallback",
+            "**Dashboard page** — `/dashboard.html` with Discord login and mod overview when bot API is enabled",
+            "**Contact form** — posts to bot `POST /api/contact` (webhook on Railway); no secret in HTML",
+        ],
+    },
     {
         "version": "2.3.3",
         "date": "2026-07-05",
