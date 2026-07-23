@@ -110,6 +110,54 @@
   margin: 8px 0 20px;
 }
 
+.wf-toolbar-left {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.wf-platform {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 14px;
+  background: var(--panel-bg-strong, rgba(15, 17, 21, 0.75));
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.wf-platform-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.wf-platform select,
+.wf-filter-select {
+  appearance: none;
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 28px 6px 10px;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+}
+
+.wf-platform select:focus,
+.wf-filter-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 .wf-status {
   display: inline-flex;
   align-items: center;
@@ -467,6 +515,16 @@
 }
 
 .wf-cycle-card.mood .state { color: #e8c4a0; }
+.wf-cycle-card.corpus .state { color: #7eb8e8; }
+.wf-cycle-card.corpus .wf-cycle-mark {
+  background: #5a9fd4;
+  color: #061018;
+}
+.wf-cycle-card.grineer .state { color: #e8a070; }
+.wf-cycle-card.grineer .wf-cycle-mark {
+  background: #c47848;
+  color: #120a04;
+}
 .wf-cycle-card.mood .wf-cycle-mark {
   background: linear-gradient(135deg, #c4a070, #8a6a40);
   color: #f0ebe5;
@@ -525,6 +583,186 @@
 
 .wf-mini-card span {
   color: var(--text-muted);
+}
+
+/* Events / construction / news */
+.wf-event-card {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.wf-event-card:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.wf-event-card:first-child {
+  padding-top: 0;
+}
+
+.wf-event-card h3 {
+  margin: 0 0 6px;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.wf-event-tip {
+  margin: 6px 0 10px;
+  font-size: 0.86rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.wf-progress {
+  height: 8px;
+  margin: 8px 0 4px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.wf-progress > span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-bright));
+  border-radius: inherit;
+}
+
+.wf-build-row {
+  display: grid;
+  grid-template-columns: 90px 1fr 52px;
+  gap: 10px;
+  align-items: center;
+  margin-top: 10px;
+  font-size: 0.86rem;
+  color: var(--text-muted);
+}
+
+.wf-build-row em {
+  font-style: normal;
+  font-weight: 700;
+  color: var(--text);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.wf-news-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.wf-news-list li {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.wf-news-list li:last-child {
+  border-bottom: none;
+}
+
+.wf-news-list a {
+  color: var(--text);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.wf-news-list a:hover {
+  color: var(--accent-bright);
+}
+
+/* Fissure filters */
+.wf-fissure-filters {
+  display: grid;
+  gap: 12px;
+  margin: 4px 0 12px;
+  padding: 14px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.wf-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.wf-filter-label {
+  flex: 0 0 96px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.wf-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.wf-filter-chip,
+.wf-mission-pill {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.wf-filter-chip:hover,
+.wf-mission-pill:hover {
+  border-color: rgba(232, 168, 74, 0.45);
+  color: var(--text);
+}
+
+.wf-filter-chip.on,
+.wf-mission-pill.on {
+  color: var(--text);
+  border-color: var(--accent);
+  background: rgba(232, 168, 74, 0.12);
+}
+
+.wf-filter-chip.tier-lith.on { border-color: #c4b5a0; }
+.wf-filter-chip.tier-meso.on { border-color: #9ec5e8; }
+.wf-filter-chip.tier-neo.on { border-color: #8fd4a8; }
+.wf-filter-chip.tier-axi.on { border-color: #e8a84a; }
+.wf-filter-chip.tier-requiem.on { border-color: #f87171; }
+.wf-filter-chip.tier-omnia.on { border-color: #c4a0e8; }
+
+.wf-filter-select {
+  min-width: min(100%, 220px);
+}
+
+.wf-mission-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--border);
+}
+
+.wf-mission-pill em {
+  font-style: normal;
+  color: var(--text-subtle);
+  font-weight: 600;
+}
+
+.wf-fissure-count {
+  margin: 0 0 8px;
 }
 
 /* Fissure chips by tier */
@@ -715,6 +953,9 @@
   .wf-jump { top: 52px; }
   .wf-skel-row { grid-template-columns: repeat(2, 1fr); }
   .wf-cta-strip { flex-direction: column; align-items: flex-start; }
+  .wf-filter-label { flex-basis: 100%; }
+  .wf-build-row { grid-template-columns: 1fr 52px; }
+  .wf-build-row span { grid-column: 1 / -1; }
 }
 
 @media (max-width: 480px) {

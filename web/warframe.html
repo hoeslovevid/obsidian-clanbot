@@ -5,13 +5,13 @@
   <script src="/assets/theme-boot.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>World State — Obsidian Overseer</title>
-  <meta name="description" content="Live Warframe world state — Baro, cycles, sortie, archon, fissures, and more. No login required." />
+  <meta name="description" content="Live Warframe world state — Baro, cycles, sortie, archon, fissures, events, and more. No login required." />
   <meta name="theme-color" content="#06070a" />
   <link rel="canonical" href="https://obsidianoverseer.com/warframe.html" />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://obsidianoverseer.com/warframe.html" />
   <meta property="og:title" content="World State — Obsidian Overseer" />
-  <meta property="og:description" content="Live Warframe world state — Baro, cycles, sortie, and more." />
+  <meta property="og:description" content="Live Warframe world state — Baro, cycles, sortie, fissures, and more." />
   <meta property="og:image" content="https://obsidianoverseer.com/assets/og.jpg" />
   <link rel="icon" type="image/png" href="/assets/logo.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -29,9 +29,9 @@
     <nav id="site-nav" data-active="warframe"></nav>
 
     <header class="wf-hero page-hero">
-      <span class="wf-eyebrow"><span class="pulse" aria-hidden="true"></span>PC · Live</span>
+      <span class="wf-eyebrow"><span class="pulse" aria-hidden="true"></span><span id="wf-platform-label">PC</span> · Live</span>
       <h1>World state</h1>
-      <p class="wf-hero-lead">Baro, open-world cycles, missions, and void fissures — a live board for your clan, no login.</p>
+      <p class="wf-hero-lead">Baro, open-world cycles, missions, void fissures, events, and news — a live board for your clan, no login.</p>
       <div id="wf-teaser" class="wf-teaser" hidden></div>
     </header>
 
@@ -39,12 +39,25 @@
       <a href="#wf-trader">Trader</a>
       <a href="#wf-cycles">Cycles</a>
       <a href="#wf-missions">Missions</a>
+      <a href="#wf-events">Events</a>
       <a href="#wf-void">Void</a>
+      <a href="#wf-news">News</a>
       <a href="#wf-invasions">Invasions</a>
     </nav>
 
     <div class="wf-toolbar">
-      <div id="wf-status" class="wf-status" aria-live="polite"><span class="dot" aria-hidden="true"></span>Loading…</div>
+      <div class="wf-toolbar-left">
+        <label class="wf-platform">
+          <span class="wf-platform-label">Platform</span>
+          <select id="wf-platform" aria-label="Warframe platform">
+            <option value="pc">PC</option>
+            <option value="ps4">PlayStation</option>
+            <option value="xb1">Xbox</option>
+            <option value="swi">Switch</option>
+          </select>
+        </label>
+        <div id="wf-status" class="wf-status" aria-live="polite"><span class="dot" aria-hidden="true"></span>Loading…</div>
+      </div>
       <button type="button" id="wf-refresh" class="btn-secondary">Refresh</button>
     </div>
 
