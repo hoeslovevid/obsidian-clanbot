@@ -8,6 +8,7 @@
 
   var NAV_TOOLS = [
     { id: "warframe", label: "World state", href: "/warframe.html" },
+    { id: "farm", label: "Acquire", href: "/farm.html" },
     { id: "market", label: "Market", href: "/market.html" },
     { id: "features", label: "Features", href: "/#features" },
   ];
@@ -18,7 +19,7 @@
     { id: "changelog", label: "Changelog", href: "/changelog.html" },
   ];
 
-  var TOOL_IDS = { warframe: 1, market: 1, features: 1 };
+  var TOOL_IDS = { warframe: 1, farm: 1, market: 1, features: 1 };
   var GUIDE_IDS = { setup: 1, faq: 1, changelog: 1 };
   var THEME_KEY = "oo_theme";
 
@@ -309,6 +310,9 @@
       '<a href="' +
       prefix +
       '/warframe.html">World state</a>' +
+      '<a href="' +
+      prefix +
+      '/farm.html">Acquire</a>' +
       '<a href="' +
       prefix +
       '/market.html">Market</a>' +

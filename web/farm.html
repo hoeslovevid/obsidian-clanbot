@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <script src="/assets/theme-boot.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Acquire — Obsidian Overseer</title>
+  <meta name="description" content="Look up Warframe resources, mods, and primes — see the best drop locations, relics, and farm methods. No login required." />
+  <meta name="theme-color" content="#06070a" />
+  <link rel="canonical" href="https://obsidianoverseer.com/farm.html" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://obsidianoverseer.com/farm.html" />
+  <meta property="og:title" content="Acquire — Obsidian Overseer" />
+  <meta property="og:description" content="Find where to farm resources, mods, and prime parts — drop chances, relics, and methods." />
+  <meta property="og:image" content="https://obsidianoverseer.com/assets/og.jpg" />
+  <link rel="icon" type="image/png" href="/assets/logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://api.warframestat.us" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/site-nav.css" />
+  <link rel="stylesheet" href="/assets/site.css" />
+  <link rel="stylesheet" href="/assets/farm.css" />
+</head>
+<body>
+  <div class="bg-ambient" aria-hidden="true"></div>
+  <div class="bg-grain" aria-hidden="true"></div>
+
+  <div class="page-wrap">
+    <nav id="site-nav" data-active="farm"></nav>
+
+    <header class="fm-hero page-hero">
+      <span class="fm-eyebrow"><span class="pulse" aria-hidden="true"></span>Drops · Relics · Resources</span>
+      <h1>Acquire</h1>
+      <p class="fm-hero-lead">Look up a resource, mod, or prime set and see the best places and methods to get it — ranked by drop chance, with junk sources filtered out.</p>
+    </header>
+
+    <form id="fm-form" class="fm-search" role="search" autocomplete="off">
+      <label class="fm-field fm-field-grow">
+        <span class="fm-label">Item or resource</span>
+        <input
+          id="fm-query"
+          type="search"
+          name="q"
+          placeholder="Neurodes, Transient Fortitude, Nova Prime…"
+          maxlength="80"
+          spellcheck="false"
+          aria-autocomplete="list"
+          aria-controls="fm-suggest"
+          aria-expanded="false"
+        />
+        <ul id="fm-suggest" class="fm-suggest" role="listbox" hidden></ul>
+      </label>
+      <button type="submit" class="btn-primary fm-submit">Find sources</button>
+    </form>
+
+    <div class="fm-quick" aria-label="Quick examples">
+      <button type="button" class="fm-chip" data-q="Neurodes">Neurodes</button>
+      <button type="button" class="fm-chip" data-q="Morphics">Morphics</button>
+      <button type="button" class="fm-chip" data-q="Orokin Cell">Orokin Cell</button>
+      <button type="button" class="fm-chip" data-q="Transient Fortitude">Transient Fortitude</button>
+      <button type="button" class="fm-chip" data-q="Nova Prime">Nova Prime</button>
+      <button type="button" class="fm-chip" data-q="Soma Prime">Soma Prime</button>
+    </div>
+
+    <div class="fm-toolbar">
+      <div id="fm-status" class="fm-status" aria-live="polite"><span class="dot" aria-hidden="true"></span>Search an item to see farm sources</div>
+      <label class="fm-toggle">
+        <input type="checkbox" id="fm-hide-junk" checked />
+        Hide Conclave / PvP
+      </label>
+    </div>
+
+    <div id="fm-root" class="fm-root" aria-busy="false">
+      <div class="fm-empty-state">
+        <p>Search resources (Neurodes), mods (Transient Fortitude), or primes (Nova Prime). Results show ranked drop locations, relics, and links to Market and live Void fissures.</p>
+      </div>
+    </div>
+
+    <div class="fm-cta-strip">
+      <p><strong>Farming now?</strong> Check <a href="/warframe.html#wf-void">live fissures</a> or <a href="/market.html">Market prices</a> if buying is faster.</p>
+      <a id="fm-invite" class="btn-primary" href="#" target="_blank" rel="noopener noreferrer">Add to Discord</a>
+    </div>
+    <p class="fm-footnote">
+      Drop data from the community <a href="https://docs.warframestat.us/" target="_blank" rel="noopener noreferrer">warframestat.us</a> API (official drop tables). Rankings are chance-based heuristics, not guaranteed resources/hour. Not affiliated with Digital Extremes.
+    </p>
+
+    <footer id="site-footer"></footer>
+  </div>
+
+  <script src="/assets/config.js"></script>
+  <script src="/assets/site.js"></script>
+  <script src="/assets/farm.js"></script>
+  <script>
+    (function () {
+      var a = document.getElementById("fm-invite");
+      if (a && window.ObsidianSite) a.href = window.ObsidianSite.inviteUrl();
+    })();
+  </script>
+</body>
+</html>
