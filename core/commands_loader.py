@@ -40,6 +40,10 @@ def load_all_commands(bot):
         name="staff",
         description="🔧 Staff utilities: sync, analytics, webhooks, mentorship (mods)",
     )
+    wftools_group = app_commands.Group(
+        name="wftools",
+        description="🧰 Website toolkit: Nightwave, ducats, rivens, relics, vault",
+    )
 
     # NOTE: economy.pets/store/xp and warframe.notify are NOT added as subgroups any more —
     # they each became their own top-level group above to fit Discord's 8000-byte limit.
@@ -79,6 +83,7 @@ def load_all_commands(bot):
     bot.tree.add_command(lfg_group)
     bot.tree.add_command(events_group)
     bot.tree.add_command(staff_group)
+    bot.tree.add_command(wftools_group)
 
     # Legacy per-type WF notify commands — removed from tree; use /wfnotify configure + /wfnotify setup.
     LEGACY_NOTIFY_MODULES = frozenset({
@@ -217,6 +222,11 @@ def load_all_commands(bot):
         "commands.warframe.fissures",
         "commands.warframe.sortie",
         "commands.warframe.daily_ops",
+        "commands.warframe.nightwave",
+        "commands.warframe.ducats",
+        "commands.warframe.riven",
+        "commands.warframe.relic",
+        "commands.warframe.vault",
         "commands.warframe.status",
         "commands.warframe.hub",
         "commands.warframe.devstream_notify",
@@ -304,6 +314,11 @@ def load_all_commands(bot):
         "commands.warframe.fissures": warframe_group,
         "commands.warframe.sortie": warframe_group,
         "commands.warframe.daily_ops": warframe_group,
+        "commands.warframe.nightwave": wftools_group,
+        "commands.warframe.ducats": wftools_group,
+        "commands.warframe.riven": wftools_group,
+        "commands.warframe.relic": wftools_group,
+        "commands.warframe.vault": wftools_group,
         "commands.warframe.status": warframe_group,
         "commands.warframe.hub": warframe_group,
         "commands.warframe.devstream_notify": wfnotify_group,

@@ -14,6 +14,15 @@ DEFAULT_LINKS = [
     ("Builds (Overframe)", "https://overframe.gg"),
 ]
 
+TOOLKIT_PATHS = [
+    ("Nightwave", "/nightwave.html"),
+    ("Ducat / plat", "/worth.html"),
+    ("Riven disposition", "/rivens.html"),
+    ("Relics", "/relics.html"),
+    ("Prime vault", "/vault.html"),
+    ("Commands", "/commands.html"),
+]
+
 
 def setup(bot, group=None):
     cmd = group.command(name="links", description="Quick links: Wiki, Market, Drop Tables, and server links.") if group else bot.tree.command(name="links", description="Quick links: Wiki, Market, Drop Tables, and server links.")
@@ -23,7 +32,10 @@ def setup(bot, group=None):
         await interaction.response.defer(ephemeral=True)
         links_list: list[tuple[str, str]] = []
         if BOT_WEBSITE:
-            links_list.append(("Obsidian Overseer", BOT_WEBSITE))
+            base = BOT_WEBSITE.rstrip("/")
+            links_list.append(("Obsidian Overseer", base + "/"))
+            for label, path in TOOLKIT_PATHS:
+                links_list.append((label, base + path))
         links_list.extend(DEFAULT_LINKS)
         custom_json = await get_guild_setting(interaction.guild.id, "custom_links") if interaction.guild else None
         if custom_json:
@@ -43,7 +55,7 @@ def setup(bot, group=None):
             "Quick Links",
             desc,
             color=EMBED_COLORS["general"],
-            footer="Use /general about for bot info • /help for commands",
+            footer="Toolkit in Discord: /wftools · /help for commands",
             client=interaction.client,
         )
         await interaction.followup.send(embed=embed, ephemeral=True)

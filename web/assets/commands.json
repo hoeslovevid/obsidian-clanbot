@@ -140,6 +140,10 @@
       "description": "\ud83d\udd27 Staff utilities: sync, analytics, webhooks, mentorship (mods)"
     },
     {
+      "path": "wftools",
+      "description": "\ud83e\uddf0 Website toolkit: Nightwave, ducats, rivens, relics, vault"
+    },
+    {
       "path": "channel",
       "description": "Lock and unlock channels"
     }
@@ -400,6 +404,10 @@
     {
       "name": "drop",
       "description": "Find where items drop (links to Wiki drop tables)."
+    },
+    {
+      "name": "ducats",
+      "description": "Should I sell this Prime part for platinum or melt it for ducats?"
     },
     {
       "name": "duviri",
@@ -690,6 +698,10 @@
       "description": "List your open tickets."
     },
     {
+      "name": "nightwave",
+      "description": "Current Nightwave daily and weekly challenges."
+    },
+    {
       "name": "note_add",
       "description": "Add a private mod note (mods only)."
     },
@@ -814,6 +826,10 @@
       "description": "List recurring event templates."
     },
     {
+      "name": "relic",
+      "description": "Look up a Void relic"
+    },
+    {
       "name": "remind",
       "description": "Set a reminder. Example: /tools remind when:in 2 hours reminder:Join voice"
     },
@@ -852,6 +868,10 @@
     {
       "name": "retention",
       "description": "Configure data retention policies (moderators only)."
+    },
+    {
+      "name": "riven",
+      "description": "Look up a weapon"
     },
     {
       "name": "roulette",
@@ -1112,6 +1132,10 @@
     {
       "name": "usage_report",
       "description": "Command heatmap + prune candidates for this server (mods only)."
+    },
+    {
+      "name": "vault",
+      "description": "Check if a Prime is vaulted, or browse Varzia"
     },
     {
       "name": "verify",

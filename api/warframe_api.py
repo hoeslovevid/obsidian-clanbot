@@ -1530,3 +1530,139 @@ def warframe_api_health() -> tuple[str, bool]:
         )
     return "Warframe API: **operational**", False
 
+
+async def fetch_weapons() -> Optional[List[Dict[str, Any]]]:
+    """Fetch weapon list (includes riven disposition). Cached 1 hour."""
+    from core.cache_utils import get_cached
+
+    async def _fetch():
+        try:
+            data = await _wf_stat_get(_wf_stat_url("weapons?language=en"), _api_proxy())
+            return data if isinstance(data, list) else None
+        except Exception as e:
+            logger.error("Error fetching weapons: %s: %s", type(e).__name__, e, exc_info=True)
+            return None
+
+    return await get_cached("warframe:weapons", 3600, _fetch, stale_seconds=_warframe_cache_stale_seconds())
+
+
+async def autocomplete_weapon_names(current: str, *, limit: int = 25) -> list[str]:
+    """Autocomplete weapon names for riven disposition lookup."""
+    weapons = await fetch_weapons() or []
+    q = (current or "").strip().lower()
+    names = [str(w.get("name") or "").strip() for w in weapons if isinstance(w, dict) and w.get("name")]
+    if not q:
+        return names[:limit]
+    exact = [n for n in names if n.lower() == q]
+    start = [n for n in names if n.lower().startswith(q) and n not in exact]
+    contains = [n for n in names if q in n.lower() and n not in exact and n not in start]
+    return (exact + start + contains)[:limit]
+
+
+async def search_weapon(name: str) -> Optional[Dict[str, Any]]:
+    """Find a weapon by name (exact / startswith / contains)."""
+    weapons = await fetch_weapons() or []
+    q = (name or "").strip().lower()
+    if not q:
+        return None
+    best: Optional[Dict[str, Any]] = None
+    best_score = 0
+    for w in weapons:
+        if not isinstance(w, dict):
+            continue
+        wn = str(w.get("name") or "").strip()
+        wl = wn.lower()
+        if not wl:
+            continue
+        if wl == q:
+            return w
+        score = 0
+        if wl.startswith(q):
+            score = 80
+        elif q in wl:
+            score = 50
+        if score > best_score or (score == best_score and best and len(wn) < len(str(best.get("name") or ""))):
+            if score > 0:
+                best_score = score
+                best = w
+    return best
+
+
+async def fetch_items_search(query: str) -> Optional[List[Dict[str, Any]]]:
+    """Search warframestat items (relics, etc.). Cached 10 minutes per query."""
+    from core.cache_utils import get_cached
+    from urllib.parse import quote
+
+    q = (query or "").strip()
+    if not q:
+        return []
+    key = f"warframe:items_search:{q.lower()}"
+
+    async def _fetch():
+        try:
+            path = f"items/search/{quote(q)}?language=en"
+            data = await _wf_stat_get(_wf_stat_url(path), _api_proxy())
+            return data if isinstance(data, list) else []
+        except Exception as e:
+            logger.error("Error searching items %r: %s: %s", q, type(e).__name__, e, exc_info=True)
+            return None
+
+    return await get_cached(key, 600, _fetch, stale_seconds=_warframe_cache_stale_seconds())
+
+
+async def fetch_vault_trader(platform: str = "pc") -> Optional[Dict[str, Any]]:
+    """Fetch Varzia / Prime Resurgence vault trader. Cached 5 minutes."""
+    from core.cache_utils import get_cached
+
+    plat = (platform or "pc").strip().lower()
+
+    async def _fetch():
+        try:
+            return await _wf_stat_get(_wf_stat_url(wf_platform_path(plat, "vaultTrader?language=en")), _api_proxy())
+        except Exception as e:
+            logger.error("Error fetching vault trader: %s: %s", type(e).__name__, e, exc_info=True)
+            return None
+
+    return await get_cached(f"warframe:vault_trader:{plat}", 300, _fetch, stale_seconds=_warframe_cache_stale_seconds())
+
+
+async def fetch_warframes() -> Optional[List[Dict[str, Any]]]:
+    """Fetch warframe list (includes vaulted flag). Cached 1 hour."""
+    from core.cache_utils import get_cached
+
+    async def _fetch():
+        try:
+            data = await _wf_stat_get(_wf_stat_url("warframes?language=en"), _api_proxy())
+            return data if isinstance(data, list) else None
+        except Exception as e:
+            logger.error("Error fetching warframes: %s: %s", type(e).__name__, e, exc_info=True)
+            return None
+
+    return await get_cached("warframe:warframes", 3600, _fetch, stale_seconds=_warframe_cache_stale_seconds())
+
+
+async def autocomplete_prime_part_names(current: str, *, limit: int = 25) -> list[str]:
+    """Autocomplete WFM items that look like Prime parts (have ducats or prime in name)."""
+    items = await _fetch_warframe_market_items_list()
+    q = (current or "").strip().lower()
+    matches: list[str] = []
+    for it in items:
+        name = str(it.get("item_name") or "").strip()
+        if not name:
+            continue
+        ducats = it.get("ducats")
+        has_ducats = ducats is not None and str(ducats).isdigit() and int(ducats) > 0
+        if not has_ducats and "prime" not in name.lower():
+            continue
+        if q and q not in name.lower() and q.replace(" ", "_") not in str(it.get("url_name") or "").lower():
+            continue
+        matches.append(name)
+        if len(matches) >= limit * 3:
+            break
+    if not q:
+        return matches[:limit]
+    exact = [n for n in matches if n.lower() == q]
+    start = [n for n in matches if n.lower().startswith(q) and n not in exact]
+    contains = [n for n in matches if q in n.lower() and n not in exact and n not in start]
+    return (exact + start + contains)[:limit]
+

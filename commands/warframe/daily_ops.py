@@ -6,6 +6,7 @@ import asyncio
 import discord
 import dateparser
 
+from core.embed_links import add_link_row, nightwave_link_buttons
 from core.embed_footers import footer_for
 from core.utils import obsidian_embed, EMBED_COLORS, warframe_data_unavailable_embed
 from core.wf_resolve import (
@@ -78,6 +79,7 @@ def setup(bot, group=None):
         embed = _build_embed(sp, arb, nw, interaction.client, platform=plat)
         payload = {"guild_id": gid, "user_id": interaction.user.id}
         view = RefreshView.panel("wf_daily_ops", payload=payload)
+        add_link_row(view, nightwave_link_buttons())
         msg = await interaction.followup.send(embed=embed, view=view)
         await register_refresh_panel(msg, "wf_daily_ops", payload)
 
@@ -123,7 +125,7 @@ def _build_embed(sp, arb, nw, client, *, platform: str = "pc"):
     sp_key, arb_key, nw_key = wf_daily_ops_cache_keys(platform)
     age_note = freshness_note(sp_key) or freshness_note(arb_key) or freshness_note(nw_key)
     footer = merge_wf_footer(
-        f"{footer_for('warframe_hub')} · /warframe sortie, /warframe fissures{age_note}",
+        f"{footer_for('warframe_hub')} · /wftools nightwave · /warframe sortie{age_note}",
         "warframe:daily_ops",
     )
     return obsidian_embed(

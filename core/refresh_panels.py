@@ -374,6 +374,9 @@ async def _refresh_wf_daily_ops(interaction: discord.Interaction, payload: dict[
     emb = _build_embed(sp2, arb2, nw2, interaction.client, platform=plat2)
     panel_payload = {"guild_id": guild_id, "user_id": user_id}
     view = RefreshView.panel("wf_daily_ops", payload=panel_payload)
+    from core.embed_links import add_link_row, nightwave_link_buttons
+
+    add_link_row(view, nightwave_link_buttons())
     await refresh_edit_message(
         interaction, embed=emb, view=view, panel_type="wf_daily_ops", payload=panel_payload,
     )
