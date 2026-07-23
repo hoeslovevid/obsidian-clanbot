@@ -2,33 +2,38 @@
  * Shared navigation, footer, and URL helpers for obsidianoverseer.com
  */
 (function () {
-  var NAV_HOME = { id: "home", label: "Home", href: "/" };
   var NAV_DASHBOARD = { id: "dashboard", label: "Dashboard", href: "/dashboard.html" };
-  var NAV_CONTACT = { id: "contact", label: "Contact", href: "/contact.html" };
 
+  // Grouped Tools menu — keep the top bar to: Logo · Tools · Guides · Dashboard · theme · CTA
   var NAV_TOOLS = [
+    { section: "Live" },
     { id: "warframe", label: "World state", href: "/warframe.html" },
     { id: "farm", label: "Acquire", href: "/farm.html" },
+    { id: "market", label: "Market", href: "/market.html" },
     { id: "relics", label: "Relics", href: "/relics.html" },
     { id: "vault", label: "Prime vault", href: "/vault.html" },
-    { id: "compare", label: "Compare", href: "/compare.html" },
-    { id: "rivens", label: "Riven disp.", href: "/rivens.html" },
+    { section: "Lookup" },
+    { id: "rivens", label: "Riven disposition", href: "/rivens.html" },
+    { id: "compare", label: "Compare items", href: "/compare.html" },
     { id: "factions", label: "Factions", href: "/factions.html" },
     { id: "builds", label: "Builds", href: "/builds.html" },
-    { id: "market", label: "Market", href: "/market.html" },
-    { id: "embeds", label: "Embeds / OBS", href: "/embeds.html" },
+    { section: "Bot" },
     { id: "status", label: "Bot status", href: "/status.html" },
-    { id: "features", label: "Features", href: "/#features" },
+    { id: "embeds", label: "Embeds / OBS", href: "/embeds.html" },
+    { id: "features", label: "All features", href: "/#features" },
   ];
 
   var NAV_GUIDES = [
+    { section: "Getting started" },
     { id: "tenno", label: "First week", href: "/tenno.html" },
+    { id: "setup", label: "Bot setup", href: "/setup.html" },
+    { id: "commands", label: "Commands", href: "/commands.html" },
+    { section: "Clan" },
     { id: "dojo", label: "Dojo ops", href: "/dojo.html" },
     { id: "trading", label: "Trading", href: "/trading.html" },
-    { id: "commands", label: "Commands", href: "/commands.html" },
     { id: "lfg", label: "LFG", href: "/lfg.html" },
     { id: "events", label: "Events", href: "/events.html" },
-    { id: "setup", label: "Setup", href: "/setup.html" },
+    { section: "Help" },
     { id: "faq", label: "FAQ", href: "/faq.html" },
     { id: "changelog", label: "Changelog", href: "/changelog.html" },
   ];
@@ -219,8 +224,15 @@
     summary.textContent = label;
     details.appendChild(summary);
     var panel = document.createElement("div");
-    panel.className = "site-nav-drop-panel";
+    panel.className = "site-nav-drop-panel site-nav-drop-panel--mega";
     items.forEach(function (item) {
+      if (item.section) {
+        var h = document.createElement("div");
+        h.className = "site-nav-drop-section";
+        h.textContent = item.section;
+        panel.appendChild(h);
+        return;
+      }
       panel.appendChild(makeNavLink(item, origin, active));
     });
     details.appendChild(panel);
@@ -284,29 +296,10 @@
     var links = document.createElement("div");
     links.className = "site-nav-links";
 
-    // Home · Tools ▾ · Guides ▾ · Dashboard · Contact · CTA
-    links.appendChild(makeNavLink(NAV_HOME, origin, active));
+    // Logo = home · Tools ▾ · Guides ▾ · Dashboard · theme · Invite
     links.appendChild(makeNavDrop("Tools", NAV_TOOLS, origin, active, TOOL_IDS));
     links.appendChild(makeNavDrop("Guides", NAV_GUIDES, origin, active, GUIDE_IDS));
     links.appendChild(makeNavLink(NAV_DASHBOARD, origin, active));
-    links.appendChild(makeNavLink(NAV_CONTACT, origin, active));
-
-    var searchWrap = document.createElement("form");
-    searchWrap.className = "nav-tool-search";
-    searchWrap.setAttribute("role", "search");
-    searchWrap.addEventListener("submit", function (e) {
-      e.preventDefault();
-      var q = (searchInput.value || "").trim();
-      if (!q) return;
-      window.location.href = routeToolSearch(q);
-    });
-    var searchInput = document.createElement("input");
-    searchInput.type = "search";
-    searchInput.placeholder = "Search tools…";
-    searchInput.setAttribute("aria-label", "Search site tools");
-    searchInput.autocomplete = "off";
-    searchWrap.appendChild(searchInput);
-    links.appendChild(searchWrap);
 
     var themeBtn = document.createElement("button");
     themeBtn.type = "button";
@@ -320,7 +313,7 @@
     var cta = document.createElement("a");
     cta.href = inviteUrl();
     cta.className = "site-nav-cta";
-    cta.textContent = "Add to Discord";
+    cta.textContent = "Invite";
     cta.target = "_blank";
     cta.rel = "noopener noreferrer";
     if (cta.getAttribute("href") === "#") {

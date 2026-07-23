@@ -261,36 +261,6 @@
   line-height: 1.4;
 }
 
-.nav-tool-search {
-  display: none;
-}
-
-@media (min-width: 900px) {
-  .nav-tool-search {
-    display: flex;
-    align-items: center;
-    margin-left: 8px;
-  }
-
-  .nav-tool-search input {
-    width: 160px;
-    padding: 7px 12px;
-    font: inherit;
-    font-size: 0.82rem;
-    font-weight: 600;
-    color: var(--text);
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 999px;
-  }
-
-  .nav-tool-search input:focus {
-    outline: none;
-    border-color: var(--accent);
-    width: 200px;
-  }
-}
-
 .tool-toggle {
   display: inline-flex;
   align-items: center;
