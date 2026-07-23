@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <script src="/assets/theme-boot.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rivens — Obsidian Overseer</title>
+  <meta name="description" content="Warframe weapon Riven disposition table — search by name or category, sort by disposition." />
+  <meta name="theme-color" content="#06070a" />
+  <link rel="canonical" href="https://obsidianoverseer.com/rivens.html" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://obsidianoverseer.com/rivens.html" />
+  <meta property="og:title" content="Rivens — Obsidian Overseer" />
+  <meta property="og:description" content="Browse weapon Riven dispositions and omega attenuation from warframestat." />
+  <meta property="og:image" content="https://obsidianoverseer.com/assets/og.jpg" />
+  <link rel="icon" type="image/png" href="/assets/logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://api.warframestat.us" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/site-nav.css" />
+  <link rel="stylesheet" href="/assets/site.css" />
+  <link rel="stylesheet" href="/assets/tools.css" />
+</head>
+<body>
+  <div class="bg-ambient" aria-hidden="true"></div>
+  <div class="bg-grain" aria-hidden="true"></div>
+
+  <div class="page-wrap">
+    <nav id="site-nav" data-active="rivens"></nav>
+
+    <header class="tool-hero page-hero">
+      <span class="tool-eyebrow"><span class="pulse" aria-hidden="true"></span>Riven · Disposition</span>
+      <h1>Rivens</h1>
+      <p class="tool-lead">Searchable weapon disposition table from community data — disposition (1–5) and omega attenuation where available.</p>
+    </header>
+
+    <div class="tool-search">
+      <label class="tool-field tool-field-grow">
+        <span class="tool-label">Search weapon</span>
+        <input id="rv-query" type="search" placeholder="Kuva Bramma, Rubico Prime…" spellcheck="false" />
+      </label>
+      <label class="tool-field">
+        <span class="tool-label">Category</span>
+        <select id="rv-type" class="tool-select">
+          <option value="">All types</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="tool-toolbar">
+      <div id="rv-status" class="tool-status" aria-live="polite"><span class="dot" aria-hidden="true"></span>Loading weapons…</div>
+    </div>
+
+    <div class="tool-card" style="overflow-x:auto;padding:0">
+      <table id="rv-table" class="rv-table" aria-label="Weapon Riven dispositions">
+        <thead>
+          <tr>
+            <th scope="col" data-sort="name">Weapon</th>
+            <th scope="col" data-sort="type">Type</th>
+            <th scope="col" data-sort="disposition" aria-sort="descending">Disposition</th>
+            <th scope="col">Market</th>
+          </tr>
+        </thead>
+        <tbody id="rv-body"></tbody>
+      </table>
+    </div>
+
+    <p class="tool-footnote" style="margin-top:12px">
+      Disposition values are community-sourced via <a href="https://docs.warframestat.us/" target="_blank" rel="noopener noreferrer">warframestat.us</a> items — not live in-game Riven rolls.
+    </p>
+
+    <div class="tool-card tool-cta-strip">
+      <p><strong>Trading rivens?</strong> Look up prices on <a href="/market.html">Market</a>.</p>
+      <a id="rv-invite" class="btn-primary" href="#" target="_blank" rel="noopener noreferrer">Add to Discord</a>
+    </div>
+
+    <footer id="site-footer"></footer>
+  </div>
+
+  <script src="/assets/config.js"></script>
+  <script src="/assets/site.js"></script>
+  <script src="/assets/rivens.js"></script>
+  <script>
+    (function () {
+      var a = document.getElementById("rv-invite");
+      if (a && window.ObsidianSite) a.href = window.ObsidianSite.inviteUrl();
+    })();
+  </script>
+</body>
+</html>

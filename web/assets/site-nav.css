@@ -108,6 +108,8 @@
   top: calc(100% + 4px);
   left: 0;
   min-width: 168px;
+  max-height: min(70vh, 420px);
+  overflow-y: auto;
   padding: 6px;
   background: var(--drop-bg, #0e1014);
   border: 1px solid var(--border, #2a2520);

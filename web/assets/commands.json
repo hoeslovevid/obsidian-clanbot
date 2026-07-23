@@ -1,0 +1,1197 @@
+{
+  "generated": true,
+  "discovery": [
+    {
+      "path": "start",
+      "blurb": "New here? Quick guide"
+    },
+    {
+      "path": "menu",
+      "blurb": "Shortcut picker"
+    },
+    {
+      "path": "help",
+      "blurb": "Full command reference"
+    },
+    {
+      "path": "search",
+      "blurb": "Find any command by keyword"
+    },
+    {
+      "path": "daily",
+      "blurb": "Claim daily coins & streak"
+    },
+    {
+      "path": "claim",
+      "blurb": "Bounties + investments hub"
+    },
+    {
+      "path": "today",
+      "blurb": "Your day at a glance"
+    },
+    {
+      "path": "baro",
+      "blurb": "Void Trader inventory"
+    },
+    {
+      "path": "fissures",
+      "blurb": "Void fissure missions"
+    },
+    {
+      "path": "lfg",
+      "blurb": "Post or browse squads"
+    },
+    {
+      "path": "ticket",
+      "blurb": "Open a support ticket"
+    },
+    {
+      "path": "wfnotify configure",
+      "blurb": "Warframe alert setup (mods)"
+    }
+  ],
+  "groups": [
+    {
+      "path": "economy",
+      "description": "\ud83d\udcb0 Coins, daily, gambling, stash, invest, prestige"
+    },
+    {
+      "path": "warframe",
+      "description": "\ud83c\udfae Baro, cycles, alerts, builds, and clan info"
+    },
+    {
+      "path": "mod",
+      "description": "\ud83d\udee1\ufe0f Purge, snipe, schedule, raid shield, and core moderation"
+    },
+    {
+      "path": "general",
+      "description": "\ud83d\udccb Help, about, setup, profiles, and server tools"
+    },
+    {
+      "path": "tools",
+      "description": "\ud83d\udd27 Coinflip and utilities"
+    },
+    {
+      "path": "community",
+      "description": "\ud83d\udc65 Events, tickets, suggestions, applications, and community features"
+    },
+    {
+      "path": "music",
+      "description": "\ud83c\udfb5 Play, pause, skip, and manage music in voice channels"
+    },
+    {
+      "path": "updates",
+      "description": "\ud83d\udcdd Update log and version management"
+    },
+    {
+      "path": "giveaways",
+      "description": "\ud83c\udf81 Create, manage, and enter giveaways"
+    },
+    {
+      "path": "trading",
+      "description": "\ud83d\udcbc Trading post, prices, and Warframe market lookup"
+    },
+    {
+      "path": "vc",
+      "description": "\ud83c\udf99\ufe0f Temp voice channel tools (transfer, presets)"
+    },
+    {
+      "path": "automod",
+      "description": "\ud83e\udd16 Auto-moderation (spam, caps, links, mentions)"
+    },
+    {
+      "path": "warn",
+      "description": "\ud83d\uded1 Warnings, templates, and moderator notes"
+    },
+    {
+      "path": "roletools",
+      "description": "\ud83c\udfad Reaction roles, level roles, role menus, mass assign"
+    },
+    {
+      "path": "admin",
+      "description": "\ud83d\uddc4\ufe0f Server admin: retention, incidents, KPIs, applications, data export"
+    },
+    {
+      "path": "pets",
+      "description": "\ud83d\udc3e Pet shop, care, battles, evolutions, and marketplace"
+    },
+    {
+      "path": "store",
+      "description": "\ud83d\uded2 Browse and buy server shop items"
+    },
+    {
+      "path": "xp",
+      "description": "\u2728 XP check, leaderboard, settings, and events"
+    },
+    {
+      "path": "wfnotify",
+      "description": "\ud83d\udd14 Warframe alerts \u2014 /wfnotify configure (recommended) or per-type commands"
+    },
+    {
+      "path": "lfg",
+      "description": "\ud83e\udd1d Warframe LFG: post and browse looking-for-group ads"
+    },
+    {
+      "path": "events",
+      "description": "\ud83d\udcc5 Server events: create, browse, and recurring schedules"
+    },
+    {
+      "path": "staff",
+      "description": "\ud83d\udd27 Staff utilities: sync, analytics, webhooks, mentorship (mods)"
+    },
+    {
+      "path": "channel",
+      "description": "Lock and unlock channels"
+    }
+  ],
+  "commands": [
+    {
+      "name": "abandon",
+      "description": "Release your pet. You must wait 24h before adopting again."
+    },
+    {
+      "name": "about",
+      "description": "View bot info, features, version, and developer."
+    },
+    {
+      "name": "accept_rules",
+      "description": "Accept the server rules."
+    },
+    {
+      "name": "achievement_list",
+      "description": "View all available achievements."
+    },
+    {
+      "name": "achievements",
+      "description": "View your unlocked achievements."
+    },
+    {
+      "name": "achievements_leaderboard",
+      "description": "See who has unlocked the most achievements."
+    },
+    {
+      "name": "activity",
+      "description": "View your activity stats in the server."
+    },
+    {
+      "name": "activity_heatmap",
+      "description": "Show server activity by hour of day."
+    },
+    {
+      "name": "activity_leaderboard",
+      "description": "View the most active members in the server."
+    },
+    {
+      "name": "add",
+      "description": "Add a role to a role menu (moderators only)."
+    },
+    {
+      "name": "afk",
+      "description": "Set yourself as AFK (Away From Keyboard)."
+    },
+    {
+      "name": "alerts",
+      "description": "View active Warframe alerts."
+    },
+    {
+      "name": "alerts_notify",
+      "description": "Configure alert notifications (moderators only)."
+    },
+    {
+      "name": "alliance",
+      "description": "Manage server alliances (moderators only)."
+    },
+    {
+      "name": "allowlist_add",
+      "description": "Trust a hostname (e.g. steamcommunity.com)"
+    },
+    {
+      "name": "allowlist_list",
+      "description": "Show trusted hostnames"
+    },
+    {
+      "name": "allowlist_remove",
+      "description": "Remove a hostname from the trust list"
+    },
+    {
+      "name": "announcement",
+      "description": "Manage scheduled announcements (moderators only)."
+    },
+    {
+      "name": "application",
+      "description": "Start a clan application."
+    },
+    {
+      "name": "application_cancel",
+      "description": "Cancel your in-progress application."
+    },
+    {
+      "name": "application_setup",
+      "description": "Configure the clan application system (moderators only)."
+    },
+    {
+      "name": "apply",
+      "description": "Apply a saved VC preset to your current VC (or queue for next)."
+    },
+    {
+      "name": "archon",
+      "description": "View current Archon Hunt details."
+    },
+    {
+      "name": "archon_notify",
+      "description": "Configure Archon Hunt notifications (moderators only)."
+    },
+    {
+      "name": "assign",
+      "description": "Assign or remove a self-assignable role."
+    },
+    {
+      "name": "badge_showcase",
+      "description": "Set or view badge showcase (featured on profile)."
+    },
+    {
+      "name": "badges",
+      "description": "View your badges."
+    },
+    {
+      "name": "bal",
+      "description": "View your or another member"
+    },
+    {
+      "name": "balance",
+      "description": "View your or another member"
+    },
+    {
+      "name": "baro",
+      "description": "Baro Ki"
+    },
+    {
+      "name": "baro_notify",
+      "description": "Configure Baro Ki"
+    },
+    {
+      "name": "battle",
+      "description": "Challenge another user"
+    },
+    {
+      "name": "bot_status",
+      "description": "Check bot health and diagnostics."
+    },
+    {
+      "name": "bounties",
+      "description": "View and claim daily bounties for bonus coins."
+    },
+    {
+      "name": "branding",
+      "description": "Set a short custom footer on bot embeds in this server."
+    },
+    {
+      "name": "browse",
+      "description": "View available items in the shop."
+    },
+    {
+      "name": "build",
+      "description": "Get build links and modding tips for Warframes and weapons."
+    },
+    {
+      "name": "buy",
+      "description": "Buy a pet."
+    },
+    {
+      "name": "buy_listed",
+      "description": "Buy a pet from the marketplace."
+    },
+    {
+      "name": "cancel",
+      "description": "Cancel your in-progress application."
+    },
+    {
+      "name": "care",
+      "description": "Feed and play with your pet in one go (costs 15 coins)."
+    },
+    {
+      "name": "care_all",
+      "description": "Feed and play with all of your pets in one go (costs 15 coins)."
+    },
+    {
+      "name": "case",
+      "description": "Complaint/help case status \u2014 check by case ID (OBS-...)."
+    },
+    {
+      "name": "case_status",
+      "description": "Complaint/help case status \u2014 check by case ID (OBS-...)."
+    },
+    {
+      "name": "check",
+      "description": "Check your XP and level."
+    },
+    {
+      "name": "claim",
+      "description": "See what"
+    },
+    {
+      "name": "clear",
+      "description": "(mods) Manually remove the inactive role from a member."
+    },
+    {
+      "name": "coinflip",
+      "description": "Flip a coin \u2014 heads or tails."
+    },
+    {
+      "name": "config",
+      "description": "Configure economy settings (moderators only)."
+    },
+    {
+      "name": "configure",
+      "description": "Recommended \u2014 toggle Baro, cycles, alerts, and other Warframe pings (ephemeral)."
+    },
+    {
+      "name": "console",
+      "description": "Post the pinned Clan Console hub (Menu, Daily, Status, Ticket, Help)."
+    },
+    {
+      "name": "cooldowns",
+      "description": "See your daily, message, and investment cooldowns at a glance."
+    },
+    {
+      "name": "cycle_notify",
+      "description": "Configure open world cycle notifications (moderators only)."
+    },
+    {
+      "name": "cycle_panel",
+      "description": "Post or refresh a pinned live cycles board (mods only)."
+    },
+    {
+      "name": "cycles",
+      "description": "Check current open world cycle status (Cetus, Fortuna, Deimos)."
+    },
+    {
+      "name": "daily",
+      "description": "Claim your daily coin reward!"
+    },
+    {
+      "name": "daily_ops",
+      "description": "Steel Path, Arbitration, and Nightwave challenges."
+    },
+    {
+      "name": "dashboard",
+      "description": "View mod overview: open tickets, pending applications, recent warns."
+    },
+    {
+      "name": "delete_preset",
+      "description": "Delete a saved VC preset."
+    },
+    {
+      "name": "devstream_set",
+      "description": "Set the next devstream date (moderators only)."
+    },
+    {
+      "name": "dice",
+      "description": "Roll dice! Bet coins and try to roll higher than the bot."
+    },
+    {
+      "name": "dojo_decoration",
+      "description": "Track dojo decorations."
+    },
+    {
+      "name": "dojo_research",
+      "description": "Clan dojo research tracker \u2014 add, update, list with progress bars."
+    },
+    {
+      "name": "drop",
+      "description": "Find where items drop (links to Wiki drop tables)."
+    },
+    {
+      "name": "duviri",
+      "description": "View current Duviri Circuit rotations and progress."
+    },
+    {
+      "name": "embed_builder",
+      "description": "Create and post a custom embed (mods only)."
+    },
+    {
+      "name": "enable",
+      "description": "Turn phishing heuristics on or off for this server."
+    },
+    {
+      "name": "equip_badge",
+      "description": "Equip a badge."
+    },
+    {
+      "name": "errors",
+      "description": "Recent slash-command errors (session digest)."
+    },
+    {
+      "name": "errors_export",
+      "description": "Export persisted errors (last 24h) as a text file."
+    },
+    {
+      "name": "event_create",
+      "description": "Create an event with RSVP buttons and reminders. E.g. title:"
+    },
+    {
+      "name": "events_list",
+      "description": "List upcoming events (today, this week, or your RSVPs)."
+    },
+    {
+      "name": "evolve",
+      "description": "Evolve your pet when it reaches the required level."
+    },
+    {
+      "name": "export",
+      "description": "Export audit log as CSV (last 500 entries)."
+    },
+    {
+      "name": "export_data",
+      "description": "Export your user data (GDPR compliance)."
+    },
+    {
+      "name": "export_transactions",
+      "description": "Export your transaction history as CSV (DMed to you)."
+    },
+    {
+      "name": "favorite_add",
+      "description": "Pin a command to your favorites list."
+    },
+    {
+      "name": "favorite_remove",
+      "description": "Remove a command from your favorites."
+    },
+    {
+      "name": "favorites",
+      "description": "View your pinned favorite commands."
+    },
+    {
+      "name": "feed",
+      "description": "Feed your pet (costs 10 coins)."
+    },
+    {
+      "name": "feedback",
+      "description": "Send feedback or report a bot issue to staff (private)."
+    },
+    {
+      "name": "feedback_setup",
+      "description": "Channel where /feedback posts are delivered."
+    },
+    {
+      "name": "fissures",
+      "description": "Void fissure missions \u2014 Lith, Meso, Neo, Axi, Requiem tiers."
+    },
+    {
+      "name": "force_version_update",
+      "description": "Force post the most recent bot update to Discord (moderators only)."
+    },
+    {
+      "name": "forum",
+      "description": "Configure Warframe forum post notifications (mods only)."
+    },
+    {
+      "name": "gamble_stats",
+      "description": "View your gambling statistics and win rate."
+    },
+    {
+      "name": "gift",
+      "description": "Gift your pet to another member (they must accept within 24h)."
+    },
+    {
+      "name": "giveaway",
+      "description": "Create a new giveaway (mods only)."
+    },
+    {
+      "name": "giveaway_end",
+      "description": "End a giveaway early and select winners (mods only)."
+    },
+    {
+      "name": "giveaway_list",
+      "description": "List all active giveaways."
+    },
+    {
+      "name": "giveaway_reroll",
+      "description": "Reroll winners for an ended giveaway (mods only)."
+    },
+    {
+      "name": "health",
+      "description": "Bot health: DB, tasks, commands, recent errors."
+    },
+    {
+      "name": "help",
+      "description": "Browse commands \u2014 categories, shortcuts, and examples. Try /help or /menu."
+    },
+    {
+      "name": "help_search",
+      "description": "Search commands by keyword \u2014 coins, baro, ticket, trade."
+    },
+    {
+      "name": "hq",
+      "description": "Clan HQ \u2014 LFG, events, Baro, and streamers at a glance."
+    },
+    {
+      "name": "hub",
+      "description": "Warframe hub \u2014 Baro snippet, live status, notify setup, and LFG links."
+    },
+    {
+      "name": "inbox",
+      "description": "Staff inbox \u2014 tickets, apps, suggestions, LFG, and setup gaps."
+    },
+    {
+      "name": "incident",
+      "description": "Toggle incident mode (limits bot commands during incidents)."
+    },
+    {
+      "name": "invasion_notify",
+      "description": "Configure invasion notifications (moderators only)."
+    },
+    {
+      "name": "invasions",
+      "description": "View active faction invasions with rewards."
+    },
+    {
+      "name": "invest",
+      "description": "Invest coins to earn interest over time."
+    },
+    {
+      "name": "invest_collect",
+      "description": "Collect your matured investment returns."
+    },
+    {
+      "name": "invest_status",
+      "description": "Check your investment status."
+    },
+    {
+      "name": "invest_withdraw",
+      "description": "Withdraw your investment early (15% penalty on principal)."
+    },
+    {
+      "name": "invite",
+      "description": "Get the bot invite link to add it to other servers."
+    },
+    {
+      "name": "kpis",
+      "description": "Moderator KPI dashboard (tickets, complaints, events)."
+    },
+    {
+      "name": "leaderboard",
+      "description": "View the top coin earners."
+    },
+    {
+      "name": "leave_setup",
+      "description": "Set up leave messages (mods only)."
+    },
+    {
+      "name": "levels",
+      "description": "Configure roles that are automatically assigned at specific XP levels (mods only)."
+    },
+    {
+      "name": "lfg",
+      "description": "Create an LFG post for a Warframe mission."
+    },
+    {
+      "name": "lfg_list",
+      "description": "Browse open LFG posts."
+    },
+    {
+      "name": "links",
+      "description": "Quick links: Wiki, Market, Drop Tables, and server links."
+    },
+    {
+      "name": "list",
+      "description": "List your pet for sale on the marketplace."
+    },
+    {
+      "name": "lock",
+      "description": "Lock channel \u2014 prevent @everyone from sending messages."
+    },
+    {
+      "name": "lock_bulk",
+      "description": "Lock multiple channels in this category (with preview)."
+    },
+    {
+      "name": "log_channel",
+      "description": "Channel for phishing alert embeds (omit to clear)."
+    },
+    {
+      "name": "logging",
+      "description": "Configure server logging channels (moderators only)."
+    },
+    {
+      "name": "manage",
+      "description": "Add or remove XP from a user (moderators only)."
+    },
+    {
+      "name": "manage_applications",
+      "description": "View and manage clan applications (moderators only)."
+    },
+    {
+      "name": "manage_coins",
+      "description": "Add or remove coins from a user (moderators only)."
+    },
+    {
+      "name": "marketplace",
+      "description": "Browse and buy pets listed for sale."
+    },
+    {
+      "name": "mass_add",
+      "description": "Add a role to all members (or to members who have a specific role)."
+    },
+    {
+      "name": "mass_remove",
+      "description": "Remove a role from all members who have it."
+    },
+    {
+      "name": "member_count",
+      "description": "Create or update a channel that displays server member count (moderators only)."
+    },
+    {
+      "name": "mentorship",
+      "description": "Assign or list mentor/mentee pairs."
+    },
+    {
+      "name": "menu",
+      "description": "Quick menu \u2014 favorites, daily, profile, baro, ticket, trade, and more."
+    },
+    {
+      "name": "milestone_settings",
+      "description": "Configure server milestone announcements (moderators only)."
+    },
+    {
+      "name": "milestones_next",
+      "description": "Next member milestone \u2014 how close the server is to the next count."
+    },
+    {
+      "name": "mod_kpi_setup",
+      "description": "Post weekly mod KPI digest to a staff channel (Mondays UTC)."
+    },
+    {
+      "name": "my_applications",
+      "description": "List your applications and their status."
+    },
+    {
+      "name": "my_complaints",
+      "description": "List your open complaints/help cases."
+    },
+    {
+      "name": "my_entries",
+      "description": "List giveaways you"
+    },
+    {
+      "name": "my_listings",
+      "description": "View your active trading listings (alias for trade_list)."
+    },
+    {
+      "name": "my_stats",
+      "description": "See your personal slash command usage stats."
+    },
+    {
+      "name": "my_suggestions",
+      "description": "List your suggestions and their status."
+    },
+    {
+      "name": "my_tickets",
+      "description": "List your open tickets."
+    },
+    {
+      "name": "note_add",
+      "description": "Add a private mod note (mods only)."
+    },
+    {
+      "name": "notes",
+      "description": "View mod notes for a user (mods only)."
+    },
+    {
+      "name": "notifications",
+      "description": "Your watches, DMs, and guild alert feeds."
+    },
+    {
+      "name": "panel_create",
+      "description": "Post a button-based self-assignable role panel."
+    },
+    {
+      "name": "panel_delete",
+      "description": "Remove a previously created role panel."
+    },
+    {
+      "name": "ping",
+      "description": "Check bot latency (ms)."
+    },
+    {
+      "name": "play",
+      "description": "Play with your pet (costs 5 coins)."
+    },
+    {
+      "name": "poll",
+      "description": "Create a server poll \u2014 members vote with number reactions."
+    },
+    {
+      "name": "poll_results",
+      "description": "View poll results."
+    },
+    {
+      "name": "post_panel",
+      "description": "Post a persistent self-subscribe panel for Warframe pings (mods only)."
+    },
+    {
+      "name": "preferences",
+      "description": "Set your timezone or view server preferences."
+    },
+    {
+      "name": "preset_list",
+      "description": "List your saved LFG presets."
+    },
+    {
+      "name": "preset_save",
+      "description": "Save an LFG template for one-tap reposting."
+    },
+    {
+      "name": "preset_use",
+      "description": "Post an LFG from a saved preset."
+    },
+    {
+      "name": "presets",
+      "description": "List your saved VC presets."
+    },
+    {
+      "name": "prestige",
+      "description": "Reset your level for prestige rewards."
+    },
+    {
+      "name": "prestige_info",
+      "description": "View your prestige information."
+    },
+    {
+      "name": "preview",
+      "description": "(mods) Preview members who"
+    },
+    {
+      "name": "price_unwatch",
+      "description": "Remove a market price watch."
+    },
+    {
+      "name": "price_watch",
+      "description": "DM me when a Warframe Market item drops to my target price."
+    },
+    {
+      "name": "price_watches",
+      "description": "List your active market price watches."
+    },
+    {
+      "name": "profile",
+      "description": "View your or another user"
+    },
+    {
+      "name": "profile_export",
+      "description": "Download your profile stats as JSON (coins, XP, activity)."
+    },
+    {
+      "name": "purge",
+      "description": "Delete messages (1\u2013100 or "
+    },
+    {
+      "name": "purge_filter",
+      "description": "Delete messages matching user/text/age/bot filters (mods only)."
+    },
+    {
+      "name": "quick",
+      "description": "Warn a user using a saved reason template (or any text)."
+    },
+    {
+      "name": "raid_protection",
+      "description": "Configure raid protection (moderators only)."
+    },
+    {
+      "name": "reaction",
+      "description": "Manage reaction roles (moderators only)."
+    },
+    {
+      "name": "recent",
+      "description": "Your last 5 slash commands with quick tips."
+    },
+    {
+      "name": "recurring_add",
+      "description": "Add a recurring event template (mods only)."
+    },
+    {
+      "name": "recurring_list",
+      "description": "List recurring event templates."
+    },
+    {
+      "name": "remind",
+      "description": "Set a reminder. Example: /tools remind when:in 2 hours reminder:Join voice"
+    },
+    {
+      "name": "remind_list",
+      "description": "List your pending reminders. Optionally cancel one."
+    },
+    {
+      "name": "reminder_prefs",
+      "description": "Set reminder delivery preference (mods: DM vs channel)."
+    },
+    {
+      "name": "rename",
+      "description": "Rename your pet."
+    },
+    {
+      "name": "reputation",
+      "description": "View a user"
+    },
+    {
+      "name": "reputation_leaderboard",
+      "description": "View reputation leaderboard."
+    },
+    {
+      "name": "request_help",
+      "description": "Report an issue or ask staff for help \u2014 trade, harassment, voice."
+    },
+    {
+      "name": "resource",
+      "description": "Get farming information for Warframe resources."
+    },
+    {
+      "name": "resume",
+      "description": "See onboarding progress and continue where you left off."
+    },
+    {
+      "name": "retention",
+      "description": "Configure data retention policies (moderators only)."
+    },
+    {
+      "name": "roulette",
+      "description": "Play roulette! Bet on red, black, or green."
+    },
+    {
+      "name": "rules",
+      "description": "View server rules."
+    },
+    {
+      "name": "rules_setup",
+      "description": "Set up server rules (moderators only)."
+    },
+    {
+      "name": "save_preset",
+      "description": "Save your current VC config (name/limit/locked) as a preset."
+    },
+    {
+      "name": "schedule",
+      "description": "Schedule a message to be sent at a future time."
+    },
+    {
+      "name": "search",
+      "description": "Find a command by keyword \u2014 returns clickable matches."
+    },
+    {
+      "name": "search_notes",
+      "description": "Search ticket notes by keyword."
+    },
+    {
+      "name": "send_me",
+      "description": "DM yourself the onboarding panel."
+    },
+    {
+      "name": "server_stats",
+      "description": "Configure the server stats channel (mods only)."
+    },
+    {
+      "name": "server_toggle",
+      "description": "(mods) Toggle the first-join onboarding DM for this server."
+    },
+    {
+      "name": "set",
+      "description": "(mods) Set a server-wide weekly goal with a reward."
+    },
+    {
+      "name": "set_bio",
+      "description": "Set a short bio that appears on your profile card."
+    },
+    {
+      "name": "settings",
+      "description": "Configure XP level-up announcements (moderators only)."
+    },
+    {
+      "name": "setup",
+      "description": "First-time setup wizard \u2013 configure channels step-by-step."
+    },
+    {
+      "name": "setup_docket",
+      "description": "Post the complaints/help request panel (mods only)."
+    },
+    {
+      "name": "setup_obsidian",
+      "description": "Configure voice, events, complaints, and core channels (mods only)."
+    },
+    {
+      "name": "setup_status",
+      "description": "See which features are configured vs missing."
+    },
+    {
+      "name": "shop",
+      "description": "View available pets to buy."
+    },
+    {
+      "name": "slots",
+      "description": "Play slots! Bet 10\u20135,000 coins."
+    },
+    {
+      "name": "snipe",
+      "description": "View recently deleted messages in this channel."
+    },
+    {
+      "name": "sortie",
+      "description": "View today"
+    },
+    {
+      "name": "staff_roles",
+      "description": "Configure roles that can manage temp VCs and use the panel (admin only)."
+    },
+    {
+      "name": "starboard_setup",
+      "description": "Configure starboard (moderators only)."
+    },
+    {
+      "name": "starboard_status",
+      "description": "View starboard settings."
+    },
+    {
+      "name": "start",
+      "description": "New here? Quick guide to daily, profile, Warframe tools, and support."
+    },
+    {
+      "name": "stash",
+      "description": "Store coins for 1% daily interest. Deposit or withdraw."
+    },
+    {
+      "name": "stats",
+      "description": "(mods) Onboarding completion funnel for the last N days."
+    },
+    {
+      "name": "stats_dashboard",
+      "description": "View server analytics: members, economy, activity."
+    },
+    {
+      "name": "status",
+      "description": "See the current server goal progress."
+    },
+    {
+      "name": "submit_complaint",
+      "description": "Add details or links to an existing complaint/help case"
+    },
+    {
+      "name": "subscribe",
+      "description": "Subscribe to per-user Warframe notification pings."
+    },
+    {
+      "name": "subscribe_all",
+      "description": "Turn ON every DM notification at once."
+    },
+    {
+      "name": "suggest",
+      "description": "Submit a suggestion with category and optional template."
+    },
+    {
+      "name": "suggest_setup",
+      "description": "Set the suggestions channel (mods only)."
+    },
+    {
+      "name": "suggestions",
+      "description": "View and manage suggestions (moderators only)."
+    },
+    {
+      "name": "sync_commands",
+      "description": "Force sync bot commands (mods only, for debugging)."
+    },
+    {
+      "name": "template_add",
+      "description": "Add or update a saved warn reason template (mods only)."
+    },
+    {
+      "name": "template_list",
+      "description": "List saved warn reason templates for this server."
+    },
+    {
+      "name": "template_remove",
+      "description": "Delete a saved warn reason template (mods only)."
+    },
+    {
+      "name": "tennogen",
+      "description": "Configure TennoGen release notifications (mods only)."
+    },
+    {
+      "name": "test_ping",
+      "description": "Send a test DM to verify bot notifications work."
+    },
+    {
+      "name": "ticket",
+      "description": "Open a support ticket \u2014 roles, bugs, questions, staff help."
+    },
+    {
+      "name": "ticket_close",
+      "description": "Close a support ticket (moderators only)."
+    },
+    {
+      "name": "ticket_escalation",
+      "description": "Set the role to ping when a ticket is escalated."
+    },
+    {
+      "name": "title",
+      "description": "Set or view your custom title."
+    },
+    {
+      "name": "title_shop",
+      "description": "Browse and equip unlockable titles."
+    },
+    {
+      "name": "today",
+      "description": "Your day at a glance \u2014 daily, bounties, Baro, LFG, events, and more."
+    },
+    {
+      "name": "toggle",
+      "description": "(mods) Turn a feature on or off for this server (with confirm)."
+    },
+    {
+      "name": "trade",
+      "description": "Post WTS/WTB listing \u2014 platinum items, Warframe market prices."
+    },
+    {
+      "name": "trade_list",
+      "description": "View your active trading listings."
+    },
+    {
+      "name": "trade_price",
+      "description": "Check current market prices for a Warframe item."
+    },
+    {
+      "name": "trade_search",
+      "description": "Search active trading listings."
+    },
+    {
+      "name": "trade_setup",
+      "description": "Configure the trading channel (moderators only)."
+    },
+    {
+      "name": "transactions",
+      "description": "View your recent coin transaction history."
+    },
+    {
+      "name": "transfer",
+      "description": "Hand off VC ownership to another member in your VC."
+    },
+    {
+      "name": "trivia",
+      "description": "Answer a Warframe trivia question and earn coins!"
+    },
+    {
+      "name": "twitch_add",
+      "description": "Add a Twitch streamer to monitor (moderators only)."
+    },
+    {
+      "name": "twitch_list",
+      "description": "List monitored Twitch streamers (live status from Twitch API)."
+    },
+    {
+      "name": "twitch_remove",
+      "description": "Remove a Twitch streamer from monitoring (moderators only)."
+    },
+    {
+      "name": "twitch_setup",
+      "description": "Configure Twitch stream notifications (moderators only)."
+    },
+    {
+      "name": "unlock",
+      "description": "Unlock channel \u2014 restore sending for @everyone."
+    },
+    {
+      "name": "unsubscribe_all",
+      "description": "Turn OFF every DM notification at once."
+    },
+    {
+      "name": "update_log",
+      "description": "Post a bot update log (moderators only)."
+    },
+    {
+      "name": "update_log_setup",
+      "description": "Configure the update log channel (moderators only)."
+    },
+    {
+      "name": "usage_report",
+      "description": "Command heatmap + prune candidates for this server (mods only)."
+    },
+    {
+      "name": "verify",
+      "description": "Verify yourself or another user (removes raid gate role)."
+    },
+    {
+      "name": "view",
+      "description": "View your pet."
+    },
+    {
+      "name": "voice_leaderboard",
+      "description": "View voice activity leaderboard."
+    },
+    {
+      "name": "wallet",
+      "description": "Coins, XP, streak, and daily timer in one place."
+    },
+    {
+      "name": "warframe_event_notify",
+      "description": "Enable/disable automatic Discord event creation for major Warframe updates (moderators only)."
+    },
+    {
+      "name": "warframe_hub",
+      "description": "Warframe hub \u2014 Baro, status, notify, and LFG."
+    },
+    {
+      "name": "warframe_link",
+      "description": "Link your Steam account for Warframe playtime roles."
+    },
+    {
+      "name": "warframe_roles",
+      "description": "Configure roles for Warframe in-game achievements like playtime (moderators only)."
+    },
+    {
+      "name": "warnings",
+      "description": "View a user"
+    },
+    {
+      "name": "webhook",
+      "description": "Manage webhook endpoints for external integrations (moderators only)."
+    },
+    {
+      "name": "welcome_dm",
+      "description": "Enable/disable welcome DMs (mods only)."
+    },
+    {
+      "name": "welcome_recommend",
+      "description": "Suggest channels for the Community Welcome Screen (mods)."
+    },
+    {
+      "name": "welcome_setup",
+      "description": "Set up welcome messages (mods only)."
+    },
+    {
+      "name": "wf",
+      "description": "Baro + Alerts + Cycles (alias for status)"
+    },
+    {
+      "name": "whatsnew",
+      "description": "See what"
+    },
+    {
+      "name": "why_dm",
+      "description": "Why didn"
+    },
+    {
+      "name": "world_state",
+      "description": "Post or refresh a pinned world-state board (mods only)."
+    },
+    {
+      "name": "worth",
+      "description": "What"
+    },
+    {
+      "name": "xp_event",
+      "description": "Start or stop a server-wide XP boost event (mods only)."
+    },
+    {
+      "name": "youtube",
+      "description": "Configure Warframe YouTube upload notifications (mods only)."
+    }
+  ]
+}

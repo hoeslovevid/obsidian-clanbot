@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <script src="/assets/theme-boot.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bot Status — Obsidian Overseer</title>
+  <meta name="description" content="Obsidian Overseer uptime, version, and public stats — servers and users served." />
+  <meta name="theme-color" content="#06070a" />
+  <link rel="canonical" href="https://obsidianoverseer.com/status.html" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://obsidianoverseer.com/status.html" />
+  <meta property="og:title" content="Bot Status — Obsidian Overseer" />
+  <meta property="og:description" content="Live API health and public bot statistics." />
+  <meta property="og:image" content="https://obsidianoverseer.com/assets/og.jpg" />
+  <link rel="icon" type="image/png" href="/assets/logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/site-nav.css" />
+  <link rel="stylesheet" href="/assets/site.css" />
+  <link rel="stylesheet" href="/assets/tools.css" />
+</head>
+<body>
+  <div class="bg-ambient" aria-hidden="true"></div>
+  <div class="bg-grain" aria-hidden="true"></div>
+  <div class="page-wrap">
+    <nav id="site-nav" data-active="status"></nav>
+
+    <header class="tool-hero page-hero">
+      <span class="tool-eyebrow">Health check</span>
+      <h1>Bot status</h1>
+      <p class="tool-lead">API health, version, and public reach. Live when the Railway API is reachable; otherwise falls back to published snapshots.</p>
+      <div class="tool-actions">
+        <button type="button" id="status-refresh" class="btn-secondary">Refresh</button>
+      </div>
+    </header>
+
+    <div class="status-grid" aria-live="polite">
+      <div id="status-api" class="status-card">
+        <div class="label">API</div>
+        <div class="value">Loading…</div>
+        <div class="sub"></div>
+      </div>
+      <div id="status-guilds" class="status-card">
+        <div class="label">Servers</div>
+        <div class="value">—</div>
+        <div class="sub"></div>
+      </div>
+      <div id="status-users" class="status-card">
+        <div class="label">Users</div>
+        <div class="value">—</div>
+        <div class="sub"></div>
+      </div>
+      <div id="status-updated" class="status-card">
+        <div class="label">Updated</div>
+        <div class="value">—</div>
+        <div class="sub"></div>
+      </div>
+    </div>
+
+    <p id="status-meta" class="tool-footnote" style="text-align:left;"></p>
+
+    <footer id="site-footer"></footer>
+  </div>
+  <script src="/assets/config.js"></script>
+  <script src="/assets/site.js"></script>
+  <script src="/assets/status.js"></script>
+</body>
+</html>

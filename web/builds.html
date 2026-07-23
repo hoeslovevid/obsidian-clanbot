@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <script src="/assets/theme-boot.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Builds — Obsidian Overseer</title>
+  <meta name="description" content="Warframe build search tips — Overframe, farm links, and starter frame ideas for new Tenno." />
+  <meta name="theme-color" content="#06070a" />
+  <link rel="canonical" href="https://obsidianoverseer.com/builds.html" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://obsidianoverseer.com/builds.html" />
+  <meta property="og:title" content="Builds — Obsidian Overseer" />
+  <meta property="og:description" content="No official build API — use Overframe and our farm/market tools." />
+  <meta property="og:image" content="https://obsidianoverseer.com/assets/og.jpg" />
+  <link rel="icon" type="image/png" href="/assets/logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/site-nav.css" />
+  <link rel="stylesheet" href="/assets/site.css" />
+  <link rel="stylesheet" href="/assets/tools.css" />
+</head>
+<body>
+  <div class="bg-ambient" aria-hidden="true"></div>
+  <div class="bg-grain" aria-hidden="true"></div>
+  <div class="page-wrap">
+    <nav id="site-nav" data-active="builds"></nav>
+
+    <header class="tool-hero page-hero">
+      <span class="tool-eyebrow">Loadouts</span>
+      <h1>Builds</h1>
+      <p class="tool-lead">There is no official Warframe build API. Community sites host loadouts — we link out and help you find parts.</p>
+    </header>
+
+    <article class="tool-prose">
+      <h2>Where to search</h2>
+      <p><a href="https://www.overframe.gg/" target="_blank" rel="noopener noreferrer">Overframe</a> is the go-to for published builds. Open the site and use its search bar for warframes, weapons, and arcanes. Warframe Builder (<a href="https://warframe-builder.com/" target="_blank" rel="noopener noreferrer">warframe-builder.com</a>) is another solid planner if you prefer step-by-step mod fitting.</p>
+    </article>
+
+    <div class="tool-card">
+      <h2>Quick search</h2>
+      <p class="tool-meta">Opens Overframe — paste your frame or weapon name into their search. Farm and market links use our site.</p>
+      <form id="build-form" class="tool-search">
+        <label class="tool-field" for="build-query">
+          <span class="tool-label">Frame or weapon</span>
+          <input id="build-query" class="tool-input" type="search" placeholder="Rhino, Soma, Archon Shards…" autocomplete="off" />
+        </label>
+        <button type="submit" class="btn-primary">Search Overframe</button>
+      </form>
+      <div id="build-links" class="build-links" hidden>
+        <a id="build-farm" class="tool-pill" href="/farm.html">Farm parts</a>
+        <a id="build-market" class="tool-pill" href="/market.html">Market prices</a>
+      </div>
+      <p class="tool-meta" style="margin-top:12px;">Tip: on Overframe, filter by <em>rating</em> and <em>updated</em> date — stale builds may reference rebalanced mods.</p>
+    </div>
+
+    <section aria-labelledby="starter-title">
+      <h2 id="starter-title" class="tool-section-title" style="font-family:var(--font-display);font-size:1.15rem;margin:24px 0 12px;">Starter ideas — early game</h2>
+      <div class="web-tools">
+        <a class="web-tool-card" href="/farm.html?q=Rhino">
+          <strong>Rhino</strong>
+          <span>Tank aura, Iron Skin — farm blueprint and neurodes.</span>
+        </a>
+        <a class="web-tool-card" href="/farm.html?q=Mag">
+          <strong>Mag</strong>
+          <span>Magnetic pull — good for grouped enemies and index prep.</span>
+        </a>
+        <a class="web-tool-card" href="/farm.html?q=Volt">
+          <strong>Volt</strong>
+          <span>Speed and shields — fast capture and low MR missions.</span>
+        </a>
+      </div>
+    </section>
+
+    <footer id="site-footer"></footer>
+  </div>
+  <script src="/assets/config.js"></script>
+  <script src="/assets/site.js"></script>
+  <script>
+    (function () {
+      var form = document.getElementById("build-form");
+      var input = document.getElementById("build-query");
+      var links = document.getElementById("build-links");
+      var farm = document.getElementById("build-farm");
+      var market = document.getElementById("build-market");
+      function syncLinks(q) {
+        q = (q || "").trim();
+        if (!q) {
+          if (links) links.hidden = true;
+          return;
+        }
+        if (links) links.hidden = false;
+        if (farm) farm.href = "/farm.html?q=" + encodeURIComponent(q);
+        if (market) market.href = "/market.html?q=" + encodeURIComponent(q);
+      }
+      if (input) input.addEventListener("input", function () { syncLinks(input.value); });
+      if (form) {
+        form.addEventListener("submit", function (e) {
+          e.preventDefault();
+          var q = input ? input.value.trim() : "";
+          syncLinks(q);
+          window.open("https://www.overframe.gg/", "_blank", "noopener,noreferrer");
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

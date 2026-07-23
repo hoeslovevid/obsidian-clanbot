@@ -9,19 +9,68 @@
   var NAV_TOOLS = [
     { id: "warframe", label: "World state", href: "/warframe.html" },
     { id: "farm", label: "Acquire", href: "/farm.html" },
+    { id: "relics", label: "Relics", href: "/relics.html" },
+    { id: "vault", label: "Prime vault", href: "/vault.html" },
+    { id: "compare", label: "Compare", href: "/compare.html" },
+    { id: "rivens", label: "Riven disp.", href: "/rivens.html" },
+    { id: "factions", label: "Factions", href: "/factions.html" },
+    { id: "builds", label: "Builds", href: "/builds.html" },
     { id: "market", label: "Market", href: "/market.html" },
+    { id: "embeds", label: "Embeds / OBS", href: "/embeds.html" },
+    { id: "status", label: "Bot status", href: "/status.html" },
     { id: "features", label: "Features", href: "/#features" },
   ];
 
   var NAV_GUIDES = [
+    { id: "tenno", label: "First week", href: "/tenno.html" },
+    { id: "dojo", label: "Dojo ops", href: "/dojo.html" },
+    { id: "trading", label: "Trading", href: "/trading.html" },
+    { id: "commands", label: "Commands", href: "/commands.html" },
+    { id: "lfg", label: "LFG", href: "/lfg.html" },
+    { id: "events", label: "Events", href: "/events.html" },
     { id: "setup", label: "Setup", href: "/setup.html" },
     { id: "faq", label: "FAQ", href: "/faq.html" },
     { id: "changelog", label: "Changelog", href: "/changelog.html" },
   ];
 
-  var TOOL_IDS = { warframe: 1, farm: 1, market: 1, features: 1 };
-  var GUIDE_IDS = { setup: 1, faq: 1, changelog: 1 };
+  var TOOL_IDS = {
+    warframe: 1, farm: 1, relics: 1, vault: 1, compare: 1, rivens: 1,
+    factions: 1, builds: 1, market: 1, embeds: 1, status: 1, features: 1,
+  };
+  var GUIDE_IDS = {
+    tenno: 1, dojo: 1, trading: 1, commands: 1, lfg: 1, events: 1,
+    setup: 1, faq: 1, changelog: 1,
+  };
   var THEME_KEY = "oo_theme";
+
+  function routeToolSearch(q) {
+    var s = String(q || "").trim().toLowerCase();
+    if (!s) return "/farm.html";
+    var map = [
+      [/^(world|baro|fissure|cycle|sortie)/, "/warframe.html"],
+      [/^(relic|lith|meso|neo|axi)/, "/relics.html"],
+      [/^(vault|varzia|prime vault)/, "/vault.html"],
+      [/^(riven|disposition)/, "/rivens.html"],
+      [/^(market|plat|wfm|price)/, "/market.html"],
+      [/^(compare)/, "/compare.html"],
+      [/^(faction|grineer|corpus|infest)/, "/factions.html"],
+      [/^(build|overframe)/, "/builds.html"],
+      [/^(command|slash|\/)/, "/commands.html"],
+      [/^(status|uptime|ping)/, "/status.html"],
+      [/^(embed|obs|tv)/, "/embeds.html"],
+      [/^(lfg|squad)/, "/lfg.html"],
+      [/^(event|giveaway)/, "/events.html"],
+      [/^(trade|trading)/, "/trading.html"],
+      [/^(tenno|beginner|new)/, "/tenno.html"],
+      [/^(dojo|clan)/, "/dojo.html"],
+      [/^(setup|invite)/, "/setup.html"],
+      [/^(acquire|farm|drop|neurode|morphic)/, "/farm.html"],
+    ];
+    for (var i = 0; i < map.length; i++) {
+      if (map[i][0].test(s)) return map[i][1];
+    }
+    return "/farm.html?q=" + encodeURIComponent(q);
+  }
 
   function cfg() {
     return window.OBSIDIAN_SITE || {};
@@ -242,6 +291,23 @@
     links.appendChild(makeNavLink(NAV_DASHBOARD, origin, active));
     links.appendChild(makeNavLink(NAV_CONTACT, origin, active));
 
+    var searchWrap = document.createElement("form");
+    searchWrap.className = "nav-tool-search";
+    searchWrap.setAttribute("role", "search");
+    searchWrap.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var q = (searchInput.value || "").trim();
+      if (!q) return;
+      window.location.href = routeToolSearch(q);
+    });
+    var searchInput = document.createElement("input");
+    searchInput.type = "search";
+    searchInput.placeholder = "Search tools…";
+    searchInput.setAttribute("aria-label", "Search site tools");
+    searchInput.autocomplete = "off";
+    searchWrap.appendChild(searchInput);
+    links.appendChild(searchWrap);
+
     var themeBtn = document.createElement("button");
     themeBtn.type = "button";
     themeBtn.className = "site-nav-theme";
@@ -315,12 +381,21 @@
       '/farm.html">Acquire</a>' +
       '<a href="' +
       prefix +
+      '/relics.html">Relics</a>' +
+      '<a href="' +
+      prefix +
       '/market.html">Market</a>' +
+      '<a href="' +
+      prefix +
+      '/commands.html">Commands</a>' +
       '<a href="' +
       dash +
       '">Dashboard</a>' +
       "</div>" +
       "<div><h4>Guides</h4>" +
+      '<a href="' +
+      prefix +
+      '/tenno.html">First week</a>' +
       '<a href="' +
       prefix +
       '/setup.html">Setup</a>' +

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <script src="/assets/theme-boot.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Relics — Obsidian Overseer</title>
+  <meta name="description" content="Browse Warframe Void relics by tier — rewards, vaulted status, and links to farm sources and live fissures." />
+  <meta name="theme-color" content="#06070a" />
+  <link rel="canonical" href="https://obsidianoverseer.com/relics.html" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://obsidianoverseer.com/relics.html" />
+  <meta property="og:title" content="Relics — Obsidian Overseer" />
+  <meta property="og:description" content="Search Void relics by tier — see rewards, vaulted status, and farm links." />
+  <meta property="og:image" content="https://obsidianoverseer.com/assets/og.jpg" />
+  <link rel="icon" type="image/png" href="/assets/logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://api.warframestat.us" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/site-nav.css" />
+  <link rel="stylesheet" href="/assets/site.css" />
+  <link rel="stylesheet" href="/assets/tools.css" />
+</head>
+<body>
+  <div class="bg-ambient" aria-hidden="true"></div>
+  <div class="bg-grain" aria-hidden="true"></div>
+
+  <div class="page-wrap">
+    <nav id="site-nav" data-active="relics"></nav>
+
+    <header class="tool-hero page-hero">
+      <span class="tool-eyebrow"><span class="pulse" aria-hidden="true"></span>Void · Relics · Rewards</span>
+      <h1>Relics</h1>
+      <p class="tool-lead">Pick a tier or search by code — see intact relic rewards, vaulted status, and quick links to farm sources, Market, and live fissures.</p>
+    </header>
+
+    <div class="tool-pills" id="rl-tiers" aria-label="Relic tiers">
+      <button type="button" class="tool-pill" data-tier="Lith">Lith</button>
+      <button type="button" class="tool-pill" data-tier="Meso">Meso</button>
+      <button type="button" class="tool-pill" data-tier="Neo">Neo</button>
+      <button type="button" class="tool-pill" data-tier="Axi">Axi</button>
+      <button type="button" class="tool-pill" data-tier="Requiem">Requiem</button>
+      <button type="button" class="tool-pill" data-tier="Omnia">Omnia</button>
+    </div>
+
+    <form id="rl-form" class="tool-search" role="search" autocomplete="off">
+      <label class="tool-field tool-field-grow">
+        <span class="tool-label">Search relic</span>
+        <input id="rl-query" type="search" name="q" placeholder="A1, Neo V9, Requiem I…" maxlength="40" spellcheck="false" />
+      </label>
+      <button type="submit" class="btn-primary">Search</button>
+    </form>
+
+    <div class="tool-toolbar">
+      <div id="rl-status" class="tool-status" aria-live="polite"><span class="dot" aria-hidden="true"></span>Select a tier or search</div>
+      <label class="tool-toggle">
+        <input type="checkbox" id="rl-hide-vaulted" checked />
+        Hide vaulted
+      </label>
+    </div>
+
+    <div id="rl-root" class="rl-root" aria-busy="false">
+      <div class="tool-card">
+        <p class="tool-prose">Choose Lith / Meso / Neo / Axi / Requiem / Omnia, or search a relic code. Results show Intact relics only to avoid duplicate refinements.</p>
+      </div>
+    </div>
+
+    <div class="tool-card tool-cta-strip">
+      <p><strong>Farming relics?</strong> Check <a href="/warframe.html#wf-void">live fissures</a> or use <a href="/farm.html">Acquire</a> for drop locations.</p>
+      <a id="rl-invite" class="btn-primary" href="#" target="_blank" rel="noopener noreferrer">Add to Discord</a>
+    </div>
+    <p class="tool-footnote">
+      Relic data from the community <a href="https://docs.warframestat.us/" target="_blank" rel="noopener noreferrer">warframestat.us</a> API. Not affiliated with Digital Extremes.
+    </p>
+
+    <footer id="site-footer"></footer>
+  </div>
+
+  <script src="/assets/config.js"></script>
+  <script src="/assets/site.js"></script>
+  <script src="/assets/relics.js"></script>
+  <script>
+    (function () {
+      var a = document.getElementById("rl-invite");
+      if (a && window.ObsidianSite) a.href = window.ObsidianSite.inviteUrl();
+    })();
+  </script>
+</body>
+</html>

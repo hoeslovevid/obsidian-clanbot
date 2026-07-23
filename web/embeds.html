@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <script src="/assets/theme-boot.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Embeds — Obsidian Overseer</title>
+  <meta name="description" content="OBS and iframe-ready embed URLs for Warframe world-state panels — void fissures, Baro, cycles, and farm lookup." />
+  <meta name="theme-color" content="#06070a" />
+  <link rel="canonical" href="https://obsidianoverseer.com/embeds.html" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://obsidianoverseer.com/embeds.html" />
+  <meta property="og:title" content="Embeds — Obsidian Overseer" />
+  <meta property="og:description" content="Copy embed URLs for stream overlays and clan dashboards." />
+  <meta property="og:image" content="https://obsidianoverseer.com/assets/og.jpg" />
+  <link rel="icon" type="image/png" href="/assets/logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/site-nav.css" />
+  <link rel="stylesheet" href="/assets/site.css" />
+  <link rel="stylesheet" href="/assets/tools.css" />
+</head>
+<body>
+  <div class="bg-ambient" aria-hidden="true"></div>
+  <div class="bg-grain" aria-hidden="true"></div>
+  <div class="page-wrap">
+    <nav id="site-nav" data-active="embeds"></nav>
+
+    <header class="tool-hero page-hero">
+      <span class="tool-eyebrow">Stream &amp; overlay</span>
+      <h1>Embed gallery</h1>
+      <p class="tool-lead">Drop these into OBS Browser Sources or clan dashboards. Add <code>?embed=1</code> to strip site chrome; <code>&amp;tv=1</code> bumps type for living-room displays.</p>
+    </header>
+
+    <article class="tool-prose">
+      <h2>Embed vs TV mode</h2>
+      <ul>
+        <li><strong>embed=1</strong> — minimal chrome, no nav. Best for iframes and OBS.</li>
+        <li><strong>tv=1</strong> — larger text and spacing for Baro/trader panels on a TV.</li>
+        <li>Use full URLs below; swap the host if you self-host the site.</li>
+      </ul>
+    </article>
+
+    <section class="tool-card" aria-labelledby="embed-void">
+      <h2 id="embed-void">Void fissures</h2>
+      <p class="tool-meta">All relic tiers in one panel.</p>
+      <div class="embed-block">
+        <h3>Page URL</h3>
+        <div class="embed-code">
+          <code id="embed-url-void">/warframe.html?embed=1&amp;section=void&amp;tiers=Lith,Meso,Neo,Axi</code>
+          <button type="button" class="btn-ghost" data-copy="embed-url-void">Copy</button>
+          <a class="btn-ghost" href="/warframe.html?embed=1&amp;section=void&amp;tiers=Lith,Meso,Neo,Axi" target="_blank" rel="noopener">Open</a>
+        </div>
+      </div>
+      <div class="embed-block">
+        <h3>Iframe snippet</h3>
+        <div class="embed-code">
+          <code id="embed-iframe-void">&lt;iframe src="https://obsidianoverseer.com/warframe.html?embed=1&amp;section=void&amp;tiers=Lith,Meso,Neo,Axi" width="480" height="360" frameborder="0"&gt;&lt;/iframe&gt;</code>
+          <button type="button" class="btn-ghost" data-copy="embed-iframe-void">Copy</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="tool-card" aria-labelledby="embed-trader">
+      <h2 id="embed-trader">Baro / Void Trader</h2>
+      <p class="tool-meta">TV-friendly trader countdown and inventory.</p>
+      <div class="embed-block">
+        <h3>Page URL</h3>
+        <div class="embed-code">
+          <code id="embed-url-trader">/warframe.html?embed=1&amp;section=trader&amp;tv=1</code>
+          <button type="button" class="btn-ghost" data-copy="embed-url-trader">Copy</button>
+          <a class="btn-ghost" href="/warframe.html?embed=1&amp;section=trader&amp;tv=1" target="_blank" rel="noopener">Open</a>
+        </div>
+      </div>
+      <div class="embed-block">
+        <h3>Iframe snippet</h3>
+        <div class="embed-code">
+          <code id="embed-iframe-trader">&lt;iframe src="https://obsidianoverseer.com/warframe.html?embed=1&amp;section=trader&amp;tv=1" width="640" height="400" frameborder="0"&gt;&lt;/iframe&gt;</code>
+          <button type="button" class="btn-ghost" data-copy="embed-iframe-trader">Copy</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="tool-card" aria-labelledby="embed-cycles">
+      <h2 id="embed-cycles">Open-world cycles</h2>
+      <p class="tool-meta">Cetus, Fortuna, and Deimos rotation timers.</p>
+      <div class="embed-block">
+        <h3>Page URL</h3>
+        <div class="embed-code">
+          <code id="embed-url-cycles">/warframe.html?embed=1&amp;section=cycles</code>
+          <button type="button" class="btn-ghost" data-copy="embed-url-cycles">Copy</button>
+          <a class="btn-ghost" href="/warframe.html?embed=1&amp;section=cycles" target="_blank" rel="noopener">Open</a>
+        </div>
+      </div>
+      <div class="embed-block">
+        <h3>Iframe snippet</h3>
+        <div class="embed-code">
+          <code id="embed-iframe-cycles">&lt;iframe src="https://obsidianoverseer.com/warframe.html?embed=1&amp;section=cycles" width="420" height="320" frameborder="0"&gt;&lt;/iframe&gt;</code>
+          <button type="button" class="btn-ghost" data-copy="embed-iframe-cycles">Copy</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="tool-card" aria-labelledby="embed-farm">
+      <h2 id="embed-farm">Farm lookup</h2>
+      <p class="tool-meta">Pinned resource search — change <code>q=</code> for your stream topic.</p>
+      <div class="embed-block">
+        <h3>Page URL</h3>
+        <div class="embed-code">
+          <code id="embed-url-farm">/farm.html?q=Neurodes</code>
+          <button type="button" class="btn-ghost" data-copy="embed-url-farm">Copy</button>
+          <a class="btn-ghost" href="/farm.html?q=Neurodes" target="_blank" rel="noopener">Open</a>
+        </div>
+      </div>
+      <div class="embed-block">
+        <h3>Iframe snippet</h3>
+        <div class="embed-code">
+          <code id="embed-iframe-farm">&lt;iframe src="https://obsidianoverseer.com/farm.html?q=Neurodes" width="520" height="480" frameborder="0"&gt;&lt;/iframe&gt;</code>
+          <button type="button" class="btn-ghost" data-copy="embed-iframe-farm">Copy</button>
+        </div>
+      </div>
+    </section>
+
+    <footer id="site-footer"></footer>
+  </div>
+  <script src="/assets/config.js"></script>
+  <script src="/assets/site.js"></script>
+  <script>
+    document.querySelectorAll("[data-copy]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = btn.getAttribute("data-copy");
+        var el = document.getElementById(id);
+        if (!el) return;
+        var text = el.textContent;
+        navigator.clipboard.writeText(text).then(function () {
+          var prev = btn.textContent;
+          btn.textContent = "Copied";
+          setTimeout(function () { btn.textContent = prev; }, 1200);
+        });
+      });
+    });
+  </script>
+</body>
+</html>

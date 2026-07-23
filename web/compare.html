@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <script src="/assets/theme-boot.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Compare — Obsidian Overseer</title>
+  <meta name="description" content="Side-by-side Warframe item comparison — drop sources, prime components, and links to farm and Market." />
+  <meta name="theme-color" content="#06070a" />
+  <link rel="canonical" href="https://obsidianoverseer.com/compare.html" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://obsidianoverseer.com/compare.html" />
+  <meta property="og:title" content="Compare — Obsidian Overseer" />
+  <meta property="og:description" content="Compare two Warframe items side by side — drops, components, farm links." />
+  <meta property="og:image" content="https://obsidianoverseer.com/assets/og.jpg" />
+  <link rel="icon" type="image/png" href="/assets/logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://api.warframestat.us" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/site-nav.css" />
+  <link rel="stylesheet" href="/assets/site.css" />
+  <link rel="stylesheet" href="/assets/tools.css" />
+</head>
+<body>
+  <div class="bg-ambient" aria-hidden="true"></div>
+  <div class="bg-grain" aria-hidden="true"></div>
+
+  <div class="page-wrap">
+    <nav id="site-nav" data-active="compare"></nav>
+
+    <header class="tool-hero page-hero">
+      <span class="tool-eyebrow"><span class="pulse" aria-hidden="true"></span>Drops · Components · Primes</span>
+      <h1>Compare</h1>
+      <p class="tool-lead">Put two items head-to-head — type, description, top drop sources, and prime component counts with links to farm and Market.</p>
+    </header>
+
+    <form id="cp-form" class="tool-search" role="search" autocomplete="off">
+      <label class="tool-field">
+        <span class="tool-label">Item A</span>
+        <input id="cp-a" type="search" name="a" placeholder="Soma Prime" maxlength="80" spellcheck="false" />
+      </label>
+      <label class="tool-field">
+        <span class="tool-label">Item B</span>
+        <input id="cp-b" type="search" name="b" placeholder="Braton Prime" maxlength="80" spellcheck="false" />
+      </label>
+      <button type="submit" class="btn-primary">Compare</button>
+    </form>
+
+    <div class="tool-toolbar">
+      <div id="cp-status" class="tool-status" aria-live="polite"><span class="dot" aria-hidden="true"></span>Enter two items to compare</div>
+    </div>
+
+    <div id="cp-root" class="tool-grid-2" aria-busy="false">
+      <div class="tool-card">
+        <p class="tool-prose">Compare primes, mods, or resources — e.g. <code>?a=Soma Prime&amp;b=Braton Prime</code></p>
+      </div>
+    </div>
+
+    <div class="tool-card tool-cta-strip">
+      <p><strong>Need deeper farm routes?</strong> Use <a href="/farm.html">Acquire</a> for ranked drop tables per item.</p>
+      <a id="cp-invite" class="btn-primary" href="#" target="_blank" rel="noopener noreferrer">Add to Discord</a>
+    </div>
+    <p class="tool-footnote">
+      Data from the community <a href="https://docs.warframestat.us/" target="_blank" rel="noopener noreferrer">warframestat.us</a> API. Not affiliated with Digital Extremes.
+    </p>
+
+    <footer id="site-footer"></footer>
+  </div>
+
+  <script src="/assets/config.js"></script>
+  <script src="/assets/site.js"></script>
+  <script src="/assets/compare.js"></script>
+  <script>
+    (function () {
+      var a = document.getElementById("cp-invite");
+      if (a && window.ObsidianSite) a.href = window.ObsidianSite.inviteUrl();
+    })();
+  </script>
+</body>
+</html>

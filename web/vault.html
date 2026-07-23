@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <script src="/assets/theme-boot.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vault — Obsidian Overseer</title>
+  <meta name="description" content="Prime Vault tracker — vaulted Warframes and Varzia's current inventory with Aya costs." />
+  <meta name="theme-color" content="#06070a" />
+  <link rel="canonical" href="https://obsidianoverseer.com/vault.html" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://obsidianoverseer.com/vault.html" />
+  <meta property="og:title" content="Vault — Obsidian Overseer" />
+  <meta property="og:description" content="Vaulted primes and Varzia's Prime Resurgence inventory." />
+  <meta property="og:image" content="https://obsidianoverseer.com/assets/og.jpg" />
+  <link rel="icon" type="image/png" href="/assets/logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://api.warframestat.us" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/site-nav.css" />
+  <link rel="stylesheet" href="/assets/site.css" />
+  <link rel="stylesheet" href="/assets/tools.css" />
+</head>
+<body>
+  <div class="bg-ambient" aria-hidden="true"></div>
+  <div class="bg-grain" aria-hidden="true"></div>
+
+  <div class="page-wrap">
+    <nav id="site-nav" data-active="vault"></nav>
+
+    <header class="tool-hero page-hero">
+      <span class="tool-eyebrow"><span class="pulse" aria-hidden="true"></span>Prime Resurgence · Varzia</span>
+      <h1>Vault</h1>
+      <p class="tool-lead">See which primes are vaulted and what Varzia is selling this rotation — Aya costs, location, and expiry.</p>
+    </header>
+
+    <div class="tool-toolbar">
+      <div id="vt-status" class="tool-status" aria-live="polite"><span class="dot" aria-hidden="true"></span>Loading vault data…</div>
+    </div>
+
+    <section id="vt-trader" class="tool-card" aria-labelledby="vt-trader-h">
+      <h2 id="vt-trader-h">Varzia — Prime Resurgence</h2>
+      <p id="vt-trader-meta" class="tool-meta">Loading…</p>
+      <ul id="vt-inventory" class="tool-list"></ul>
+    </section>
+
+    <section class="tool-card" aria-labelledby="vt-wf-h">
+      <h2 id="vt-wf-h">Vaulted Warframes</h2>
+      <label class="tool-field" style="max-width:320px;margin-bottom:12px">
+        <span class="tool-label">Filter</span>
+        <input id="vt-search" type="search" placeholder="Search vaulted frames…" spellcheck="false" />
+      </label>
+      <ul id="vt-warframes" class="tool-list"></ul>
+    </section>
+
+    <div class="tool-card tool-cta-strip">
+      <p><strong>Buying vaulted parts?</strong> Check <a href="/market.html">Market prices</a> or <a href="/relics.html">relic rewards</a>.</p>
+      <a id="vt-invite" class="btn-primary" href="#" target="_blank" rel="noopener noreferrer">Add to Discord</a>
+    </div>
+    <p class="tool-footnote">
+      Data from the community <a href="https://docs.warframestat.us/" target="_blank" rel="noopener noreferrer">warframestat.us</a> API. Aya costs use the API <code>ducats</code> field. Not affiliated with Digital Extremes.
+    </p>
+
+    <footer id="site-footer"></footer>
+  </div>
+
+  <script src="/assets/config.js"></script>
+  <script src="/assets/site.js"></script>
+  <script src="/assets/vault.js"></script>
+  <script>
+    (function () {
+      var a = document.getElementById("vt-invite");
+      if (a && window.ObsidianSite) a.href = window.ObsidianSite.inviteUrl();
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <script src="/assets/theme-boot.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dojo Ops — Obsidian Overseer</title>
+  <meta name="description" content="Clan dojo checklist — research, labs, decorations, roles, and Discord tools for Warframe clans." />
+  <meta name="theme-color" content="#06070a" />
+  <link rel="canonical" href="https://obsidianoverseer.com/dojo.html" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://obsidianoverseer.com/dojo.html" />
+  <meta property="og:title" content="Dojo Ops — Obsidian Overseer" />
+  <meta property="og:description" content="Run your clan dojo and Discord in sync." />
+  <meta property="og:image" content="https://obsidianoverseer.com/assets/og.jpg" />
+  <link rel="icon" type="image/png" href="/assets/logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/site-nav.css" />
+  <link rel="stylesheet" href="/assets/site.css" />
+  <link rel="stylesheet" href="/assets/tools.css" />
+</head>
+<body>
+  <div class="bg-ambient" aria-hidden="true"></div>
+  <div class="bg-grain" aria-hidden="true"></div>
+  <div class="page-wrap">
+    <nav id="site-nav" data-active="dojo"></nav>
+
+    <header class="tool-hero page-hero">
+      <span class="tool-eyebrow">Clan HQ</span>
+      <h1>Dojo operations</h1>
+      <p class="tool-lead">Keep the in-game dojo and your Discord aligned — research, roles, and squad coordination.</p>
+    </header>
+
+    <article class="tool-prose">
+      <h2>Research &amp; labs</h2>
+      <ul>
+        <li>Prioritize <strong>key research</strong> (forma, weapons, arcanes) before cosmetic rooms.</li>
+        <li>Track progress with <code>/dojo_research</code> in Discord — add items and update contributions.</li>
+        <li>Post weekly “donate” reminders in your resources channel; link required mats from <a href="/farm.html">Acquire</a>.</li>
+      </ul>
+
+      <h2>Decorations &amp; layout</h2>
+      <ul>
+        <li>Keep a clear path from spawn to trading post and labs.</li>
+        <li>Use <code>/dojo_decoration</code> to log who placed what — helps when rotating decorators.</li>
+        <li>Screenshot your layout for new members; pin in Discord.</li>
+      </ul>
+
+      <h2>Roles &amp; ranks</h2>
+      <ul>
+        <li><strong>Architect</strong> — dojo build rights; limit to trusted officers.</li>
+        <li><strong>Knight / Sage</strong> — research and treasury access as your clan prefers.</li>
+        <li>Mirror important ranks in Discord so mods can ping the right group.</li>
+      </ul>
+
+      <h2>Discord tools</h2>
+      <ul>
+        <li><code>/lfg</code> — squad up for sorties, archon hunts, and key runs. See <a href="/lfg.html">LFG guide</a>.</li>
+        <li><code>/events</code> — schedule clan nights and dojo decorating sessions. See <a href="/events.html">Events guide</a>.</li>
+        <li><code>/ticket</code> — disputes, account issues, or officer requests without public drama.</li>
+      </ul>
+
+      <h2>Officer checklist</h2>
+      <ol>
+        <li>Audit inactive members before rank decay hits.</li>
+        <li>Confirm alert channels still work — run <code>/baro</code> or check <a href="/warframe.html">world state</a>.</li>
+        <li>Open the <a id="dojo-dashboard" href="/dashboard.html">dashboard</a> for inbox and setup health.</li>
+      </ol>
+    </article>
+
+    <footer id="site-footer"></footer>
+  </div>
+  <script src="/assets/config.js"></script>
+  <script src="/assets/site.js"></script>
+  <script>
+    (function () {
+      if (!window.ObsidianSite) return;
+      var d = document.getElementById("dojo-dashboard");
+      if (d) d.href = window.ObsidianSite.dashboardUrl();
+    })();
+  </script>
+</body>
+</html>

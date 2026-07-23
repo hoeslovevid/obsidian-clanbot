@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <script src="/assets/theme-boot.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Events — Obsidian Overseer</title>
+  <meta name="description" content="Warframe world events vs Discord /events — RSVPs, giveaways, and clan scheduling." />
+  <meta name="theme-color" content="#06070a" />
+  <link rel="canonical" href="https://obsidianoverseer.com/events.html" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://obsidianoverseer.com/events.html" />
+  <meta property="og:title" content="Events — Obsidian Overseer" />
+  <meta property="og:description" content="In-game events and clan Discord scheduling." />
+  <meta property="og:image" content="https://obsidianoverseer.com/assets/og.jpg" />
+  <link rel="icon" type="image/png" href="/assets/logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/site-nav.css" />
+  <link rel="stylesheet" href="/assets/site.css" />
+  <link rel="stylesheet" href="/assets/tools.css" />
+</head>
+<body>
+  <div class="bg-ambient" aria-hidden="true"></div>
+  <div class="bg-grain" aria-hidden="true"></div>
+  <div class="page-wrap">
+    <nav id="site-nav" data-active="events"></nav>
+
+    <header class="tool-hero page-hero">
+      <span class="tool-eyebrow">Calendar</span>
+      <h1>Events</h1>
+      <p class="tool-lead">Two kinds: Digital Extremes world events in-game, and your clan’s schedule on Discord.</p>
+    </header>
+
+    <article class="tool-prose">
+      <h2>Warframe world events</h2>
+      <p>Plague Star, Thermia, Nightwave acts, and similar rotations show on our <a href="/warframe.html#wf-events">world state board</a>. Wire alert channels with <code>/wfnotify configure</code> so your clan does not miss them.</p>
+
+      <h2>Discord <code>/events</code></h2>
+      <ul>
+        <li><code>/events</code> — create a server event with time, description, and RSVP buttons.</li>
+        <li><code>/events_list</code> — what’s coming up this week.</li>
+        <li>Reminders ping interested members before start — great for sortie nights and dojo sessions.</li>
+      </ul>
+      <p>See <a href="/dojo.html">dojo ops</a> for how officers combine events with LFG.</p>
+
+      <h2>Giveaways</h2>
+      <p>Clan giveaways (plat, slots, fashion prizes) run through the bot and <a id="events-dashboard" href="/dashboard.html">dashboard</a> when a mod is logged in. Create entries, set end time, and roll winners without a third-party bot.</p>
+
+      <h2>Quick links</h2>
+      <ul>
+        <li><a href="/warframe.html#wf-events">Live world events</a></li>
+        <li><a href="/commands.html">Command reference</a></li>
+        <li><a href="/lfg.html">LFG guide</a></li>
+      </ul>
+    </article>
+
+    <footer id="site-footer"></footer>
+  </div>
+  <script src="/assets/config.js"></script>
+  <script src="/assets/site.js"></script>
+  <script>
+    (function () {
+      if (!window.ObsidianSite) return;
+      var d = document.getElementById("events-dashboard");
+      if (d) d.href = window.ObsidianSite.dashboardUrl();
+    })();
+  </script>
+</body>
+</html>

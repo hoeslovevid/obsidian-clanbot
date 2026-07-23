@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <script src="/assets/theme-boot.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Commands — Obsidian Overseer</title>
+  <meta name="description" content="Browse Obsidian Overseer slash commands — discovery shortcuts, command groups, and a searchable reference." />
+  <meta name="theme-color" content="#06070a" />
+  <link rel="canonical" href="https://obsidianoverseer.com/commands.html" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://obsidianoverseer.com/commands.html" />
+  <meta property="og:title" content="Commands — Obsidian Overseer" />
+  <meta property="og:description" content="Searchable slash command reference for Obsidian Overseer." />
+  <meta property="og:image" content="https://obsidianoverseer.com/assets/og.jpg" />
+  <link rel="icon" type="image/png" href="/assets/logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/site-nav.css" />
+  <link rel="stylesheet" href="/assets/site.css" />
+  <link rel="stylesheet" href="/assets/tools.css" />
+</head>
+<body>
+  <div class="bg-ambient" aria-hidden="true"></div>
+  <div class="bg-grain" aria-hidden="true"></div>
+  <div class="page-wrap">
+    <nav id="site-nav" data-active="commands"></nav>
+
+    <header class="tool-hero page-hero">
+      <span class="tool-eyebrow">Slash commands</span>
+      <h1>Command reference</h1>
+      <p class="tool-lead">Every slash command in one place. Start with the discovery shortcuts, then search the full list.</p>
+    </header>
+
+    <p id="cmd-error" class="tool-status err" hidden role="alert"></p>
+
+    <section class="cmd-section" aria-labelledby="cmd-discovery-title">
+      <h2 id="cmd-discovery-title">Discovery — start here</h2>
+      <p class="tool-meta">Twelve commands most clans reach for first.</p>
+      <div id="cmd-discovery" class="cmd-discovery" aria-live="polite"></div>
+    </section>
+
+    <section class="cmd-section" aria-labelledby="cmd-groups-title">
+      <h2 id="cmd-groups-title">Slash groups</h2>
+      <p class="tool-meta">Top-level command groups and what they cover.</p>
+      <div id="cmd-groups" class="cmd-groups" aria-live="polite"></div>
+    </section>
+
+    <section class="cmd-section" aria-labelledby="cmd-all-title">
+      <div class="tool-toolbar">
+        <h2 id="cmd-all-title" style="margin:0;">All commands</h2>
+        <span id="cmd-count" class="tool-status" aria-live="polite"></span>
+      </div>
+      <div class="tool-search">
+        <label class="tool-field" for="cmd-filter">
+          <span class="tool-label">Filter</span>
+          <input id="cmd-filter" class="tool-input" type="search" placeholder="baro, ticket, daily…" autocomplete="off" spellcheck="false" />
+        </label>
+      </div>
+      <ul id="cmd-list" class="cmd-list" aria-live="polite"></ul>
+    </section>
+
+    <p class="tool-footnote">In Discord, type <code>/</code> and start typing — or run <code>/help</code> for interactive search.</p>
+
+    <footer id="site-footer"></footer>
+  </div>
+  <script src="/assets/config.js"></script>
+  <script src="/assets/site.js"></script>
+  <script src="/assets/commands.js"></script>
+</body>
+</html>
