@@ -3,6 +3,8 @@
  */
 (function () {
   var API_HOST = "https://api.warframestat.us";
+  var CDN_IMG = "https://cdn.warframestat.us/img/";
+  var ITEM_IMG_LS = "oo_wf_item_img_v1";
   var REFRESH_MS = 60 * 1000;
   var SOON_MS = 30 * 60 * 1000;
   var URGENT_MS = 15 * 60 * 1000;
@@ -163,9 +165,22 @@
     return "";
   }
 
-  function thumbHtml(url) {
-    if (!url) return "";
-    return '<img class="wf-thumb" loading="lazy" alt="" src="' + esc(url) + '">';
+  function thumbHtml(url, itemName) {
+    if (url) {
+      return (
+        '<img class="wf-thumb" loading="lazy" alt="" src="' +
+        esc(url) +
+        '" onerror="this.remove()">'
+      );
+    }
+    if (itemName) {
+      return (
+        '<img class="wf-thumb wf-thumb-pending" loading="lazy" alt="" data-wf-item="' +
+        esc(itemName) +
+        '" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7">'
+      );
+    }
+    return "";
   }
 
   function marketLink(name) {
@@ -177,15 +192,161 @@
     return m ? m[1] : "";
   }
 
-  function rewardThumb(reward) {
-    if (!reward) return "";
-    if (reward.thumbnail) return reward.thumbnail;
-    var items = reward.countedItems || reward.items || [];
-    for (var i = 0; i < items.length; i++) {
-      var it = items[i];
-      if (it && it.thumbnail) return it.thumbnail;
+  // Invasion/alert reward.thumbnail from warframestat is a guessed slug URL that 404s
+  // (e.g. detonite-injector.png). Real icons use WFCD imageName (GrineerComponent.png).
+  var itemImgCache = loadItemImgCache();
+
+  function loadItemImgCache() {
+    try {
+      var raw = sessionStorage.getItem(ITEM_IMG_LS);
+      if (!raw) return {};
+      var parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (_) {
+      return {};
     }
+  }
+
+  function saveItemImgCache() {
+    try {
+      sessionStorage.setItem(ITEM_IMG_LS, JSON.stringify(itemImgCache));
+    } catch (_) {}
+  }
+
+  function rewardItemName(reward) {
+    if (!reward) return "";
+    var counted = reward.countedItems || [];
+    if (counted.length) {
+      var c0 = counted[0];
+      if (typeof c0 === "string") return c0;
+      if (c0 && (c0.type || c0.key)) return String(c0.type || c0.key);
+    }
+    var items = reward.items || [];
+    if (items.length) {
+      var it0 = items[0];
+      if (typeof it0 === "string") return it0;
+      if (it0 && (it0.type || it0.name || it0.key)) return String(it0.type || it0.name || it0.key);
+    }
+    if (reward.itemString) return String(reward.itemString);
     return "";
+  }
+
+  function parentItemName(name) {
+    return String(name || "")
+      .replace(
+        /\s+(Blueprint|Chassis|Neuroptics|Systems|Barrel|Receiver|Stock|Blade|Handle|Head|Link|Gauntlet|Grip|String|Lower Limb|Upper Limb|Hilt|Pouch|Stars|Boot|Ornament|Chain|Limb)$/i,
+        ""
+      )
+      .trim();
+  }
+
+  function cdnFromImageName(imageName) {
+    if (!imageName) return "";
+    return CDN_IMG + String(imageName).replace(/^\/+/, "");
+  }
+
+  function pickItemImage(items, query) {
+    if (!items || !items.length) return "";
+    var q = String(query || "").toLowerCase();
+    var scored = [];
+    items.forEach(function (it) {
+      if (!it || !it.imageName) return;
+      var name = String(it.name || "").toLowerCase();
+      var type = String(it.type || "").toLowerCase();
+      var score = 0;
+      if (name === q) score = 100;
+      else if (name.indexOf(q) === 0) score = 80;
+      else if (name.indexOf(q) >= 0 || q.indexOf(name) >= 0) score = 50;
+      else score = 10;
+      if (type === "resource" || type === "misc" || type === "component") score += 5;
+      if (type === "skin") score -= 20;
+      scored.push({ score: score, img: it.imageName });
+    });
+    if (!scored.length) return "";
+    scored.sort(function (a, b) {
+      return b.score - a.score;
+    });
+    return cdnFromImageName(scored[0].img);
+  }
+
+  function fetchItemImage(name) {
+    var key = String(name || "")
+      .trim()
+      .toLowerCase();
+    if (!key) return Promise.resolve("");
+    if (Object.prototype.hasOwnProperty.call(itemImgCache, key)) {
+      return Promise.resolve(itemImgCache[key] || "");
+    }
+    return fetch(API_HOST + "/items/search/" + encodeURIComponent(name) + "?language=en", {
+      cache: "force-cache",
+      headers: { Accept: "application/json" },
+    })
+      .then(function (res) {
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        return res.json();
+      })
+      .then(function (items) {
+        var url = pickItemImage(items, name);
+        if (!url) {
+          var parent = parentItemName(name);
+          if (parent && parent.toLowerCase() !== key) {
+            return fetchItemImage(parent).then(function (parentUrl) {
+              itemImgCache[key] = parentUrl || "";
+              saveItemImgCache();
+              return itemImgCache[key];
+            });
+          }
+        }
+        itemImgCache[key] = url || "";
+        saveItemImgCache();
+        return itemImgCache[key];
+      })
+      .catch(function () {
+        itemImgCache[key] = "";
+        saveItemImgCache();
+        return "";
+      });
+  }
+
+  function rewardThumb(reward) {
+    var name = rewardItemName(reward);
+    if (!name) return "";
+    return itemImgCache[name.toLowerCase()] || "";
+  }
+
+  function thumbHtmlForReward(reward) {
+    var name = rewardItemName(reward);
+    if (!name) return "";
+    return thumbHtml(rewardThumb(reward), name);
+  }
+
+  function hydrateRewardThumbs(scope) {
+    var rootEl = scope || document;
+    var imgs = rootEl.querySelectorAll("img.wf-thumb[data-wf-item]");
+    if (!imgs.length) return;
+    var names = [];
+    imgs.forEach(function (img) {
+      var n = img.getAttribute("data-wf-item");
+      if (n && names.indexOf(n) < 0) names.push(n);
+    });
+    names.forEach(function (name) {
+      fetchItemImage(name).then(function (url) {
+        var attr =
+          typeof CSS !== "undefined" && CSS.escape
+            ? CSS.escape(name)
+            : String(name).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+        var nodes = rootEl.querySelectorAll('img.wf-thumb[data-wf-item="' + attr + '"]');
+        nodes.forEach(function (img) {
+          if (!url) {
+            img.remove();
+            return;
+          }
+          img.src = url;
+          img.removeAttribute("data-wf-item");
+          img.classList.remove("wf-thumb-pending");
+        });
+      });
+    });
   }
 
   function loadPlatform() {
@@ -850,11 +1011,13 @@
         var pct = eventProgress(ev);
         var rewardItems = [];
         var thumb = "";
+        var thumbName = "";
         (ev.rewards || []).forEach(function (r) {
+          if (!thumbName) thumbName = rewardItemName(r);
           if (!thumb) thumb = rewardThumb(r);
           (r.items || []).forEach(function (it) { rewardItems.push(it); });
         });
-        body += '<div class="wf-event-card"><h3>' + (thumb ? thumbHtml(thumb) : "") + esc(ev.description || ev.tooltip || "Event") + "</h3>";
+        body += '<div class="wf-event-card"><h3>' + thumbHtml(thumb, thumbName) + esc(ev.description || ev.tooltip || "Event") + "</h3>";
         body += '<p class="meta">' + esc(ev.node || "") + (ev.expiry ? (ev.node ? " · " : "") + "ends in " + etaHtml(ev.expiry) : "") + "</p>";
         if (ev.tooltip && ev.tooltip !== ev.description) body += '<p class="wf-event-tip">' + esc(ev.tooltip) + "</p>";
         if (pct != null) body += '<div class="wf-progress" role="progressbar" aria-valuenow="' + Math.round(pct) + '"><span style="width:' + pct.toFixed(1) + '%"></span></div><p class="meta">' + Math.round(pct) + "% complete</p>";
@@ -1119,7 +1282,7 @@
     list.slice(0, 10).forEach(function (a) {
       var mission = a.mission || {};
       var reward = formatReward(mission.reward || a.reward);
-      var thumb = thumbHtml(rewardThumb(mission.reward || a.reward));
+      var thumb = thumbHtmlForReward(mission.reward || a.reward);
       body += "<li>" + thumb + "<strong>" + esc(mission.node || a.tag || "Alert") + "</strong> · " + esc(mission.type || "") + (mission.faction ? " · " + esc(mission.faction) : "") + (reward ? '<div class="meta">Reward: ' + esc(reward) + "</div>" : "") + (a.expiry ? '<div class="meta">' + etaHtml(a.expiry) + " left</div>" : "") + "</li>";
     });
     return panel("Alerts", "alert", body + "</ul>", { id: "alerts", cmd: "/alert" });
@@ -1136,8 +1299,8 @@
         var def = i.defender || {};
         var atkR = formatReward(atk.reward);
         var defR = formatReward(def.reward);
-        var atkThumb = thumbHtml(rewardThumb(atk.reward));
-        var defThumb = thumbHtml(rewardThumb(def.reward));
+        var atkThumb = thumbHtmlForReward(atk.reward);
+        var defThumb = thumbHtmlForReward(def.reward);
         var fc = factionClass(atk.faction || (i.vsInfestation ? "infested" : ""));
         body += '<div class="wf-invasion-card ' + fc + '"><h3>' + esc(i.node || "?") + '</h3><p class="meta">' + esc(i.desc || "") + (i.vsInfestation ? " · vs Infested" : "") + "</p>";
         body += '<div class="wf-invasion-sides"><div><strong>' + esc(atk.faction || "Attacker") + "</strong>" + atkThumb + "<span>" + esc(atkR || "—") + "</span></div><div><strong>" + esc(def.faction || "Defender") + "</strong>" + defThumb + "<span>" + esc(defR || "—") + "</span></div></div>";
@@ -1417,6 +1580,7 @@
     bands["wf-invasions"] = renderInvasionsBand(map["/invasions"], renderAlerts(map["/alerts"]));
     root.innerHTML = assembleBands(bands);
     root.removeAttribute("aria-busy");
+    hydrateRewardThumbs(root);
     bindFissureFilters();
     bindWatchlist();
     bindBaroTools();

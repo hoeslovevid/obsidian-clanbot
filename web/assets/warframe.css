@@ -1280,6 +1280,10 @@ body.wf-dense .wf-teaser {
   vertical-align: middle;
   border-radius: 4px;
 }
+.wf-thumb-pending {
+  opacity: 0.35;
+  background: var(--surface2, #161a20);
+}
 
 .wf-watch {
   appearance: none;
