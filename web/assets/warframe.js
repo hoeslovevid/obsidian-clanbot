@@ -346,14 +346,23 @@
     teaserEl.hidden = false;
   }
 
-  function renderInventoryGrid(inv, emptyMsg) {
+  function renderInventoryGrid(inv, emptyMsg, opts) {
+    opts = opts || {};
+    // vaultTrader reuses the `ducats` field for Aya (warframestat quirk)
+    var primaryLabel = opts.primaryLabel || "ducats";
     if (!inv || !inv.length) {
       return '<p class="meta" style="margin-top:12px">' + esc(emptyMsg || "No inventory listed.") + "</p>";
     }
     var html = '<div class="wf-inv-grid">';
     inv.forEach(function (item) {
       var priceBits = [];
-      if (item.ducats != null) priceBits.push("<em>" + esc(item.ducats) + "</em> ducats");
+      var primary =
+        item.aya != null
+          ? item.aya
+          : item.ducats != null
+            ? item.ducats
+            : null;
+      if (primary != null) priceBits.push("<em>" + esc(primary) + "</em> " + esc(primaryLabel));
       if (item.credits != null) priceBits.push(esc(item.credits) + " cr");
       html +=
         '<div class="wf-inv-item"><span class="name">' +
@@ -421,7 +430,9 @@
       esc(vt.location || "Maroo's Bazaar") +
       (vt.expiry ? " · ends in " + etaHtml(vt.expiry) : "") +
       "</p>";
-    html += renderInventoryGrid(vt.inventory || [], "No vault inventory listed.");
+    html += renderInventoryGrid(vt.inventory || [], "No vault inventory listed.", {
+      primaryLabel: "Aya",
+    });
     return html + "</section>";
   }
 
