@@ -62,6 +62,37 @@ async def find_or_create_text_channel(guild: discord.Guild, *, name: str) -> dis
     return await guild.create_text_channel(name=name, reason="Bot auto-setup")
 
 
+def sanitize_discord_channel_name(name: str, *, category: bool = False) -> str:
+    """Normalize a user-provided Discord channel or category name."""
+    import re
+
+    raw = (name or "").strip()
+    if not raw:
+        return "new-channel" if not category else "New Category"
+    if category:
+        cleaned = re.sub(r"\s+", " ", raw)
+        return cleaned[:100] or "New Category"
+    cleaned = raw.lower().replace(" ", "-")
+    cleaned = re.sub(r"[^a-z0-9\-_]", "", cleaned)
+    cleaned = re.sub(r"-{2,}", "-", cleaned).strip("-_")
+    return (cleaned[:100] or "new-channel")
+
+
+async def create_named_setup_channel(
+    guild: discord.Guild,
+    *,
+    name: str,
+    channel_type: str = "text",
+    reason: str = "Setup channel create",
+) -> Union[discord.TextChannel, discord.CategoryChannel]:
+    """Create a text channel or category with a user-provided name."""
+    if channel_type == "category":
+        safe = sanitize_discord_channel_name(name, category=True)
+        return await guild.create_category(name=safe, reason=reason)
+    safe = sanitize_discord_channel_name(name, category=False)
+    return await guild.create_text_channel(name=safe, reason=reason)
+
+
 async def resolve_channel_id(
     guild: discord.Guild,
     setting_key: str,

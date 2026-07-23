@@ -720,6 +720,9 @@ body.dash-body {
   outline: none;
   border-color: var(--accent);
 }
+.dash-setup-create-name {
+  margin-top: 2px;
+}
 .dash-field-actions {
   display: flex;
   gap: 10px;

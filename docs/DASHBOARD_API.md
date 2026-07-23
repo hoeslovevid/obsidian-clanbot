@@ -66,7 +66,7 @@ Requires scopes: `identify`, `guilds`.
 | GET | `/api/guilds/{id}/inbox` | yes + admin | Ticket/app/LFG/suggestion counts |
 | GET | `/api/guilds/{id}/overview` | yes + admin | Full mod dashboard JSON |
 | GET | `/api/guilds/{id}/setup` | yes + admin | Setup health checklist (channels, roles, features) |
-| PATCH | `/api/guilds/{id}/setup` | yes + admin | Update channel assignments: `{ "updates": [{ "key": "events_channel_id", "channel_id": "123" }] }` |
+| PATCH | `/api/guilds/{id}/setup` | yes + admin | Update channel assignments. Each update is either `{ "key", "channel_id" }` (existing/clear) or `{ "key", "create": true, "name": "ops-board" }` (bot creates then saves). Requires Manage Channels. |
 | GET | `/api/guilds/{id}/features` | yes + admin | Feature toggle states plus full `catalog` of bot modules |
 | PATCH | `/api/guilds/{id}/features` | yes + admin | `{"feature":"music","enabled":true}` |
 | GET | `/api/guilds/{id}/warframe` | yes + admin | Baro Ki'Teer status + open-world cycles |

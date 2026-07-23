@@ -438,22 +438,22 @@ async def fetch_guild_setup_health(guild_id: int, bot: discord.Client) -> dict[s
 
 
 _SETUP_FIELD_DEFS: list[dict[str, Any]] = [
-    {"key": "events_channel_id", "section": "core", "label": "Events (Ops Board)", "kind": "guild", "channel_type": "text"},
-    {"key": "xp_levelup_channel_id", "section": "core", "label": "Level-up announcements", "kind": "guild", "channel_type": "text"},
-    {"key": "create_vc_channel_id", "section": "core", "label": "Join-to-create voice", "kind": "guild", "channel_type": "text"},
-    {"key": "voice_panel_channel_id", "section": "core", "label": "Voice panel", "kind": "guild", "channel_type": "text"},
-    {"key": "complaints_channel_id", "section": "core", "label": "Inheritor docket", "kind": "guild", "channel_type": "text"},
-    {"key": "suggestions_channel_id", "section": "core", "label": "Suggestions", "kind": "guild", "channel_type": "text"},
-    {"key": "temp_vc_category_id", "section": "core", "label": "Temp VC category", "kind": "guild", "channel_type": "category"},
-    {"key": "changelog_channel_id", "section": "core", "label": "Changelog / updates", "kind": "guild", "channel_type": "text"},
-    {"key": "recap_channel_id", "section": "core", "label": "Weekly clan recap", "kind": "guild", "channel_type": "text"},
-    {"key": "alerts_notify_channel_id", "section": "warframe", "label": "Warframe alerts feed", "kind": "guild", "channel_type": "text"},
-    {"key": "forum_notify_channel_id", "section": "warframe", "label": "Warframe forum feed", "kind": "guild", "channel_type": "text"},
-    {"key": "youtube_notify_channel_id", "section": "warframe", "label": "Warframe YouTube feed", "kind": "guild", "channel_type": "text"},
-    {"key": "devstream_notify_channel_id", "section": "warframe", "label": "Warframe devstreams", "kind": "guild", "channel_type": "text"},
-    {"key": "audit", "section": "moderation", "label": "Mod audit log", "kind": "log", "log_type": "audit"},
-    {"key": "bot_error", "section": "moderation", "label": "Bot error log", "kind": "log", "log_type": "bot_error"},
-    {"key": "ticket_transcript", "section": "moderation", "label": "Ticket transcripts", "kind": "log", "log_type": "ticket_transcript"},
+    {"key": "events_channel_id", "section": "core", "label": "Events (Ops Board)", "kind": "guild", "channel_type": "text", "default_name": "ops-board"},
+    {"key": "xp_levelup_channel_id", "section": "core", "label": "Level-up announcements", "kind": "guild", "channel_type": "text", "default_name": "level-ups"},
+    {"key": "create_vc_channel_id", "section": "core", "label": "Join-to-create voice", "kind": "guild", "channel_type": "text", "default_name": "join-to-create"},
+    {"key": "voice_panel_channel_id", "section": "core", "label": "Voice panel", "kind": "guild", "channel_type": "text", "default_name": "obsidian-console"},
+    {"key": "complaints_channel_id", "section": "core", "label": "Inheritor docket", "kind": "guild", "channel_type": "text", "default_name": "inheritor-docket"},
+    {"key": "suggestions_channel_id", "section": "core", "label": "Suggestions", "kind": "guild", "channel_type": "text", "default_name": "suggestions"},
+    {"key": "temp_vc_category_id", "section": "core", "label": "Temp VC category", "kind": "guild", "channel_type": "category", "default_name": "Temp VCs"},
+    {"key": "changelog_channel_id", "section": "core", "label": "Changelog / updates", "kind": "guild", "channel_type": "text", "default_name": "bot-updates"},
+    {"key": "recap_channel_id", "section": "core", "label": "Weekly clan recap", "kind": "guild", "channel_type": "text", "default_name": "clan-recap"},
+    {"key": "alerts_notify_channel_id", "section": "warframe", "label": "Warframe alerts feed", "kind": "guild", "channel_type": "text", "default_name": "wf-alerts"},
+    {"key": "forum_notify_channel_id", "section": "warframe", "label": "Warframe forum feed", "kind": "guild", "channel_type": "text", "default_name": "wf-forum"},
+    {"key": "youtube_notify_channel_id", "section": "warframe", "label": "Warframe YouTube feed", "kind": "guild", "channel_type": "text", "default_name": "wf-youtube"},
+    {"key": "devstream_notify_channel_id", "section": "warframe", "label": "Warframe devstreams", "kind": "guild", "channel_type": "text", "default_name": "wf-devstream"},
+    {"key": "audit", "section": "moderation", "label": "Mod audit log", "kind": "log", "log_type": "audit", "channel_type": "text", "default_name": "mod-audit"},
+    {"key": "bot_error", "section": "moderation", "label": "Bot error log", "kind": "log", "log_type": "bot_error", "channel_type": "text", "default_name": "bot-errors"},
+    {"key": "ticket_transcript", "section": "moderation", "label": "Ticket transcripts", "kind": "log", "log_type": "ticket_transcript", "channel_type": "text", "default_name": "ticket-transcripts"},
 ]
 _SETUP_FIELD_BY_KEY = {f["key"]: f for f in _SETUP_FIELD_DEFS}
 
@@ -476,6 +476,7 @@ async def _build_setup_editor(guild: discord.Guild) -> tuple[list[dict[str, Any]
                 "label": spec["label"],
                 "kind": spec["kind"],
                 "channel_type": spec.get("channel_type"),
+                "default_name": spec.get("default_name") or "new-channel",
                 "channel_id": str(channel_id) if channel_id else None,
                 "channel_name": getattr(ch, "name", None),
             }
@@ -502,19 +503,63 @@ async def update_guild_setup_fields(
     bot: discord.Client,
     updates: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    """Apply channel setup changes from the dashboard."""
+    """Apply channel setup changes from the dashboard.
+
+    Each update may be:
+      { "key": "...", "channel_id": "123" }           — select existing / clear
+      { "key": "...", "create": true, "name": "ops" } — bot creates channel then saves id
+    """
     guild = bot.get_guild(guild_id)
     if not guild:
         return {"ok": False, "error": "guild_not_found"}
 
+    from core.channels import create_named_setup_channel
     from database import set_guild_setting
 
     errors: list[str] = []
+    created: list[dict[str, Any]] = []
+
+    async def _persist_channel_id(spec: dict[str, Any], channel_id: int) -> None:
+        if spec["kind"] == "guild":
+            await set_guild_setting(guild_id, spec["key"], str(channel_id))
+            return
+        log_type = spec["log_type"]
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute(
+                """
+                INSERT OR REPLACE INTO log_channels (guild_id, log_type, channel_id, enabled)
+                VALUES (?, ?, ?, 1)
+                """,
+                (guild_id, log_type, channel_id),
+            )
+            await db.commit()
+
     for upd in updates:
         key = str(upd.get("key") or "").strip()
         spec = _SETUP_FIELD_BY_KEY.get(key)
         if not spec:
             errors.append(f"Unknown field: {key}")
+            continue
+
+        want_create = bool(upd.get("create"))
+        if want_create:
+            name = str(upd.get("name") or spec.get("default_name") or "new-channel").strip()
+            channel_type = str(spec.get("channel_type") or "text")
+            try:
+                ch = await create_named_setup_channel(
+                    guild,
+                    name=name,
+                    channel_type=channel_type,
+                    reason=f"Dashboard setup: {spec['label']}",
+                )
+            except discord.Forbidden:
+                errors.append(f"{spec['label']}: bot needs Manage Channels to create")
+                continue
+            except Exception as exc:
+                errors.append(f"{spec['label']}: could not create ({exc})")
+                continue
+            await _persist_channel_id(spec, ch.id)
+            created.append({"key": key, "channel_id": str(ch.id), "channel_name": ch.name})
             continue
 
         raw = upd.get("channel_id")
@@ -566,6 +611,8 @@ async def update_guild_setup_fields(
     result["ok"] = not errors
     if errors:
         result["errors"] = errors
+    if created:
+        result["created"] = created
     return result
 
 

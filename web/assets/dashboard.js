@@ -34,20 +34,47 @@
         escapeHtml(c.name) +
         "</option>";
     });
+    html += '<option value="__create__">➕ Create new…</option>';
     return html;
+  }
+
+  function syncSetupCreateNameVisibility(sel) {
+    var wrap = sel.closest(".dash-field-row");
+    if (!wrap) return;
+    var nameInput = wrap.querySelector("[data-setup-create-name]");
+    if (!nameInput) return;
+    var create = sel.value === "__create__";
+    nameInput.hidden = !create;
+    nameInput.required = create;
   }
 
   async function saveSetupFields() {
     if (!state.guildId) return;
     var updates = [];
-    el("dash-setup")
-      .querySelectorAll("select[data-setup-key]")
-      .forEach(function (sel) {
+    var rows = el("dash-setup").querySelectorAll(".dash-field-row[data-setup-key]");
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i];
+      var key = row.getAttribute("data-setup-key");
+      var sel = row.querySelector("select[data-setup-key]");
+      if (!sel) continue;
+      if (sel.value === "__create__") {
+        var nameInput = row.querySelector("[data-setup-create-name]");
+        var name =
+          (nameInput && nameInput.value.trim()) ||
+          (nameInput && nameInput.getAttribute("placeholder")) ||
+          "new-channel";
+        if (!name) {
+          toast("Enter a name for " + (key || "channel"), "error");
+          return;
+        }
+        updates.push({ key: key, create: true, name: name });
+      } else {
         updates.push({
-          key: sel.getAttribute("data-setup-key"),
+          key: key,
           channel_id: sel.value || null,
         });
-      });
+      }
+    }
     try {
       var data = await apiFetch("/api/guilds/" + state.guildId + "/setup", {
         method: "PATCH",
@@ -57,6 +84,8 @@
       renderSetup();
       if (data.errors && data.errors.length) {
         toast(data.errors.join("; "), "error");
+      } else if (data.created && data.created.length) {
+        toast("Created " + data.created.length + " channel(s) and saved setup", "success");
       } else {
         toast("Setup saved", "success");
       }
@@ -887,22 +916,39 @@
         if (!sectionFields.length) return;
         html += '<div class="dash-setup-section"><h4>' + escapeHtml(SETUP_SECTION_LABELS[sectionId] || sectionId) + "</h4>";
         sectionFields.forEach(function (field) {
+          var defaultName = field.default_name || "new-channel";
           html +=
-            '<label class="dash-field-row"><span class="dash-field-label">' +
+            '<label class="dash-field-row" data-setup-key="' +
+            escapeHtml(field.key) +
+            '"><span class="dash-field-label">' +
             escapeHtml(field.label) +
             '</span><select class="dash-select" data-setup-key="' +
             escapeHtml(field.key) +
             '">' +
             channelSelectOptions(field, options) +
-            "</select></label>";
+            '</select><input type="text" class="dash-input dash-setup-create-name" data-setup-create-name="' +
+            escapeHtml(field.key) +
+            '" placeholder="' +
+            escapeHtml(defaultName) +
+            '" value="' +
+            escapeHtml(defaultName) +
+            '" maxlength="100" hidden /></label>';
         });
         html += "</div>";
       });
       html +=
+        '<p class="dash-meta">Choose <strong>Create new…</strong> to have the bot make a channel (edit the name first). Bot needs Manage Channels.</p>' +
         '<div class="dash-field-actions"><button type="button" class="dash-btn dash-btn-primary" id="dash-setup-save">Save setup</button></div></div>';
     }
 
     el("dash-setup").innerHTML = html;
+
+    el("dash-setup").querySelectorAll("select[data-setup-key]").forEach(function (sel) {
+      syncSetupCreateNameVisibility(sel);
+      sel.addEventListener("change", function () {
+        syncSetupCreateNameVisibility(sel);
+      });
+    });
 
     var saveBtn = el("dash-setup-save");
     if (saveBtn) {

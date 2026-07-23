@@ -4,6 +4,7 @@ import discord
 from discord import app_commands
 from typing import Optional, List, Tuple
 
+from core.channels import create_named_setup_channel
 from core.embed_templates import embed_template
 from core.utils import is_mod
 from database import get_guild_setting, set_guild_setting, get_configured_channel_id
@@ -21,6 +22,47 @@ CHANNEL_CONFIGS: List[Tuple[str, str, str, str]] = [
 ]
 
 _setup_in_progress = set()
+
+
+class CreateChannelNameModal(discord.ui.Modal):
+    """Ask for a channel name before the bot creates it."""
+
+    def __init__(self, select: "SetupChannelSelect", setup_view: "SetupObsidianView"):
+        kind = "category" if select._channel_type == "category" else "channel"
+        super().__init__(title=f"Name {kind} · {select._display_name}"[:45])
+        self._select = select
+        self._setup_view = setup_view
+        self.name_input = discord.ui.TextInput(
+            label="Channel name" if kind == "channel" else "Category name",
+            default=select._default_name,
+            placeholder=select._default_name,
+            max_length=100,
+            required=True,
+        )
+        self.add_item(self.name_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        if not interaction.guild or not isinstance(interaction.user, discord.Member) or not is_mod(interaction.user):
+            await interaction.response.send_message("You must be a moderator to configure channels.", ephemeral=True)
+            return
+
+        select = self._select
+        name = str(self.name_input.value or select._default_name).strip() or select._default_name
+        try:
+            ch = await create_named_setup_channel(
+                interaction.guild,
+                name=name,
+                channel_type=select._channel_type,
+                reason="Setup via /setup_obsidian",
+            )
+            await set_guild_setting(interaction.guild.id, select._setting_key, str(ch.id))
+            result = f"**{select._display_name}**: Created {ch.mention}"
+        except discord.Forbidden:
+            result = f"**{select._display_name}**: Failed to create (bot needs Manage Channels)"
+        except Exception as e:
+            result = f"**{select._display_name}**: Error creating: {e}"
+
+        await self._setup_view.advance(interaction, result)
 
 
 class SetupChannelSelect(discord.ui.Select):
@@ -50,7 +92,13 @@ class SetupChannelSelect(discord.ui.Select):
         options: List[discord.SelectOption] = []
         for ch in channels[:23]:  # Max 23 to leave room for Create + Skip
             options.append(discord.SelectOption(label=f"#{ch.name}", value=str(ch.id), description=ch.name[:100]))
-        options.append(discord.SelectOption(label="➕ Create new channel", value="__create__", description=f"Bot creates #{default_name}"))
+        options.append(
+            discord.SelectOption(
+                label="➕ Create new channel",
+                value="__create__",
+                description="Pick a name, then bot creates it",
+            )
+        )
         options.append(discord.SelectOption(label="⏭️ Skip (don't configure)", value="__skip__", description="Commands for this channel will be unavailable"))
 
         super().__init__(
@@ -66,21 +114,17 @@ class SetupChannelSelect(discord.ui.Select):
             return
 
         value = self.values[0]
+        if value == "__create__":
+            view = self.view
+            if isinstance(view, SetupObsidianView):
+                await interaction.response.send_modal(CreateChannelNameModal(self, view))
+            else:
+                await interaction.response.send_message("Setup view expired. Run /setup_obsidian again.", ephemeral=True)
+            return
+
         if value == "__skip__":
             await set_guild_setting(interaction.guild.id, self._setting_key, "0")
             result = f"**{self._display_name}** skipped. Commands requiring this channel will be unavailable."
-        elif value == "__create__":
-            try:
-                if self._channel_type == "category":
-                    ch = await interaction.guild.create_category(name=self._default_name, reason="Setup via /setup_obsidian")
-                else:
-                    ch = await interaction.guild.create_text_channel(name=self._default_name, reason="Setup via /setup_obsidian")
-                await set_guild_setting(interaction.guild.id, self._setting_key, str(ch.id))
-                result = f"**{self._display_name}**: Created {ch.mention}"
-            except discord.Forbidden:
-                result = f"**{self._display_name}**: Failed to create (missing permissions)"
-            except Exception as e:
-                result = f"**{self._display_name}**: Error creating: {e}"
         else:
             ch = interaction.guild.get_channel(int(value))
             if ch and isinstance(ch, (discord.TextChannel, discord.CategoryChannel)):
@@ -148,7 +192,7 @@ class SetupObsidianView(discord.ui.View):
             embed = embed_template(
                 "showcase",
                 f"Setup • Step {self.step_index + 1}/{len(CHANNEL_CONFIGS)}: {display_name}",
-                f"Choose a channel for **{display_name}**, have the bot create one, or skip.\n\n"
+                f"Choose a channel for **{display_name}**, create one (you'll name it), or skip.\n\n"
                 f"*Previous: {result}*",
                 category="general",
                 client=interaction.client,
@@ -307,7 +351,7 @@ def setup(bot, group=None):
             embed = embed_template(
                 "showcase",
                 f"Setup • Step 1/{len(CHANNEL_CONFIGS)}: {display_name}",
-                "Select an existing channel, create a new one, or skip. "
+                "Select an existing channel, create a new one (you'll choose the name), or skip. "
                 "Skipped channels will make related commands unavailable until configured.",
                 category="general",
                 client=interaction.client,
