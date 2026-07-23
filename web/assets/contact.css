@@ -15,7 +15,8 @@
   --accent: #d4943c;
   --accent-bright: #e8a84a;
   --accent-dim: #b87828;
-  --accent-glow: rgba(212, 148, 60, 0.35);
+  --accent-rgb: 232, 168, 74;
+  --accent-glow: rgba(var(--accent-rgb), 0.35);
   --success: #6bcf7f;
   --danger: #f87171;
   --discord-blurple: #5865f2;
@@ -65,8 +66,8 @@ body {
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--accent-bright);
-  background: rgba(212, 148, 60, 0.1);
-  border: 1px solid rgba(212, 148, 60, 0.25);
+  background: rgba(var(--accent-rgb), 0.1);
+  border: 1px solid rgba(var(--accent-rgb), 0.25);
   border-radius: 999px;
 }
 
@@ -164,7 +165,7 @@ body {
 }
 
 .contact-card.email .contact-card-icon {
-  background: rgba(212, 148, 60, 0.12);
+  background: rgba(var(--accent-rgb), 0.12);
   color: var(--accent-bright);
 }
 
@@ -376,8 +377,8 @@ body {
 .pref-pill input:checked + span {
   color: var(--text);
   border-color: var(--accent);
-  background: rgba(212, 148, 60, 0.1);
-  box-shadow: 0 0 0 1px rgba(212, 148, 60, 0.2);
+  background: rgba(var(--accent-rgb), 0.1);
+  box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.2);
 }
 
 .pref-pill input:focus-visible + span {
@@ -423,13 +424,13 @@ body {
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: filter 0.2s, transform 0.15s, box-shadow 0.2s;
-  box-shadow: 0 4px 20px rgba(212, 148, 60, 0.25);
+  box-shadow: 0 4px 20px rgba(var(--accent-rgb), 0.25);
 }
 
 .form-submit:hover:not(:disabled) {
   filter: brightness(1.06);
   transform: translateY(-1px);
-  box-shadow: 0 6px 28px rgba(212, 148, 60, 0.35);
+  box-shadow: 0 6px 28px rgba(var(--accent-rgb), 0.35);
 }
 
 .form-submit:active:not(:disabled) {
@@ -564,20 +565,21 @@ body {
 html[data-theme="light"] {
   --bg: #eef1f5;
   --bg-gradient: radial-gradient(ellipse 100% 80% at 50% 0%, rgba(238, 241, 245, 0.98) 0%, transparent 50%),
-                radial-gradient(ellipse 80% 50% at 50% -20%, rgba(180, 120, 40, 0.08), transparent),
+                radial-gradient(ellipse 80% 50% at 50% -20%, rgba(61, 110, 168, 0.1), transparent),
                 radial-gradient(ellipse 60% 40% at 80% 60%, rgba(90, 110, 140, 0.05), transparent);
   --surface: #ffffff;
   --surface2: #f2f4f8;
   --surface-hover: #e8ebf1;
   --border: #cfd5df;
-  --border-focus: #b07828;
+  --border-focus: #3d6ea8;
   --text: #1a1d24;
   --text-muted: #5a6370;
   --text-subtle: #848c99;
-  --accent: #c4842e;
-  --accent-bright: #b07424;
-  --accent-dim: #9a6420;
-  --accent-glow: rgba(180, 120, 40, 0.25);
+  --accent: #3d6ea8;
+  --accent-bright: #2f5f96;
+  --accent-dim: #25507e;
+  --accent-glow: rgba(61, 110, 168, 0.25);
+  --accent-rgb: 61, 110, 168;
   --shadow: 0 4px 24px rgba(20, 25, 35, 0.08);
   --shadow-lg: 0 12px 48px rgba(20, 25, 35, 0.12);
 }

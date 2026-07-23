@@ -177,7 +177,7 @@
 .site-nav-drop-panel a:hover,
 .site-nav-drop-panel a.active {
   color: var(--accent-bright, #e8a84a);
-  background: rgba(212, 148, 60, 0.08);
+  background: rgba(var(--accent-rgb), 0.08);
 }
 
 .site-nav-cta {
@@ -186,7 +186,7 @@
   margin-left: 4px;
   padding: 7px 12px !important;
   color: #06070a !important;
-  background: linear-gradient(135deg, #e8a84a, #b87828) !important;
+  background: linear-gradient(135deg, var(--accent-bright), var(--accent-dim)) !important;
   border-radius: 999px !important;
   font-weight: 700 !important;
   font-size: 0.82rem !important;
@@ -307,7 +307,7 @@
 
 .site-jump-item:hover,
 .site-jump-item.active {
-  background: rgba(212, 148, 60, 0.1);
+  background: rgba(var(--accent-rgb), 0.1);
 }
 
 .site-jump-group {
@@ -342,7 +342,7 @@
   text-transform: uppercase;
   vertical-align: middle;
   color: #06070a;
-  background: linear-gradient(135deg, #e8a84a, #b87828);
+  background: linear-gradient(135deg, var(--accent-bright), var(--accent-dim));
   border-radius: 999px;
 }
 

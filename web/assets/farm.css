@@ -16,8 +16,8 @@
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--accent-bright);
-  background: rgba(232, 168, 74, 0.1);
-  border: 1px solid rgba(232, 168, 74, 0.25);
+  background: rgba(var(--accent-rgb), 0.1);
+  border: 1px solid rgba(var(--accent-rgb), 0.25);
   border-radius: 999px;
 }
 
@@ -129,7 +129,7 @@
 .fm-suggest li:hover,
 .fm-suggest li.on,
 .fm-suggest li[aria-selected="true"] {
-  background: rgba(232, 168, 74, 0.12);
+  background: rgba(var(--accent-rgb), 0.12);
 }
 
 .fm-quick {
@@ -392,7 +392,7 @@
   gap: 14px;
   margin-top: 8px;
   padding: 18px 22px;
-  background: linear-gradient(135deg, rgba(232, 168, 74, 0.1), transparent 55%), var(--surface);
+  background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.1), transparent 55%), var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
 }

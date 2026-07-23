@@ -12,6 +12,7 @@
   --accent: #d4943c;
   --accent-bright: #e8a84a;
   --accent-dim: #b87828;
+  --accent-rgb: 232, 168, 74;
   --discord-blurple: #5865F2;
   --success: #6bcf7f;
   --warn: #fbbf24;
@@ -595,7 +596,7 @@ body.dash-body {
   display: inline-block;
   padding: 2px 8px;
   border-radius: 999px;
-  background: rgba(212, 148, 60, 0.15);
+  background: rgba(var(--accent-rgb), 0.15);
   color: var(--accent-bright);
   font-size: 0.78rem;
   font-weight: 700;
@@ -751,15 +752,16 @@ body.dash-body {
 html[data-theme="light"] {
   --bg: #eef1f5;
   --bg-gradient: radial-gradient(ellipse 100% 80% at 50% 0%, rgba(238, 241, 245, 0.98) 0%, transparent 50%),
-    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(180, 120, 40, 0.08), transparent);
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(61, 110, 168, 0.1), transparent);
   --surface: #ffffff;
   --surface2: #f2f4f8;
   --surface-hover: #e8ebf1;
   --border: #cfd5df;
   --text: #1a1d24;
   --text-muted: #5a6370;
-  --accent: #c4842e;
-  --accent-bright: #b07424;
-  --accent-dim: #9a6420;
+  --accent: #3d6ea8;
+  --accent-bright: #2f5f96;
+  --accent-dim: #25507e;
+  --accent-rgb: 61, 110, 168;
   --shadow: 0 4px 24px rgba(20, 25, 35, 0.08);
 }

@@ -16,8 +16,8 @@
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--accent-bright);
-  background: rgba(232, 168, 74, 0.1);
-  border: 1px solid rgba(232, 168, 74, 0.25);
+  background: rgba(var(--accent-rgb), 0.1);
+  border: 1px solid rgba(var(--accent-rgb), 0.25);
   border-radius: 999px;
 }
 
@@ -245,7 +245,7 @@
 }
 
 .wf-panel:hover {
-  border-color: rgba(232, 168, 74, 0.28);
+  border-color: rgba(var(--accent-rgb), 0.28);
 }
 
 .wf-panel > summary {
@@ -283,7 +283,7 @@
   margin-bottom: 0;
   padding-bottom: 10px;
   border-bottom: 1px solid transparent;
-  border-image: linear-gradient(90deg, rgba(232, 168, 74, 0.45), transparent 70%) 1;
+  border-image: linear-gradient(90deg, rgba(var(--accent-rgb), 0.45), transparent 70%) 1;
 }
 
 .wf-panel-head::after {
@@ -311,8 +311,8 @@
   align-items: center;
   justify-content: center;
   border-radius: 9px;
-  background: rgba(232, 168, 74, 0.1);
-  border: 1px solid rgba(232, 168, 74, 0.2);
+  background: rgba(var(--accent-rgb), 0.1);
+  border: 1px solid rgba(var(--accent-rgb), 0.2);
   color: var(--accent-bright);
   flex-shrink: 0;
 }
@@ -352,9 +352,9 @@
   overflow: hidden;
   padding: 22px 24px;
   background:
-    linear-gradient(135deg, rgba(232, 168, 74, 0.12) 0%, transparent 45%),
+    linear-gradient(135deg, rgba(var(--accent-rgb), 0.12) 0%, transparent 45%),
     var(--surface);
-  border: 1px solid rgba(232, 168, 74, 0.35);
+  border: 1px solid rgba(var(--accent-rgb), 0.35);
   border-left: 4px solid var(--accent-bright);
   border-radius: var(--radius-lg);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
@@ -378,7 +378,7 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #06070a;
-  background: linear-gradient(135deg, #e8a84a, #b87828);
+  background: linear-gradient(135deg, var(--accent-bright), var(--accent-dim));
   border-radius: 999px;
 }
 
@@ -446,7 +446,7 @@
 
 .wf-inv-item:hover {
   transform: translateY(-1px);
-  border-color: rgba(232, 168, 74, 0.4);
+  border-color: rgba(var(--accent-rgb), 0.4);
 }
 
 .wf-inv-item .name {
@@ -482,8 +482,8 @@
   opacity: 0.04;
   border-radius: inherit;
   background-image:
-    linear-gradient(rgba(232, 168, 74, 0.8) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(232, 168, 74, 0.8) 1px, transparent 1px);
+    linear-gradient(rgba(var(--accent-rgb), 0.8) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(var(--accent-rgb), 0.8) 1px, transparent 1px);
   background-size: 28px 28px;
   pointer-events: none;
 }
@@ -506,7 +506,7 @@
 
 .wf-cycle-card:hover {
   transform: translateY(-2px);
-  border-color: rgba(232, 168, 74, 0.35);
+  border-color: rgba(var(--accent-rgb), 0.35);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
 }
 
@@ -630,7 +630,7 @@
 
 .wf-mini-card:hover {
   transform: translateY(-1px);
-  border-color: rgba(232, 168, 74, 0.3);
+  border-color: rgba(var(--accent-rgb), 0.3);
 }
 
 .wf-mini-card strong {
@@ -785,7 +785,7 @@
 
 .wf-filter-chip:hover,
 .wf-mission-pill:hover {
-  border-color: rgba(232, 168, 74, 0.45);
+  border-color: rgba(var(--accent-rgb), 0.45);
   color: var(--text);
 }
 
@@ -793,7 +793,7 @@
 .wf-mission-pill.on {
   color: var(--text);
   border-color: var(--accent);
-  background: rgba(232, 168, 74, 0.12);
+  background: rgba(var(--accent-rgb), 0.12);
 }
 
 .wf-filter-chip.tier-lith.on { border-color: #c4b5a0; }
@@ -885,7 +885,7 @@
 
 .wf-chip:hover {
   transform: translateY(-1px);
-  border-color: rgba(232, 168, 74, 0.4);
+  border-color: rgba(var(--accent-rgb), 0.4);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
 }
 
@@ -941,7 +941,7 @@
   gap: 14px;
   margin-top: 32px;
   padding: 18px 22px;
-  background: linear-gradient(135deg, rgba(232, 168, 74, 0.1), transparent 55%),
+  background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.1), transparent 55%),
               var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -1255,7 +1255,7 @@ body.wf-dense .wf-teaser {
 .wf-jump a.is-active {
   color: var(--accent-bright);
   border-color: var(--accent);
-  background: rgba(232, 168, 74, 0.12);
+  background: rgba(var(--accent-rgb), 0.12);
 }
 
 .wf-pin {
@@ -1290,7 +1290,7 @@ body.wf-dense .wf-teaser {
 }
 
 .wf-pin.pinned {
-  background: rgba(232, 168, 74, 0.15);
+  background: rgba(var(--accent-rgb), 0.15);
 }
 
 .wf-cmd {

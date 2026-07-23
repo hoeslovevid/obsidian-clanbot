@@ -21,8 +21,8 @@
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--accent-bright);
-  background: rgba(232, 168, 74, 0.1);
-  border: 1px solid rgba(232, 168, 74, 0.25);
+  background: rgba(var(--accent-rgb), 0.1);
+  border: 1px solid rgba(var(--accent-rgb), 0.25);
   border-radius: 999px;
 }
 
@@ -269,7 +269,7 @@
 
 .web-tool-card:hover {
   border-color: var(--accent);
-  background: rgba(232, 168, 74, 0.04);
+  background: rgba(var(--accent-rgb), 0.04);
   transform: translateY(-2px);
 }
 
@@ -668,7 +668,7 @@
 }
 
 .worth-suggest li:hover {
-  background: rgba(212, 148, 60, 0.1);
+  background: rgba(var(--accent-rgb), 0.1);
   color: var(--accent-bright);
 }
 
@@ -770,7 +770,7 @@
 .rg-drop:focus,
 .rg-drop.dragover {
   border-color: var(--accent);
-  background: rgba(212, 148, 60, 0.06);
+  background: rgba(var(--accent-rgb), 0.06);
   outline: none;
 }
 

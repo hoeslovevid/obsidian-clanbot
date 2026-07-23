@@ -16,8 +16,8 @@
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--accent-bright);
-  background: rgba(232, 168, 74, 0.1);
-  border: 1px solid rgba(232, 168, 74, 0.25);
+  background: rgba(var(--accent-rgb), 0.1);
+  border: 1px solid rgba(var(--accent-rgb), 0.25);
   border-radius: 999px;
 }
 
@@ -90,7 +90,7 @@
 .mk-field input:focus,
 .mk-field select:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(232, 168, 74, 0.15);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.15);
 }
 
 .mk-submit {
@@ -128,7 +128,7 @@
 
 .mk-suggest li:hover,
 .mk-suggest li[aria-selected="true"] {
-  background: rgba(232, 168, 74, 0.12);
+  background: rgba(var(--accent-rgb), 0.12);
   color: var(--text);
 }
 
@@ -423,8 +423,8 @@
   gap: 14px;
   margin: 28px 0 12px;
   padding: 18px 20px;
-  background: rgba(232, 168, 74, 0.08);
-  border: 1px solid rgba(232, 168, 74, 0.22);
+  background: rgba(var(--accent-rgb), 0.08);
+  border: 1px solid rgba(var(--accent-rgb), 0.22);
   border-radius: 16px;
 }
 
