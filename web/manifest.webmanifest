@@ -1,0 +1,12 @@
+{
+  "name": "Obsidian Overseer",
+  "short_name": "Overseer",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#06070a",
+  "background_color": "#06070a",
+  "icons": [
+    { "src": "/assets/logo.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/assets/logo.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

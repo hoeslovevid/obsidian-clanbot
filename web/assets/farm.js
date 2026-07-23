@@ -414,7 +414,13 @@
       '<div class="fm-actions">' +
       '<a class="btn-secondary" href="' +
       esc(marketUrl(item.name)) +
-      '">Market prices</a>';
+      '">Market prices</a>' +
+      '<a class="btn-secondary" href="/worth.html?q=' +
+      encodeURIComponent(item.name) +
+      '">Ducat / plat</a>' +
+      '<a class="btn-secondary" href="/planner.html?want=' +
+      encodeURIComponent(item.name) +
+      '">Relic planner</a>';
     if (item.wikiaUrl) {
       html +=
         '<a class="btn-secondary" href="' +

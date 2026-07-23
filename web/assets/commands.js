@@ -75,17 +75,33 @@
     }
     listEl.innerHTML = filtered
       .map(function (c) {
+        var name = c.name || "";
         return (
           '<li id="cmd-' +
-          esc((c.name || "").replace(/\s+/g, "-")) +
-          '"><code>/' +
-          esc(c.name || "") +
-          "</code> — " +
+          esc(name.replace(/\s+/g, "-")) +
+          '"><div class="cmd-row"><code>/' +
+          esc(name) +
+          "</code>" +
+          '<button type="button" class="btn-ghost cmd-copy" data-cmd="/' +
+          esc(name) +
+          '" title="Copy command">Copy</button></div><span class="cmd-desc">' +
           esc(c.description || "") +
-          "</li>"
+          "</span></li>"
         );
       })
       .join("");
+    listEl.querySelectorAll(".cmd-copy").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var text = btn.getAttribute("data-cmd") || "";
+        navigator.clipboard.writeText(text).then(function () {
+          var prev = btn.textContent;
+          btn.textContent = "Copied";
+          setTimeout(function () {
+            btn.textContent = prev;
+          }, 1000);
+        });
+      });
+    });
   }
 
   function onFilter() {

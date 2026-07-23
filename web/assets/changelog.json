@@ -1,10 +1,20 @@
 {
-  "version": "2.3.4",
+  "version": "2.4.0",
   "entries": [
+    {
+      "version": "2.4.0",
+      "date": "2026-07-23",
+      "current": true,
+      "changes": [
+        "Website — Ctrl/Cmd+K jump menu; Nightwave checklist; Baro shopping list; Steel Path rotation; ducat/plat helper; relic planner",
+        "Website — Incarnon and Archon shard cheat sheets; privacy summary; richer 404; OBS size presets; PWA install (manifest + service worker)",
+        "Website — New badges on home cards; command Copy buttons; Builds/LFG/Events polish; mobile world-state tweaks"
+      ]
+    },
     {
       "version": "2.3.4",
       "date": "2026-07-05",
-      "current": true,
+      "current": false,
       "changes": [
         "Website \u2014 shared nav (Home, Features, Dashboard, Contact, Legal); root / URLs fix GitHub Pages routing; 404.html fallback",
         "Dashboard page \u2014 /dashboard.html with Discord login and mod overview when bot API is enabled",

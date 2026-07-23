@@ -51,6 +51,7 @@
       <div id="build-links" class="build-links" hidden>
         <a id="build-farm" class="tool-pill" href="/farm.html">Farm parts</a>
         <a id="build-market" class="tool-pill" href="/market.html">Market prices</a>
+        <a id="build-worth" class="tool-pill" href="/worth.html">Ducat / plat</a>
       </div>
       <p class="tool-meta" style="margin-top:12px;">Tip: on Overframe, filter by <em>rating</em> and <em>updated</em> date — stale builds may reference rebalanced mods.</p>
     </div>
@@ -73,6 +74,29 @@
       </div>
     </section>
 
+    <section aria-labelledby="sp-title">
+      <h2 id="sp-title" class="tool-section-title" style="font-family:var(--font-display);font-size:1.15rem;margin:24px 0 12px;">Steel Path starters</h2>
+      <p class="tool-meta" style="margin-bottom:12px;">Once you unlock Steel Path, these frames/weapons are forgiving. Check <a href="/shards.html">Archon shards</a> and <a href="/circuit.html">Honoria rewards</a> next.</p>
+      <div class="web-tools">
+        <a class="web-tool-card" href="/farm.html?q=Revenant">
+          <strong>Revenant</strong>
+          <span>Mesmer Shield — very tanky for SP content.</span>
+        </a>
+        <a class="web-tool-card" href="/farm.html?q=Wisp">
+          <strong>Wisp</strong>
+          <span>Haste mote + health — great for squads and survival.</span>
+        </a>
+        <a class="web-tool-card" href="/farm.html?q=Kuva Bramma">
+          <strong>Kuva Bramma</strong>
+          <span>AoE clear — farm Kuva Liches; watch self-damage.</span>
+        </a>
+      </div>
+    </section>
+
+    <div class="tool-card tool-cta-strip">
+      <p>Got the parts? Check <a href="/worth.html">ducat vs plat</a>, or plan relics with the <a href="/planner.html">relic planner</a>.</p>
+    </div>
+
     <footer id="site-footer"></footer>
   </div>
   <script src="/assets/config.js"></script>
@@ -93,6 +117,8 @@
         if (links) links.hidden = false;
         if (farm) farm.href = "/farm.html?q=" + encodeURIComponent(q);
         if (market) market.href = "/market.html?q=" + encodeURIComponent(q);
+        var worth = document.getElementById("build-worth");
+        if (worth) worth.href = "/worth.html?q=" + encodeURIComponent(q);
       }
       if (input) input.addEventListener("input", function () { syncLinks(input.value); });
       if (form) {

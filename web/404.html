@@ -5,30 +5,41 @@
   <script src="/assets/theme-boot.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Page not found — Obsidian Overseer</title>
+  <meta name="robots" content="noindex" />
+  <meta name="theme-color" content="#06070a" />
   <link rel="icon" type="image/png" href="/assets/logo.png" />
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/site-nav.css" />
   <link rel="stylesheet" href="/assets/site.css" />
-  <style>
-    body { display: flex; align-items: center; justify-content: center; text-align: center; padding: 24px; }
-    h1 { font-size: 2.5rem; font-weight: 800; letter-spacing: -0.04em; margin-bottom: 8px; }
-    p { color: var(--text-muted); }
-    .links { margin-top: 24px; display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; }
-    .links a { color: var(--accent-bright); font-weight: 600; text-decoration: none; }
-    .links a:hover { text-decoration: underline; }
-  </style>
+  <link rel="stylesheet" href="/assets/tools.css" />
 </head>
 <body>
-  <div>
-    <h1>404</h1>
-    <p>That page isn’t here.</p>
-    <div class="links">
-      <a href="/">Home</a>
-      <a href="/warframe.html">World state</a>
-      <a href="/market.html">Market</a>
-      <a href="/setup.html">Setup</a>
-      <a href="/faq.html">FAQ</a>
-      <a href="/contact.html">Contact</a>
+  <div class="bg-ambient" aria-hidden="true"></div>
+  <div class="bg-grain" aria-hidden="true"></div>
+  <div class="page-wrap">
+    <nav id="site-nav" data-active=""></nav>
+    <header class="tool-hero page-hero">
+      <span class="tool-eyebrow">404</span>
+      <h1>Page not found</h1>
+      <p class="tool-lead">That URL isn’t on the site. Try a tool below, or press <kbd>Ctrl</kbd>+<kbd>K</kbd> to jump anywhere.</p>
+    </header>
+    <div class="web-tools">
+      <a class="web-tool-card" href="/warframe.html"><strong>World state</strong><span>Live board — Baro, fissures, cycles.</span></a>
+      <a class="web-tool-card" href="/farm.html"><strong>Acquire</strong><span>Drop locations for resources and primes.</span></a>
+      <a class="web-tool-card" href="/market.html"><strong>Market</strong><span>Warframe Market orders.</span></a>
+      <a class="web-tool-card" href="/relics.html"><strong>Relics</strong><span>Intact relic rewards by tier.</span></a>
+      <a class="web-tool-card" href="/nightwave.html"><strong>Nightwave</strong><span>Challenge checklist.</span></a>
+      <a class="web-tool-card" href="/commands.html"><strong>Commands</strong><span>Slash command reference.</span></a>
+      <a class="web-tool-card" href="/setup.html"><strong>Setup</strong><span>Invite and first-run guide.</span></a>
+      <a class="web-tool-card" href="/faq.html"><strong>FAQ</strong><span>Common questions.</span></a>
+      <a class="web-tool-card" href="/contact.html"><strong>Contact</strong><span>Reach the developer.</span></a>
     </div>
+    <p class="tool-footnote"><a href="/">← Back home</a></p>
+    <footer id="site-footer"></footer>
   </div>
+  <script src="/assets/config.js"></script>
+  <script src="/assets/site.js"></script>
 </body>
 </html>

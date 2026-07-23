@@ -117,7 +117,10 @@
         esc(farmUrl(itemName)) +
         '">' +
         esc(itemName) +
-        "</a></li>";
+        "</a>" +
+        ' · <a href="/worth.html?q=' +
+        encodeURIComponent(itemName) +
+        '">Worth</a></li>';
     });
     return html + "</ul>";
   }
@@ -144,6 +147,7 @@
       html += '<div class="tool-actions">';
       html += '<a class="btn-secondary" href="' + esc(voidUrl(tier)) + '">Live fissures</a>';
       html += '<a class="btn-secondary" href="' + esc(marketUrl(baseName)) + '">Market</a>';
+      html += '<a class="btn-secondary" href="/planner.html?want=' + encodeURIComponent(baseName) + '">Planner</a>';
       html += "</div></article>";
     });
     root.innerHTML = html;

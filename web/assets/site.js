@@ -8,14 +8,21 @@
   var NAV_TOOLS = [
     { section: "Live" },
     { id: "warframe", label: "World state", href: "/warframe.html" },
+    { id: "nightwave", label: "Nightwave", href: "/nightwave.html" },
+    { id: "baro", label: "Baro list", href: "/baro.html" },
+    { id: "circuit", label: "Steel Path", href: "/circuit.html" },
     { id: "farm", label: "Acquire", href: "/farm.html" },
     { id: "market", label: "Market", href: "/market.html" },
     { id: "relics", label: "Relics", href: "/relics.html" },
+    { id: "planner", label: "Relic planner", href: "/planner.html" },
     { id: "vault", label: "Prime vault", href: "/vault.html" },
+    { id: "worth", label: "Ducat / plat", href: "/worth.html" },
     { section: "Lookup" },
     { id: "rivens", label: "Riven disposition", href: "/rivens.html" },
     { id: "compare", label: "Compare items", href: "/compare.html" },
     { id: "factions", label: "Factions", href: "/factions.html" },
+    { id: "incarnon", label: "Incarnon", href: "/incarnon.html" },
+    { id: "shards", label: "Archon shards", href: "/shards.html" },
     { id: "builds", label: "Builds", href: "/builds.html" },
     { section: "Bot" },
     { id: "status", label: "Bot status", href: "/status.html" },
@@ -36,29 +43,54 @@
     { section: "Help" },
     { id: "faq", label: "FAQ", href: "/faq.html" },
     { id: "changelog", label: "Changelog", href: "/changelog.html" },
+    { id: "privacy", label: "Privacy", href: "/privacy.html" },
   ];
 
   var TOOL_IDS = {
     warframe: 1, farm: 1, relics: 1, vault: 1, compare: 1, rivens: 1,
     factions: 1, builds: 1, market: 1, embeds: 1, status: 1, features: 1,
+    nightwave: 1, baro: 1, circuit: 1, planner: 1, worth: 1, incarnon: 1, shards: 1,
   };
   var GUIDE_IDS = {
     tenno: 1, dojo: 1, trading: 1, commands: 1, lfg: 1, events: 1,
-    setup: 1, faq: 1, changelog: 1,
+    setup: 1, faq: 1, changelog: 1, privacy: 1,
   };
   var THEME_KEY = "oo_theme";
+  // Show "New" chips on home / jump menu until this date (ISO)
+  var NEW_UNTIL = {
+    nightwave: "2026-08-20",
+    baro: "2026-08-20",
+    circuit: "2026-08-20",
+    planner: "2026-08-20",
+    worth: "2026-08-20",
+    incarnon: "2026-08-20",
+    shards: "2026-08-20",
+  };
+
+  function isNewTool(id) {
+    var until = NEW_UNTIL[id];
+    if (!until) return false;
+    return Date.now() < new Date(until + "T23:59:59Z").getTime();
+  }
 
   function routeToolSearch(q) {
     var s = String(q || "").trim().toLowerCase();
     if (!s) return "/farm.html";
     var map = [
-      [/^(world|baro|fissure|cycle|sortie)/, "/warframe.html"],
+      [/^(world|fissure|cycle|sortie|archon)/, "/warframe.html"],
+      [/^(nightwave|nw\b)/, "/nightwave.html"],
+      [/^(baro|void trader|ducat shop)/, "/baro.html"],
+      [/^(steel|circuit|honoria|teshin)/, "/circuit.html"],
       [/^(relic|lith|meso|neo|axi)/, "/relics.html"],
+      [/^(plan|planner|farm plan)/, "/planner.html"],
       [/^(vault|varzia|prime vault)/, "/vault.html"],
+      [/^(worth|ducat|melt|sell or)/, "/worth.html"],
       [/^(riven|disposition)/, "/rivens.html"],
       [/^(market|plat|wfm|price)/, "/market.html"],
       [/^(compare)/, "/compare.html"],
       [/^(faction|grineer|corpus|infest)/, "/factions.html"],
+      [/^(incarnon|evolution)/, "/incarnon.html"],
+      [/^(shard|archon shard|tauforged)/, "/shards.html"],
       [/^(build|overframe)/, "/builds.html"],
       [/^(command|slash|\/)/, "/commands.html"],
       [/^(status|uptime|ping)/, "/status.html"],
@@ -69,12 +101,35 @@
       [/^(tenno|beginner|new)/, "/tenno.html"],
       [/^(dojo|clan)/, "/dojo.html"],
       [/^(setup|invite)/, "/setup.html"],
+      [/^(privacy|legal|terms)/, "/privacy.html"],
       [/^(acquire|farm|drop|neurode|morphic)/, "/farm.html"],
     ];
     for (var i = 0; i < map.length; i++) {
       if (map[i][0].test(s)) return map[i][1];
     }
     return "/farm.html?q=" + encodeURIComponent(q);
+  }
+
+  function searchIndex() {
+    var items = [];
+    function pushList(list, group) {
+      list.forEach(function (item) {
+        if (item.section || !item.href) return;
+        items.push({
+          id: item.id,
+          label: item.label,
+          href: item.href,
+          group: group,
+          isNew: isNewTool(item.id),
+        });
+      });
+    }
+    pushList(NAV_TOOLS, "Tools");
+    pushList(NAV_GUIDES, "Guides");
+    items.push({ id: "home", label: "Home", href: "/", group: "Site", isNew: false });
+    items.push({ id: "dashboard", label: "Dashboard", href: "/dashboard.html", group: "Site", isNew: false });
+    items.push({ id: "contact", label: "Contact", href: "/contact.html", group: "Site", isNew: false });
+    return items;
   }
 
   function cfg() {
@@ -301,6 +356,18 @@
     links.appendChild(makeNavDrop("Guides", NAV_GUIDES, origin, active, GUIDE_IDS));
     links.appendChild(makeNavLink(NAV_DASHBOARD, origin, active));
 
+    var jumpBtn = document.createElement("button");
+    jumpBtn.type = "button";
+    jumpBtn.className = "site-nav-jump";
+    jumpBtn.setAttribute("aria-label", "Search pages");
+    jumpBtn.title = "Search (Ctrl+K)";
+    jumpBtn.innerHTML =
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>';
+    jumpBtn.addEventListener("click", function () {
+      openJumpMenu();
+    });
+    links.appendChild(jumpBtn);
+
     var themeBtn = document.createElement("button");
     themeBtn.type = "button";
     themeBtn.className = "site-nav-theme";
@@ -380,6 +447,12 @@
       '/market.html">Market</a>' +
       '<a href="' +
       prefix +
+      '/nightwave.html">Nightwave</a>' +
+      '<a href="' +
+      prefix +
+      '/worth.html">Ducat / plat</a>' +
+      '<a href="' +
+      prefix +
       '/commands.html">Commands</a>' +
       '<a href="' +
       dash +
@@ -408,7 +481,7 @@
       '" target="_blank" rel="noopener noreferrer">Discord</a>' +
       '<a href="' +
       prefix +
-      '/legal.html#privacy">Privacy</a>' +
+      '/privacy.html">Privacy</a>' +
       '<a href="' +
       prefix +
       '/legal.html#terms">Terms</a>' +
@@ -430,7 +503,7 @@
       '<span class="site-footer-sep" aria-hidden="true">·</span>' +
       '<a href="' +
       prefix +
-      '/legal.html#privacy">Privacy</a>' +
+      '/privacy.html">Privacy</a>' +
       '<span class="site-footer-sep" aria-hidden="true">·</span>' +
       '<a href="' +
       prefix +
@@ -675,6 +748,190 @@
     });
   }
 
+  function closeJumpMenu() {
+    var overlay = document.getElementById("site-jump");
+    if (overlay) overlay.remove();
+  }
+
+  function openJumpMenu(initialQuery) {
+    closeJumpMenu();
+    var origin = siteOrigin();
+    var items = searchIndex();
+    var overlay = document.createElement("div");
+    overlay.id = "site-jump";
+    overlay.className = "site-jump";
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+    overlay.setAttribute("aria-label", "Jump to page");
+    overlay.innerHTML =
+      '<div class="site-jump-panel">' +
+      '<form class="site-jump-form" role="search">' +
+      '<input type="search" class="site-jump-input" placeholder="Jump to a tool or guide…" autocomplete="off" aria-label="Search pages" />' +
+      '<kbd class="site-jump-kbd">Esc</kbd>' +
+      "</form>" +
+      '<ul class="site-jump-list" role="listbox"></ul>' +
+      '<p class="site-jump-hint">Enter opens · ↑↓ move · Esc close</p>' +
+      "</div>";
+    document.body.appendChild(overlay);
+
+    var input = overlay.querySelector(".site-jump-input");
+    var list = overlay.querySelector(".site-jump-list");
+    var form = overlay.querySelector(".site-jump-form");
+    var activeIdx = 0;
+    var visible = [];
+
+    function hrefFor(item) {
+      if (!origin) return item.href;
+      if (item.href.indexOf("http") === 0) return item.href;
+      if (item.href.charAt(0) === "/") return origin + item.href;
+      return origin + "/" + item.href;
+    }
+
+    function renderList(q) {
+      q = String(q || "").trim().toLowerCase();
+      visible = items.filter(function (it) {
+        if (!q) return true;
+        return (
+          it.label.toLowerCase().indexOf(q) >= 0 ||
+          it.id.toLowerCase().indexOf(q) >= 0 ||
+          it.group.toLowerCase().indexOf(q) >= 0
+        );
+      });
+      if (!visible.length && q) {
+        visible = [
+          {
+            id: "farm-q",
+            label: 'Search Acquire for "' + q + '"',
+            href: "/farm.html?q=" + encodeURIComponent(q),
+            group: "Search",
+            isNew: false,
+          },
+        ];
+      }
+      activeIdx = 0;
+      list.innerHTML = visible
+        .slice(0, 12)
+        .map(function (it, i) {
+          return (
+            '<li role="option" class="site-jump-item' +
+            (i === 0 ? " active" : "") +
+            '" data-idx="' +
+            i +
+            '">' +
+            '<span class="site-jump-group">' +
+            it.group +
+            "</span>" +
+            '<span class="site-jump-label">' +
+            it.label +
+            (it.isNew ? ' <span class="tool-badge-new">New</span>' : "") +
+            "</span></li>"
+          );
+        })
+        .join("");
+    }
+
+    function go(idx) {
+      var it = visible[idx];
+      if (!it) return;
+      closeJumpMenu();
+      window.location.href = hrefFor(it);
+    }
+
+    function setActive(idx) {
+      var nodes = list.querySelectorAll(".site-jump-item");
+      if (!nodes.length) return;
+      activeIdx = (idx + nodes.length) % nodes.length;
+      nodes.forEach(function (n, i) {
+        n.classList.toggle("active", i === activeIdx);
+      });
+      nodes[activeIdx].scrollIntoView({ block: "nearest" });
+    }
+
+    renderList(initialQuery || "");
+    if (initialQuery) input.value = initialQuery;
+    setTimeout(function () {
+      input.focus();
+      input.select();
+    }, 0);
+
+    input.addEventListener("input", function () {
+      renderList(input.value);
+    });
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      if (visible.length) go(activeIdx);
+      else window.location.href = routeToolSearch(input.value);
+    });
+    list.addEventListener("click", function (e) {
+      var li = e.target.closest(".site-jump-item");
+      if (!li) return;
+      go(Number(li.getAttribute("data-idx")) || 0);
+    });
+    overlay.addEventListener("click", function (e) {
+      if (e.target === overlay) closeJumpMenu();
+    });
+    function onKey(e) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closeJumpMenu();
+        document.removeEventListener("keydown", onKey);
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setActive(activeIdx + 1);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setActive(activeIdx - 1);
+      }
+    }
+    document.addEventListener("keydown", onKey);
+  }
+
+  function bindJumpHotkey() {
+    document.addEventListener("keydown", function (e) {
+      var tag = (e.target && e.target.tagName) || "";
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (e.target && e.target.isContentEditable)) {
+        if (!(e.key === "Escape" && document.getElementById("site-jump"))) return;
+      }
+      if ((e.ctrlKey || e.metaKey) && String(e.key).toLowerCase() === "k") {
+        e.preventDefault();
+        if (document.getElementById("site-jump")) closeJumpMenu();
+        else openJumpMenu();
+      }
+    });
+  }
+
+  function markNewToolCards() {
+    document.querySelectorAll("[data-tool-id]").forEach(function (el) {
+      var id = el.getAttribute("data-tool-id");
+      if (!isNewTool(id)) return;
+      if (el.querySelector(".tool-badge-new")) return;
+      var badge = document.createElement("span");
+      badge.className = "tool-badge-new";
+      badge.textContent = "New";
+      var strong = el.querySelector("strong");
+      if (strong) strong.appendChild(document.createTextNode(" "));
+      if (strong) strong.appendChild(badge);
+      else el.insertBefore(badge, el.firstChild);
+    });
+  }
+
+  function registerPwa() {
+    if (!("serviceWorker" in navigator)) return;
+    var host = window.location.hostname;
+    if (host !== "obsidianoverseer.com" && host !== "www.obsidianoverseer.com" && host !== "localhost" && host !== "127.0.0.1") {
+      return;
+    }
+    navigator.serviceWorker.register("/sw.js").catch(function () {});
+  }
+
+  function ensureManifestLink() {
+    if (document.querySelector('link[rel="manifest"]')) return;
+    var link = document.createElement("link");
+    link.rel = "manifest";
+    link.href = "/manifest.webmanifest";
+    document.head.appendChild(link);
+  }
+
   function initChrome() {
     if (!document.documentElement.getAttribute("data-theme")) {
       applyTheme(
@@ -693,6 +950,10 @@
     }
     renderNav();
     renderFooter();
+    bindJumpHotkey();
+    markNewToolCards();
+    ensureManifestLink();
+    registerPwa();
   }
 
   window.ObsidianSite = {
@@ -710,6 +971,10 @@
     setTheme: applyTheme,
     toggleTheme: toggleTheme,
     config: cfg,
+    routeToolSearch: routeToolSearch,
+    openJumpMenu: openJumpMenu,
+    isNewTool: isNewTool,
+    searchIndex: searchIndex,
   };
 
   if (document.readyState === "loading") {

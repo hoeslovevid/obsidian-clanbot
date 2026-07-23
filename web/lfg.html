@@ -46,11 +46,23 @@
       </ul>
       <p>Staff can route posts to a dedicated channel via setup. See <a href="/commands.html">commands</a> for the full list.</p>
 
+      <h2>Copy-ready examples</h2>
+      <div class="tool-card">
+        <p class="tool-meta">Paste into Discord after inviting the bot.</p>
+        <ul class="tool-list">
+          <li><code>/lfg mission:Axi fissure goal:radshare voice:yes</code>
+            <button type="button" class="btn-ghost cmd-copy" data-cmd="/lfg">Copy /lfg</button></li>
+          <li><code>/lfg_list</code>
+            <button type="button" class="btn-ghost cmd-copy" data-cmd="/lfg_list">Copy</button></li>
+        </ul>
+      </div>
+
       <h2>Tips for hosts</h2>
       <ul>
         <li>State mission, goal (e.g. “steel path”, “quick clear”), and if voice is required.</li>
         <li>Close the post when full — reduces ping fatigue.</li>
         <li>Link <a href="/warframe.html">world state</a> for fissure tier or sortie element.</li>
+        <li>For relic targets, share a <a href="/planner.html">planner</a> URL with your wanted parts.</li>
       </ul>
 
       <h2>Web board</h2>
@@ -70,6 +82,16 @@
       ["lfg-dashboard", "lfg-dashboard-inline"].forEach(function (id) {
         var el = document.getElementById(id);
         if (el) el.href = d;
+      });
+      document.querySelectorAll(".cmd-copy").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var text = btn.getAttribute("data-cmd") || "";
+          navigator.clipboard.writeText(text).then(function () {
+            var prev = btn.textContent;
+            btn.textContent = "Copied";
+            setTimeout(function () { btn.textContent = prev; }, 1000);
+          });
+        });
       });
     })();
   </script>

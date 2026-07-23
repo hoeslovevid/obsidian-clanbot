@@ -43,6 +43,14 @@
         <li><code>/events_list</code> — what’s coming up this week.</li>
         <li>Reminders ping interested members before start — great for sortie nights and dojo sessions.</li>
       </ul>
+      <div class="tool-card">
+        <p class="tool-meta">Copy-ready</p>
+        <ul class="tool-list">
+          <li><button type="button" class="btn-ghost cmd-copy" data-cmd="/events">Copy /events</button></li>
+          <li><button type="button" class="btn-ghost cmd-copy" data-cmd="/events_list">Copy /events_list</button></li>
+          <li><button type="button" class="btn-ghost cmd-copy" data-cmd="/wfnotify configure">Copy /wfnotify configure</button></li>
+        </ul>
+      </div>
       <p>See <a href="/dojo.html">dojo ops</a> for how officers combine events with LFG.</p>
 
       <h2>Giveaways</h2>
@@ -65,6 +73,16 @@
       if (!window.ObsidianSite) return;
       var d = document.getElementById("events-dashboard");
       if (d) d.href = window.ObsidianSite.dashboardUrl();
+      document.querySelectorAll(".cmd-copy").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var text = btn.getAttribute("data-cmd") || "";
+          navigator.clipboard.writeText(text).then(function () {
+            var prev = btn.textContent;
+            btn.textContent = "Copied";
+            setTimeout(function () { btn.textContent = prev; }, 1000);
+          });
+        });
+      });
     })();
   </script>
 </body>

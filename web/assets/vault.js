@@ -125,7 +125,11 @@
         esc(marketUrl(wf.name)) +
         '">' +
         esc(wf.name) +
-        "</a></strong> <span class=\"vt-badge\">Vaulted</span></li>";
+        '</a></strong> <span class="vt-badge">Vaulted</span> · <a href="/worth.html?q=' +
+        encodeURIComponent(wf.name) +
+        '">Worth</a> · <a href="/farm.html?q=' +
+        encodeURIComponent(wf.name) +
+        '">Farm</a></li>';
     });
     warframesEl.innerHTML = html;
   }

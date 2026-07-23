@@ -985,6 +985,22 @@
   .wf-build-row span { grid-column: 1 / -1; }
   .wf-invasion-sides { grid-template-columns: 1fr; }
   .wf-riven-tools { flex-direction: column; }
+  .wf-panel-body,
+  .wf-inv-grid,
+  .wf-fissure-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .wf-filters {
+    position: sticky;
+    top: 52px;
+    z-index: 40;
+    background: var(--surface, #0e1014);
+    padding: 8px 0;
+  }
+  .wf-mini-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 480px) {
