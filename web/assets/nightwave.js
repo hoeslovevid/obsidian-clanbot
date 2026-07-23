@@ -21,6 +21,16 @@
     if (a.isElite) return "Elite";
     return "Weekly";
   }
+  function skeletonHtml() {
+    if (window.ObsidianSite && typeof window.ObsidianSite.skeletonCards === "function") {
+      return window.ObsidianSite.skeletonCards(3);
+    }
+    return '<div class="tool-skeleton" aria-hidden="true"><div class="tool-card tool-skel-card"><div class="skel skel-title"></div><div class="skel skel-line"></div><div class="skel skel-line short"></div></div><div class="tool-card tool-skel-card"><div class="skel skel-title"></div><div class="skel skel-line"></div><div class="skel skel-line short"></div></div><div class="tool-card tool-skel-card"><div class="skel skel-title"></div><div class="skel skel-line"></div><div class="skel skel-line short"></div></div></div>';
+  }
+  function paint(html) {
+    root.innerHTML = '<div class="tool-content-enter">' + html + "</div>";
+    root.setAttribute("aria-busy", "false");
+  }
   function render(data) {
     var acts = data.activeChallenges || data.activeChallenges || [];
     var groups = { Daily: [], Weekly: [], Elite: [] };
@@ -39,8 +49,9 @@
       });
       html += "</ul></section>";
     });
-    root.innerHTML = html; root.setAttribute("aria-busy", "false");
+    paint(html);
   }
+  root.innerHTML = skeletonHtml();
   fetch(API + "/pc/nightwave?language=en", { cache: "no-store", headers: { Accept: "application/json" } })
     .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
     .then(function (data) {
@@ -50,7 +61,7 @@
       statusEl.innerHTML = '<span class="dot" aria-hidden="true"></span>Season ' + esc(data.season != null ? data.season : (data.tag || "Nightwave")) + " · Phase " + esc(phase) + (data.expiry ? " · " + esc(relative(data.expiry)) : "");
       render(data);
     })
-    .catch(function () { statusEl.className += " err"; statusEl.innerHTML = '<span class="dot"></span>Could not load Nightwave'; root.innerHTML = '<div class="tool-card"><p class="tool-prose">The world-state API is unavailable. Try again shortly.</p></div>'; root.setAttribute("aria-busy", "false"); });
+    .catch(function () { statusEl.className += " err"; statusEl.innerHTML = '<span class="dot"></span>Could not load Nightwave'; paint('<div class="tool-card"><p class="tool-prose">The world-state API is unavailable. Try again shortly.</p></div>'); });
   root.addEventListener("change", function (e) { var id = e.target.getAttribute("data-id"); if (!id) return; if (e.target.checked) state.done[id] = true; else delete state.done[id]; save(); });
   clearBtn.addEventListener("click", function () { state.done = {}; save(); root.querySelectorAll('input[type="checkbox"]').forEach(function (x) { x.checked = false; }); });
 })();

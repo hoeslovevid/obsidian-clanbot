@@ -262,6 +262,18 @@
     );
   }
 
+  function skeletonHtml() {
+    if (window.ObsidianSite && typeof window.ObsidianSite.skeletonCards === "function") {
+      return window.ObsidianSite.skeletonCards(2, { cls: "mk-skeleton" });
+    }
+    return (
+      '<div class="tool-skeleton mk-skeleton" aria-hidden="true">' +
+      '<div class="tool-card tool-skel-card"><div class="skel skel-title"></div><div class="skel skel-line"></div><div class="skel skel-line short"></div></div>' +
+      '<div class="tool-card tool-skel-card"><div class="skel skel-title"></div><div class="skel skel-line"></div><div class="skel skel-line short"></div></div>' +
+      "</div>"
+    );
+  }
+
   function renderItem(data) {
     var item = data.item || {};
     var sum = data.summary || {};
@@ -280,7 +292,7 @@
     }
 
     root.innerHTML =
-      '<div class="mk-card">' +
+      '<div class="mk-card tool-content-enter">' +
       '<div class="mk-item">' +
       '<img class="mk-item-art" src="' +
       esc(img) +
@@ -380,6 +392,7 @@
     activeSlug = slug;
     if (refreshBtn) refreshBtn.hidden = false;
     root.setAttribute("aria-busy", "true");
+    root.innerHTML = skeletonHtml();
     setStatus("Fetching orders…", "loading");
     hideSuggest();
 

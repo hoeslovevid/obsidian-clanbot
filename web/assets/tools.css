@@ -4,6 +4,12 @@
   padding: 12px 0 8px;
 }
 
+.tool-hero.reveal-io:not(.is-visible),
+.mk-hero.reveal-io:not(.is-visible) {
+  opacity: 0;
+  transform: translateY(16px);
+}
+
 .tool-eyebrow {
   display: inline-flex;
   align-items: center;
@@ -105,6 +111,16 @@
 }
 
 .tool-status.err { color: #f87171; }
+
+.tool-skel-card {
+  pointer-events: none;
+  border-style: dashed;
+  opacity: 0.9;
+}
+
+.tool-skel-card .skel-title {
+  margin-bottom: 14px;
+}
 
 .tool-card {
   background: var(--surface);

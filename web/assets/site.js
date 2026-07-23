@@ -173,8 +173,93 @@
         : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
   }
 
+  function prefersReducedMotion() {
+    try {
+      return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    } catch (_) {
+      return false;
+    }
+  }
+
   function toggleTheme() {
-    applyTheme(getTheme() === "light" ? "dark" : "light");
+    var next = getTheme() === "light" ? "dark" : "light";
+    function go() {
+      applyTheme(next);
+    }
+    if (prefersReducedMotion()) {
+      go();
+      return;
+    }
+    if (typeof document.startViewTransition === "function") {
+      try {
+        document.startViewTransition(go);
+        return;
+      } catch (_) {}
+    }
+    document.documentElement.classList.add("theme-animating");
+    go();
+    window.setTimeout(function () {
+      document.documentElement.classList.remove("theme-animating");
+    }, 360);
+  }
+
+  function skeletonCards(count, opts) {
+    count = Math.max(1, Math.min(Number(count) || 2, 6));
+    opts = opts || {};
+    var cls = opts.cls ? " " + opts.cls : "";
+    var html = '<div class="tool-skeleton' + cls + '" aria-hidden="true">';
+    for (var i = 0; i < count; i++) {
+      html +=
+        '<div class="tool-card tool-skel-card">' +
+        '<div class="skel skel-title"></div>' +
+        '<div class="skel skel-line"></div>' +
+        '<div class="skel skel-line short"></div>' +
+        "</div>";
+    }
+    return html + "</div>";
+  }
+
+  function initScrollReveals() {
+    document.querySelectorAll("[data-reveal-children]").forEach(function (parent) {
+      var kids = parent.children;
+      for (var i = 0; i < kids.length; i++) {
+        var kid = kids[i];
+        if (!kid || kid.nodeType !== 1) continue;
+        if (!kid.hasAttribute("data-reveal")) kid.setAttribute("data-reveal", "");
+        if (!kid.style.getPropertyValue("--reveal-delay")) {
+          kid.style.setProperty("--reveal-delay", Math.min(i, 10) * 0.05 + "s");
+        }
+      }
+    });
+
+    var nodes = document.querySelectorAll("[data-reveal], .tool-hero, .mk-hero, .wf-hero");
+    if (!nodes.length) return;
+
+    if (prefersReducedMotion() || !("IntersectionObserver" in window)) {
+      nodes.forEach(function (el) {
+        el.classList.add("reveal-io", "is-visible");
+      });
+      return;
+    }
+
+    var io = new IntersectionObserver(
+      function (entries) {
+        entries.forEach(function (entry) {
+          if (!entry.isIntersecting) return;
+          entry.target.classList.add("is-visible");
+          io.unobserve(entry.target);
+        });
+      },
+      { rootMargin: "0px 0px -6% 0px", threshold: 0.08 }
+    );
+
+    nodes.forEach(function (el) {
+      if (el.classList.contains("reveal")) return;
+      el.classList.add("reveal-io");
+      var delay = el.getAttribute("data-reveal-delay");
+      if (delay) el.style.setProperty("--reveal-delay", delay);
+      io.observe(el);
+    });
   }
 
   function dashboardUrl() {
@@ -958,6 +1043,7 @@
     renderFooter();
     bindJumpHotkey();
     markNewToolCards();
+    initScrollReveals();
     ensureManifestLink();
     registerPwa();
   }
@@ -976,6 +1062,8 @@
     getTheme: getTheme,
     setTheme: applyTheme,
     toggleTheme: toggleTheme,
+    skeletonCards: skeletonCards,
+    initScrollReveals: initScrollReveals,
     config: cfg,
     routeToolSearch: routeToolSearch,
     openJumpMenu: openJumpMenu,
