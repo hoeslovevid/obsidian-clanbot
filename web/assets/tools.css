@@ -244,7 +244,16 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 12px;
-  margin: 8px 0 28px;
+  margin: 8px 0 16px;
+}
+
+.web-tools-featured {
+  margin-bottom: 8px;
+}
+
+.web-tools-all {
+  margin-top: 4px;
+  margin-bottom: 8px;
 }
 
 .web-tool-card {
@@ -255,11 +264,12 @@
   border-radius: var(--radius-lg);
   text-decoration: none;
   color: inherit;
-  transition: border-color 0.15s, transform 0.15s;
+  transition: border-color 0.15s, transform 0.15s, background 0.15s;
 }
 
 .web-tool-card:hover {
   border-color: var(--accent);
+  background: rgba(232, 168, 74, 0.04);
   transform: translateY(-2px);
 }
 

@@ -1,7 +1,7 @@
 {
   "baro": {
     "label": "Baro Ki'Teer",
-    "line": "Next relay visit — check /baro in Discord"
+    "line": "Next relay visit — check /baro or the Baro list"
   },
   "cycle": {
     "label": "Open worlds",
