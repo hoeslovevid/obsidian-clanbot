@@ -181,7 +181,7 @@
     }
   }
 
-  function toggleTheme() {
+  function toggleTheme(ev) {
     var next = getTheme() === "light" ? "dark" : "light";
     function go() {
       applyTheme(next);
@@ -190,17 +190,65 @@
       go();
       return;
     }
+
+    var origin = null;
+    try {
+      var btn =
+        (ev && ev.currentTarget) ||
+        document.querySelector(".site-nav-theme") ||
+        null;
+      if (btn && btn.getBoundingClientRect) {
+        var rect = btn.getBoundingClientRect();
+        var x = rect.left + rect.width / 2;
+        var y = rect.top + rect.height / 2;
+        var endX = Math.max(x, window.innerWidth - x);
+        var endY = Math.max(y, window.innerHeight - y);
+        origin = {
+          x: x,
+          y: y,
+          r: Math.ceil(Math.hypot(endX, endY)),
+        };
+      }
+    } catch (_) {}
+
     if (typeof document.startViewTransition === "function") {
       try {
-        document.startViewTransition(go);
+        var root = document.documentElement;
+        if (origin) {
+          root.style.setProperty("--theme-x", origin.x + "px");
+          root.style.setProperty("--theme-y", origin.y + "px");
+          root.style.setProperty("--theme-r", origin.r + "px");
+        }
+        root.classList.add("theme-transition");
+        var transition = document.startViewTransition(go);
+        if (transition && transition.finished && typeof transition.finished.finally === "function") {
+          transition.finished.finally(function () {
+            root.classList.remove("theme-transition");
+            root.style.removeProperty("--theme-x");
+            root.style.removeProperty("--theme-y");
+            root.style.removeProperty("--theme-r");
+          });
+        } else {
+          window.setTimeout(function () {
+            root.classList.remove("theme-transition");
+          }, 520);
+        }
         return;
-      } catch (_) {}
+      } catch (_) {
+        document.documentElement.classList.remove("theme-transition");
+      }
     }
+
     document.documentElement.classList.add("theme-animating");
-    go();
-    window.setTimeout(function () {
-      document.documentElement.classList.remove("theme-animating");
-    }, 360);
+    // Double-rAF so the browser applies transition rules before the theme flip
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        go();
+        window.setTimeout(function () {
+          document.documentElement.classList.remove("theme-animating");
+        }, 450);
+      });
+    });
   }
 
   function skeletonCards(count, opts) {
@@ -463,8 +511,8 @@
     themeBtn.type = "button";
     themeBtn.className = "site-nav-theme";
     syncThemeButton(themeBtn, getTheme());
-    themeBtn.addEventListener("click", function () {
-      toggleTheme();
+    themeBtn.addEventListener("click", function (e) {
+      toggleTheme(e);
     });
     links.appendChild(themeBtn);
 

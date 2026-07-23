@@ -146,6 +146,10 @@ body {
   .final-cta::before {
     animation: none !important;
   }
+  html.theme-transition::view-transition-old(root),
+  html.theme-transition::view-transition-new(root) {
+    animation: none !important;
+  }
   *,
   *::before,
   *::after {
@@ -174,18 +178,43 @@ body {
   animation-timing-function: ease;
 }
 
-/* Theme crossfade when toggling without View Transitions */
+/* Theme toggle: circular reveal from the control (View Transitions) */
+html.theme-transition::view-transition-old(root) {
+  animation: none;
+  z-index: 1;
+  mix-blend-mode: normal;
+}
+
+html.theme-transition::view-transition-new(root) {
+  animation: theme-circle-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  z-index: 2;
+  mix-blend-mode: normal;
+}
+
+@keyframes theme-circle-in {
+  from {
+    clip-path: circle(0px at var(--theme-x, 50%) var(--theme-y, 50%));
+  }
+  to {
+    clip-path: circle(var(--theme-r, 100vmax) at var(--theme-x, 50%) var(--theme-y, 50%));
+  }
+}
+
+/* Theme crossfade fallback (Firefox / no View Transitions) */
 html.theme-animating,
 html.theme-animating body,
-html.theme-animating .site-nav,
-html.theme-animating .bg-ambient,
-html.theme-animating .container,
-html.theme-animating .page-wrap {
-  transition:
-    background-color 0.32s ease,
-    background-image 0.32s ease,
-    color 0.32s ease,
-    border-color 0.32s ease;
+html.theme-animating body * {
+  transition-property: background-color, background-image, color, border-color, box-shadow, outline-color, fill, stroke !important;
+  transition-duration: 0.42s !important;
+  transition-timing-function: ease !important;
+}
+
+html.theme-animating img,
+html.theme-animating svg,
+html.theme-animating video,
+html.theme-animating canvas,
+html.theme-animating iframe {
+  transition: none !important;
 }
 
 .container,
