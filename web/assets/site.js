@@ -502,10 +502,13 @@
     var links = document.createElement("div");
     links.className = "site-nav-links";
 
-    // Logo = home · Tools ▾ · Guides ▾ · Dashboard · theme · Invite
+    // Logo = home · Tools ▾ · Guides ▾ · Dashboard · Report · theme · Invite
     links.appendChild(makeNavDrop("Tools", NAV_TOOLS, origin, active, TOOL_IDS));
     links.appendChild(makeNavDrop("Guides", NAV_GUIDES, origin, active, GUIDE_IDS));
     links.appendChild(makeNavLink(NAV_DASHBOARD, origin, active));
+    links.appendChild(
+      makeNavLink({ id: "report", label: "Report a bug", href: "/report.html" }, origin, active)
+    );
 
     var jumpBtn = document.createElement("button");
     jumpBtn.type = "button";

@@ -53,7 +53,7 @@
           <ul class="contact-info-list">
             <li><a href="/faq.html">FAQ</a> — Steam link tips</li>
             <li><a href="/contact.html">Contact</a> — general questions</li>
-            <li><a id="report-discord" href="#" target="_blank" rel="noopener noreferrer" style="display:none">Support Discord</a></li>
+            <li><a id="report-discord-invite" href="#" target="_blank" rel="noopener noreferrer" style="display:none">Support Discord</a></li>
           </ul>
         </div>
       </aside>
@@ -67,8 +67,8 @@
         <form id="report-form" novalidate>
           <div class="contact-form-grid">
             <div class="form-group">
-              <label for="report-discord">Discord username <span class="required-mark">*</span></label>
-              <input type="text" id="report-discord" name="discord_username" class="form-field" placeholder="e.g. username" maxlength="100" required autocomplete="username" />
+              <label for="report-username">Discord username <span class="required-mark">*</span></label>
+              <input type="text" id="report-username" name="discord_username" class="form-field" placeholder="e.g. username" maxlength="100" required autocomplete="username" />
             </div>
             <div class="form-group">
               <label for="report-command">Command / feature <span class="required-mark">*</span></label>
@@ -113,6 +113,19 @@
             <input type="email" id="report-email" name="email" class="form-field" placeholder="you@example.com" maxlength="200" autocomplete="email" />
           </div>
 
+          <div class="form-group">
+            <label for="report-screenshot">Screenshot <span class="field-hint">(optional · PNG, JPG, WebP, or GIF · max 8 MB)</span></label>
+            <div class="report-shot">
+              <input type="file" id="report-screenshot" name="screenshot" class="report-shot-input" accept="image/png,image/jpeg,image/webp,image/gif" />
+              <label for="report-screenshot" class="report-shot-btn">Choose image</label>
+              <button type="button" class="report-shot-clear" id="report-shot-clear" hidden>Remove</button>
+            </div>
+            <div class="report-shot-preview" id="report-shot-preview" hidden>
+              <img id="report-shot-img" alt="Screenshot preview" />
+              <span class="report-shot-meta" id="report-shot-meta"></span>
+            </div>
+          </div>
+
           <div class="form-actions">
             <button type="submit" class="form-submit" id="report-submit">
               <span class="spinner" aria-hidden="true"></span>
@@ -139,7 +152,7 @@
       var cfg = window.OBSIDIAN_SITE || {};
       var invite = (cfg.DISCORD_SERVER_INVITE || "").trim();
       if (invite) {
-        var el = document.getElementById("report-discord");
+        var el = document.getElementById("report-discord-invite");
         el.href = invite;
         el.style.display = "";
       }
@@ -162,6 +175,62 @@
       }
       messageInput.addEventListener("input", updateCharCount);
       updateCharCount();
+
+      var shotInput = document.getElementById("report-screenshot");
+      var shotPreview = document.getElementById("report-shot-preview");
+      var shotImg = document.getElementById("report-shot-img");
+      var shotMeta = document.getElementById("report-shot-meta");
+      var shotClear = document.getElementById("report-shot-clear");
+      var shotObjectUrl = null;
+      var MAX_SHOT_BYTES = 8 * 1024 * 1024;
+
+      function clearShot() {
+        shotInput.value = "";
+        if (shotObjectUrl) {
+          try { URL.revokeObjectURL(shotObjectUrl); } catch (_) {}
+          shotObjectUrl = null;
+        }
+        shotImg.removeAttribute("src");
+        shotPreview.hidden = true;
+        shotClear.hidden = true;
+        shotMeta.textContent = "";
+      }
+
+      function formatBytes(n) {
+        if (n < 1024) return n + " B";
+        if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+        return (n / (1024 * 1024)).toFixed(1) + " MB";
+      }
+
+      shotInput.addEventListener("change", function () {
+        hideMsg();
+        var file = shotInput.files && shotInput.files[0];
+        if (!file) {
+          clearShot();
+          return;
+        }
+        if (!/^image\/(png|jpeg|webp|gif)$/i.test(file.type)) {
+          clearShot();
+          showMsg("Screenshot must be a PNG, JPG, WebP, or GIF.", true);
+          return;
+        }
+        if (file.size > MAX_SHOT_BYTES) {
+          clearShot();
+          showMsg("Screenshot must be 8 MB or smaller.", true);
+          return;
+        }
+        if (shotObjectUrl) {
+          try { URL.revokeObjectURL(shotObjectUrl); } catch (_) {}
+        }
+        shotObjectUrl = URL.createObjectURL(file);
+        shotImg.src = shotObjectUrl;
+        shotMeta.textContent = file.name + " · " + formatBytes(file.size);
+        shotPreview.hidden = false;
+        shotClear.hidden = false;
+      });
+      shotClear.addEventListener("click", function () {
+        clearShot();
+      });
 
       var form = document.getElementById("report-form");
       var submitBtn = document.getElementById("report-submit");
@@ -188,7 +257,7 @@
         e.preventDefault();
         hideMsg();
 
-        var discordUsername = (document.getElementById("report-discord").value || "").trim();
+        var discordUsername = (document.getElementById("report-username").value || "").trim();
         var command = (document.getElementById("report-command").value || "").trim();
         var steps = (document.getElementById("report-steps").value || "").trim();
         var expected = (document.getElementById("report-expected").value || "").trim();
@@ -196,10 +265,11 @@
         var email = (document.getElementById("report-email").value || "").trim();
         var pageUrl = (document.getElementById("report-page").value || "").trim();
         var botVersion = (document.getElementById("report-version").value || "").trim();
+        var shotFile = shotInput.files && shotInput.files[0];
 
         if (!discordUsername) {
           showMsg("Add your Discord username so we can follow up.", true);
-          document.getElementById("report-discord").focus();
+          document.getElementById("report-username").focus();
           return;
         }
         if (!command) {
@@ -221,6 +291,10 @@
           showMsg("Message must be 2000 characters or less.", true);
           return;
         }
+        if (shotFile && shotFile.size > MAX_SHOT_BYTES) {
+          showMsg("Screenshot must be 8 MB or smaller.", true);
+          return;
+        }
 
         var botApiUrl = window.ObsidianSite && window.ObsidianSite.apiUrl("/api/contact");
         if (!botApiUrl) {
@@ -230,22 +304,24 @@
 
         setLoading(true);
         try {
+          var fd = new FormData();
+          fd.append("category", "bug_report");
+          fd.append("name", discordUsername);
+          fd.append("email", email);
+          fd.append("preferred_response", "Discord");
+          fd.append("discord_username", discordUsername);
+          fd.append("command", command);
+          fd.append("steps", steps);
+          fd.append("expected", expected);
+          fd.append("page_url", pageUrl || location.href);
+          fd.append("bot_version", botVersion);
+          fd.append("message", message);
+          if (shotFile) fd.append("screenshot", shotFile, shotFile.name || "screenshot.png");
+
           var res = await fetch(botApiUrl, {
             method: "POST",
-            headers: { "Content-Type": "application/json", Accept: "application/json" },
-            body: JSON.stringify({
-              category: "bug_report",
-              name: discordUsername,
-              email: email,
-              preferred_response: "Discord",
-              discord_username: discordUsername,
-              command: command,
-              steps: steps,
-              expected: expected,
-              page_url: pageUrl || location.href,
-              bot_version: botVersion,
-              message: message,
-            }),
+            headers: { Accept: "application/json" },
+            body: fd,
           });
           var data = {};
           try { data = await res.json(); } catch (_) {}
@@ -255,6 +331,7 @@
           }
           showMsg("Report sent — thanks. We’ll dig in and follow up on Discord when we can.", false);
           form.reset();
+          clearShot();
           updateCharCount();
         } catch (_) {
           showMsg("Network error sending the report. Try again shortly.", true);

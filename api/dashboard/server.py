@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import base64
 import time
 from datetime import datetime, timezone
 from typing import Any
@@ -486,7 +487,11 @@ async def handle_guild_search(request: web.Request) -> web.Response:
 
 
 async def handle_contact(request: web.Request) -> web.Response:
-    """Public contact form — forwards to CONTACT_WEBHOOK_URL (rate-limited)."""
+    """Public contact / bug form — forwards to CONTACT_WEBHOOK_URL (rate-limited).
+
+    Accepts JSON or multipart/form-data. Multipart may include an optional
+    ``screenshot`` image file (png/jpeg/webp/gif, max 8 MiB).
+    """
     if request.method == "OPTIONS":
         return web.Response(status=204)
 
@@ -505,13 +510,82 @@ async def handle_contact(request: web.Request) -> web.Response:
             status=503,
         )
 
-    try:
-        body = await request.json()
-    except json.JSONDecodeError:
-        raise web.HTTPBadRequest(
-            text='{"error":"invalid_json"}',
-            content_type="application/json",
-        )
+    screenshot_bytes: bytes | None = None
+    screenshot_name = "screenshot.png"
+    screenshot_ctype = "image/png"
+    body: dict[str, Any] = {}
+
+    ctype = (request.content_type or "").lower()
+    if ctype.startswith("multipart/"):
+        try:
+            reader = await request.multipart()
+        except Exception:
+            raise web.HTTPBadRequest(
+                text='{"error":"invalid_multipart"}',
+                content_type="application/json",
+            )
+        async for part in reader:
+            name = part.name or ""
+            if name == "screenshot":
+                raw = await part.read(decode=False)
+                if not raw:
+                    continue
+                if len(raw) > 8 * 1024 * 1024:
+                    raise web.HTTPBadRequest(
+                        text='{"error":"screenshot_too_large","message":"Screenshot must be 8 MB or smaller."}',
+                        content_type="application/json",
+                    )
+                fname = (part.filename or "screenshot.png").strip() or "screenshot.png"
+                # Keep a safe extension
+                lower = fname.lower()
+                if not any(lower.endswith(ext) for ext in (".png", ".jpg", ".jpeg", ".webp", ".gif")):
+                    fname = "screenshot.png"
+                screenshot_name = Path(fname).name[:120]
+                screenshot_ctype = (part.headers.get(aiohttp.hdrs.CONTENT_TYPE) or "application/octet-stream").split(";")[0].strip()
+                if not screenshot_ctype.startswith("image/"):
+                    screenshot_ctype = "image/png"
+                screenshot_bytes = raw
+            else:
+                try:
+                    text = await part.text()
+                except Exception:
+                    text = ""
+                body[name] = text
+    else:
+        try:
+            body = await request.json()
+        except json.JSONDecodeError:
+            raise web.HTTPBadRequest(
+                text='{"error":"invalid_json"}',
+                content_type="application/json",
+            )
+        # Optional base64 screenshot from JSON clients
+        b64 = str(body.get("screenshot_base64") or "").strip()
+        if b64:
+            if "," in b64 and b64.lower().startswith("data:"):
+                header, b64 = b64.split(",", 1)
+                if "image/jpeg" in header or "image/jpg" in header:
+                    screenshot_ctype = "image/jpeg"
+                    screenshot_name = "screenshot.jpg"
+                elif "image/webp" in header:
+                    screenshot_ctype = "image/webp"
+                    screenshot_name = "screenshot.webp"
+                elif "image/gif" in header:
+                    screenshot_ctype = "image/gif"
+                    screenshot_name = "screenshot.gif"
+            try:
+                raw = base64.b64decode(b64, validate=False)
+            except Exception:
+                raise web.HTTPBadRequest(
+                    text='{"error":"invalid_screenshot"}',
+                    content_type="application/json",
+                )
+            if len(raw) > 8 * 1024 * 1024:
+                raise web.HTTPBadRequest(
+                    text='{"error":"screenshot_too_large","message":"Screenshot must be 8 MB or smaller."}',
+                    content_type="application/json",
+                )
+            screenshot_bytes = raw
 
     message = str(body.get("message") or "").strip()
     if not message:
@@ -561,32 +635,53 @@ async def handle_contact(request: web.Request) -> web.Response:
             fields.append({"name": "Steps to reproduce", "value": steps[:1024], "inline": False})
         if expected:
             fields.append({"name": "Expected", "value": expected[:512], "inline": False})
+        if screenshot_bytes:
+            fields.append({"name": "Screenshot", "value": f"Attached (`{screenshot_name}`)", "inline": True})
     fields.append({"name": "Message", "value": message[:1024], "inline": False})
     if len(message) > 1024:
         fields.append({"name": "(continued)", "value": message[1024:2048], "inline": False})
 
-    payload = {
-        "embeds": [
-            {
-                "title": title,
-                "color": color,
-                "fields": fields,
-                "footer": {"text": footer},
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            }
-        ]
+    embed: dict[str, Any] = {
+        "title": title,
+        "color": color,
+        "fields": fields,
+        "footer": {"text": footer},
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
+    if screenshot_bytes:
+        # Discord shows attachment images when referenced as attachment://filename
+        embed["image"] = {"url": f"attachment://{screenshot_name}"}
 
-    timeout = aiohttp.ClientTimeout(total=15)
+    payload = {"embeds": [embed]}
+
+    timeout = aiohttp.ClientTimeout(total=30)
     async with aiohttp.ClientSession(timeout=timeout) as session:
-        async with session.post(CONTACT_WEBHOOK_URL, json=payload) as resp:
-            if resp.status >= 400:
-                text = await resp.text()
-                logger.warning("[contact] webhook failed status=%s body=%s", resp.status, text[:200])
-                return _json(
-                    {"error": "webhook_failed", "message": "Could not deliver message."},
-                    status=502,
-                )
+        if screenshot_bytes:
+            form = aiohttp.FormData()
+            form.add_field("payload_json", json.dumps(payload), content_type="application/json")
+            form.add_field(
+                "files[0]",
+                screenshot_bytes,
+                filename=screenshot_name,
+                content_type=screenshot_ctype,
+            )
+            async with session.post(CONTACT_WEBHOOK_URL, data=form) as resp:
+                if resp.status >= 400:
+                    text = await resp.text()
+                    logger.warning("[contact] webhook failed status=%s body=%s", resp.status, text[:200])
+                    return _json(
+                        {"error": "webhook_failed", "message": "Could not deliver message."},
+                        status=502,
+                    )
+        else:
+            async with session.post(CONTACT_WEBHOOK_URL, json=payload) as resp:
+                if resp.status >= 400:
+                    text = await resp.text()
+                    logger.warning("[contact] webhook failed status=%s body=%s", resp.status, text[:200])
+                    return _json(
+                        {"error": "webhook_failed", "message": "Could not deliver message."},
+                        status=502,
+                    )
 
     _contact_last[ip] = now
     return _json({"ok": True})
@@ -706,7 +801,8 @@ async def handle_wfm_item(request: web.Request) -> web.Response:
 
 
 def create_app(bot: discord.Client) -> web.Application:
-    app = web.Application(middlewares=[cors_middleware])
+    # Allow optional bug-report screenshots (8 MiB) plus form fields.
+    app = web.Application(middlewares=[cors_middleware], client_max_size=10 * 1024 * 1024)
     app["bot"] = bot
     # Preflight for every API path (browser sends OPTIONS before Authorization GETs).
     app.router.add_route("OPTIONS", "/api/{tail:.*}", handle_options)
