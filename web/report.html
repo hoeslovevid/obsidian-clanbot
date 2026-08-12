@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <script src="/assets/theme-boot.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Report a Bug — Obsidian Overseer</title>
+  <meta name="description" content="Report a bug in Obsidian Overseer — include the command, steps, and what you expected so we can fix it faster." />
+  <meta name="theme-color" content="#06070a" />
+  <link rel="canonical" href="https://obsidianoverseer.com/report.html" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://obsidianoverseer.com/report.html" />
+  <meta property="og:title" content="Report a Bug — Obsidian Overseer" />
+  <meta property="og:description" content="Send a structured bug report for Obsidian Overseer." />
+  <meta property="og:image" content="https://obsidianoverseer.com/assets/og.jpg" />
+  <link rel="icon" type="image/png" href="/assets/logo-icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/site-nav.css" />
+  <link rel="stylesheet" href="/assets/site.css" />
+  <link rel="stylesheet" href="/assets/contact.css" />
+</head>
+<body>
+  <div class="bg-ambient" aria-hidden="true"></div>
+  <div class="bg-grain" aria-hidden="true"></div>
+
+  <div class="contact-wrap">
+    <nav id="site-nav" data-active="report"></nav>
+
+    <header class="contact-hero">
+      <div class="contact-badge">
+        <span class="contact-badge-dot" aria-hidden="true"></span>
+        Debugging help
+      </div>
+      <h1 class="contact-page-title">Report a bug</h1>
+      <p class="contact-intro">Something broken in Discord or on the site? A clear report (command, steps, what you expected) gets fixed faster. Steam linking issues welcome.</p>
+    </header>
+
+    <div class="contact-layout">
+      <aside class="contact-sidebar">
+        <div class="contact-sidebar-card">
+          <h2>What helps most</h2>
+          <ul class="contact-info-list">
+            <li>Exact slash command (e.g. <code>/warframe warframe_link</code>)</li>
+            <li>What you typed or linked (Steam URL / ID — redact secrets)</li>
+            <li>Error title from the bot embed</li>
+            <li>Your Discord username so we can follow up</li>
+          </ul>
+        </div>
+        <div class="contact-sidebar-card">
+          <h2>Also try</h2>
+          <ul class="contact-info-list">
+            <li><a href="/faq.html">FAQ</a> — Steam link tips</li>
+            <li><a href="/contact.html">Contact</a> — general questions</li>
+            <li><a id="report-discord" href="#" target="_blank" rel="noopener noreferrer" style="display:none">Support Discord</a></li>
+          </ul>
+        </div>
+      </aside>
+
+      <section class="contact-form-panel" aria-labelledby="report-form-title">
+        <div class="contact-form-header">
+          <h2 id="report-form-title">Bug details</h2>
+          <p>Goes to the same support channel as contact — tagged as a bug report.</p>
+        </div>
+
+        <form id="report-form" novalidate>
+          <div class="contact-form-grid">
+            <div class="form-group">
+              <label for="report-discord">Discord username <span class="required-mark">*</span></label>
+              <input type="text" id="report-discord" name="discord_username" class="form-field" placeholder="e.g. username" maxlength="100" required autocomplete="username" />
+            </div>
+            <div class="form-group">
+              <label for="report-command">Command / feature <span class="required-mark">*</span></label>
+              <input type="text" id="report-command" name="command" class="form-field" placeholder="/warframe warframe_link" maxlength="200" required />
+            </div>
+          </div>
+
+          <div class="contact-form-grid">
+            <div class="form-group">
+              <label for="report-page">Page URL <span class="field-hint">(if website)</span></label>
+              <input type="url" id="report-page" name="page_url" class="form-field" placeholder="https://obsidianoverseer.com/…" maxlength="500" />
+            </div>
+            <div class="form-group">
+              <label for="report-version">Bot version <span class="field-hint">(optional)</span></label>
+              <input type="text" id="report-version" name="bot_version" class="form-field" placeholder="e.g. 2.5.0" maxlength="32" />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="report-steps">Steps to reproduce <span class="required-mark">*</span></label>
+            <textarea id="report-steps" name="steps" class="form-field textarea" placeholder="1. Ran /warframe warframe_link&#10;2. Pasted my Steam profile URL&#10;3. Got “Could Not Resolve Steam ID”" required maxlength="1500"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label for="report-expected">What you expected</label>
+            <input type="text" id="report-expected" name="expected" class="form-field" placeholder="Account links and playtime roles update" maxlength="400" />
+          </div>
+
+          <div class="form-group">
+            <label for="report-message">What actually happened <span class="required-mark">*</span></label>
+            <div class="form-field-wrap">
+              <textarea id="report-message" name="message" class="form-field textarea" placeholder="Paste the error title/body, or describe the bug. Include any Steam ID format you tried." required maxlength="2000"></textarea>
+            </div>
+            <div class="message-meta">
+              <span>Required</span>
+              <span class="char-count" id="report-char-count">0 / 2000</span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="report-email">Email <span class="field-hint">(optional)</span></label>
+            <input type="email" id="report-email" name="email" class="form-field" placeholder="you@example.com" maxlength="200" autocomplete="email" />
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="form-submit" id="report-submit">
+              <span class="spinner" aria-hidden="true"></span>
+              <span class="btn-label">Send bug report</span>
+            </button>
+            <p class="form-privacy">By submitting, you agree we may use this info only to investigate and reply. See our <a href="/legal.html">Privacy Policy</a>.</p>
+          </div>
+
+          <div id="report-form-message" class="form-message" role="alert" aria-live="polite">
+            <span class="form-message-icon" aria-hidden="true"></span>
+            <span class="form-message-text"></span>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <footer id="site-footer"></footer>
+  </div>
+
+  <script src="/assets/config.js"></script>
+  <script src="/assets/site.js"></script>
+  <script>
+    (function () {
+      var cfg = window.OBSIDIAN_SITE || {};
+      var invite = (cfg.DISCORD_SERVER_INVITE || "").trim();
+      if (invite) {
+        var el = document.getElementById("report-discord");
+        el.href = invite;
+        el.style.display = "";
+      }
+
+      try {
+        var params = new URLSearchParams(location.search);
+        var cmd = params.get("command") || params.get("cmd");
+        if (cmd) document.getElementById("report-command").value = cmd;
+        var msg = params.get("message") || params.get("error");
+        if (msg) document.getElementById("report-message").value = msg;
+      } catch (_) {}
+
+      var messageInput = document.getElementById("report-message");
+      var charCountEl = document.getElementById("report-char-count");
+      function updateCharCount() {
+        var len = (messageInput.value || "").length;
+        charCountEl.textContent = len + " / 2000";
+        charCountEl.classList.toggle("warn", len > 1800);
+        charCountEl.classList.toggle("over", len >= 2000);
+      }
+      messageInput.addEventListener("input", updateCharCount);
+      updateCharCount();
+
+      var form = document.getElementById("report-form");
+      var submitBtn = document.getElementById("report-submit");
+      var msgEl = document.getElementById("report-form-message");
+      var msgIcon = msgEl.querySelector(".form-message-icon");
+      var msgText = msgEl.querySelector(".form-message-text");
+
+      function showMsg(text, isError) {
+        msgIcon.textContent = isError ? "⚠️" : "✓";
+        msgText.textContent = text;
+        msgEl.className = "form-message visible " + (isError ? "error" : "success");
+      }
+      function hideMsg() {
+        msgEl.className = "form-message";
+        msgText.textContent = "";
+      }
+      function setLoading(on) {
+        submitBtn.disabled = on;
+        submitBtn.classList.toggle("loading", on);
+        submitBtn.querySelector(".btn-label").textContent = on ? "Sending…" : "Send bug report";
+      }
+
+      form.addEventListener("submit", async function (e) {
+        e.preventDefault();
+        hideMsg();
+
+        var discordUsername = (document.getElementById("report-discord").value || "").trim();
+        var command = (document.getElementById("report-command").value || "").trim();
+        var steps = (document.getElementById("report-steps").value || "").trim();
+        var expected = (document.getElementById("report-expected").value || "").trim();
+        var message = (document.getElementById("report-message").value || "").trim();
+        var email = (document.getElementById("report-email").value || "").trim();
+        var pageUrl = (document.getElementById("report-page").value || "").trim();
+        var botVersion = (document.getElementById("report-version").value || "").trim();
+
+        if (!discordUsername) {
+          showMsg("Add your Discord username so we can follow up.", true);
+          document.getElementById("report-discord").focus();
+          return;
+        }
+        if (!command) {
+          showMsg("Which command or feature broke?", true);
+          document.getElementById("report-command").focus();
+          return;
+        }
+        if (!steps) {
+          showMsg("Add steps to reproduce the bug.", true);
+          document.getElementById("report-steps").focus();
+          return;
+        }
+        if (!message) {
+          showMsg("Describe what actually happened (or paste the error).", true);
+          document.getElementById("report-message").focus();
+          return;
+        }
+        if (message.length > 2000) {
+          showMsg("Message must be 2000 characters or less.", true);
+          return;
+        }
+
+        var botApiUrl = window.ObsidianSite && window.ObsidianSite.apiUrl("/api/contact");
+        if (!botApiUrl) {
+          showMsg("Bug reports are not configured yet. Join Discord from the FAQ/Contact page, or ask an admin to set BOT_API_URL and CONTACT_WEBHOOK_URL.", true);
+          return;
+        }
+
+        setLoading(true);
+        try {
+          var res = await fetch(botApiUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            body: JSON.stringify({
+              category: "bug_report",
+              name: discordUsername,
+              email: email,
+              preferred_response: "Discord",
+              discord_username: discordUsername,
+              command: command,
+              steps: steps,
+              expected: expected,
+              page_url: pageUrl || location.href,
+              bot_version: botVersion,
+              message: message,
+            }),
+          });
+          var data = {};
+          try { data = await res.json(); } catch (_) {}
+          if (!res.ok) {
+            showMsg((data && data.message) || "Could not send the report. Try again or use Discord.", true);
+            return;
+          }
+          showMsg("Report sent — thanks. We’ll dig in and follow up on Discord when we can.", false);
+          form.reset();
+          updateCharCount();
+        } catch (_) {
+          showMsg("Network error sending the report. Try again shortly.", true);
+        } finally {
+          setLoading(false);
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

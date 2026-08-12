@@ -529,24 +529,49 @@ async def handle_contact(request: web.Request) -> web.Response:
     email = str(body.get("email") or "").strip() or "—"
     preferred = str(body.get("preferred_response") or "Either").strip() or "Either"
     discord_username = str(body.get("discord_username") or "").strip() or "—"
+    category = str(body.get("category") or "contact").strip().lower() or "contact"
+    if category not in ("contact", "bug", "bug_report", "feedback"):
+        category = "contact"
+    command = str(body.get("command") or "").strip()
+    page_url = str(body.get("page_url") or "").strip()
+    bot_version = str(body.get("bot_version") or "").strip()
+    steps = str(body.get("steps") or "").strip()
+    expected = str(body.get("expected") or "").strip()
+
+    is_bug = category in ("bug", "bug_report")
+    title = "🐞 Bug report from website" if is_bug else "📩 New message from website"
+    color = 0xE85D5D if is_bug else 0x8B7CF8
+    footer = "Obsidian Overseer bug report" if is_bug else "Obsidian Overseer contact form"
 
     fields = [
         {"name": "From", "value": name[:256], "inline": True},
         {"name": "Email", "value": email[:256], "inline": True},
         {"name": "Preferred response", "value": preferred[:256], "inline": True},
         {"name": "Discord username", "value": discord_username[:256], "inline": True},
-        {"name": "Message", "value": message[:1024], "inline": False},
     ]
+    if is_bug:
+        fields.append({"name": "Category", "value": "Bug report", "inline": True})
+        if command:
+            fields.append({"name": "Command / feature", "value": command[:256], "inline": True})
+        if bot_version:
+            fields.append({"name": "Bot version", "value": bot_version[:64], "inline": True})
+        if page_url:
+            fields.append({"name": "Page URL", "value": page_url[:512], "inline": False})
+        if steps:
+            fields.append({"name": "Steps to reproduce", "value": steps[:1024], "inline": False})
+        if expected:
+            fields.append({"name": "Expected", "value": expected[:512], "inline": False})
+    fields.append({"name": "Message", "value": message[:1024], "inline": False})
     if len(message) > 1024:
         fields.append({"name": "(continued)", "value": message[1024:2048], "inline": False})
 
     payload = {
         "embeds": [
             {
-                "title": "📩 New message from website",
-                "color": 0x8B7CF8,
+                "title": title,
+                "color": color,
                 "fields": fields,
-                "footer": {"text": "Obsidian Overseer contact form"},
+                "footer": {"text": footer},
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
         ]

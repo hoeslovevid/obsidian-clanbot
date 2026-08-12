@@ -43,6 +43,7 @@
     { id: "events", label: "Events", href: "/events.html" },
     { section: "Help" },
     { id: "faq", label: "FAQ", href: "/faq.html" },
+    { id: "report", label: "Report a bug", href: "/report.html" },
     { id: "changelog", label: "Changelog", href: "/changelog.html" },
     { id: "privacy", label: "Privacy", href: "/privacy.html" },
   ];
@@ -55,7 +56,7 @@
   };
   var GUIDE_IDS = {
     tenno: 1, dojo: 1, trading: 1, commands: 1, lfg: 1, events: 1,
-    setup: 1, faq: 1, changelog: 1, privacy: 1,
+    setup: 1, faq: 1, report: 1, changelog: 1, privacy: 1,
   };
   var THEME_KEY = "oo_theme";
   // Show "New" chips on home / jump menu until this date (ISO)
@@ -68,6 +69,7 @@
     worth: "2026-08-20",
     incarnon: "2026-08-20",
     shards: "2026-08-20",
+    report: "2026-09-15",
   };
 
   function isNewTool(id) {
@@ -133,6 +135,7 @@
     items.push({ id: "home", label: "Home", href: "/", group: "Site", isNew: false });
     items.push({ id: "dashboard", label: "Dashboard", href: "/dashboard.html", group: "Site", isNew: false });
     items.push({ id: "contact", label: "Contact", href: "/contact.html", group: "Site", isNew: false });
+    items.push({ id: "report", label: "Report a bug", href: "/report.html", group: "Site", isNew: isNewTool("report") });
     return items;
   }
 
@@ -624,6 +627,9 @@
       '<a href="' +
       prefix +
       '/contact.html">Contact</a>' +
+      '<a href="' +
+      prefix +
+      '/report.html">Report a bug</a>' +
       '<a href="' +
       discord +
       '" target="_blank" rel="noopener noreferrer">Discord</a>' +

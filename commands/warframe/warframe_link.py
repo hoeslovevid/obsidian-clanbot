@@ -5,7 +5,7 @@ from typing import Optional
 
 from core.utils import obsidian_embed
 from database import link_steam_account, unlink_steam_account, get_linked_steam_id, update_steam_playtime
-from api.warframe_api import resolve_steam_id, fetch_steam_warframe_playtime
+from api.warframe_api import resolve_steam_id_detailed, fetch_steam_warframe_playtime
 
 
 def setup(bot, group=None):
@@ -97,8 +97,10 @@ def setup(bot, group=None):
                     "Examples:\n"
                     "• `https://steamcommunity.com/id/yourname`\n"
                     "• `https://steamcommunity.com/profiles/76561198000000000`\n"
-                    "• Your Steam ID (17 digits)\n\n"
-                    "**Note:** Set your Steam profile and **Game details** to Public for playtime to be tracked.",
+                    "• SteamID64 (`7656119…`) — most reliable\n"
+                    "• SteamID (`STEAM_0:1:…`) or SteamID3 (`[U:1:…]`)\n\n"
+                    "**Tip:** Get your ID at https://steamid.io/\n"
+                    "**Note:** Set Steam **Game details** to Public for playtime roles after linking.",
                     color=discord.Color.red(),
                     client=interaction.client,
                 ),
@@ -118,15 +120,44 @@ def setup(bot, group=None):
 
         ign = in_game_name.strip()[:32]  # Discord nickname limit
 
-        steam_id = await resolve_steam_id(steam.strip())
+        steam_id, reason = await resolve_steam_id_detailed(steam.strip())
         if not steam_id:
+            if reason == "missing_key":
+                msg = (
+                    "Steam linking is not fully configured on this bot yet "
+                    "(missing `STEAM_API_KEY`).\n\n"
+                    "**Workaround:** paste your **17-digit SteamID64** "
+                    "(from https://steamid.io/) instead of a vanity URL.\n\n"
+                    "Server owners: set `STEAM_API_KEY` on Railway and redeploy."
+                )
+            elif reason == "api_error":
+                msg = (
+                    "Steam’s API did not respond. Try again in a minute, or paste your "
+                    "**SteamID64** from https://steamid.io/ instead of a profile URL."
+                )
+            elif reason == "invalid":
+                msg = (
+                    "That doesn’t look like a Steam profile URL or ID.\n\n"
+                    "Accepted formats:\n"
+                    "• `https://steamcommunity.com/id/yourname`\n"
+                    "• `https://steamcommunity.com/profiles/7656119…`\n"
+                    "• SteamID64 (`7656119…`)\n"
+                    "• SteamID (`STEAM_0:1:…`) or SteamID3 (`[U:1:…]`)\n\n"
+                    "Tip: Discord may wrap links — paste the raw URL or the 17-digit ID."
+                )
+            else:
+                msg = (
+                    "Could not find that Steam account.\n\n"
+                    "• Double-check the vanity name / URL\n"
+                    "• Prefer your **SteamID64** from https://steamid.io/\n"
+                    "• Custom URL changes can take a few minutes to propagate\n\n"
+                    "**Note:** Profile visibility is only needed later for playtime roles — "
+                    "linking itself does not require a public profile."
+                )
             return await interaction.followup.send(
                 embed=obsidian_embed(
                     "❌ Could Not Resolve Steam ID",
-                    "Could not find your Steam account. Check that:\n"
-                    "• The URL or ID is correct\n"
-                    "• Your profile is set to Public\n\n"
-                    "Get your Steam ID: https://steamid.io/",
+                    msg,
                     color=discord.Color.red(),
                     client=interaction.client,
                 ),

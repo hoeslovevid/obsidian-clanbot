@@ -1244,73 +1244,165 @@ async def warm_hot_warframe_endpoints() -> None:
 
 # Warframe Steam App ID (for playtime lookup)
 WARFRAME_STEAM_APP_ID = 230410
+_STEAM64_BASE = 76561197960265728
+
+
+def _normalize_steam_input(raw: str) -> str:
+    s = (raw or "").strip()
+    # Discord often wraps links as <https://...>
+    if s.startswith("<") and s.endswith(">"):
+        s = s[1:-1].strip()
+    # Markdown links [label](url)
+    m = _re.fullmatch(r"\[([^\]]*)\]\((https?://[^)]+)\)", s)
+    if m:
+        s = m.group(2).strip()
+    # Strip surrounding quotes
+    if (s.startswith('"') and s.endswith('"')) or (s.startswith("'") and s.endswith("'")):
+        s = s[1:-1].strip()
+    return s
+
+
+def _is_steam64(value: str) -> bool:
+    if not value or not value.isdigit():
+        return False
+    # Classic Steam64 for individual accounts is 17 digits starting with 7656119
+    if len(value) == 17 and value.startswith("7656119"):
+        return True
+    # Accept other 17–18 digit IDs that fall in a plausible range
+    if 17 <= len(value) <= 18:
+        try:
+            n = int(value)
+            return n >= _STEAM64_BASE
+        except ValueError:
+            return False
+    return False
+
+
+def _steamid2_to_64(y: int, z: int) -> str:
+    return str(z * 2 + y + _STEAM64_BASE)
+
+
+def _steamid3_to_64(account_id: int) -> str:
+    return str(account_id + _STEAM64_BASE)
+
+
+def _parse_local_steam_id(stripped: str) -> Optional[str]:
+    """Convert SteamID / SteamID3 / Steam64 without calling the Steam API."""
+    if _is_steam64(stripped):
+        return stripped
+
+    # STEAM_0:Y:Z  (also STEAM_1:…)
+    m = _re.fullmatch(r"STEAM_[0-5]:([01]):(\d+)", stripped, flags=_re.IGNORECASE)
+    if m:
+        return _steamid2_to_64(int(m.group(1)), int(m.group(2)))
+
+    # [U:1:accountid] or U:1:accountid
+    m = _re.fullmatch(r"\[?U:1:(\d+)\]?", stripped, flags=_re.IGNORECASE)
+    if m:
+        return _steamid3_to_64(int(m.group(1)))
+
+    return None
 
 
 async def resolve_steam_id(vanity_url_or_id: str) -> Optional[str]:
     """
-    Resolve Steam profile URL or vanity name to 64-bit Steam ID.
+    Resolve Steam profile URL, vanity name, SteamID, SteamID3, or Steam64 to a 64-bit Steam ID.
     Returns Steam ID string or None if not found/invalid.
     """
-    key = os.environ.get("STEAM_API_KEY", "")
-    if not key:
-        logger.warning("STEAM_API_KEY not set - cannot resolve Steam IDs")
-        return None
-    stripped = (vanity_url_or_id or "").strip()
+    steam_id, _reason = await resolve_steam_id_detailed(vanity_url_or_id)
+    return steam_id
+
+
+async def resolve_steam_id_detailed(vanity_url_or_id: str) -> Tuple[Optional[str], str]:
+    """
+    Like resolve_steam_id, but also returns a machine-readable reason when resolution fails.
+
+    Reasons: empty | invalid | missing_key | not_found | api_error | ""
+    """
+    stripped = _normalize_steam_input(vanity_url_or_id)
     if not stripped:
-        return None
-    # Extract vanity name from URL: steamcommunity.com/id/USERNAME
-    vanity = None
-    if "steamcommunity.com/id/" in stripped:
-        parts = stripped.split("steamcommunity.com/id/")[-1].split("/")[0].split("?")[0]
+        return None, "empty"
+
+    local = _parse_local_steam_id(stripped)
+    if local:
+        return local, ""
+
+    vanity: Optional[str] = None
+    lower = stripped.lower()
+
+    # Custom URL: steamcommunity.com/id/NAME
+    if "steamcommunity.com/id/" in lower:
+        parts = stripped.split("/id/")[-1].split("/")[0].split("?")[0].strip()
         if parts:
             vanity = parts
-    elif "steamcommunity.com/profiles/" in stripped:
-        # Already a numeric ID
-        parts = stripped.split("steamcommunity.com/profiles/")[-1].split("/")[0].split("?")[0]
-        if parts.isdigit():
-            return parts
-    elif stripped.isdigit() and len(stripped) >= 17:
-        return stripped  # Already 64-bit ID
+    # Profile URL: steamcommunity.com/profiles/7656119… (or mistaken vanity)
+    elif "steamcommunity.com/profiles/" in lower:
+        parts = stripped.split("/profiles/")[-1].split("/")[0].split("?")[0].strip()
+        local = _parse_local_steam_id(parts)
+        if local:
+            return local, ""
+        if parts:
+            vanity = parts
     else:
-        vanity = stripped  # Assume vanity name
+        # Bare vanity name (or unrecognized format)
+        if _re.fullmatch(r"[A-Za-z0-9_-]{2,64}", stripped):
+            vanity = stripped
+        else:
+            return None, "invalid"
+
     if not vanity:
-        return None
-    if vanity.isdigit():
-        return vanity
+        return None, "invalid"
+
+    # Numeric vanity that is already a Steam64
+    local = _parse_local_steam_id(vanity)
+    if local:
+        return local, ""
+
+    key = os.environ.get("STEAM_API_KEY", "").strip()
+    if not key:
+        logger.warning("STEAM_API_KEY not set - cannot resolve Steam vanity URLs")
+        return None, "missing_key"
+
     try:
         async with aiohttp.ClientSession() as session:
-            # urlencode prevents vanity names with & or ? from breaking the query or injecting params
             q = urlencode({"key": key, "vanityurl": vanity})
             url = f"https://api.steampowered.com/ISteamUser/ResolveVanityURL/v1/?{q}"
             async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status == 403:
+                    logger.error("Steam ResolveVanityURL returned 403 — check STEAM_API_KEY")
+                    return None, "api_error"
                 if resp.status != 200:
-                    return None
+                    logger.error("Steam ResolveVanityURL HTTP %s", resp.status)
+                    return None, "api_error"
                 data = await resp.json()
-                r = data.get("response", {})
+                r = data.get("response", {}) or {}
                 if r.get("success") == 1 and r.get("steamid"):
-                    return r["steamid"]
+                    sid = str(r["steamid"])
+                    return sid, ""
+                # success 42 = no match
+                return None, "not_found"
     except Exception as e:
-        logger.error(f"Error resolving Steam ID: {e}")
-    return None
+        logger.error("Error resolving Steam ID: %s", e)
+        return None, "api_error"
 
 
 async def fetch_steam_warframe_playtime(steam_id_64: str) -> Optional[int]:
     """
     Fetch Warframe playtime in hours from Steam API.
     Requires STEAM_API_KEY. Returns hours or None if unavailable.
-    Note: User must have Steam profile/game details set to public.
+    Note: User must have Steam profile/game details set to Public.
     """
     key = os.environ.get("STEAM_API_KEY", "")
     if not key:
         logger.warning("STEAM_API_KEY not set - cannot fetch Warframe playtime")
         return None
     sid = (steam_id_64 or "").strip()
-    if not sid.isdigit() or len(sid) < 15:
+    if not _is_steam64(sid):
         return None
     try:
         async with aiohttp.ClientSession() as session:
             q = urlencode(
-                {"key": key, "steamid": sid, "include_played_free_games": "1"}
+                {"key": key, "steamid": sid, "include_played_free_games": "1", "include_appinfo": "0"}
             )
             url = f"https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?{q}"
             async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
